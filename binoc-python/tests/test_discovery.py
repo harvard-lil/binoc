@@ -66,7 +66,9 @@ class TestDiscoverPlugins:
         mock_ep.value = "test_plugin:register"
         mock_ep.load.return_value = mock_register
 
-        with patch("binoc._discovery.importlib.metadata.entry_points", return_value=[mock_ep]):
+        with patch(
+            "binoc._discovery.importlib.metadata.entry_points", return_value=[mock_ep]
+        ):
             discover_plugins(registry)
 
         mock_ep.load.assert_called_once()
@@ -81,7 +83,9 @@ class TestDiscoverPlugins:
         mock_ep.value = "broken:register"
         mock_ep.load.side_effect = ImportError("no such module")
 
-        with patch("binoc._discovery.importlib.metadata.entry_points", return_value=[mock_ep]):
+        with patch(
+            "binoc._discovery.importlib.metadata.entry_points", return_value=[mock_ep]
+        ):
             discover_plugins(registry)
 
     def test_discover_with_no_plugins(self):

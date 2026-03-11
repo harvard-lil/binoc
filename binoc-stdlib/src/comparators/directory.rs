@@ -12,7 +12,11 @@ pub struct DirectoryComparator;
 
 fn list_entries(dir: &std::path::Path) -> BinocResult<Vec<std::path::PathBuf>> {
     let mut entries = Vec::new();
-    for entry in walkdir::WalkDir::new(dir).min_depth(1).max_depth(1).sort_by_file_name() {
+    for entry in walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .max_depth(1)
+        .sort_by_file_name()
+    {
         let entry = entry.map_err(|e| BinocError::Io(e.into()))?;
         entries.push(entry.into_path());
     }
@@ -20,15 +24,22 @@ fn list_entries(dir: &std::path::Path) -> BinocResult<Vec<std::path::PathBuf>> {
 }
 
 fn relative_name(entry: &std::path::Path, base: &std::path::Path) -> String {
-    entry.strip_prefix(base)
+    entry
+        .strip_prefix(base)
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| entry.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default())
+        .unwrap_or_else(|_| {
+            entry
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        })
 }
 
 /// Read a file's bytes, compute BLAKE3 hash and detect media type in one pass.
-fn read_and_identify(path: &std::path::Path, logical_path: &str) -> BinocResult<(String, Option<String>)> {
+fn read_and_identify(
+    path: &std::path::Path,
+    logical_path: &str,
+) -> BinocResult<(String, Option<String>)> {
     let data = std::fs::read(path).map_err(BinocError::Io)?;
     let hash = blake3::hash(&data).to_hex().to_string();
     let media_type = infer::get(&data)
@@ -53,7 +64,9 @@ fn make_item(path: std::path::PathBuf, logical: String) -> Item {
 }
 
 impl Comparator for DirectoryComparator {
-    fn name(&self) -> &str { "binoc.directory" }
+    fn name(&self) -> &str {
+        "binoc.directory"
+    }
 
     fn can_handle(&self, pair: &ItemPair) -> bool {
         pair.is_dir()
@@ -67,7 +80,9 @@ impl Comparator for DirectoryComparator {
     ) -> BinocResult<ItemPair> {
         // Resolve a child's physical path from the parent directory pair.
         // child_path is the full logical path; we need the relative segment.
-        let parent_logical = pair.left.as_ref()
+        let parent_logical = pair
+            .left
+            .as_ref()
             .or(pair.right.as_ref())
             .map(|i| i.logical_path.as_str())
             .unwrap_or("");
@@ -99,35 +114,39 @@ impl Comparator for DirectoryComparator {
 
     fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
-            (Some(left), Some(right)) => {
-                self.compare_dirs(left, right)
-            }
+            (Some(left), Some(right)) => self.compare_dirs(left, right),
             (None, Some(right)) => {
                 let entries = list_entries(&right.physical_path)?;
-                let children: Vec<ItemPair> = entries.into_iter().map(|path| {
-                    let name = relative_name(&path, &right.physical_path);
-                    let logical = if right.logical_path.is_empty() {
-                        name
-                    } else {
-                        format!("{}/{}", right.logical_path, name)
-                    };
-                    ItemPair::added(make_item(path, logical))
-                }).collect();
+                let children: Vec<ItemPair> = entries
+                    .into_iter()
+                    .map(|path| {
+                        let name = relative_name(&path, &right.physical_path);
+                        let logical = if right.logical_path.is_empty() {
+                            name
+                        } else {
+                            format!("{}/{}", right.logical_path, name)
+                        };
+                        ItemPair::added(make_item(path, logical))
+                    })
+                    .collect();
 
                 let node = DiffNode::new("add", "directory", &right.logical_path);
                 Ok(CompareResult::Expand(node, children))
             }
             (Some(left), None) => {
                 let entries = list_entries(&left.physical_path)?;
-                let children: Vec<ItemPair> = entries.into_iter().map(|path| {
-                    let name = relative_name(&path, &left.physical_path);
-                    let logical = if left.logical_path.is_empty() {
-                        name
-                    } else {
-                        format!("{}/{}", left.logical_path, name)
-                    };
-                    ItemPair::removed(make_item(path, logical))
-                }).collect();
+                let children: Vec<ItemPair> = entries
+                    .into_iter()
+                    .map(|path| {
+                        let name = relative_name(&path, &left.physical_path);
+                        let logical = if left.logical_path.is_empty() {
+                            name
+                        } else {
+                            format!("{}/{}", left.logical_path, name)
+                        };
+                        ItemPair::removed(make_item(path, logical))
+                    })
+                    .collect();
 
                 let node = DiffNode::new("remove", "directory", &left.logical_path);
                 Ok(CompareResult::Expand(node, children))
@@ -142,10 +161,12 @@ impl DirectoryComparator {
         let entries_l = list_entries(&left.physical_path)?;
         let entries_r = list_entries(&right.physical_path)?;
 
-        let names_l: BTreeSet<String> = entries_l.iter()
+        let names_l: BTreeSet<String> = entries_l
+            .iter()
             .map(|e| relative_name(e, &left.physical_path))
             .collect();
-        let names_r: BTreeSet<String> = entries_r.iter()
+        let names_r: BTreeSet<String> = entries_r
+            .iter()
             .map(|e| relative_name(e, &right.physical_path))
             .collect();
 
@@ -185,7 +206,11 @@ impl DirectoryComparator {
             children.push(ItemPair::removed(make_item(path_l, logical)));
         }
 
-        let kind = if children.is_empty() { "identical" } else { "modify" };
+        let kind = if children.is_empty() {
+            "identical"
+        } else {
+            "modify"
+        };
         let node = DiffNode::new(kind, "directory", &right.logical_path);
         Ok(CompareResult::Expand(node, children))
     }

@@ -60,10 +60,8 @@ impl OutputConfig {
 impl DatasetConfig {
     /// Load config from a YAML file.
     pub fn from_file(path: &Path) -> Result<Self, BinocError> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(BinocError::Io)?;
-        serde_yaml::from_str(&contents)
-            .map_err(|e| BinocError::Config(e.to_string()))
+        let contents = std::fs::read_to_string(path).map_err(BinocError::Io)?;
+        serde_yaml::from_str(&contents).map_err(|e| BinocError::Config(e.to_string()))
     }
 
     /// Return the default configuration with the standard plugin pipeline.
@@ -134,15 +132,24 @@ impl PluginRegistry {
         self.outputters.insert(name.into(), outputter);
     }
 
-    pub fn get_comparator(&self, name: &str) -> Option<std::sync::Arc<dyn crate::traits::Comparator>> {
+    pub fn get_comparator(
+        &self,
+        name: &str,
+    ) -> Option<std::sync::Arc<dyn crate::traits::Comparator>> {
         self.comparators.get(name).cloned()
     }
 
-    pub fn get_transformer(&self, name: &str) -> Option<std::sync::Arc<dyn crate::traits::Transformer>> {
+    pub fn get_transformer(
+        &self,
+        name: &str,
+    ) -> Option<std::sync::Arc<dyn crate::traits::Transformer>> {
         self.transformers.get(name).cloned()
     }
 
-    pub fn get_outputter(&self, name: &str) -> Option<std::sync::Arc<dyn crate::traits::Outputter>> {
+    pub fn get_outputter(
+        &self,
+        name: &str,
+    ) -> Option<std::sync::Arc<dyn crate::traits::Outputter>> {
         self.outputters.get(name).cloned()
     }
 
@@ -166,13 +173,17 @@ impl PluginRegistry {
     pub fn default_config(&self) -> DatasetConfig {
         let mut config = DatasetConfig::default_config();
 
-        let extra_comparators: Vec<String> = self.comparators.keys()
+        let extra_comparators: Vec<String> = self
+            .comparators
+            .keys()
             .filter(|name| !config.comparators.contains(name))
             .cloned()
             .collect();
 
         if !extra_comparators.is_empty() {
-            let insert_pos = config.comparators.iter()
+            let insert_pos = config
+                .comparators
+                .iter()
                 .position(|n| n == "binoc.binary")
                 .unwrap_or(config.comparators.len());
             for (i, name) in extra_comparators.into_iter().enumerate() {
@@ -180,7 +191,9 @@ impl PluginRegistry {
             }
         }
 
-        let extra_transformers: Vec<String> = self.transformers.keys()
+        let extra_transformers: Vec<String> = self
+            .transformers
+            .keys()
             .filter(|name| !config.transformers.contains(name))
             .cloned()
             .collect();
@@ -194,30 +207,33 @@ impl PluginRegistry {
         &self,
         config: &DatasetConfig,
     ) -> Result<ResolvedPlugins, crate::traits::BinocError> {
-        let comparators: Result<Vec<_>, _> = config.comparators.iter()
+        let comparators: Result<Vec<_>, _> = config
+            .comparators
+            .iter()
             .map(|name| {
-                self.get_comparator(name)
-                    .ok_or_else(|| crate::traits::BinocError::Config(
-                        format!("unknown comparator: {name}")
-                    ))
+                self.get_comparator(name).ok_or_else(|| {
+                    crate::traits::BinocError::Config(format!("unknown comparator: {name}"))
+                })
             })
             .collect();
 
-        let transformers: Result<Vec<_>, _> = config.transformers.iter()
+        let transformers: Result<Vec<_>, _> = config
+            .transformers
+            .iter()
             .map(|name| {
-                self.get_transformer(name)
-                    .ok_or_else(|| crate::traits::BinocError::Config(
-                        format!("unknown transformer: {name}")
-                    ))
+                self.get_transformer(name).ok_or_else(|| {
+                    crate::traits::BinocError::Config(format!("unknown transformer: {name}"))
+                })
             })
             .collect();
 
-        let outputters: Result<Vec<_>, _> = config.outputters.iter()
+        let outputters: Result<Vec<_>, _> = config
+            .outputters
+            .iter()
             .map(|name| {
-                self.get_outputter(name)
-                    .ok_or_else(|| crate::traits::BinocError::Config(
-                        format!("unknown outputter: {name}")
-                    ))
+                self.get_outputter(name).ok_or_else(|| {
+                    crate::traits::BinocError::Config(format!("unknown outputter: {name}"))
+                })
             })
             .collect();
 
@@ -242,8 +258,11 @@ impl ResolvedPlugins {
     pub fn outputter_for_extension(
         &self,
         ext: &str,
-    ) -> Result<Option<std::sync::Arc<dyn crate::traits::Outputter>>, crate::traits::BinocError> {
-        let matches: Vec<_> = self.outputters.iter()
+    ) -> Result<Option<std::sync::Arc<dyn crate::traits::Outputter>>, crate::traits::BinocError>
+    {
+        let matches: Vec<_> = self
+            .outputters
+            .iter()
             .filter(|o| o.file_extension() == ext)
             .collect();
         match matches.len() {
@@ -265,7 +284,8 @@ impl ResolvedPlugins {
         &self,
         name: &str,
     ) -> Option<std::sync::Arc<dyn crate::traits::Outputter>> {
-        self.outputters.iter()
+        self.outputters
+            .iter()
             .find(|o| o.name() == name)
             .or_else(|| {
                 let qualified = format!("binoc.{name}");
@@ -284,10 +304,10 @@ impl Default for PluginRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::{Comparator, Transformer};
-    use crate::traits::CompareContext;
-    use crate::types::{CompareResult, ItemPair, TransformResult};
     use crate::ir::DiffNode;
+    use crate::traits::CompareContext;
+    use crate::traits::{Comparator, Transformer};
+    use crate::types::{CompareResult, ItemPair, TransformResult};
     use std::sync::Arc;
 
     struct MockComparator(&'static str);
@@ -356,8 +376,13 @@ output:
         assert_eq!(config.comparators, vec!["binoc.csv", "binoc.text"]);
         assert_eq!(config.transformers, vec!["binoc.move_detector"]);
         let md_val = config.output.get_for_outputter("binoc.markdown");
-        let sig = md_val.get("significance").expect("should have significance section");
-        assert!(sig.get("critical").is_some(), "should have 'critical' category");
+        let sig = md_val
+            .get("significance")
+            .expect("should have significance section");
+        assert!(
+            sig.get("critical").is_some(),
+            "should have 'critical' category"
+        );
     }
 
     #[test]
@@ -390,8 +415,14 @@ output:
         registry.register_comparator("mock-comp", Arc::clone(&comp));
         registry.register_transformer("mock-trans", Arc::clone(&trans));
 
-        assert_eq!(registry.get_comparator("mock-comp").unwrap().name(), "mock-comp");
-        assert_eq!(registry.get_transformer("mock-trans").unwrap().name(), "mock-trans");
+        assert_eq!(
+            registry.get_comparator("mock-comp").unwrap().name(),
+            "mock-comp"
+        );
+        assert_eq!(
+            registry.get_transformer("mock-trans").unwrap().name(),
+            "mock-trans"
+        );
         assert!(registry.get_comparator("unknown").is_none());
         assert!(registry.get_transformer("unknown").is_none());
     }

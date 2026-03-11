@@ -18,15 +18,14 @@ impl Controller {
         comparators: Vec<Arc<dyn Comparator>>,
         transformers: Vec<Arc<dyn Transformer>>,
     ) -> Self {
-        Self { comparators, transformers }
+        Self {
+            comparators,
+            transformers,
+        }
     }
 
     /// Diff two snapshots and produce a migration.
-    pub fn diff(
-        &self,
-        from_path: &str,
-        to_path: &str,
-    ) -> BinocResult<Migration> {
+    pub fn diff(&self, from_path: &str, to_path: &str) -> BinocResult<Migration> {
         let ctx = Arc::new(CompareContext::new());
 
         let left = crate::types::Item::new(from_path, "");
@@ -35,7 +34,8 @@ impl Controller {
 
         let root_node = self.process_pair(root_pair, &ctx)?;
 
-        let root_node = self.run_transformers(root_node, &ctx)
+        let root_node = self
+            .run_transformers(root_node, &ctx)
             .and_then(Self::prune_identical);
 
         Ok(Migration::new(from_path, to_path, root_node))
@@ -52,35 +52,39 @@ impl Controller {
         snapshot_a: &str,
         snapshot_b: &str,
     ) -> BinocResult<ExtractResult> {
-        let root = migration.root.as_ref()
+        let root = migration
+            .root
+            .as_ref()
             .ok_or_else(|| BinocError::Extract("migration has no root".into()))?;
 
         let ancestor_chain = Self::find_ancestor_chain(root, node_path)
             .ok_or_else(|| BinocError::Extract(format!("node not found: {node_path}")))?;
 
-        let target = ancestor_chain.last()
+        let target = ancestor_chain
+            .last()
             .ok_or_else(|| BinocError::Extract("empty ancestor chain".into()))?;
 
         let ctx = Arc::new(CompareContext::new());
 
-        let mut current_pair = ItemPair::both(
-            Item::new(snapshot_a, ""),
-            Item::new(snapshot_b, ""),
-        );
+        let mut current_pair = ItemPair::both(Item::new(snapshot_a, ""), Item::new(snapshot_b, ""));
 
         // Walk ancestor chain (excluding the target itself), reopening at each level
         for ancestor in &ancestor_chain[..ancestor_chain.len() - 1] {
-            let comp_name = ancestor.comparator.as_deref()
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "node '{}' has no comparator recorded", ancestor.path
-                )))?;
+            let comp_name = ancestor.comparator.as_deref().ok_or_else(|| {
+                BinocError::Extract(format!(
+                    "node '{}' has no comparator recorded",
+                    ancestor.path
+                ))
+            })?;
 
-            let comparator = self.find_comparator_by_name(comp_name)
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "comparator '{comp_name}' not found in registry"
-                )))?;
+            let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
+                BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
+            })?;
 
-            let ancestor_idx = ancestor_chain.iter().position(|n| std::ptr::eq(*n, *ancestor)).unwrap();
+            let ancestor_idx = ancestor_chain
+                .iter()
+                .position(|n| std::ptr::eq(*n, *ancestor))
+                .unwrap();
             let next_path = &ancestor_chain[ancestor_idx + 1].path;
 
             current_pair = comparator.reopen(&current_pair, next_path, &ctx)?;
@@ -89,20 +93,24 @@ impl Controller {
         // Now current_pair points at the target's source files.
         // Determine who extracts: last transformer or the comparator.
         if let Some(last_transformer_name) = target.transformed_by.last() {
-            let transformer = self.find_transformer_by_name(last_transformer_name)
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "transformer '{last_transformer_name}' not found in registry"
-                )))?;
+            let transformer = self
+                .find_transformer_by_name(last_transformer_name)
+                .ok_or_else(|| {
+                    BinocError::Extract(format!(
+                        "transformer '{last_transformer_name}' not found in registry"
+                    ))
+                })?;
 
-            let comp_name = target.comparator.as_deref()
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "node '{}' has no comparator for data access", target.path
-                )))?;
+            let comp_name = target.comparator.as_deref().ok_or_else(|| {
+                BinocError::Extract(format!(
+                    "node '{}' has no comparator for data access",
+                    target.path
+                ))
+            })?;
 
-            let comparator = self.find_comparator_by_name(comp_name)
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "comparator '{comp_name}' not found in registry"
-                )))?;
+            let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
+                BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
+            })?;
 
             let data = comparator.reopen_data(&current_pair, &ctx)?;
             transformer.extract(&data, target, aspect)
@@ -111,22 +119,21 @@ impl Controller {
                     target.path
                 )))
         } else {
-            let comp_name = target.comparator.as_deref()
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "node '{}' has no comparator recorded", target.path
-                )))?;
+            let comp_name = target.comparator.as_deref().ok_or_else(|| {
+                BinocError::Extract(format!("node '{}' has no comparator recorded", target.path))
+            })?;
 
-            let comparator = self.find_comparator_by_name(comp_name)
-                .ok_or_else(|| BinocError::Extract(format!(
-                    "comparator '{comp_name}' not found in registry"
-                )))?;
+            let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
+                BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
+            })?;
 
             let data = comparator.reopen_data(&current_pair, &ctx)?;
-            comparator.extract(&data, target, aspect)
-                .ok_or_else(|| BinocError::Extract(format!(
+            comparator.extract(&data, target, aspect).ok_or_else(|| {
+                BinocError::Extract(format!(
                     "comparator '{comp_name}' cannot extract aspect '{aspect}' from node '{}'",
                     target.path
-                )))
+                ))
+            })
         }
     }
 
@@ -155,32 +162,28 @@ impl Controller {
     /// Recursively process an item pair through the comparator pipeline.
     /// Identical items produce nodes with kind "identical" so transformers
     /// can see the full comparison result. Pruning happens after transformers.
-    fn process_pair(
-        &self,
-        pair: ItemPair,
-        ctx: &Arc<CompareContext>,
-    ) -> BinocResult<DiffNode> {
+    fn process_pair(&self, pair: ItemPair, ctx: &Arc<CompareContext>) -> BinocResult<DiffNode> {
         // Short-circuit: if both items have matching content hashes and no
         // comparator opts in to processing identical items, skip dispatch.
         if let Some(hash) = pair.matching_content_hash() {
-            let dominated = self.find_comparator(&pair)
-                .map_or(false, |c| c.handles_identical());
+            let dominated = self
+                .find_comparator(&pair)
+                .is_some_and(|c| c.handles_identical());
             if !dominated {
                 return Ok(DiffNode::new("identical", "", pair.logical_path())
                     .with_detail("hash", serde_json::json!(hash)));
             }
         }
 
-        let comparator = self.find_comparator(&pair)
+        let comparator = self
+            .find_comparator(&pair)
             .ok_or_else(|| BinocError::NoComparator(pair.logical_path().to_string()))?;
 
         let comp_name = comparator.name().to_string();
         let result = comparator.compare(&pair, ctx)?;
 
         let mut node = match result {
-            CompareResult::Identical => {
-                DiffNode::new("identical", "", pair.logical_path())
-            }
+            CompareResult::Identical => DiffNode::new("identical", "", pair.logical_path()),
 
             CompareResult::Leaf(node) => node,
 
@@ -206,16 +209,19 @@ impl Controller {
 
         match (left_hash, right_hash) {
             (Some(l), Some(r)) if l == r => {
-                node.details.entry("hash".into())
+                node.details
+                    .entry("hash".into())
                     .or_insert_with(|| serde_json::json!(l));
             }
             _ => {
                 if let Some(h) = left_hash {
-                    node.details.entry("hash_left".into())
+                    node.details
+                        .entry("hash_left".into())
                         .or_insert_with(|| serde_json::json!(h));
                 }
                 if let Some(h) = right_hash {
-                    node.details.entry("hash_right".into())
+                    node.details
+                        .entry("hash_right".into())
                         .or_insert_with(|| serde_json::json!(h));
                 }
             }
@@ -249,20 +255,33 @@ impl Controller {
         // This prevents e.g. extracted zip contents (directory with logical_path
         // "archive.zip") from being re-claimed by the zip comparator.
         let is_dir = pair.is_dir();
-        let ext = if is_dir { None } else { pair.extension() };
-        let media = if is_dir { None } else { pair.media_type().map(|s| s.to_owned()) };
+        let path_lower = if is_dir {
+            None
+        } else {
+            Some(pair.logical_path().to_lowercase())
+        };
+        let media = if is_dir {
+            None
+        } else {
+            pair.media_type().map(|s| s.to_owned())
+        };
 
         for comparator in &self.comparators {
-            if let Some(ref e) = ext {
+            if let Some(ref p) = path_lower {
                 let exts = comparator.handles_extensions();
-                if !exts.is_empty() && exts.iter().any(|handled| handled.eq_ignore_ascii_case(e)) {
+                if !exts.is_empty()
+                    && exts
+                        .iter()
+                        .any(|handled| p.ends_with(&handled.to_lowercase()))
+                {
                     return Some(Arc::clone(comparator));
                 }
             }
 
             if let Some(ref m) = media {
                 let types = comparator.handles_media_types();
-                if !types.is_empty() && types.iter().any(|handled| handled.eq_ignore_ascii_case(m)) {
+                if !types.is_empty() && types.iter().any(|handled| handled.eq_ignore_ascii_case(m))
+                {
                     return Some(Arc::clone(comparator));
                 }
             }
@@ -303,7 +322,8 @@ impl Controller {
         }
 
         let had_children = !node.children.is_empty();
-        let children: Vec<DiffNode> = node.children
+        let children: Vec<DiffNode> = node
+            .children
             .into_iter()
             .filter_map(Self::prune_identical)
             .collect();
@@ -311,9 +331,7 @@ impl Controller {
         // Prune containers that lost all their change-bearing children
         // and carry no own payload (details/tags). Leaf nodes (never had
         // children) are always preserved — they represent actual changes.
-        if had_children && children.is_empty()
-            && node.details.is_empty() && node.tags.is_empty()
-        {
+        if had_children && children.is_empty() && node.details.is_empty() && node.tags.is_empty() {
             return None;
         }
 
@@ -333,7 +351,9 @@ impl Controller {
 
         match transformer.scope() {
             TransformScope::Node => {
-                node.children = node.children.into_iter()
+                node.children = node
+                    .children
+                    .into_iter()
                     .flat_map(|child| self.apply_transformer(child, transformer, ctx))
                     .collect();
 
@@ -344,12 +364,13 @@ impl Controller {
                             new_node.transformed_by.push(trans_name);
                             vec![new_node]
                         }
-                        TransformResult::ReplaceMany(nodes) => {
-                            nodes.into_iter().map(|mut n| {
+                        TransformResult::ReplaceMany(nodes) => nodes
+                            .into_iter()
+                            .map(|mut n| {
                                 n.transformed_by.push(trans_name.clone());
                                 n
-                            }).collect()
-                        }
+                            })
+                            .collect(),
                         TransformResult::Remove => vec![],
                     }
                 } else {
@@ -364,16 +385,19 @@ impl Controller {
                             new_node.transformed_by.push(trans_name);
                             vec![new_node]
                         }
-                        TransformResult::ReplaceMany(nodes) => {
-                            nodes.into_iter().map(|mut n| {
+                        TransformResult::ReplaceMany(nodes) => nodes
+                            .into_iter()
+                            .map(|mut n| {
                                 n.transformed_by.push(trans_name.clone());
                                 n
-                            }).collect()
-                        }
+                            })
+                            .collect(),
                         TransformResult::Remove => vec![],
                     }
                 } else {
-                    node.children = node.children.into_iter()
+                    node.children = node
+                        .children
+                        .into_iter()
                         .flat_map(|child| self.apply_transformer(child, transformer, ctx))
                         .collect();
                     vec![node]
@@ -383,11 +407,7 @@ impl Controller {
     }
 
     /// Check if a transformer's declarative filters match a node.
-    fn transformer_matches(
-        &self,
-        transformer: &Arc<dyn Transformer>,
-        node: &DiffNode,
-    ) -> bool {
+    fn transformer_matches(&self, transformer: &Arc<dyn Transformer>, node: &DiffNode) -> bool {
         let types = transformer.match_types();
         if !types.is_empty() && types.contains(&node.item_type.as_str()) {
             return true;
@@ -410,10 +430,10 @@ impl Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::{Comparator, Transformer};
-    use crate::traits::CompareContext;
-    use crate::types::{CompareResult, ItemPair, TransformResult, TransformScope};
     use crate::ir::DiffNode;
+    use crate::traits::CompareContext;
+    use crate::traits::{Comparator, Transformer};
+    use crate::types::{CompareResult, ItemPair, TransformResult, TransformScope};
 
     struct CatchAllIdenticalComparator;
     impl Comparator for CatchAllIdenticalComparator {
@@ -423,11 +443,7 @@ mod tests {
         fn can_handle(&self, _pair: &ItemPair) -> bool {
             true
         }
-        fn compare(
-            &self,
-            _pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> BinocResult<CompareResult> {
+        fn compare(&self, _pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Identical)
         }
     }
@@ -440,11 +456,7 @@ mod tests {
         fn can_handle(&self, _pair: &ItemPair) -> bool {
             true
         }
-        fn compare(
-            &self,
-            pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> BinocResult<CompareResult> {
+        fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Leaf(DiffNode::new(
                 "modify",
                 "file",
@@ -461,11 +473,7 @@ mod tests {
         fn can_handle(&self, _pair: &ItemPair) -> bool {
             true
         }
-        fn compare(
-            &self,
-            pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> BinocResult<CompareResult> {
+        fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Leaf(DiffNode::new(
                 "modify",
                 self.0,
@@ -482,11 +490,7 @@ mod tests {
         fn can_handle(&self, _pair: &ItemPair) -> bool {
             true
         }
-        fn compare(
-            &self,
-            pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> BinocResult<CompareResult> {
+        fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Leaf(
                 DiffNode::new("modify", "file", pair.logical_path()).with_tag(self.0),
             ))
@@ -501,11 +505,7 @@ mod tests {
         fn can_handle(&self, pair: &ItemPair) -> bool {
             pair.is_dir()
         }
-        fn compare(
-            &self,
-            pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> BinocResult<CompareResult> {
+        fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             let path = pair.logical_path();
             let left_path = pair.left.as_ref().map(|i| i.physical_path.clone());
             let right_path = pair.right.as_ref().map(|i| i.physical_path.clone());
@@ -518,8 +518,14 @@ mod tests {
                         (l.join("b.txt"), r.join("b.txt")),
                     ] {
                         if lp.exists() && rp.exists() {
-                            let left = Item::new(&lp, format!("{path}/{}", lp.file_name().unwrap().to_string_lossy()));
-                            let right = Item::new(&rp, format!("{path}/{}", rp.file_name().unwrap().to_string_lossy()));
+                            let left = Item::new(
+                                &lp,
+                                format!("{path}/{}", lp.file_name().unwrap().to_string_lossy()),
+                            );
+                            let right = Item::new(
+                                &rp,
+                                format!("{path}/{}", rp.file_name().unwrap().to_string_lossy()),
+                            );
                             pairs.push(ItemPair::both(left, right));
                         }
                     }
@@ -539,10 +545,7 @@ mod tests {
     fn controller_identical_comparator_produces_no_root_diff() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().to_string();
-        let controller = Controller::new(
-            vec![Arc::new(CatchAllIdenticalComparator)],
-            vec![],
-        );
+        let controller = Controller::new(vec![Arc::new(CatchAllIdenticalComparator)], vec![]);
         let migration = controller.diff(&path, &path).unwrap();
         assert!(migration.root.is_none());
     }
@@ -551,10 +554,7 @@ mod tests {
     fn controller_leaf_comparator_produces_leaf_node() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().to_string();
-        let controller = Controller::new(
-            vec![Arc::new(LeafComparator)],
-            vec![],
-        );
+        let controller = Controller::new(vec![Arc::new(LeafComparator)], vec![]);
         let migration = controller.diff(&path, &path).unwrap();
         let root = migration.root.as_ref().unwrap();
         assert_eq!(root.kind, "modify");
@@ -574,10 +574,12 @@ mod tests {
             vec![Arc::new(ExpandComparator), Arc::new(LeafComparator)],
             vec![],
         );
-        let migration = controller.diff(
-            from_dir.path().to_string_lossy().as_ref(),
-            to_dir.path().to_string_lossy().as_ref(),
-        ).unwrap();
+        let migration = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
 
         let root = migration.root.as_ref().unwrap();
         assert_eq!(root.kind, "modify");
@@ -707,8 +709,12 @@ mod tests {
         extensions: &'static [&'static str],
     }
     impl Comparator for ExtensionComparator {
-        fn name(&self) -> &str { self.name }
-        fn handles_extensions(&self) -> &[&str] { self.extensions }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn handles_extensions(&self) -> &[&str] {
+            self.extensions
+        }
         fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Leaf(
                 DiffNode::new("modify", "file", pair.logical_path())
@@ -723,7 +729,9 @@ mod tests {
         path_contains: &'static str,
     }
     impl Comparator for SelectiveCanHandleComparator {
-        fn name(&self) -> &str { self.name }
+        fn name(&self) -> &str {
+            self.name
+        }
         fn can_handle(&self, pair: &ItemPair) -> bool {
             pair.logical_path().contains(self.path_contains)
         }
@@ -741,8 +749,12 @@ mod tests {
         media_types: &'static [&'static str],
     }
     impl Comparator for MediaTypeComparator {
-        fn name(&self) -> &str { self.name }
-        fn handles_media_types(&self) -> &[&str] { self.media_types }
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn handles_media_types(&self) -> &[&str] {
+            self.media_types
+        }
         fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
             Ok(CompareResult::Leaf(
                 DiffNode::new("modify", "file", pair.logical_path())
@@ -766,7 +778,10 @@ mod tests {
         );
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("csv-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("csv-comp"))
+        );
     }
 
     #[test]
@@ -788,7 +803,7 @@ mod tests {
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
         // csv-comp can't claim .txt, so LeafComparator (via can_handle) wins
-        assert!(result.details.get("claimed_by").is_none());
+        assert!(!result.details.contains_key("claimed_by"));
     }
 
     #[test]
@@ -812,7 +827,10 @@ mod tests {
         );
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("custom")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("custom"))
+        );
     }
 
     #[test]
@@ -836,7 +854,10 @@ mod tests {
         );
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("csv-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("csv-comp"))
+        );
     }
 
     #[test]
@@ -860,7 +881,10 @@ mod tests {
         );
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("csv-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("csv-comp"))
+        );
     }
 
     #[test]
@@ -899,7 +923,10 @@ mod tests {
         let pair = ItemPair::both(left, right);
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("zip-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("zip-comp"))
+        );
     }
 
     #[test]
@@ -926,7 +953,10 @@ mod tests {
         let pair = ItemPair::both(left, right);
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("csv-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("csv-comp"))
+        );
     }
 
     #[test]
@@ -948,7 +978,10 @@ mod tests {
         let pair = ItemPair::both(left, right);
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
-        assert_eq!(result.details.get("claimed_by"), Some(&serde_json::json!("zip-comp")));
+        assert_eq!(
+            result.details.get("claimed_by"),
+            Some(&serde_json::json!("zip-comp"))
+        );
     }
 
     #[test]
@@ -996,13 +1029,17 @@ mod tests {
         let ctx = Arc::new(CompareContext::new());
         let result = controller.process_pair(pair, &ctx).unwrap();
         // zip-comp doesn't match text/plain, so LeafComparator (can_handle) wins
-        assert!(result.details.get("claimed_by").is_none());
+        assert!(!result.details.contains_key("claimed_by"));
     }
 
     struct RemoveTransformer;
     impl Transformer for RemoveTransformer {
-        fn name(&self) -> &str { "remove-test" }
-        fn match_kinds(&self) -> &[&str] { &["modify"] }
+        fn name(&self) -> &str {
+            "remove-test"
+        }
+        fn match_kinds(&self) -> &[&str] {
+            &["modify"]
+        }
         fn transform(&self, _node: DiffNode, _ctx: &CompareContext) -> TransformResult {
             TransformResult::Remove
         }
@@ -1019,10 +1056,12 @@ mod tests {
         std::fs::write(from_dir.path().join("a.txt"), b"x").unwrap();
         std::fs::write(to_dir.path().join("a.txt"), b"y").unwrap();
 
-        let migration = controller.diff(
-            from_dir.path().to_string_lossy().as_ref(),
-            to_dir.path().to_string_lossy().as_ref(),
-        ).unwrap();
+        let migration = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
         // RemoveTransformer matches "modify" kind. Both the root (directory)
         // and the child (file) have kind "modify", so all nodes are removed
         // and the migration should have no root.
@@ -1033,8 +1072,12 @@ mod tests {
     fn transformer_remove_splices_out_child() {
         struct RemoveFileTransformer;
         impl Transformer for RemoveFileTransformer {
-            fn name(&self) -> &str { "remove-file" }
-            fn match_types(&self) -> &[&str] { &["file"] }
+            fn name(&self) -> &str {
+                "remove-file"
+            }
+            fn match_types(&self) -> &[&str] {
+                &["file"]
+            }
             fn transform(&self, _node: DiffNode, _ctx: &CompareContext) -> TransformResult {
                 TransformResult::Remove
             }
@@ -1051,10 +1094,12 @@ mod tests {
         std::fs::write(to_dir.path().join("a.txt"), b"x2").unwrap();
         std::fs::write(to_dir.path().join("b.txt"), b"y2").unwrap();
 
-        let migration = controller.diff(
-            from_dir.path().to_string_lossy().as_ref(),
-            to_dir.path().to_string_lossy().as_ref(),
-        ).unwrap();
+        let migration = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
         // The directory container itself has kind "modify" but type "directory",
         // so it's not matched. Its file children are spliced out entirely.
         let root = migration.root.as_ref().unwrap();
@@ -1064,8 +1109,12 @@ mod tests {
 
     struct ReplaceManyTransformer;
     impl Transformer for ReplaceManyTransformer {
-        fn name(&self) -> &str { "replace-many" }
-        fn match_types(&self) -> &[&str] { &["file"] }
+        fn name(&self) -> &str {
+            "replace-many"
+        }
+        fn match_types(&self) -> &[&str] {
+            &["file"]
+        }
         fn transform(&self, node: DiffNode, _ctx: &CompareContext) -> TransformResult {
             TransformResult::ReplaceMany(vec![
                 DiffNode::new("add", "file", format!("{}.part1", node.path)),
@@ -1085,10 +1134,12 @@ mod tests {
         std::fs::write(from_dir.path().join("a.txt"), b"x").unwrap();
         std::fs::write(to_dir.path().join("a.txt"), b"y").unwrap();
 
-        let migration = controller.diff(
-            from_dir.path().to_string_lossy().as_ref(),
-            to_dir.path().to_string_lossy().as_ref(),
-        ).unwrap();
+        let migration = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
         let root = migration.root.as_ref().unwrap();
         // The single "file" child should be replaced with two siblings.
         assert_eq!(root.children.len(), 2);
@@ -1100,8 +1151,12 @@ mod tests {
     fn transformer_unchanged_preserves_node() {
         struct NoOpTransformer;
         impl Transformer for NoOpTransformer {
-            fn name(&self) -> &str { "noop" }
-            fn match_kinds(&self) -> &[&str] { &["modify"] }
+            fn name(&self) -> &str {
+                "noop"
+            }
+            fn match_kinds(&self) -> &[&str] {
+                &["modify"]
+            }
             fn transform(&self, _node: DiffNode, _ctx: &CompareContext) -> TransformResult {
                 TransformResult::Unchanged
             }
@@ -1136,10 +1191,12 @@ mod tests {
         std::fs::write(from_dir.path().join("a.txt"), b"").unwrap();
         std::fs::write(to_dir.path().join("a.txt"), b"").unwrap();
 
-        let migration = controller.diff(
-            from_dir.path().to_string_lossy().as_ref(),
-            to_dir.path().to_string_lossy().as_ref(),
-        ).unwrap();
+        let migration = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
         let root = migration.root.as_ref().unwrap();
         assert!(root.tags.contains("transformed"));
     }

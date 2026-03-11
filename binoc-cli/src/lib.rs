@@ -119,9 +119,7 @@ fn resolve_format(
     match &spec.format {
         Some(fmt) => resolve_format_name(fmt, resolved),
         None => {
-            let ext = spec.path.extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
+            let ext = spec.path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if ext == "json" {
                 return Ok(ResolvedFormat::Json);
             }
@@ -143,7 +141,8 @@ fn resolve_format_name(
     if name == "json" {
         return Ok(ResolvedFormat::Json);
     }
-    resolved.outputter_by_name(name)
+    resolved
+        .outputter_by_name(name)
         .map(ResolvedFormat::Outputter)
         .ok_or_else(|| BinocError::Config(format!("unknown output format: {name}")))
 }
@@ -156,8 +155,7 @@ fn render(
     match format {
         ResolvedFormat::Json => {
             if migrations.len() == 1 {
-                output::to_json(&migrations[0])
-                    .map_err(|e| BinocError::Other(e.to_string()))
+                output::to_json(&migrations[0]).map_err(|e| BinocError::Other(e.to_string()))
             } else {
                 serde_json::to_string_pretty(&migrations)
                     .map_err(|e| BinocError::Other(e.to_string()))
@@ -221,14 +219,22 @@ pub fn run(
     };
 
     match cli.command {
-        Commands::Diff { snapshot_a, snapshot_b, config, output, format, quiet } => {
+        Commands::Diff {
+            snapshot_a,
+            snapshot_b,
+            config,
+            output,
+            format,
+            quiet,
+        } => {
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
                 None => registry.default_config(),
             };
 
             let resolved = registry.resolve(&dataset_config)?;
-            let controller = Controller::new(resolved.comparators.clone(), resolved.transformers.clone());
+            let controller =
+                Controller::new(resolved.comparators.clone(), resolved.transformers.clone());
 
             let snap_a = snapshot_a.to_string_lossy().to_string();
             let snap_b = snapshot_b.to_string_lossy().to_string();
@@ -236,9 +242,22 @@ pub fn run(
             let migration = controller.diff(&snap_a, &snap_b)?;
             let migrations = [migration];
 
-            write_outputs(&output, &format, quiet, &migrations, &dataset_config, &resolved)?;
+            write_outputs(
+                &output,
+                &format,
+                quiet,
+                &migrations,
+                &dataset_config,
+                &resolved,
+            )?;
         }
-        Commands::Changelog { migrations: migration_paths, config, output, format, quiet } => {
+        Commands::Changelog {
+            migrations: migration_paths,
+            config,
+            output,
+            format,
+            quiet,
+        } => {
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
                 None => registry.default_config(),
@@ -253,9 +272,23 @@ pub fn run(
                 migrations.push(m);
             }
 
-            write_outputs(&output, &format, quiet, &migrations, &dataset_config, &resolved)?;
+            write_outputs(
+                &output,
+                &format,
+                quiet,
+                &migrations,
+                &dataset_config,
+                &resolved,
+            )?;
         }
-        Commands::Extract { migration: migration_path, node, aspect, snapshot_a, snapshot_b, config } => {
+        Commands::Extract {
+            migration: migration_path,
+            node,
+            aspect,
+            snapshot_a,
+            snapshot_b,
+            config,
+        } => {
             let data = std::fs::read_to_string(&migration_path)?;
             let migration: Migration = serde_json::from_str(&data)?;
 
@@ -286,17 +319,15 @@ pub fn run(
             let controller = Controller::new(resolved.comparators, resolved.transformers);
 
             match controller.extract(&migration, &node, &aspect, &snap_a, &snap_b) {
-                Ok(result) => {
-                    match result {
-                        binoc_core::types::ExtractResult::Text(text) => {
-                            print!("{text}");
-                        }
-                        binoc_core::types::ExtractResult::Binary(bytes) => {
-                            use std::io::Write;
-                            std::io::stdout().write_all(&bytes)?;
-                        }
+                Ok(result) => match result {
+                    binoc_core::types::ExtractResult::Text(text) => {
+                        print!("{text}");
                     }
-                }
+                    binoc_core::types::ExtractResult::Binary(bytes) => {
+                        use std::io::Write;
+                        std::io::stdout().write_all(&bytes)?;
+                    }
+                },
                 Err(e) => {
                     eprintln!("Extract error: {e}");
                     std::process::exit(1);

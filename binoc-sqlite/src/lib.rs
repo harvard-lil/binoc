@@ -1,16 +1,13 @@
 mod sqlite;
 
-use std::sync::Arc;
 use binoc_core::config::PluginRegistry;
+use std::sync::Arc;
 
 pub use sqlite::SqliteComparator;
 
 /// Register the SQLite comparator into a Rust PluginRegistry.
 pub fn register(registry: &mut PluginRegistry) {
-    registry.register_comparator(
-        "binoc-sqlite.sqlite",
-        Arc::new(SqliteComparator),
-    );
+    registry.register_comparator("binoc-sqlite.sqlite", Arc::new(SqliteComparator));
 }
 
 #[cfg(feature = "python")]
@@ -35,7 +32,9 @@ mod py {
     impl PySqliteComparatorCore {
         #[new]
         fn new() -> Self {
-            Self { inner: super::SqliteComparator }
+            Self {
+                inner: super::SqliteComparator,
+            }
         }
 
         /// Run the Rust comparator and return a JSON string describing
@@ -51,18 +50,16 @@ mod py {
                     Item::new(l.as_str(), &logical_path),
                     Item::new(r.as_str(), &logical_path),
                 ),
-                (None, Some(r)) => ItemPair::added(
-                    Item::new(r.as_str(), &logical_path),
-                ),
-                (Some(l), None) => ItemPair::removed(
-                    Item::new(l.as_str(), &logical_path),
-                ),
+                (None, Some(r)) => ItemPair::added(Item::new(r.as_str(), &logical_path)),
+                (Some(l), None) => ItemPair::removed(Item::new(l.as_str(), &logical_path)),
                 (None, None) => return Ok(None),
             };
 
             let ctx = CompareContext::new();
             use binoc_core::traits::Comparator;
-            let result = self.inner.compare(&rust_pair, &ctx)
+            let result = self
+                .inner
+                .compare(&rust_pair, &ctx)
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             match result {

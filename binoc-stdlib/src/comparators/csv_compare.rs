@@ -13,11 +13,10 @@ pub struct CsvComparator;
 fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
     let file = std::fs::File::open(path).map_err(BinocError::Io)?;
     let reader = BufReader::new(file);
-    let mut rdr = csv::ReaderBuilder::new()
-        .flexible(true)
-        .from_reader(reader);
+    let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(reader);
 
-    let headers: Vec<String> = rdr.headers()
+    let headers: Vec<String> = rdr
+        .headers()
         .map_err(|e| BinocError::Csv(e.to_string()))?
         .iter()
         .map(|s| s.to_string())
@@ -33,20 +32,23 @@ fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
 }
 
 impl Comparator for CsvComparator {
-    fn name(&self) -> &str { "binoc.csv" }
+    fn name(&self) -> &str {
+        "binoc.csv"
+    }
 
-    fn handles_extensions(&self) -> &[&str] { &[".csv", ".tsv"] }
+    fn handles_extensions(&self) -> &[&str] {
+        &[".csv", ".tsv"]
+    }
 
     fn compare(&self, pair: &ItemPair, ctx: &CompareContext) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
-            (Some(left), Some(right)) => {
-                self.compare_both(left, right, pair.logical_path(), ctx)
-            }
+            (Some(left), Some(right)) => self.compare_both(left, right, pair.logical_path(), ctx),
             (None, Some(right)) => {
                 let csv = parse_csv(&right.physical_path)?;
                 let summary = format!(
                     "New table ({} columns, {} rows)",
-                    csv.headers.len(), csv.rows.len()
+                    csv.headers.len(),
+                    csv.rows.len()
                 );
                 let node = DiffNode::new("add", "tabular", &right.logical_path)
                     .with_summary(summary)
@@ -54,10 +56,13 @@ impl Comparator for CsvComparator {
                     .with_detail("columns", serde_json::json!(csv.headers))
                     .with_detail("rows", serde_json::json!(csv.rows.len()));
 
-                ctx.cache_data(&right.logical_path, ReopenedData::Tabular(TabularDataPair {
-                    left: None,
-                    right: Some(csv),
-                }));
+                ctx.cache_data(
+                    &right.logical_path,
+                    ReopenedData::Tabular(TabularDataPair {
+                        left: None,
+                        right: Some(csv),
+                    }),
+                );
 
                 Ok(CompareResult::Leaf(node))
             }
@@ -65,7 +70,8 @@ impl Comparator for CsvComparator {
                 let csv = parse_csv(&left.physical_path)?;
                 let summary = format!(
                     "Table removed ({} columns, {} rows)",
-                    csv.headers.len(), csv.rows.len()
+                    csv.headers.len(),
+                    csv.rows.len()
                 );
                 let node = DiffNode::new("remove", "tabular", &left.logical_path)
                     .with_summary(summary)
@@ -73,10 +79,13 @@ impl Comparator for CsvComparator {
                     .with_detail("columns", serde_json::json!(csv.headers))
                     .with_detail("rows", serde_json::json!(csv.rows.len()));
 
-                ctx.cache_data(&left.logical_path, ReopenedData::Tabular(TabularDataPair {
-                    left: Some(csv),
-                    right: None,
-                }));
+                ctx.cache_data(
+                    &left.logical_path,
+                    ReopenedData::Tabular(TabularDataPair {
+                        left: Some(csv),
+                        right: None,
+                    }),
+                );
 
                 Ok(CompareResult::Leaf(node))
             }
@@ -84,27 +93,24 @@ impl Comparator for CsvComparator {
         }
     }
 
-    fn reopen_data(
-        &self,
-        pair: &ItemPair,
-        _ctx: &CompareContext,
-    ) -> BinocResult<ReopenedData> {
-        let left = pair.left.as_ref()
+    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
+        let left = pair
+            .left
+            .as_ref()
             .map(|item| parse_csv(&item.physical_path))
             .transpose()?;
-        let right = pair.right.as_ref()
+        let right = pair
+            .right
+            .as_ref()
             .map(|item| parse_csv(&item.physical_path))
             .transpose()?;
         Ok(ReopenedData::Tabular(TabularDataPair { left, right }))
     }
 
-    fn extract(
-        &self,
-        data: &ReopenedData,
-        node: &DiffNode,
-        aspect: &str,
-    ) -> Option<ExtractResult> {
-        let ReopenedData::Tabular(pair) = data else { return None };
+    fn extract(&self, data: &ReopenedData, node: &DiffNode, aspect: &str) -> Option<ExtractResult> {
+        let ReopenedData::Tabular(pair) = data else {
+            return None;
+        };
         tabular_extract(pair, node, aspect)
     }
 }
@@ -165,7 +171,9 @@ pub fn tabular_extract(
             let left = pair.left.as_ref()?;
             let right = pair.right.as_ref()?;
             let left_set: BTreeSet<&str> = left.headers.iter().map(|s| s.as_str()).collect();
-            let added: Vec<&str> = right.headers.iter()
+            let added: Vec<&str> = right
+                .headers
+                .iter()
                 .filter(|h| !left_set.contains(h.as_str()))
                 .map(|h| h.as_str())
                 .collect();
@@ -187,7 +195,9 @@ pub fn tabular_extract(
             let left = pair.left.as_ref()?;
             let right = pair.right.as_ref()?;
             let right_set: BTreeSet<&str> = right.headers.iter().map(|s| s.as_str()).collect();
-            let removed: Vec<&str> = left.headers.iter()
+            let removed: Vec<&str> = left
+                .headers
+                .iter()
                 .filter(|h| !right_set.contains(h.as_str()))
                 .map(|h| h.as_str())
                 .collect();
@@ -251,13 +261,22 @@ fn tabular_summary(
         parts.push("columns reordered".into());
     }
     if rows_added > 0 {
-        parts.push(format!("{rows_added} row{} added", if rows_added == 1 { "" } else { "s" }));
+        parts.push(format!(
+            "{rows_added} row{} added",
+            if rows_added == 1 { "" } else { "s" }
+        ));
     }
     if rows_removed > 0 {
-        parts.push(format!("{rows_removed} row{} removed", if rows_removed == 1 { "" } else { "s" }));
+        parts.push(format!(
+            "{rows_removed} row{} removed",
+            if rows_removed == 1 { "" } else { "s" }
+        ));
     }
     if cells_changed > 0 {
-        parts.push(format!("{cells_changed} cell{} changed", if cells_changed == 1 { "" } else { "s" }));
+        parts.push(format!(
+            "{cells_changed} cell{} changed",
+            if cells_changed == 1 { "" } else { "s" }
+        ));
     }
 
     if parts.is_empty() {
@@ -273,49 +292,75 @@ fn tabular_summary(
 }
 
 fn fmt_quoted_list(items: &[&str]) -> String {
-    items.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(", ")
+    items
+        .iter()
+        .map(|s| format!("'{s}'"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn columns_in_common(left: &TabularData, right: &TabularData) -> Vec<String> {
     let left_set: BTreeSet<&str> = left.headers.iter().map(|s| s.as_str()).collect();
-    right.headers.iter()
+    right
+        .headers
+        .iter()
         .filter(|h| left_set.contains(h.as_str()))
         .cloned()
         .collect()
 }
 
 impl CsvComparator {
-    fn compare_both(&self, left: &Item, right: &Item, logical_path: &str, ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare_both(
+        &self,
+        left: &Item,
+        right: &Item,
+        logical_path: &str,
+        ctx: &CompareContext,
+    ) -> BinocResult<CompareResult> {
         let csv_l = parse_csv(&left.physical_path)?;
         let csv_r = parse_csv(&right.physical_path)?;
 
         let headers_l: BTreeSet<&str> = csv_l.headers.iter().map(|s| s.as_str()).collect();
         let headers_r: BTreeSet<&str> = csv_r.headers.iter().map(|s| s.as_str()).collect();
 
-        let columns_added: Vec<String> = headers_r.difference(&headers_l)
-            .map(|s| s.to_string()).collect();
-        let columns_removed: Vec<String> = headers_l.difference(&headers_r)
-            .map(|s| s.to_string()).collect();
-        let columns_common: Vec<String> = headers_l.intersection(&headers_r)
-            .map(|s| s.to_string()).collect();
+        let columns_added: Vec<String> = headers_r
+            .difference(&headers_l)
+            .map(|s| s.to_string())
+            .collect();
+        let columns_removed: Vec<String> = headers_l
+            .difference(&headers_r)
+            .map(|s| s.to_string())
+            .collect();
+        let columns_common: Vec<String> = headers_l
+            .intersection(&headers_r)
+            .map(|s| s.to_string())
+            .collect();
 
         let order_changed = {
-            let common_order_l: Vec<&str> = csv_l.headers.iter()
+            let common_order_l: Vec<&str> = csv_l
+                .headers
+                .iter()
                 .filter(|h| columns_common.contains(h))
                 .map(|s| s.as_str())
                 .collect();
-            let common_order_r: Vec<&str> = csv_r.headers.iter()
+            let common_order_r: Vec<&str> = csv_r
+                .headers
+                .iter()
                 .filter(|h| columns_common.contains(h))
                 .map(|s| s.as_str())
                 .collect();
             common_order_l != common_order_r
         };
 
-        let col_idx_l: BTreeMap<&str, usize> = csv_l.headers.iter()
+        let col_idx_l: BTreeMap<&str, usize> = csv_l
+            .headers
+            .iter()
             .enumerate()
             .map(|(i, h)| (h.as_str(), i))
             .collect();
-        let col_idx_r: BTreeMap<&str, usize> = csv_r.headers.iter()
+        let col_idx_r: BTreeMap<&str, usize> = csv_r
+            .headers
+            .iter()
             .enumerate()
             .map(|(i, h)| (h.as_str(), i))
             .collect();
@@ -327,11 +372,13 @@ impl CsvComparator {
             let row_l = &csv_l.rows[i];
             let row_r = &csv_r.rows[i];
             for col in &columns_common {
-                let val_l = col_idx_l.get(col.as_str())
+                let val_l = col_idx_l
+                    .get(col.as_str())
                     .and_then(|&j| row_l.get(j))
                     .map(|s| s.as_str())
                     .unwrap_or("");
-                let val_r = col_idx_r.get(col.as_str())
+                let val_r = col_idx_r
+                    .get(col.as_str())
                     .and_then(|&j| row_r.get(j))
                     .map(|s| s.as_str())
                     .unwrap_or("");
@@ -388,15 +435,22 @@ impl CsvComparator {
         }
 
         node.summary = Some(tabular_summary(
-            &columns_added, &columns_removed, order_changed,
-            rows_added, rows_removed, cells_changed,
+            &columns_added,
+            &columns_removed,
+            order_changed,
+            rows_added,
+            rows_removed,
+            cells_changed,
         ));
 
         // Cache the parsed data for downstream transformers and extract
-        ctx.cache_data(logical_path, ReopenedData::Tabular(TabularDataPair {
-            left: Some(csv_l),
-            right: Some(csv_r),
-        }));
+        ctx.cache_data(
+            logical_path,
+            ReopenedData::Tabular(TabularDataPair {
+                left: Some(csv_l),
+                right: Some(csv_r),
+            }),
+        );
 
         Ok(CompareResult::Leaf(node))
     }

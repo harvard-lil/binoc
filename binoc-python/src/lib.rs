@@ -10,7 +10,9 @@ use binoc_core::controller::Controller;
 use binoc_core::ir;
 use binoc_core::output;
 use binoc_core::traits::{self, BinocError, BinocResult, CompareContext};
-use binoc_core::types::{CompareResult, ExtractResult, Item, ItemPair, ReopenedData, TransformResult};
+use binoc_core::types::{
+    CompareResult, ExtractResult, Item, ItemPair, ReopenedData, TransformResult,
+};
 
 use binoc_stdlib::outputters::markdown as md_outputter;
 
@@ -108,6 +110,7 @@ pub struct PyDiffNode {
 impl PyDiffNode {
     #[new]
     #[pyo3(signature = (kind, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         kind: String,
         item_type: String,
@@ -130,7 +133,9 @@ impl PyDiffNode {
                     node.tags.insert(item.extract::<String>()?);
                 }
             } else {
-                return Err(PyTypeError::new_err("tags must be a list or set of strings"));
+                return Err(PyTypeError::new_err(
+                    "tags must be a list or set of strings",
+                ));
             }
         }
         if let Some(d) = details {
@@ -363,6 +368,7 @@ impl PyMigration {
     }
 
     #[getter]
+    #[allow(clippy::wrong_self_convention)]
     fn from_snapshot(&self) -> &str {
         &self.inner.from_snapshot
     }
@@ -512,9 +518,7 @@ impl PyItemPair {
                 l.as_str(),
                 self.left_logical.as_deref().unwrap_or(""),
             )),
-            (None, None) => {
-                ItemPair::both(Item::new("", ""), Item::new("", ""))
-            }
+            (None, None) => ItemPair::both(Item::new("", ""), Item::new("", "")),
         }
     }
 }
@@ -658,7 +662,11 @@ impl PyExpand {
         Self { node, children }
     }
     fn __repr__(&self) -> String {
-        format!("Expand({}, {} children)", self.node.__repr__(), self.children.len())
+        format!(
+            "Expand({}, {} children)",
+            self.node.__repr__(),
+            self.children.len()
+        )
     }
 }
 
@@ -753,11 +761,7 @@ impl traits::Comparator for PyComparatorBridge {
     fn can_handle(&self, pair: &ItemPair) -> bool {
         if !self.extensions.is_empty() && !pair.is_dir() {
             if let Some(ext) = pair.extension() {
-                if self
-                    .extensions
-                    .iter()
-                    .any(|e| e.eq_ignore_ascii_case(&ext))
-                {
+                if self.extensions.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
                     return true;
                 }
             }
@@ -796,10 +800,7 @@ impl traits::Comparator for PyComparatorBridge {
     }
 }
 
-fn convert_py_compare_result(
-    py: Python<'_>,
-    obj: &Py<PyAny>,
-) -> BinocResult<CompareResult> {
+fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<CompareResult> {
     let bound = obj.bind(py);
     if bound.is_instance_of::<PyIdentical>() {
         Ok(CompareResult::Identical)
@@ -816,9 +817,7 @@ fn convert_py_compare_result(
             .unwrap_or_else(|_| "<unknown>".to_string());
         Err(BinocError::Comparator {
             comparator: "python".into(),
-            message: format!(
-                "compare() must return Identical, Leaf, or Expand, got {type_name}",
-            ),
+            message: format!("compare() must return Identical, Leaf, or Expand, got {type_name}",),
         })
     }
 }
@@ -846,23 +845,16 @@ impl traits::Transformer for PyTransformerBridge {
 
     fn can_handle(&self, node: &ir::DiffNode) -> bool {
         if !self.match_types_val.is_empty()
-            && self
-                .match_types_val
-                .iter()
-                .any(|t| t == &node.item_type)
+            && self.match_types_val.iter().any(|t| t == &node.item_type)
         {
             return true;
         }
         if !self.match_tags_val.is_empty()
-            && self
-                .match_tags_val
-                .iter()
-                .any(|t| node.tags.contains(t))
+            && self.match_tags_val.iter().any(|t| node.tags.contains(t))
         {
             return true;
         }
-        if !self.match_kinds_val.is_empty()
-            && self.match_kinds_val.iter().any(|k| k == &node.kind)
+        if !self.match_kinds_val.is_empty() && self.match_kinds_val.iter().any(|k| k == &node.kind)
         {
             return true;
         }
@@ -895,10 +887,7 @@ impl traits::Transformer for PyTransformerBridge {
     }
 }
 
-fn convert_py_transform_result(
-    py: Python<'_>,
-    obj: &Py<PyAny>,
-) -> Option<TransformResult> {
+fn convert_py_transform_result(py: Python<'_>, obj: &Py<PyAny>) -> Option<TransformResult> {
     let bound = obj.bind(py);
     if bound.is_instance_of::<PyUnchanged>() {
         Some(TransformResult::Unchanged)
@@ -914,7 +903,10 @@ fn convert_py_transform_result(
     }
 }
 
-fn create_comparator_bridge(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyComparatorBridge> {
+fn create_comparator_bridge(
+    _py: Python<'_>,
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<PyComparatorBridge> {
     let name: String = obj
         .getattr("name")
         .and_then(|n| n.extract())
@@ -1010,14 +1002,12 @@ impl PyConfig {
     }
 
     fn add_comparator(&mut self, comparator: Bound<'_, PyAny>) -> PyResult<()> {
-        self.extra_comparators
-            .push(comparator.unbind());
+        self.extra_comparators.push(comparator.unbind());
         Ok(())
     }
 
     fn add_transformer(&mut self, transformer: Bound<'_, PyAny>) -> PyResult<()> {
-        self.extra_transformers
-            .push(transformer.unbind());
+        self.extra_transformers.push(transformer.unbind());
         Ok(())
     }
 
@@ -1069,7 +1059,12 @@ fn build_controller(py: Python<'_>, config: &PyConfig) -> PyResult<Controller> {
 
 #[pyfunction]
 #[pyo3(signature = (snapshot_a, snapshot_b, *, config=None))]
-fn diff(py: Python<'_>, snapshot_a: &str, snapshot_b: &str, config: Option<&PyConfig>) -> PyResult<PyMigration> {
+fn diff(
+    py: Python<'_>,
+    snapshot_a: &str,
+    snapshot_b: &str,
+    config: Option<&PyConfig>,
+) -> PyResult<PyMigration> {
     let default_config;
     let config = match config {
         Some(c) => c,
@@ -1136,9 +1131,7 @@ fn extract(
 
     match result {
         ExtractResult::Text(text) => Ok(text),
-        ExtractResult::Binary(bytes) => {
-            Ok(String::from_utf8_lossy(&bytes).to_string())
-        }
+        ExtractResult::Binary(bytes) => Ok(String::from_utf8_lossy(&bytes).to_string()),
     }
 }
 
@@ -1178,14 +1171,24 @@ impl PyPluginRegistry {
     }
 
     /// Register a Python comparator into the registry under `name`.
-    fn register_comparator(&mut self, py: Python<'_>, name: String, obj: Py<PyAny>) -> PyResult<()> {
+    fn register_comparator(
+        &mut self,
+        py: Python<'_>,
+        name: String,
+        obj: Py<PyAny>,
+    ) -> PyResult<()> {
         let bridge = create_comparator_bridge(py, obj.bind(py))?;
         self.inner.register_comparator(name, Arc::new(bridge));
         Ok(())
     }
 
     /// Register a Python transformer into the registry under `name`.
-    fn register_transformer(&mut self, py: Python<'_>, name: String, obj: Py<PyAny>) -> PyResult<()> {
+    fn register_transformer(
+        &mut self,
+        py: Python<'_>,
+        name: String,
+        obj: Py<PyAny>,
+    ) -> PyResult<()> {
         let bridge = create_transformer_bridge(py, obj.bind(py))?;
         self.inner.register_transformer(name, Arc::new(bridge));
         Ok(())
@@ -1214,8 +1217,7 @@ impl PyPluginRegistry {
 #[pyfunction]
 fn run_cli(registry: &mut PyPluginRegistry, args: Vec<String>) -> PyResult<()> {
     let inner = std::mem::take(&mut registry.inner);
-    binoc_cli::run(inner, args)
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    binoc_cli::run(inner, args).map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

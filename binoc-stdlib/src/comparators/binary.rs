@@ -17,21 +17,23 @@ fn hash_for_item(item: &Item) -> BinocResult<String> {
 }
 
 impl Comparator for BinaryComparator {
-    fn name(&self) -> &str { "binoc.binary" }
+    fn name(&self) -> &str {
+        "binoc.binary"
+    }
 
     fn can_handle(&self, _pair: &ItemPair) -> bool {
         true
     }
 
-    fn reopen_data(
-        &self,
-        pair: &ItemPair,
-        _ctx: &CompareContext,
-    ) -> BinocResult<ReopenedData> {
-        let left = pair.left.as_ref()
+    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
+        let left = pair
+            .left
+            .as_ref()
             .map(|item| std::fs::read(&item.physical_path).map_err(BinocError::Io))
             .transpose()?;
-        let right = pair.right.as_ref()
+        let right = pair
+            .right
+            .as_ref()
             .map(|item| std::fs::read(&item.physical_path).map_err(BinocError::Io))
             .transpose()?;
         Ok(ReopenedData::Binary { left, right })
@@ -43,13 +45,16 @@ impl Comparator for BinaryComparator {
         _node: &DiffNode,
         aspect: &str,
     ) -> Option<ExtractResult> {
-        let ReopenedData::Binary { left, right } = data else { return None };
+        let ReopenedData::Binary { left, right } = data else {
+            return None;
+        };
         match aspect {
             "content_left" => left.as_ref().map(|b| ExtractResult::Binary(b.clone())),
             "content_right" => right.as_ref().map(|b| ExtractResult::Binary(b.clone())),
-            "content" | "full" => {
-                right.as_ref().or(left.as_ref()).map(|b| ExtractResult::Binary(b.clone()))
-            }
+            "content" | "full" => right
+                .as_ref()
+                .or(left.as_ref())
+                .map(|b| ExtractResult::Binary(b.clone())),
             _ => None,
         }
     }
@@ -67,13 +72,16 @@ impl Comparator for BinaryComparator {
                 }
 
                 let size_l = std::fs::metadata(&left.physical_path)
-                    .map(|m| m.len()).unwrap_or(0);
+                    .map(|m| m.len())
+                    .unwrap_or(0);
                 let size_r = std::fs::metadata(&right.physical_path)
-                    .map(|m| m.len()).unwrap_or(0);
+                    .map(|m| m.len())
+                    .unwrap_or(0);
 
                 let summary = format!(
                     "Content changed ({} → {})",
-                    fmt_bytes(size_l), fmt_bytes(size_r)
+                    fmt_bytes(size_l),
+                    fmt_bytes(size_r)
                 );
                 let node = DiffNode::new("modify", "file", &right.logical_path)
                     .with_summary(summary)

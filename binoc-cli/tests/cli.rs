@@ -2,7 +2,8 @@ use assert_cmd::Command;
 
 fn vectors_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
+        .parent()
+        .unwrap()
         .join("test-vectors")
 }
 
@@ -168,14 +169,18 @@ fn diff_explicit_format_prefix() {
 fn diff_with_config_file() {
     let tmp = tempfile::tempdir().unwrap();
     let config_path = tmp.path().join("config.yaml");
-    std::fs::write(&config_path, r#"
+    std::fs::write(
+        &config_path,
+        r#"
 comparators:
   - binoc.directory
   - binoc.csv
   - binoc.text
   - binoc.binary
 transformers: []
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let dir = vectors_dir().join("csv-row-addition");
     binoc()

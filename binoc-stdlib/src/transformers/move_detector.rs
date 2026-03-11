@@ -1,18 +1,24 @@
 use std::collections::BTreeMap;
 
 use binoc_core::ir::DiffNode;
-use binoc_core::types::*;
 use binoc_core::traits::{CompareContext, Transformer};
+use binoc_core::types::*;
 
 /// Correlates adds/removes by content hash; collapses matching pairs into `move` nodes.
 pub struct MoveDetector;
 
 impl Transformer for MoveDetector {
-    fn name(&self) -> &str { "binoc.move_detector" }
+    fn name(&self) -> &str {
+        "binoc.move_detector"
+    }
 
-    fn match_types(&self) -> &[&str] { &["directory", "zip_archive"] }
+    fn match_types(&self) -> &[&str] {
+        &["directory", "zip_archive"]
+    }
 
-    fn scope(&self) -> TransformScope { TransformScope::Subtree }
+    fn scope(&self) -> TransformScope {
+        TransformScope::Subtree
+    }
 
     fn transform(&self, mut node: DiffNode, _ctx: &CompareContext) -> TransformResult {
         let has_adds = node.children.iter().any(|c| c.kind == "add");
@@ -27,7 +33,9 @@ impl Transformer for MoveDetector {
         let mut remove_by_hash: BTreeMap<Option<String>, Vec<usize>> = BTreeMap::new();
 
         for (i, child) in node.children.iter().enumerate() {
-            let hash = child.details.get("hash_right")
+            let hash = child
+                .details
+                .get("hash_right")
                 .or_else(|| child.details.get("hash_left"))
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());

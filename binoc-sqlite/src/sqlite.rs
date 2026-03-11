@@ -153,9 +153,7 @@ fn diff_table(
         node.tags.insert("binoc-sqlite.column-type-change".into());
         let changes: Vec<serde_json::Value> = cols_type_changed
             .iter()
-            .map(|(name, from, to)| {
-                serde_json::json!({"column": name, "from": from, "to": to})
-            })
+            .map(|(name, from, to)| serde_json::json!({"column": name, "from": from, "to": to}))
             .collect();
         node = node.with_detail("columns_type_changed", serde_json::json!(changes));
     }
@@ -179,7 +177,12 @@ fn diff_table(
         parts.push(fmt_count(cols_added.len(), "column", "columns", "added"));
     }
     if !cols_removed.is_empty() {
-        parts.push(fmt_count(cols_removed.len(), "column", "columns", "removed"));
+        parts.push(fmt_count(
+            cols_removed.len(),
+            "column",
+            "columns",
+            "removed",
+        ));
     }
     if !cols_type_changed.is_empty() {
         parts.push(fmt_count(
@@ -241,9 +244,7 @@ impl Comparator for SqliteComparator {
 
     fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
-            (Some(left), Some(right)) => {
-                self.compare_both(left, right, pair.logical_path())
-            }
+            (Some(left), Some(right)) => self.compare_both(left, right, pair.logical_path()),
             (None, Some(right)) => {
                 let conn = open_db(&right.physical_path)?;
                 let schema = read_schema(&conn)?;
@@ -419,15 +420,21 @@ mod tests {
         let a = dir.path().join("a.sqlite");
         let b = dir.path().join("b.sqlite");
 
-        create_test_db(&a, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "INSERT INTO users VALUES (1, 'Alice');",
-        ]);
-        create_test_db(&b, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "INSERT INTO users VALUES (1, 'Alice');",
-            "INSERT INTO users VALUES (2, 'Bob');",
-        ]);
+        create_test_db(
+            &a,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                "INSERT INTO users VALUES (1, 'Alice');",
+            ],
+        );
+        create_test_db(
+            &b,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                "INSERT INTO users VALUES (1, 'Alice');",
+                "INSERT INTO users VALUES (2, 'Bob');",
+            ],
+        );
 
         let cmp = SqliteComparator;
         let ctx = CompareContext::new();
@@ -454,14 +461,18 @@ mod tests {
         let a = dir.path().join("a.sqlite");
         let b = dir.path().join("b.sqlite");
 
-        create_test_db(&a, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-        ]);
-        create_test_db(&b, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT, user_id INTEGER);",
-            "INSERT INTO posts VALUES (1, 'Hello', 1);",
-        ]);
+        create_test_db(
+            &a,
+            &["CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"],
+        );
+        create_test_db(
+            &b,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                "CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT, user_id INTEGER);",
+                "INSERT INTO posts VALUES (1, 'Hello', 1);",
+            ],
+        );
 
         let cmp = SqliteComparator;
         let ctx = CompareContext::new();
@@ -487,14 +498,20 @@ mod tests {
         let a = dir.path().join("a.sqlite");
         let b = dir.path().join("b.sqlite");
 
-        create_test_db(&a, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "INSERT INTO users VALUES (1, 'Alice');",
-        ]);
-        create_test_db(&b, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);",
-            "INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');",
-        ]);
+        create_test_db(
+            &a,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                "INSERT INTO users VALUES (1, 'Alice');",
+            ],
+        );
+        create_test_db(
+            &b,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);",
+                "INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');",
+            ],
+        );
 
         let cmp = SqliteComparator;
         let ctx = CompareContext::new();
@@ -518,10 +535,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let b = dir.path().join("b.sqlite");
 
-        create_test_db(&b, &[
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-            "INSERT INTO users VALUES (1, 'Alice');",
-        ]);
+        create_test_db(
+            &b,
+            &[
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+                "INSERT INTO users VALUES (1, 'Alice');",
+            ],
+        );
 
         let cmp = SqliteComparator;
         let ctx = CompareContext::new();
@@ -543,10 +563,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let a = dir.path().join("a.sqlite");
 
-        create_test_db(&a, &[
-            "CREATE TABLE t1 (x INTEGER);",
-            "CREATE TABLE t2 (y TEXT);",
-        ]);
+        create_test_db(
+            &a,
+            &["CREATE TABLE t1 (x INTEGER);", "CREATE TABLE t2 (y TEXT);"],
+        );
 
         let cmp = SqliteComparator;
         let ctx = CompareContext::new();

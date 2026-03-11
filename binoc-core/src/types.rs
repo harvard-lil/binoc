@@ -19,7 +19,12 @@ impl TabularData {
 
     pub fn column_values(&self, name: &str) -> Option<Vec<&str>> {
         let idx = self.column_index(name)?;
-        Some(self.rows.iter().map(|r| r.get(idx).map(|s| s.as_str()).unwrap_or("")).collect())
+        Some(
+            self.rows
+                .iter()
+                .map(|r| r.get(idx).map(|s| s.as_str()).unwrap_or(""))
+                .collect(),
+        )
     }
 
     pub fn to_csv(&self) -> String {
@@ -114,20 +119,30 @@ pub struct ItemPair {
 
 impl ItemPair {
     pub fn both(left: Item, right: Item) -> Self {
-        Self { left: Some(left), right: Some(right) }
+        Self {
+            left: Some(left),
+            right: Some(right),
+        }
     }
 
     pub fn added(right: Item) -> Self {
-        Self { left: None, right: Some(right) }
+        Self {
+            left: None,
+            right: Some(right),
+        }
     }
 
     pub fn removed(left: Item) -> Self {
-        Self { left: Some(left), right: None }
+        Self {
+            left: Some(left),
+            right: None,
+        }
     }
 
     /// Get the logical path from whichever side is present (prefer right).
     pub fn logical_path(&self) -> &str {
-        self.right.as_ref()
+        self.right
+            .as_ref()
             .or(self.left.as_ref())
             .map(|i| i.logical_path.as_str())
             .unwrap_or("")
@@ -135,22 +150,24 @@ impl ItemPair {
 
     /// Get file extension from whichever side is present (prefer right).
     pub fn extension(&self) -> Option<String> {
-        self.right.as_ref()
+        self.right
+            .as_ref()
             .or(self.left.as_ref())
             .and_then(|i| i.extension())
     }
 
     /// Get detected media type from whichever side is present (prefer right).
     pub fn media_type(&self) -> Option<&str> {
-        self.right.as_ref()
+        self.right
+            .as_ref()
             .or(self.left.as_ref())
             .and_then(|i| i.media_type.as_deref())
     }
 
     /// Check if either side is a directory.
     pub fn is_dir(&self) -> bool {
-        self.right.as_ref().map_or(false, |i| i.is_dir)
-            || self.left.as_ref().map_or(false, |i| i.is_dir)
+        self.right.as_ref().is_some_and(|i| i.is_dir)
+            || self.left.as_ref().is_some_and(|i| i.is_dir)
     }
 
     /// If both sides have matching content hashes, return the hash.
@@ -344,10 +361,8 @@ mod tests {
         let file_path = dir.path().join("file.txt");
         std::fs::write(&file_path, b"").unwrap();
 
-        let pair_both_dirs = ItemPair::both(
-            Item::new(&subdir, "sub"),
-            Item::new(dir.path(), "root"),
-        );
+        let pair_both_dirs =
+            ItemPair::both(Item::new(&subdir, "sub"), Item::new(dir.path(), "root"));
         assert!(pair_both_dirs.is_dir());
 
         let pair_dir_left = ItemPair::removed(Item::new(&subdir, "sub"));

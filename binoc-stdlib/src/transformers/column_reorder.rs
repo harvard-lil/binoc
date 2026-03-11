@@ -13,11 +13,17 @@ use crate::comparators::csv_compare::tabular_extract;
 pub struct ColumnReorderDetector;
 
 impl Transformer for ColumnReorderDetector {
-    fn name(&self) -> &str { "binoc.column_reorder_detector" }
+    fn name(&self) -> &str {
+        "binoc.column_reorder_detector"
+    }
 
-    fn match_types(&self) -> &[&str] { &["tabular"] }
+    fn match_types(&self) -> &[&str] {
+        &["tabular"]
+    }
 
-    fn scope(&self) -> TransformScope { TransformScope::Node }
+    fn scope(&self) -> TransformScope {
+        TransformScope::Node
+    }
 
     fn transform(&self, mut node: DiffNode, ctx: &CompareContext) -> TransformResult {
         let has_reorder_tag = node.tags.contains("binoc.column-reorder");
@@ -25,11 +31,12 @@ impl Transformer for ColumnReorderDetector {
             return TransformResult::Unchanged;
         }
 
-        let is_pure_reorder = if let Some(ReopenedData::Tabular(pair)) = ctx.get_cached_data(&node.path) {
-            check_pure_reorder_from_data(&pair)
-        } else {
-            check_pure_reorder_from_details(&node)
-        };
+        let is_pure_reorder =
+            if let Some(ReopenedData::Tabular(pair)) = ctx.get_cached_data(&node.path) {
+                check_pure_reorder_from_data(&pair)
+            } else {
+                check_pure_reorder_from_details(&node)
+            };
 
         if is_pure_reorder {
             node.kind = "reorder".into();
@@ -42,15 +49,12 @@ impl Transformer for ColumnReorderDetector {
         }
     }
 
-    fn extract(
-        &self,
-        data: &ReopenedData,
-        node: &DiffNode,
-        aspect: &str,
-    ) -> Option<ExtractResult> {
+    fn extract(&self, data: &ReopenedData, node: &DiffNode, aspect: &str) -> Option<ExtractResult> {
         match aspect {
             "column_order" => {
-                let ReopenedData::Tabular(pair) = data else { return None };
+                let ReopenedData::Tabular(pair) = data else {
+                    return None;
+                };
                 let mut out = String::new();
                 if let Some(left) = &pair.left {
                     out.push_str("before: ");
@@ -65,7 +69,9 @@ impl Transformer for ColumnReorderDetector {
                 Some(ExtractResult::Text(out))
             }
             _ => {
-                let ReopenedData::Tabular(pair) = data else { return None };
+                let ReopenedData::Tabular(pair) = data else {
+                    return None;
+                };
                 tabular_extract(pair, node, aspect)
             }
         }
@@ -108,21 +114,31 @@ fn check_pure_reorder_from_data(pair: &TabularDataPair) -> bool {
 
 /// Fallback: check using details metadata (for loaded migrations without cache).
 fn check_pure_reorder_from_details(node: &DiffNode) -> bool {
-    let no_col_adds = node.details.get("columns_added")
+    let no_col_adds = node
+        .details
+        .get("columns_added")
         .and_then(|v| v.as_array())
-        .map_or(true, |a| a.is_empty());
-    let no_col_removes = node.details.get("columns_removed")
+        .is_none_or(|a| a.is_empty());
+    let no_col_removes = node
+        .details
+        .get("columns_removed")
         .and_then(|v| v.as_array())
-        .map_or(true, |a| a.is_empty());
-    let no_row_adds = node.details.get("rows_added")
+        .is_none_or(|a| a.is_empty());
+    let no_row_adds = node
+        .details
+        .get("rows_added")
         .and_then(|v| v.as_u64())
-        .map_or(true, |n| n == 0);
-    let no_row_removes = node.details.get("rows_removed")
+        .is_none_or(|n| n == 0);
+    let no_row_removes = node
+        .details
+        .get("rows_removed")
         .and_then(|v| v.as_u64())
-        .map_or(true, |n| n == 0);
-    let no_cell_changes = node.details.get("cells_changed")
+        .is_none_or(|n| n == 0);
+    let no_cell_changes = node
+        .details
+        .get("cells_changed")
         .and_then(|v| v.as_u64())
-        .map_or(true, |n| n == 0);
+        .is_none_or(|n| n == 0);
 
     no_col_adds && no_col_removes && no_row_adds && no_row_removes && no_cell_changes
 }

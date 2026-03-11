@@ -14,7 +14,7 @@ class TestDiffWithTestVectors:
         a, b = snapshot_pair("single-file-add")
         migration = binoc.diff(a, b)
         assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        migration.root.all_tags()
         kinds = _collect_kinds(migration.root)
         assert "add" in kinds
 

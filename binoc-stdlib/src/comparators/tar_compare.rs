@@ -19,21 +19,31 @@ fn extract_tar(tar_path: &Path, dest: &Path) -> BinocResult<()> {
     if is_gzipped(tar_path) {
         let decoder = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(decoder);
-        archive.unpack(dest).map_err(|e| BinocError::Tar(e.to_string()))?;
+        archive
+            .unpack(dest)
+            .map_err(|e| BinocError::Tar(e.to_string()))?;
     } else {
         let mut archive = tar::Archive::new(file);
-        archive.unpack(dest).map_err(|e| BinocError::Tar(e.to_string()))?;
+        archive
+            .unpack(dest)
+            .map_err(|e| BinocError::Tar(e.to_string()))?;
     }
 
     Ok(())
 }
 
 impl Comparator for TarComparator {
-    fn name(&self) -> &str { "binoc.tar" }
+    fn name(&self) -> &str {
+        "binoc.tar"
+    }
 
-    fn handles_extensions(&self) -> &[&str] { &[".tar", ".tar.gz", ".tgz"] }
+    fn handles_extensions(&self) -> &[&str] {
+        &[".tar", ".tar.gz", ".tgz"]
+    }
 
-    fn handles_media_types(&self) -> &[&str] { &["application/x-tar"] }
+    fn handles_media_types(&self) -> &[&str] {
+        &["application/x-tar"]
+    }
 
     fn reopen(
         &self,
@@ -65,7 +75,9 @@ impl Comparator for TarComparator {
             (Some(l), Some(r)) => Ok(ItemPair::both(l, r)),
             (None, Some(r)) => Ok(ItemPair::added(r)),
             (Some(l), None) => Ok(ItemPair::removed(l)),
-            (None, None) => Err(BinocError::Extract("both sides missing in tar reopen".into())),
+            (None, None) => Err(BinocError::Extract(
+                "both sides missing in tar reopen".into(),
+            )),
         }
     }
 

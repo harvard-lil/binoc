@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use binoc_stdlib::test_vectors::{discover_vectors, run_vector};
 use binoc_stdlib::default_registry;
+use binoc_stdlib::test_vectors::{discover_vectors, run_vector};
 
 fn vectors_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -21,7 +21,12 @@ macro_rules! vector_test {
             if !dir.exists() {
                 panic!("Test vector directory not found: {}", dir.display());
             }
-            run_vector(&dir, &vectors_dir(), default_registry, None::<fn(&Path, &Path)>);
+            run_vector(
+                &dir,
+                &vectors_dir(),
+                default_registry,
+                None::<fn(&Path, &Path)>,
+            );
         }
     };
 }

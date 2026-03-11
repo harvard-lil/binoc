@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use binoc_core::ir::DiffNode;
-use binoc_core::types::*;
 use binoc_core::traits::{CompareContext, Transformer};
+use binoc_core::types::*;
 
 /// Detects when an added file has the same content hash as an identical
 /// (unchanged) file elsewhere in the same container. Converts the add
@@ -13,11 +13,17 @@ use binoc_core::traits::{CompareContext, Transformer};
 pub struct CopyDetector;
 
 impl Transformer for CopyDetector {
-    fn name(&self) -> &str { "binoc.copy_detector" }
+    fn name(&self) -> &str {
+        "binoc.copy_detector"
+    }
 
-    fn match_types(&self) -> &[&str] { &["directory", "zip_archive"] }
+    fn match_types(&self) -> &[&str] {
+        &["directory", "zip_archive"]
+    }
 
-    fn scope(&self) -> TransformScope { TransformScope::Subtree }
+    fn scope(&self) -> TransformScope {
+        TransformScope::Subtree
+    }
 
     fn transform(&self, mut node: DiffNode, _ctx: &CompareContext) -> TransformResult {
         let has_adds = node.children.iter().any(|c| c.kind == "add");
@@ -89,7 +95,8 @@ impl Transformer for CopyDetector {
 }
 
 fn extract_hash(node: &DiffNode) -> Option<String> {
-    node.details.get("hash")
+    node.details
+        .get("hash")
         .or_else(|| node.details.get("hash_right"))
         .or_else(|| node.details.get("hash_left"))
         .and_then(|v| v.as_str())

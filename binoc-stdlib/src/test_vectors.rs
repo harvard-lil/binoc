@@ -121,9 +121,12 @@ pub fn run_vector(
     }
 
     let registry = registry_builder();
-    let resolved = registry
-        .resolve(&config)
-        .unwrap_or_else(|e| panic!("Failed to resolve plugins for {}: {e}", manifest.vector.name));
+    let resolved = registry.resolve(&config).unwrap_or_else(|e| {
+        panic!(
+            "Failed to resolve plugins for {}: {e}",
+            manifest.vector.name
+        )
+    });
     let controller = Controller::new(resolved.comparators, resolved.transformers);
 
     let migration = controller
@@ -160,16 +163,19 @@ fn load_root_manifest(vectors_dir: &Path) -> RootManifest {
     }
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
-    toml::from_str(&content)
-        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()))
+    toml::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()))
 }
 
 fn load_manifest(vectors_root: &Path, vector_dir: &Path) -> Manifest {
     let root = load_root_manifest(vectors_root);
     let content = std::fs::read_to_string(vector_dir.join("manifest.toml"))
         .expect("manifest.toml should be readable");
-    let mut manifest: Manifest = toml::from_str(&content)
-        .unwrap_or_else(|e| panic!("Failed to parse {}/manifest.toml: {e}", vector_dir.display()));
+    let mut manifest: Manifest = toml::from_str(&content).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse {}/manifest.toml: {e}",
+            vector_dir.display()
+        )
+    });
     if manifest.config.is_none() && root.config.is_some() {
         manifest.config = root.config;
     }
@@ -200,6 +206,9 @@ fn copy_dir_all(src: &Path, dst: &Path) {
         let e = e.expect("entry");
         let path = e.path();
         let name = e.file_name();
+        if name == ".gitkeep" {
+            continue;
+        }
         let dst_path = dst.join(&name);
         if path.is_dir() {
             copy_dir_all(&path, &dst_path);
@@ -328,13 +337,18 @@ fn create_tar_from_dir(source_dir: &Path, tar_path: &Path) {
 }
 
 fn add_dir_to_tar<W: Write>(builder: &mut tar::Builder<W>, base: &Path, dir: &Path) {
-    let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).collect();
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
     entries.sort_by_key(|e| e.file_name());
     for entry in entries {
         let path = entry.path();
         let rel = path.strip_prefix(base).unwrap();
         let name = rel.to_string_lossy();
-        if path.is_dir() && (name.ends_with(".tar.d") || name.ends_with(".tar.gz.d") || name.ends_with(".tgz.d")) {
+        if path.is_dir()
+            && (name.ends_with(".tar.d") || name.ends_with(".tar.gz.d") || name.ends_with(".tgz.d"))
+        {
             continue;
         }
         if path.is_dir() {
@@ -349,8 +363,8 @@ fn create_zip_from_dir(source_dir: &Path, zip_path: &Path) {
     let file = std::fs::File::create(zip_path)
         .unwrap_or_else(|e| panic!("Failed to create {}: {e}", zip_path.display()));
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     add_dir_to_zip(&mut zip, source_dir, source_dir, options);
     zip.finish().unwrap();
 }
@@ -361,7 +375,10 @@ fn add_dir_to_zip(
     dir: &Path,
     options: zip::write::SimpleFileOptions,
 ) {
-    let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).collect();
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
     entries.sort_by_key(|e| e.file_name());
     for entry in entries {
         let path = entry.path();
@@ -371,7 +388,7 @@ fn add_dir_to_zip(
             continue;
         }
         if path.is_dir() {
-            zip.add_directory(&format!("{name}/"), options).unwrap();
+            zip.add_directory(format!("{name}/"), options).unwrap();
             add_dir_to_zip(zip, base, &path, options);
         } else {
             zip.start_file(&name, options).unwrap();
@@ -409,7 +426,10 @@ fn check_assertions(
             child_count,
             "[{name}] Expected child_count={child_count}, got {}. Children: {:?}",
             root.children.len(),
-            root.children.iter().map(|c| (&c.kind, &c.path)).collect::<Vec<_>>()
+            root.children
+                .iter()
+                .map(|c| (&c.kind, &c.path))
+                .collect::<Vec<_>>()
         );
     }
     if let Some(has_tags) = &expected.has_tags {
@@ -426,9 +446,10 @@ fn check_assertions(
         }
     }
     if let Some(significance) = &expected.significance {
-        let root = migration.root.as_ref().unwrap_or_else(|| {
-            panic!("[{name}] Expected significance but migration has no root")
-        });
+        let root = migration
+            .root
+            .as_ref()
+            .unwrap_or_else(|| panic!("[{name}] Expected significance but migration has no root"));
         let all_tags = root.all_tags();
         let md_val = config.output.get_for_outputter("binoc.markdown");
         let md_config: markdown::MarkdownOutputterConfig =

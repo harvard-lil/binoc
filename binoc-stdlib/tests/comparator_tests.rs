@@ -9,7 +9,9 @@ use binoc_stdlib::comparators::directory::DirectoryComparator;
 use binoc_stdlib::comparators::text::TextComparator;
 use binoc_stdlib::comparators::zip_compare::ZipComparator;
 
-fn ctx() -> CompareContext { CompareContext::new() }
+fn ctx() -> CompareContext {
+    CompareContext::new()
+}
 
 // ── Binary comparator ──────────────────────────────────────────────
 
@@ -99,7 +101,11 @@ fn text_identical_content() {
 fn text_diff_counts_lines() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("a.txt"), "line1\nline2\nline3\n").unwrap();
-    std::fs::write(tmp.path().join("b.txt"), "line1\nline2_changed\nline3\nline4\n").unwrap();
+    std::fs::write(
+        tmp.path().join("b.txt"),
+        "line1\nline2_changed\nline3\nline4\n",
+    )
+    .unwrap();
 
     let pair = ItemPair::both(
         Item::new(tmp.path().join("a.txt"), "file.txt"),
@@ -146,7 +152,11 @@ fn csv_identical() {
 fn csv_detects_column_addition() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("a.csv"), "name,age\nAlice,30\n").unwrap();
-    std::fs::write(tmp.path().join("b.csv"), "name,age,email\nAlice,30,a@b.com\n").unwrap();
+    std::fs::write(
+        tmp.path().join("b.csv"),
+        "name,age,email\nAlice,30,a@b.com\n",
+    )
+    .unwrap();
 
     let pair = ItemPair::both(
         Item::new(tmp.path().join("a.csv"), "data.csv"),
@@ -228,10 +238,7 @@ fn csv_detects_column_reorder() {
 #[test]
 fn directory_can_handle_dirs() {
     let tmp = tempfile::tempdir().unwrap();
-    let pair = ItemPair::both(
-        Item::new(tmp.path(), "dir"),
-        Item::new(tmp.path(), "dir"),
-    );
+    let pair = ItemPair::both(Item::new(tmp.path(), "dir"), Item::new(tmp.path(), "dir"));
     assert!(DirectoryComparator.can_handle(&pair));
 }
 
@@ -245,10 +252,7 @@ fn directory_expands_children() {
     std::fs::write(a.join("file.txt"), "hello").unwrap();
     std::fs::write(b.join("file.txt"), "hello").unwrap();
 
-    let pair = ItemPair::both(
-        Item::new(&a, "root"),
-        Item::new(&b, "root"),
-    );
+    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
     let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
     match result {
         CompareResult::Expand(node, children) => {
@@ -268,10 +272,7 @@ fn directory_detects_added_files() {
     std::fs::create_dir_all(&b).unwrap();
     std::fs::write(b.join("new.txt"), "new").unwrap();
 
-    let pair = ItemPair::both(
-        Item::new(&a, "root"),
-        Item::new(&b, "root"),
-    );
+    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
     let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
     match result {
         CompareResult::Expand(_, children) => {
@@ -369,7 +370,9 @@ fn zip_handles_zip_extension() {
 
 #[test]
 fn zip_handles_zip_media_type() {
-    assert!(ZipComparator.handles_media_types().contains(&"application/zip"));
+    assert!(ZipComparator
+        .handles_media_types()
+        .contains(&"application/zip"));
 }
 
 #[test]
@@ -395,8 +398,8 @@ fn zip_expands_contents() {
 fn create_test_zip(path: &std::path::Path, entries: &[(&str, &str)]) {
     let file = std::fs::File::create(path).unwrap();
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     for (name, content) in entries {
         zip.start_file(*name, options).unwrap();
         zip.write_all(content.as_bytes()).unwrap();

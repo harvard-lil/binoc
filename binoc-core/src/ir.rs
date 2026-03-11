@@ -54,7 +54,11 @@ pub struct DiffNode {
 }
 
 impl DiffNode {
-    pub fn new(kind: impl Into<String>, item_type: impl Into<String>, path: impl Into<String>) -> Self {
+    pub fn new(
+        kind: impl Into<String>,
+        item_type: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
         Self {
             kind: kind.into(),
             item_type: item_type.into(),
@@ -165,7 +169,10 @@ mod tests {
         assert_eq!(node.tags.len(), 2);
         assert!(node.tags.contains("binoc.column-reorder"));
         assert!(node.tags.contains("binoc.whitespace"));
-        assert_eq!(node.details.get("lines_changed"), Some(&serde_json::json!(42)));
+        assert_eq!(
+            node.details.get("lines_changed"),
+            Some(&serde_json::json!(42))
+        );
         assert_eq!(node.children.len(), 1);
         assert_eq!(node.children[0].path, "child.txt");
         assert_eq!(node.source_path.as_deref(), Some("old/dir"));
@@ -179,14 +186,14 @@ mod tests {
 
     #[test]
     fn node_count_tree_returns_correct_total() {
-        let node = DiffNode::new("modify", "dir", "dir")
-            .with_children(vec![
-                DiffNode::new("add", "file", "a.txt"),
-                DiffNode::new("modify", "dir", "sub")
-                    .with_children(vec![
-                        DiffNode::new("remove", "file", "sub/b.txt"),
-                    ]),
-            ]);
+        let node = DiffNode::new("modify", "dir", "dir").with_children(vec![
+            DiffNode::new("add", "file", "a.txt"),
+            DiffNode::new("modify", "dir", "sub").with_children(vec![DiffNode::new(
+                "remove",
+                "file",
+                "sub/b.txt",
+            )]),
+        ]);
         assert_eq!(node.node_count(), 4);
     }
 
@@ -198,7 +205,7 @@ mod tests {
                 DiffNode::new("add", "file", "a").with_tag("child-tag"),
                 DiffNode::new("remove", "file", "b")
                     .with_children(vec![
-                        DiffNode::new("modify", "file", "c").with_tag("grandchild-tag"),
+                        DiffNode::new("modify", "file", "c").with_tag("grandchild-tag")
                     ]),
             ]);
         let tags = node.all_tags();
@@ -226,11 +233,10 @@ mod tests {
 
     #[test]
     fn migration_construction_and_node_count() {
-        let root = DiffNode::new("modify", "dir", "root")
-            .with_children(vec![
-                DiffNode::new("add", "file", "root/a.txt"),
-                DiffNode::new("remove", "file", "root/b.txt"),
-            ]);
+        let root = DiffNode::new("modify", "dir", "root").with_children(vec![
+            DiffNode::new("add", "file", "root/a.txt"),
+            DiffNode::new("remove", "file", "root/b.txt"),
+        ]);
         let migration = Migration::new("v1", "v2", Some(root));
         assert_eq!(migration.from_snapshot, "v1");
         assert_eq!(migration.to_snapshot, "v2");

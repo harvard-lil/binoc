@@ -50,7 +50,10 @@ impl CompareContext {
 
     /// Cache reopened data for a node, keyed by logical path.
     pub fn cache_data(&self, path: &str, data: ReopenedData) {
-        self.data_cache.lock().unwrap().insert(path.to_string(), data);
+        self.data_cache
+            .lock()
+            .unwrap()
+            .insert(path.to_string(), data);
     }
 
     /// Retrieve cached data for a node by logical path.
@@ -72,21 +75,30 @@ pub trait Comparator: Send + Sync {
     fn name(&self) -> &str;
 
     /// File extensions this comparator handles (e.g. [".csv", ".tsv"]).
-    fn handles_extensions(&self) -> &[&str] { &[] }
+    fn handles_extensions(&self) -> &[&str] {
+        &[]
+    }
 
     /// MIME media types this comparator handles (e.g. ["application/zip"]).
     /// Checked after extension matching but before `can_handle`.
-    fn handles_media_types(&self) -> &[&str] { &[] }
+    fn handles_media_types(&self) -> &[&str] {
+        &[]
+    }
 
     /// Imperative dispatch: return true if this comparator can handle the given pair.
-    fn can_handle(&self, pair: &ItemPair) -> bool { let _ = pair; false }
+    fn can_handle(&self, pair: &ItemPair) -> bool {
+        let _ = pair;
+        false
+    }
 
     /// Whether this comparator wants to process items even when their
     /// content hashes match (byte-identical). Default false — the controller
     /// short-circuits to "identical" without dispatching. Override to true
     /// for comparators that need to expand identical containers (e.g. to
     /// make their internal structure visible to transformers).
-    fn handles_identical(&self) -> bool { false }
+    fn handles_identical(&self) -> bool {
+        false
+    }
 
     /// Compare an item pair. Both, one, or neither side may be present.
     fn compare(&self, pair: &ItemPair, ctx: &CompareContext) -> BinocResult<CompareResult>;
@@ -100,17 +112,19 @@ pub trait Comparator: Send + Sync {
         _child_path: &str,
         _ctx: &CompareContext,
     ) -> BinocResult<ItemPair> {
-        Err(BinocError::Extract(format!("{} does not support reopen", self.name())))
+        Err(BinocError::Extract(format!(
+            "{} does not support reopen",
+            self.name()
+        )))
     }
 
     /// Reopen leaf data: parse source files into format-neutral form.
     /// Called during extract to provide data for transformer extraction.
-    fn reopen_data(
-        &self,
-        _pair: &ItemPair,
-        _ctx: &CompareContext,
-    ) -> BinocResult<ReopenedData> {
-        Err(BinocError::Extract(format!("{} does not support reopen_data", self.name())))
+    fn reopen_data(&self, _pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
+        Err(BinocError::Extract(format!(
+            "{} does not support reopen_data",
+            self.name()
+        )))
     }
 
     /// Extract user-facing data from this comparator's node.
@@ -131,25 +145,37 @@ pub trait Transformer: Send + Sync {
     fn name(&self) -> &str;
 
     /// Node item_types to match.
-    fn match_types(&self) -> &[&str] { &[] }
+    fn match_types(&self) -> &[&str] {
+        &[]
+    }
 
     /// Nodes with any of these tags.
-    fn match_tags(&self) -> &[&str] { &[] }
+    fn match_tags(&self) -> &[&str] {
+        &[]
+    }
 
     /// Node diff kinds to match.
-    fn match_kinds(&self) -> &[&str] { &[] }
+    fn match_kinds(&self) -> &[&str] {
+        &[]
+    }
 
     /// Whether this transformer operates on individual nodes or whole subtrees.
-    fn scope(&self) -> TransformScope { TransformScope::Node }
+    fn scope(&self) -> TransformScope {
+        TransformScope::Node
+    }
 
     /// Imperative filter: return true if this transformer should process the node.
-    fn can_handle(&self, _node: &DiffNode) -> bool { false }
+    fn can_handle(&self, _node: &DiffNode) -> bool {
+        false
+    }
 
     /// Rewrite a matched node. Receives the CompareContext for cached data access.
     fn transform(&self, node: DiffNode, ctx: &CompareContext) -> TransformResult;
 
     /// Suggested phase for default ordering.
-    fn suggested_phase(&self) -> &str { "default" }
+    fn suggested_phase(&self) -> &str {
+        "default"
+    }
 
     /// Extract user-facing data from a node this transformer modified.
     /// Receives the reopened data from the comparator (via `reopen_data`).

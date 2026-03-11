@@ -4,18 +4,22 @@ use binoc_core::types::*;
 use similar::{ChangeTag, TextDiff};
 
 const TEXT_EXTENSIONS: &[&str] = &[
-    ".txt", ".md", ".rst", ".log", ".cfg", ".ini", ".toml", ".yaml", ".yml",
-    ".json", ".xml", ".html", ".htm", ".css", ".js", ".py", ".rs", ".sh",
-    ".sql", ".r", ".rb", ".pl", ".c", ".h", ".cpp", ".hpp", ".java",
+    ".txt", ".md", ".rst", ".log", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".json", ".xml",
+    ".html", ".htm", ".css", ".js", ".py", ".rs", ".sh", ".sql", ".r", ".rb", ".pl", ".c", ".h",
+    ".cpp", ".hpp", ".java",
 ];
 
 /// Line-level diff comparator for text files.
 pub struct TextComparator;
 
 impl Comparator for TextComparator {
-    fn name(&self) -> &str { "binoc.text" }
+    fn name(&self) -> &str {
+        "binoc.text"
+    }
 
-    fn handles_extensions(&self) -> &[&str] { TEXT_EXTENSIONS }
+    fn handles_extensions(&self) -> &[&str] {
+        TEXT_EXTENSIONS
+    }
 
     fn can_handle(&self, pair: &ItemPair) -> bool {
         let item = pair.right.as_ref().or(pair.left.as_ref());
@@ -27,15 +31,15 @@ impl Comparator for TextComparator {
         false
     }
 
-    fn reopen_data(
-        &self,
-        pair: &ItemPair,
-        _ctx: &CompareContext,
-    ) -> BinocResult<ReopenedData> {
-        let left = pair.left.as_ref()
+    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
+        let left = pair
+            .left
+            .as_ref()
             .map(|item| std::fs::read_to_string(&item.physical_path).map_err(BinocError::Io))
             .transpose()?;
-        let right = pair.right.as_ref()
+        let right = pair
+            .right
+            .as_ref()
             .map(|item| std::fs::read_to_string(&item.physical_path).map_err(BinocError::Io))
             .transpose()?;
         Ok(ReopenedData::Text { left, right })
@@ -47,7 +51,9 @@ impl Comparator for TextComparator {
         _node: &DiffNode,
         aspect: &str,
     ) -> Option<ExtractResult> {
-        let ReopenedData::Text { left, right } = data else { return None };
+        let ReopenedData::Text { left, right } = data else {
+            return None;
+        };
         match aspect {
             "diff" => {
                 let l = left.as_deref().unwrap_or("");
@@ -64,23 +70,23 @@ impl Comparator for TextComparator {
                 }
                 Some(ExtractResult::Text(out))
             }
-            "content_left" => {
-                left.as_ref().map(|s| ExtractResult::Text(s.clone()))
-            }
-            "content_right" => {
-                right.as_ref().map(|s| ExtractResult::Text(s.clone()))
-            }
+            "content_left" => left.as_ref().map(|s| ExtractResult::Text(s.clone())),
+            "content_right" => right.as_ref().map(|s| ExtractResult::Text(s.clone())),
             "content" | "full" => {
                 let mut out = String::new();
                 if let Some(l) = left {
                     out.push_str("--- left\n");
                     out.push_str(l);
-                    if !l.ends_with('\n') { out.push('\n'); }
+                    if !l.ends_with('\n') {
+                        out.push('\n');
+                    }
                 }
                 if let Some(r) = right {
                     out.push_str("+++ right\n");
                     out.push_str(r);
-                    if !r.ends_with('\n') { out.push('\n'); }
+                    if !r.ends_with('\n') {
+                        out.push('\n');
+                    }
                 }
                 Some(ExtractResult::Text(out))
             }
@@ -91,10 +97,10 @@ impl Comparator for TextComparator {
     fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
             (Some(left), Some(right)) => {
-                let text_l = std::fs::read_to_string(&left.physical_path)
-                    .map_err(BinocError::Io)?;
-                let text_r = std::fs::read_to_string(&right.physical_path)
-                    .map_err(BinocError::Io)?;
+                let text_l =
+                    std::fs::read_to_string(&left.physical_path).map_err(BinocError::Io)?;
+                let text_r =
+                    std::fs::read_to_string(&right.physical_path).map_err(BinocError::Io)?;
 
                 if text_l == text_r {
                     return Ok(CompareResult::Identical);
@@ -136,24 +142,28 @@ impl Comparator for TextComparator {
                 Ok(CompareResult::Leaf(node))
             }
             (None, Some(right)) => {
-                let text = std::fs::read_to_string(&right.physical_path)
-                    .map_err(BinocError::Io)?;
+                let text = std::fs::read_to_string(&right.physical_path).map_err(BinocError::Io)?;
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("add", "text", &right.logical_path)
-                    .with_summary(format!("New file ({lines} line{})", if lines == 1 { "" } else { "s" }))
+                    .with_summary(format!(
+                        "New file ({lines} line{})",
+                        if lines == 1 { "" } else { "s" }
+                    ))
                     .with_tag("binoc.content-changed")
                     .with_detail("lines", serde_json::json!(lines));
 
                 Ok(CompareResult::Leaf(node))
             }
             (Some(left), None) => {
-                let text = std::fs::read_to_string(&left.physical_path)
-                    .map_err(BinocError::Io)?;
+                let text = std::fs::read_to_string(&left.physical_path).map_err(BinocError::Io)?;
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("remove", "text", &left.logical_path)
-                    .with_summary(format!("File removed ({lines} line{})", if lines == 1 { "" } else { "s" }))
+                    .with_summary(format!(
+                        "File removed ({lines} line{})",
+                        if lines == 1 { "" } else { "s" }
+                    ))
                     .with_tag("binoc.content-changed")
                     .with_detail("lines", serde_json::json!(lines));
 

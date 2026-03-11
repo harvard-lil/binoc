@@ -16,10 +16,7 @@ mod tests {
         let migration = crate::ir::Migration::new(
             "v1",
             "v2",
-            Some(
-                DiffNode::new("modify", "file", "data.csv")
-                    .with_tag("binoc.content-changed"),
-            ),
+            Some(DiffNode::new("modify", "file", "data.csv").with_tag("binoc.content-changed")),
         );
         let json = to_json(&migration).unwrap();
         let parsed: crate::ir::Migration = serde_json::from_str(&json).unwrap();

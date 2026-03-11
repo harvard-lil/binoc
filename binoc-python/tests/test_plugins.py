@@ -135,7 +135,7 @@ class TestPythonTransformer:
         a, b = snapshot_pair("single-file-modify-text")
         config = binoc.Config.default()
         config.add_transformer(Remover())
-        migration = binoc.diff(a, b, config=config)
+        binoc.diff(a, b, config=config)
 
     def test_match_by_tag_transformer(self, snapshot_pair):
         """A transformer that matches by tag."""

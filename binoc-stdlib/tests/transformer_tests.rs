@@ -6,19 +6,20 @@ use binoc_stdlib::transformers::column_reorder::ColumnReorderDetector;
 use binoc_stdlib::transformers::copy_detector::CopyDetector;
 use binoc_stdlib::transformers::move_detector::MoveDetector;
 
-fn ctx() -> CompareContext { CompareContext::new() }
+fn ctx() -> CompareContext {
+    CompareContext::new()
+}
 
 // ── Move detector ──────────────────────────────────────────────────
 
 #[test]
 fn move_detector_collapses_matching_add_remove() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("remove", "file", "/old.bin")
-                .with_detail("hash_left", serde_json::json!("abc123")),
-            DiffNode::new("add", "file", "/new.bin")
-                .with_detail("hash_right", serde_json::json!("abc123")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("remove", "file", "/old.bin")
+            .with_detail("hash_left", serde_json::json!("abc123")),
+        DiffNode::new("add", "file", "/new.bin")
+            .with_detail("hash_right", serde_json::json!("abc123")),
+    ]);
 
     let result = MoveDetector.transform(container, &ctx());
     match result {
@@ -34,13 +35,12 @@ fn move_detector_collapses_matching_add_remove() {
 
 #[test]
 fn move_detector_ignores_non_matching_hashes() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("remove", "file", "/old.bin")
-                .with_detail("hash_left", serde_json::json!("aaa")),
-            DiffNode::new("add", "file", "/new.bin")
-                .with_detail("hash_right", serde_json::json!("bbb")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("remove", "file", "/old.bin")
+            .with_detail("hash_left", serde_json::json!("aaa")),
+        DiffNode::new("add", "file", "/new.bin")
+            .with_detail("hash_right", serde_json::json!("bbb")),
+    ]);
 
     let result = MoveDetector.transform(container, &ctx());
     assert!(matches!(result, TransformResult::Unchanged));
@@ -48,10 +48,11 @@ fn move_detector_ignores_non_matching_hashes() {
 
 #[test]
 fn move_detector_unchanged_without_adds_and_removes() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("modify", "file", "/changed.txt"),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![DiffNode::new(
+        "modify",
+        "file",
+        "/changed.txt",
+    )]);
 
     let result = MoveDetector.transform(container, &ctx());
     assert!(matches!(result, TransformResult::Unchanged));
@@ -59,16 +60,15 @@ fn move_detector_unchanged_without_adds_and_removes() {
 
 #[test]
 fn move_detector_preserves_non_moved_children() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("remove", "file", "/moved_old.bin")
-                .with_detail("hash_left", serde_json::json!("abc")),
-            DiffNode::new("add", "file", "/moved_new.bin")
-                .with_detail("hash_right", serde_json::json!("abc")),
-            DiffNode::new("modify", "file", "/untouched.txt"),
-            DiffNode::new("add", "file", "/truly_new.bin")
-                .with_detail("hash_right", serde_json::json!("xyz")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("remove", "file", "/moved_old.bin")
+            .with_detail("hash_left", serde_json::json!("abc")),
+        DiffNode::new("add", "file", "/moved_new.bin")
+            .with_detail("hash_right", serde_json::json!("abc")),
+        DiffNode::new("modify", "file", "/untouched.txt"),
+        DiffNode::new("add", "file", "/truly_new.bin")
+            .with_detail("hash_right", serde_json::json!("xyz")),
+    ]);
 
     let result = MoveDetector.transform(container, &ctx());
     match result {
@@ -94,20 +94,22 @@ fn move_detector_matches_directory_type() {
 
 #[test]
 fn copy_detector_detects_add_matching_identical() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("identical", "file", "/original.bin")
-                .with_detail("hash", serde_json::json!("abc123")),
-            DiffNode::new("add", "file", "/duplicate.bin")
-                .with_detail("hash_right", serde_json::json!("abc123")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("identical", "file", "/original.bin")
+            .with_detail("hash", serde_json::json!("abc123")),
+        DiffNode::new("add", "file", "/duplicate.bin")
+            .with_detail("hash_right", serde_json::json!("abc123")),
+    ]);
 
     let result = CopyDetector.transform(container, &ctx());
     match result {
         TransformResult::Replace(node) => {
             let copy = node.children.iter().find(|c| c.kind == "copy");
-            assert!(copy.is_some(), "should have a copy node, got: {:?}",
-                node.children.iter().map(|c| &c.kind).collect::<Vec<_>>());
+            assert!(
+                copy.is_some(),
+                "should have a copy node, got: {:?}",
+                node.children.iter().map(|c| &c.kind).collect::<Vec<_>>()
+            );
             let copy = copy.unwrap();
             assert_eq!(copy.path, "/duplicate.bin");
             assert_eq!(copy.source_path.as_deref(), Some("/original.bin"));
@@ -122,10 +124,8 @@ fn copy_detector_detects_add_matching_identical() {
 #[test]
 fn copy_detector_unchanged_without_identicals() {
     let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("add", "file", "/new.bin")
-                .with_detail("hash_right", serde_json::json!("abc123")),
-        ]);
+        .with_children(vec![DiffNode::new("add", "file", "/new.bin")
+            .with_detail("hash_right", serde_json::json!("abc123"))]);
 
     let result = CopyDetector.transform(container, &ctx());
     assert!(matches!(result, TransformResult::Unchanged));
@@ -133,13 +133,12 @@ fn copy_detector_unchanged_without_identicals() {
 
 #[test]
 fn copy_detector_unchanged_when_hashes_differ() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("identical", "file", "/original.bin")
-                .with_detail("hash", serde_json::json!("aaa")),
-            DiffNode::new("add", "file", "/new.bin")
-                .with_detail("hash_right", serde_json::json!("bbb")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("identical", "file", "/original.bin")
+            .with_detail("hash", serde_json::json!("aaa")),
+        DiffNode::new("add", "file", "/new.bin")
+            .with_detail("hash_right", serde_json::json!("bbb")),
+    ]);
 
     let result = CopyDetector.transform(container, &ctx());
     assert!(matches!(result, TransformResult::Unchanged));
@@ -147,21 +146,24 @@ fn copy_detector_unchanged_when_hashes_differ() {
 
 #[test]
 fn copy_detector_preserves_non_copy_children() {
-    let container = DiffNode::new("modify", "directory", "/")
-        .with_children(vec![
-            DiffNode::new("identical", "file", "/source.bin")
-                .with_detail("hash", serde_json::json!("abc")),
-            DiffNode::new("add", "file", "/copied.bin")
-                .with_detail("hash_right", serde_json::json!("abc")),
-            DiffNode::new("modify", "file", "/changed.txt"),
-            DiffNode::new("add", "file", "/truly_new.bin")
-                .with_detail("hash_right", serde_json::json!("xyz")),
-        ]);
+    let container = DiffNode::new("modify", "directory", "/").with_children(vec![
+        DiffNode::new("identical", "file", "/source.bin")
+            .with_detail("hash", serde_json::json!("abc")),
+        DiffNode::new("add", "file", "/copied.bin")
+            .with_detail("hash_right", serde_json::json!("abc")),
+        DiffNode::new("modify", "file", "/changed.txt"),
+        DiffNode::new("add", "file", "/truly_new.bin")
+            .with_detail("hash_right", serde_json::json!("xyz")),
+    ]);
 
     let result = CopyDetector.transform(container, &ctx());
     match result {
         TransformResult::Replace(node) => {
-            assert_eq!(node.children.len(), 4, "1 copy + 1 identical + 1 modify + 1 add");
+            assert_eq!(
+                node.children.len(),
+                4,
+                "1 copy + 1 identical + 1 modify + 1 add"
+            );
             let kinds: Vec<&str> = node.children.iter().map(|c| c.kind.as_str()).collect();
             assert!(kinds.contains(&"copy"));
             assert!(kinds.contains(&"identical"));
@@ -219,8 +221,7 @@ fn column_reorder_unchanged_when_other_changes_present() {
 
 #[test]
 fn column_reorder_unchanged_without_reorder_tag() {
-    let node = DiffNode::new("modify", "tabular", "data.csv")
-        .with_tag("binoc.row-addition");
+    let node = DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.row-addition");
 
     let result = ColumnReorderDetector.transform(node, &ctx());
     assert!(matches!(result, TransformResult::Unchanged));

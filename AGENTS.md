@@ -35,18 +35,16 @@ Shared test fixtures live in `test-vectors/`. Authoritative architecture spec is
 ## Build & Test
 
 ```bash
-just build                    # Rust workspace + Python bindings
+just build                    # Python package (primary target), debug mode
+just build-release            # optimized Rust binaries + Python package
 just test                     # full suite: Rust crates + Python tests
 just docs                     # regenerate tutorial after code changes
+just binoc diff snap-a snap-b # run binoc CLI with auto-rebuild
 ```
 
 For Rust-only iteration: `cargo build`, `cargo test`, or by crate: `cargo test -p binoc-core`, etc.
 
-To test the Python CLI with local plugin crates (no PyPI needed):
-
-```bash
-uv run --with ./binoc-python --with ./binoc-sqlite binoc diff snapshot-a snapshot-b
-```
+**After making changes**, run `just fmt` to auto-format, then `just check && just test` to verify CI will pass. `just check` runs clippy, rustfmt (verify), and ruff (lint + format verify). `just test` runs the full Rust and Python test suites.
 
 ## Test Vectors
 

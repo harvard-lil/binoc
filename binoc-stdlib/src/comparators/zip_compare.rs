@@ -11,11 +11,11 @@ pub struct ZipComparator;
 
 fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<()> {
     let file = std::fs::File::open(zip_path).map_err(BinocError::Io)?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| BinocError::Zip(e.to_string()))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| BinocError::Zip(e.to_string()))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| BinocError::Zip(e.to_string()))?;
         let Some(entry_path) = entry.enclosed_name().map(|p| p.to_path_buf()) else {
             continue;
@@ -39,11 +39,17 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<()> {
 }
 
 impl Comparator for ZipComparator {
-    fn name(&self) -> &str { "binoc.zip" }
+    fn name(&self) -> &str {
+        "binoc.zip"
+    }
 
-    fn handles_extensions(&self) -> &[&str] { &[".zip"] }
+    fn handles_extensions(&self) -> &[&str] {
+        &[".zip"]
+    }
 
-    fn handles_media_types(&self) -> &[&str] { &["application/zip"] }
+    fn handles_media_types(&self) -> &[&str] {
+        &["application/zip"]
+    }
 
     fn reopen(
         &self,
@@ -78,7 +84,9 @@ impl Comparator for ZipComparator {
             (Some(l), Some(r)) => Ok(ItemPair::both(l, r)),
             (None, Some(r)) => Ok(ItemPair::added(r)),
             (Some(l), None) => Ok(ItemPair::removed(l)),
-            (None, None) => Err(BinocError::Extract("both sides missing in zip reopen".into())),
+            (None, None) => Err(BinocError::Extract(
+                "both sides missing in zip reopen".into(),
+            )),
         }
     }
 

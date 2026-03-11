@@ -4,9 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use binoc_sqlite::register as register_sqlite;
 use binoc_stdlib::default_registry;
 use binoc_stdlib::test_vectors::{discover_vectors, run_vector};
-use binoc_sqlite::register as register_sqlite;
 
 fn vectors_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-vectors")
@@ -55,7 +55,7 @@ fn create_sqlite_from_sql_dir(source_dir: &Path, db_path: &Path) {
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().map_or(false, |e| e == "sql"))
+        .filter(|p| p.extension().is_some_and(|e| e == "sql"))
         .collect();
     sql_files.sort();
     let conn = rusqlite::Connection::open(db_path)
@@ -64,7 +64,11 @@ fn create_sqlite_from_sql_dir(source_dir: &Path, db_path: &Path) {
         let sql = std::fs::read_to_string(sql_path)
             .unwrap_or_else(|e| panic!("Failed to read {}: {e}", sql_path.display()));
         conn.execute_batch(&sql).unwrap_or_else(|e| {
-            panic!("Failed to run {} on {}: {e}", sql_path.display(), db_path.display())
+            panic!(
+                "Failed to run {} on {}: {e}",
+                sql_path.display(),
+                db_path.display()
+            )
         });
     }
 }
@@ -99,7 +103,12 @@ macro_rules! vector_test {
             if !dir.exists() {
                 panic!("Test vector directory not found: {}", dir.display());
             }
-            run_vector(&dir, &vectors_dir(), registry_with_sqlite, Some(prepare_sqlite));
+            run_vector(
+                &dir,
+                &vectors_dir(),
+                registry_with_sqlite,
+                Some(prepare_sqlite),
+            );
         }
     };
 }

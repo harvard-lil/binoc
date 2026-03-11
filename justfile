@@ -1,7 +1,27 @@
-# Build everything: Rust workspace + Python bindings.
+# Build the binoc Python package (primary distribution target) in dev mode.
 build:
-    cargo build --release
     cd binoc-python && uv sync --extra dev
+
+# Build optimized release artifacts (Rust binaries + Python package).
+build-release:
+    cargo build --release
+    cd binoc-python && MATURIN_PEP517_ARGS="--release" uv sync --extra dev
+
+# Run binoc CLI with latest source (auto-rebuilds if needed).
+binoc *ARGS:
+    uv run --with ./binoc-python --with ./binoc-sqlite binoc {{ARGS}}
+
+# Auto-format Rust and Python code.
+fmt:
+    cargo fmt
+    uvx ruff format binoc-python/ binoc-sqlite/python/
+
+# Run formatting and lint checks (mirrors CI).
+check:
+    cargo fmt --check
+    cargo clippy --workspace --all-targets -- -D warnings
+    uvx ruff check binoc-python/ binoc-sqlite/python/
+    uvx ruff format --check binoc-python/ binoc-sqlite/python/
 
 # Run all tests: Rust crates + Python binding tests.
 test:
