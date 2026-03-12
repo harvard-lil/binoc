@@ -1036,8 +1036,19 @@ impl PyConfig {
 // Top-level functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_controller(py: Python<'_>, config: &PyConfig) -> PyResult<Controller> {
-    let registry = binoc_stdlib::default_registry();
+fn build_controller(
+    py: Python<'_>,
+    config: &PyConfig,
+    registry: Option<&PyPluginRegistry>,
+) -> PyResult<Controller> {
+    let default_registry;
+    let registry = match registry {
+        Some(r) => &r.inner,
+        None => {
+            default_registry = binoc_stdlib::default_registry();
+            &default_registry
+        }
+    };
     let resolved = registry
         .resolve(&config.dataset_config)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -1058,12 +1069,13 @@ fn build_controller(py: Python<'_>, config: &PyConfig) -> PyResult<Controller> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None))]
+#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None, registry=None))]
 fn diff(
     py: Python<'_>,
     snapshot_a: &str,
     snapshot_b: &str,
     config: Option<&PyConfig>,
+    registry: Option<&PyPluginRegistry>,
 ) -> PyResult<PyMigration> {
     let default_config;
     let config = match config {
@@ -1078,7 +1090,7 @@ fn diff(
         }
     };
 
-    let controller = build_controller(py, config)?;
+    let controller = build_controller(py, config, registry)?;
 
     let migration = py
         .detach(|| controller.diff(snapshot_a, snapshot_b))
@@ -1116,7 +1128,7 @@ fn extract(
         }
     };
 
-    let controller = build_controller(py, config)?;
+    let controller = build_controller(py, config, None)?;
 
     let snap_a = snapshot_a
         .map(|s| s.to_string())

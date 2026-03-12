@@ -1,6 +1,7 @@
 # Build the binoc Python package (primary distribution target) in dev mode.
 build:
     cd binoc-python && uv sync --extra dev
+    cd binoc-sqlite && uv sync --extra dev
 
 # Build optimized release artifacts (Rust binaries + Python package).
 build-release:
@@ -29,7 +30,8 @@ check:
 # which builds a PyO3 cdylib that can only link via maturin (not bare cargo).
 test:
     cargo test
-    cd binoc-python && uv run pytest
+    cd binoc-python && uv run --extra dev pytest
+    cd binoc-sqlite && uv run --extra dev pytest
 
 # Regenerate docs/tutorial.md by re-running all embedded code blocks.
 docs:

@@ -1,5 +1,7 @@
 This document tracks design goals, user stories, and architectural decisions needed to develop Binoc.
 
+Detailed design decisions are also recorded in docs/adr/
+
 ## Design Goals
 
 **1. Fast.** The core engine is written in Rust. Large datasets with thousands of files should diff in seconds, not minutes. Parallel processing of independent subtrees is a default, not an optimization. Plugins are expected to be computationally lean — streaming I/O, minimal allocations, no unnecessary re-parsing.

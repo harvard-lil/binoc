@@ -1,6 +1,9 @@
 //! Plugin test vectors: binoc-sqlite/test-vectors/. Uses the shared harness from
 //! binoc_stdlib::test_vectors; building SQLite from .sqlite.d/.db.d is done here
 //! via the prepare callback (a stdlib concern would not depend on rusqlite).
+//!
+//! Auto-discovers all vectors — add a new directory with manifest.toml + snapshots
+//! and it will be tested automatically.
 
 use std::path::{Path, PathBuf};
 
@@ -95,44 +98,20 @@ fn remove_sqlite_dirs(dir: &Path) {
     }
 }
 
-macro_rules! vector_test {
-    ($name:ident) => {
-        #[test]
-        fn $name() {
-            let dir = vectors_dir().join(stringify!($name).replace('_', "-"));
-            if !dir.exists() {
-                panic!("Test vector directory not found: {}", dir.display());
-            }
-            run_vector(
-                &dir,
-                &vectors_dir(),
-                registry_with_sqlite,
-                Some(prepare_sqlite),
-            );
-        }
-    };
-}
-
-vector_test!(sqlite_row_addition);
-vector_test!(sqlite_table_addition);
-vector_test!(without_plugin);
-
 #[test]
-fn all_vectors_have_tests() {
-    let known_vectors = [
-        "sqlite-row-addition",
-        "sqlite-table-addition",
-        "without-plugin",
-    ];
-    let discovered: Vec<String> = discover_vectors(&vectors_dir())
-        .iter()
-        .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
-        .collect();
-    for v in &discovered {
-        assert!(
-            known_vectors.contains(&v.as_str()),
-            "Test vector '{v}' discovered but has no corresponding test function. Add one with vector_test!({}).",
-            v.replace('-', "_")
+fn test_all_vectors() {
+    let vectors = discover_vectors(&vectors_dir());
+    assert!(
+        !vectors.is_empty(),
+        "No test vectors found at {}",
+        vectors_dir().display()
+    );
+    for vector in &vectors {
+        run_vector(
+            vector,
+            &vectors_dir(),
+            registry_with_sqlite,
+            Some(prepare_sqlite),
         );
     }
 }
