@@ -1,6 +1,6 @@
 pub mod config;
 pub mod controller;
-pub mod ir;
+pub mod data_access;
 pub mod output;
-pub mod traits;
-pub mod types;
+
+pub use binoc_sdk as sdk;

@@ -1,0 +1,14 @@
+# Build the Python package (dev mode).
+build:
+    uv sync --extra dev
+    uv run maturin develop
+
+# Run all tests (Rust unit + vector tests, Python smoke test).
+test:
+    cargo test
+    uv run maturin develop
+    uv run pytest
+
+# Regenerate test-vector expected-output snapshots.
+snapshot-update:
+    INSTA_UPDATE=always cargo test --test test_vectors

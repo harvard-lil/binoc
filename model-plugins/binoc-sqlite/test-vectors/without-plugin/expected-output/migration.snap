@@ -1,0 +1,32 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_migration"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "kind": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "kind": "modify",
+        "item_type": "file",
+        "path": "data.sqlite",
+        "summary": "Content changed (0 bytes → 0 bytes)",
+        "tags": [
+          "binoc.content-changed"
+        ],
+        "details": {
+          "hash_left": "5642b90b69b50b45075fabf9f4b990c42ac7c020cf84db343cdfa4f2aad485d2",
+          "hash_right": "21c6dfd96f7aca55c266d5af918149e63f806433065750b55114b6faad7e9b7b",
+          "size_left": 0,
+          "size_right": 0
+        },
+        "comparator": "binoc.binary"
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

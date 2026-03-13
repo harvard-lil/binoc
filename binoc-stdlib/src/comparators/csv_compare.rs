@@ -1,13 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::BufReader;
 
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// Column-level and row-level aware CSV comparator.
-/// Emits `item_type: tabular` with the standard tabular detail schema.
-/// Caches parsed tabular data in CompareContext for downstream transformers.
 pub struct CsvComparator;
 
 fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
@@ -31,20 +27,38 @@ fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
     Ok(TabularData { headers, rows })
 }
 
+fn parse_csv_via_data(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<TabularData> {
+    let path = data.local_path(item)?;
+    parse_csv(&path)
+}
+
+/// Build a TabularDataPair by re-parsing source files referenced in `node.source_items`.
+pub fn tabular_pair_from_source(node: &DiffNode, data: &dyn DataAccess) -> Option<TabularDataPair> {
+    let pair = node.source_items.as_ref()?;
+    let left = pair
+        .left
+        .as_ref()
+        .and_then(|item| parse_csv_via_data(item, data).ok());
+    let right = pair
+        .right
+        .as_ref()
+        .and_then(|item| parse_csv_via_data(item, data).ok());
+    if left.is_none() && right.is_none() {
+        return None;
+    }
+    Some(TabularDataPair { left, right })
+}
+
 impl Comparator for CsvComparator {
-    fn name(&self) -> &str {
-        "binoc.csv"
+    fn descriptor(&self) -> ComparatorDescriptor {
+        ComparatorDescriptor::new("binoc.csv").with_extensions(vec![".csv".into(), ".tsv".into()])
     }
 
-    fn handles_extensions(&self) -> &[&str] {
-        &[".csv", ".tsv"]
-    }
-
-    fn compare(&self, pair: &ItemPair, ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
-            (Some(left), Some(right)) => self.compare_both(left, right, pair.logical_path(), ctx),
+            (Some(left), Some(right)) => self.compare_both(left, right, pair.logical_path(), data),
             (None, Some(right)) => {
-                let csv = parse_csv(&right.physical_path)?;
+                let csv = parse_csv_via_data(right, data)?;
                 let summary = format!(
                     "New table ({} columns, {} rows)",
                     csv.headers.len(),
@@ -56,18 +70,10 @@ impl Comparator for CsvComparator {
                     .with_detail("columns", serde_json::json!(csv.headers))
                     .with_detail("rows", serde_json::json!(csv.rows.len()));
 
-                ctx.cache_data(
-                    &right.logical_path,
-                    ReopenedData::Tabular(TabularDataPair {
-                        left: None,
-                        right: Some(csv),
-                    }),
-                );
-
                 Ok(CompareResult::Leaf(node))
             }
             (Some(left), None) => {
-                let csv = parse_csv(&left.physical_path)?;
+                let csv = parse_csv_via_data(left, data)?;
                 let summary = format!(
                     "Table removed ({} columns, {} rows)",
                     csv.headers.len(),
@@ -79,44 +85,24 @@ impl Comparator for CsvComparator {
                     .with_detail("columns", serde_json::json!(csv.headers))
                     .with_detail("rows", serde_json::json!(csv.rows.len()));
 
-                ctx.cache_data(
-                    &left.logical_path,
-                    ReopenedData::Tabular(TabularDataPair {
-                        left: Some(csv),
-                        right: None,
-                    }),
-                );
-
                 Ok(CompareResult::Leaf(node))
             }
             (None, None) => Ok(CompareResult::Identical),
         }
     }
 
-    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
-        let left = pair
-            .left
-            .as_ref()
-            .map(|item| parse_csv(&item.physical_path))
-            .transpose()?;
-        let right = pair
-            .right
-            .as_ref()
-            .map(|item| parse_csv(&item.physical_path))
-            .transpose()?;
-        Ok(ReopenedData::Tabular(TabularDataPair { left, right }))
-    }
-
-    fn extract(&self, data: &ReopenedData, node: &DiffNode, aspect: &str) -> Option<ExtractResult> {
-        let ReopenedData::Tabular(pair) = data else {
-            return None;
-        };
-        tabular_extract(pair, node, aspect)
+    fn extract(
+        &self,
+        node: &DiffNode,
+        aspect: &str,
+        data: &dyn DataAccess,
+    ) -> Option<ExtractResult> {
+        let pair = tabular_pair_from_source(node, data)?;
+        tabular_extract(&pair, node, aspect)
     }
 }
 
-/// Shared tabular extraction logic. Used by both the CSV comparator (when it's
-/// the last toucher) and tabular transformers.
+/// Shared tabular extraction logic.
 pub fn tabular_extract(
     pair: &TabularDataPair,
     _node: &DiffNode,
@@ -283,7 +269,6 @@ fn tabular_summary(
         "Table modified".into()
     } else {
         let mut s = parts.join("; ");
-        // Capitalize first letter
         if let Some(first) = s.get_mut(..1) {
             first.make_ascii_uppercase();
         }
@@ -312,13 +297,13 @@ fn columns_in_common(left: &TabularData, right: &TabularData) -> Vec<String> {
 impl CsvComparator {
     fn compare_both(
         &self,
-        left: &Item,
-        right: &Item,
+        left: &ItemRef,
+        right: &ItemRef,
         logical_path: &str,
-        ctx: &CompareContext,
+        data: &dyn DataAccess,
     ) -> BinocResult<CompareResult> {
-        let csv_l = parse_csv(&left.physical_path)?;
-        let csv_r = parse_csv(&right.physical_path)?;
+        let csv_l = parse_csv_via_data(left, data)?;
+        let csv_r = parse_csv_via_data(right, data)?;
 
         let headers_l: BTreeSet<&str> = csv_l.headers.iter().map(|s| s.as_str()).collect();
         let headers_r: BTreeSet<&str> = csv_r.headers.iter().map(|s| s.as_str()).collect();
@@ -442,15 +427,6 @@ impl CsvComparator {
             rows_removed,
             cells_changed,
         ));
-
-        // Cache the parsed data for downstream transformers and extract
-        ctx.cache_data(
-            logical_path,
-            ReopenedData::Tabular(TabularDataPair {
-                left: Some(csv_l),
-                right: Some(csv_r),
-            }),
-        );
 
         Ok(CompareResult::Leaf(node))
     }

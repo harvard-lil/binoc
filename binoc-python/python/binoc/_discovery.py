@@ -1,20 +1,20 @@
 """Plugin discovery via Python entry points.
 
 Third-party packages register binoc plugins by declaring an entry point
-in the ``"binoc.plugins"`` group.  Each entry point should resolve to a
-callable that accepts a :class:`~binoc.PluginRegistry` and populates it
-with comparators, transformers, and/or outputters.
+in the ``"binoc.plugins"`` group.  Two forms are supported:
 
-Example ``pyproject.toml`` for a third-party plugin package::
+**Python plugins** use ``module:callable`` syntax.  The callable receives
+a :class:`~binoc.PluginRegistry` and populates it::
 
     [project.entry-points."binoc.plugins"]
     biobinoc = "biobinoc:register"
 
-Where ``biobinoc.register`` looks like::
+**Native Rust plugins** use a bare module path pointing to the ``.so``
+built by ``export_plugin!``.  The host loads it via libloading
+automatically::
 
-    def register(registry):
-        from biobinoc.fasta import FastaComparator
-        registry.register_comparator("biobinoc.fasta", FastaComparator())
+    [project.entry-points."binoc.plugins"]
+    binoc-sqlite = "binoc_sqlite"
 """
 
 import importlib.metadata
@@ -26,15 +26,18 @@ logger = logging.getLogger("binoc")
 def discover_plugins(registry):
     """Scan installed packages for binoc plugin entry points.
 
-    Each entry point in the ``"binoc.plugins"`` group should be a callable
-    that accepts a :class:`~binoc.PluginRegistry` and registers plugins
-    into it.
+    Each entry point in the ``"binoc.plugins"`` group is either a
+    ``module:callable`` (Python plugin) or a bare module path (native
+    Rust plugin).
     """
     eps = importlib.metadata.entry_points(group="binoc.plugins")
     for ep in eps:
         logger.debug("Loading plugin entry point: %s (from %s)", ep.name, ep.value)
         try:
-            register_fn = ep.load()
-            register_fn(registry)
+            loaded = ep.load()
+            if callable(loaded):
+                loaded(registry)
+            else:
+                registry.load_native_plugin(ep.value)
         except Exception:
             logger.exception("Failed to load binoc plugin %r", ep.name)

@@ -1,7 +1,0 @@
-# Run plugin tests (from workspace root).
-test:
-    cd .. && cargo test -p binoc-sqlite
-
-# Regenerate test-vector expected-output snapshots (from workspace root).
-snapshot-update:
-    cd .. && INSTA_UPDATE=always cargo test -p binoc-sqlite --test test_vectors

@@ -1,0 +1,24 @@
+[package]
+name = "binoc-row-reorder"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "binoc_row_reorder"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["dep:pyo3"]
+
+[dependencies]
+binoc-sdk = { path = "../../binoc-sdk" }
+csv = "1.3"
+serde_json = "1.0"
+pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+
+[dev-dependencies]
+binoc-core = { path = "../../binoc-core" }
+binoc-sdk = { path = "../../binoc-sdk", features = ["test-support"] }
+binoc-stdlib = { path = "../../binoc-stdlib", features = ["test-vectors"] }
+tempfile = "3"

@@ -1,7 +1,7 @@
 use std::io::Write;
 
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_core::data_access::LocalDataAccess;
+use binoc_sdk::*;
 
 use binoc_stdlib::comparators::binary::BinaryComparator;
 use binoc_stdlib::comparators::csv_compare::CsvComparator;
@@ -9,8 +9,8 @@ use binoc_stdlib::comparators::directory::DirectoryComparator;
 use binoc_stdlib::comparators::text::TextComparator;
 use binoc_stdlib::comparators::zip_compare::ZipComparator;
 
-fn ctx() -> CompareContext {
-    CompareContext::new()
+fn data() -> LocalDataAccess {
+    LocalDataAccess::new()
 }
 
 // ── Binary comparator ──────────────────────────────────────────────
@@ -21,11 +21,14 @@ fn binary_identical_files() {
     std::fs::write(tmp.path().join("a.bin"), b"hello").unwrap();
     std::fs::write(tmp.path().join("b.bin"), b"hello").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.bin"), "file.bin"),
-        Item::new(tmp.path().join("b.bin"), "file.bin"),
+        da.register_local(&tmp.path().join("a.bin"), "file.bin")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.bin"), "file.bin")
+            .unwrap(),
     );
-    let result = BinaryComparator.compare(&pair, &ctx()).unwrap();
+    let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert_eq!(node.kind, "identical");
@@ -41,11 +44,14 @@ fn binary_different_files() {
     std::fs::write(tmp.path().join("a.bin"), b"hello").unwrap();
     std::fs::write(tmp.path().join("b.bin"), b"world").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.bin"), "file.bin"),
-        Item::new(tmp.path().join("b.bin"), "file.bin"),
+        da.register_local(&tmp.path().join("a.bin"), "file.bin")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.bin"), "file.bin")
+            .unwrap(),
     );
-    let result = BinaryComparator.compare(&pair, &ctx()).unwrap();
+    let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert_eq!(node.kind, "modify");
@@ -62,8 +68,12 @@ fn binary_added_file_includes_hash() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("b.bin"), b"new content").unwrap();
 
-    let pair = ItemPair::added(Item::new(tmp.path().join("b.bin"), "new.bin"));
-    let result = BinaryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::added(
+        da.register_local(&tmp.path().join("b.bin"), "new.bin")
+            .unwrap(),
+    );
+    let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert_eq!(node.kind, "add");
@@ -74,11 +84,9 @@ fn binary_added_file_includes_hash() {
 }
 
 #[test]
-fn binary_can_handle_returns_true() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("a"), b"x").unwrap();
-    let pair = ItemPair::added(Item::new(tmp.path().join("a"), "anything"));
-    assert!(BinaryComparator.can_handle(&pair));
+fn binary_scope_is_files() {
+    let desc = BinaryComparator.descriptor();
+    assert_eq!(desc.scope, ItemScope::Files);
 }
 
 // ── Text comparator ────────────────────────────────────────────────
@@ -89,11 +97,14 @@ fn text_identical_content() {
     std::fs::write(tmp.path().join("a.txt"), "hello\nworld\n").unwrap();
     std::fs::write(tmp.path().join("b.txt"), "hello\nworld\n").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.txt"), "file.txt"),
-        Item::new(tmp.path().join("b.txt"), "file.txt"),
+        da.register_local(&tmp.path().join("a.txt"), "file.txt")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.txt"), "file.txt")
+            .unwrap(),
     );
-    let result = TextComparator.compare(&pair, &ctx()).unwrap();
+    let result = TextComparator.compare(&pair, &da).unwrap();
     assert!(matches!(result, CompareResult::Identical));
 }
 
@@ -107,11 +118,14 @@ fn text_diff_counts_lines() {
     )
     .unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.txt"), "file.txt"),
-        Item::new(tmp.path().join("b.txt"), "file.txt"),
+        da.register_local(&tmp.path().join("a.txt"), "file.txt")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.txt"), "file.txt")
+            .unwrap(),
     );
-    let result = TextComparator.compare(&pair, &ctx()).unwrap();
+    let result = TextComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert_eq!(node.kind, "modify");
@@ -127,9 +141,10 @@ fn text_diff_counts_lines() {
 
 #[test]
 fn text_handles_txt_extension() {
-    assert!(TextComparator.handles_extensions().contains(&".txt"));
-    assert!(TextComparator.handles_extensions().contains(&".md"));
-    assert!(TextComparator.handles_extensions().contains(&".rs"));
+    let desc = TextComparator.descriptor();
+    assert!(desc.extensions.contains(&".txt".to_string()));
+    assert!(desc.extensions.contains(&".md".to_string()));
+    assert!(desc.extensions.contains(&".rs".to_string()));
 }
 
 // ── CSV comparator ─────────────────────────────────────────────────
@@ -140,11 +155,14 @@ fn csv_identical() {
     std::fs::write(tmp.path().join("a.csv"), "name,age\nAlice,30\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "name,age\nAlice,30\n").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.csv"), "data.csv"),
-        Item::new(tmp.path().join("b.csv"), "data.csv"),
+        da.register_local(&tmp.path().join("a.csv"), "data.csv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv"), "data.csv")
+            .unwrap(),
     );
-    let result = CsvComparator.compare(&pair, &ctx()).unwrap();
+    let result = CsvComparator.compare(&pair, &da).unwrap();
     assert!(matches!(result, CompareResult::Identical));
 }
 
@@ -158,11 +176,14 @@ fn csv_detects_column_addition() {
     )
     .unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.csv"), "data.csv"),
-        Item::new(tmp.path().join("b.csv"), "data.csv"),
+        da.register_local(&tmp.path().join("a.csv"), "data.csv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv"), "data.csv")
+            .unwrap(),
     );
-    let result = CsvComparator.compare(&pair, &ctx()).unwrap();
+    let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert!(node.tags.contains("binoc.column-addition"));
@@ -180,11 +201,14 @@ fn csv_detects_row_addition() {
     std::fs::write(tmp.path().join("a.csv"), "name,age\nAlice,30\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.csv"), "data.csv"),
-        Item::new(tmp.path().join("b.csv"), "data.csv"),
+        da.register_local(&tmp.path().join("a.csv"), "data.csv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv"), "data.csv")
+            .unwrap(),
     );
-    let result = CsvComparator.compare(&pair, &ctx()).unwrap();
+    let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert!(node.tags.contains("binoc.row-addition"));
@@ -200,11 +224,14 @@ fn csv_detects_cell_changes() {
     std::fs::write(tmp.path().join("a.csv"), "name,score\nAlice,85\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "name,score\nAlice,92\n").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.csv"), "data.csv"),
-        Item::new(tmp.path().join("b.csv"), "data.csv"),
+        da.register_local(&tmp.path().join("a.csv"), "data.csv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv"), "data.csv")
+            .unwrap(),
     );
-    let result = CsvComparator.compare(&pair, &ctx()).unwrap();
+    let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert!(node.tags.contains("binoc.cell-change"));
@@ -220,11 +247,14 @@ fn csv_detects_column_reorder() {
     std::fs::write(tmp.path().join("a.csv"), "name,age,city\nAlice,30,NYC\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "city,name,age\nNYC,Alice,30\n").unwrap();
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.csv"), "data.csv"),
-        Item::new(tmp.path().join("b.csv"), "data.csv"),
+        da.register_local(&tmp.path().join("a.csv"), "data.csv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv"), "data.csv")
+            .unwrap(),
     );
-    let result = CsvComparator.compare(&pair, &ctx()).unwrap();
+    let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
             assert!(node.tags.contains("binoc.column-reorder"));
@@ -236,10 +266,10 @@ fn csv_detects_column_reorder() {
 // ── Directory comparator ───────────────────────────────────────────
 
 #[test]
-fn directory_can_handle_dirs() {
-    let tmp = tempfile::tempdir().unwrap();
-    let pair = ItemPair::both(Item::new(tmp.path(), "dir"), Item::new(tmp.path(), "dir"));
-    assert!(DirectoryComparator.can_handle(&pair));
+fn directory_descriptor_scope_is_containers() {
+    let desc = DirectoryComparator.descriptor();
+    assert_eq!(desc.scope, ItemScope::Containers);
+    assert!(desc.handles_identical);
 }
 
 #[test]
@@ -252,8 +282,12 @@ fn directory_expands_children() {
     std::fs::write(a.join("file.txt"), "hello").unwrap();
     std::fs::write(b.join("file.txt"), "hello").unwrap();
 
-    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
-    let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&a, "root").unwrap(),
+        da.register_local(&b, "root").unwrap(),
+    );
+    let result = DirectoryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(node, children) => {
             assert_eq!(node.item_type, "directory");
@@ -272,8 +306,12 @@ fn directory_detects_added_files() {
     std::fs::create_dir_all(&b).unwrap();
     std::fs::write(b.join("new.txt"), "new").unwrap();
 
-    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
-    let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&a, "root").unwrap(),
+        da.register_local(&b, "root").unwrap(),
+    );
+    let result = DirectoryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(_, children) => {
             assert_eq!(children.len(), 1);
@@ -294,13 +332,16 @@ fn directory_populates_media_type_from_content() {
     std::fs::create_dir_all(&a).unwrap();
     std::fs::create_dir_all(&b).unwrap();
 
-    // Write a PNG file (infer detects from magic bytes)
     let png_header = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89";
     std::fs::write(a.join("image.png"), png_header).unwrap();
     std::fs::write(b.join("image.png"), png_header).unwrap();
 
-    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
-    let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&a, "root").unwrap(),
+        da.register_local(&b, "root").unwrap(),
+    );
+    let result = DirectoryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(_, children) => {
             let child = &children[0];
@@ -319,13 +360,15 @@ fn directory_media_type_falls_back_to_extension() {
     std::fs::create_dir_all(&a).unwrap();
     std::fs::create_dir_all(&b).unwrap();
 
-    // Plain text has no distinctive magic bytes; infer won't match, so
-    // mime_guess from the .txt extension should provide the fallback.
     std::fs::write(a.join("readme.txt"), "hello world").unwrap();
     std::fs::write(b.join("readme.txt"), "hello world").unwrap();
 
-    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
-    let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&a, "root").unwrap(),
+        da.register_local(&b, "root").unwrap(),
+    );
+    let result = DirectoryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(_, children) => {
             let child = &children[0];
@@ -344,17 +387,19 @@ fn directory_media_type_none_for_unknown() {
     std::fs::create_dir_all(&a).unwrap();
     std::fs::create_dir_all(&b).unwrap();
 
-    // A file with no extension and non-magic content
     std::fs::write(a.join("Makefile"), "all: build").unwrap();
     std::fs::write(b.join("Makefile"), "all: build").unwrap();
 
-    let pair = ItemPair::both(Item::new(&a, "root"), Item::new(&b, "root"));
-    let result = DirectoryComparator.compare(&pair, &ctx()).unwrap();
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&a, "root").unwrap(),
+        da.register_local(&b, "root").unwrap(),
+    );
+    let result = DirectoryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(_, children) => {
             let child = &children[0];
             let item = child.right.as_ref().unwrap();
-            // No extension, no magic bytes → None
             assert!(item.media_type.is_none());
         }
         _ => panic!("Expected Expand"),
@@ -364,15 +409,10 @@ fn directory_media_type_none_for_unknown() {
 // ── Zip comparator ─────────────────────────────────────────────────
 
 #[test]
-fn zip_handles_zip_extension() {
-    assert!(ZipComparator.handles_extensions().contains(&".zip"));
-}
-
-#[test]
-fn zip_handles_zip_media_type() {
-    assert!(ZipComparator
-        .handles_media_types()
-        .contains(&"application/zip"));
+fn zip_descriptor_has_extension_and_media_type() {
+    let desc = ZipComparator.descriptor();
+    assert!(desc.extensions.contains(&".zip".to_string()));
+    assert!(desc.media_types.contains(&"application/zip".to_string()));
 }
 
 #[test]
@@ -381,11 +421,14 @@ fn zip_expands_contents() {
     create_test_zip(&tmp.path().join("a.zip"), &[("data.txt", "hello")]);
     create_test_zip(&tmp.path().join("b.zip"), &[("data.txt", "world")]);
 
+    let da = data();
     let pair = ItemPair::both(
-        Item::new(tmp.path().join("a.zip"), "archive.zip"),
-        Item::new(tmp.path().join("b.zip"), "archive.zip"),
+        da.register_local(&tmp.path().join("a.zip"), "archive.zip")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.zip"), "archive.zip")
+            .unwrap(),
     );
-    let result = ZipComparator.compare(&pair, &ctx()).unwrap();
+    let result = ZipComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Expand(node, children) => {
             assert_eq!(node.item_type, "zip_archive");

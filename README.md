@@ -67,7 +67,7 @@ Generic diff tools don't understand data formats, while version control systems 
 - Detect moves and copies from content hashes
 - Extract actual changed data from migration nodes (added rows, text diffs, etc.)
 - Render migrations as JSON or Markdown changelogs
-- Extend comparison and transformation pipelines from Rust stdlib plugins or Python-authored plugins
+- Extend comparison and transformation pipelines via Rust native plugins (C ABI), Python plugins, or in-workspace stdlib plugins
 
 ## Documentation
 
@@ -137,7 +137,7 @@ Or with `uvx`, no install needed:
 uvx binoc --with binoc-sqlite diff snapshots/v1 snapshots/v2
 ```
 
-See [docs/writing_plugins.md](docs/writing_plugins.md) for plugin authoring details and [docs/design.md](docs/design.md) for architecture.
+Plugins can be Rust crates (compiled as native shared libraries via the `export_plugin!` macro) or pure Python. See [docs/design.md](docs/design.md) for architecture and [model-plugins/](model-plugins/) for reference implementations.
 
 ### Rust-only CLI
 
@@ -161,23 +161,24 @@ just docs    # regenerate tutorial after code changes
 To test the full Python CLI with local plugin crates (no PyPI needed):
 
 ```bash
-uv run --with ./binoc-python --with ./binoc-sqlite \
+uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite \
   binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-This builds both packages from source and wires up entry-point discovery automatically. The same pattern works for any local plugin crate that has a `pyproject.toml` with a `[project.entry-points."binoc.plugins"]` section. For a self-contained plugin example (install, run, test vectors), see [binoc-sqlite/README.md](binoc-sqlite/README.md).
+This builds both packages from source and wires up entry-point discovery automatically. The same pattern works for any local plugin crate that has a `pyproject.toml` with a `[project.entry-points."binoc.plugins"]` section. For a self-contained plugin example (install, run, test vectors), see [model-plugins/binoc-sqlite/](model-plugins/binoc-sqlite/).
 
 ## Workspace Layout
 
 | Path | Role |
 |---|---|
-| `binoc-core/` | Controller, IR, config, traits, and output functions |
-| `binoc-stdlib/` | Standard comparators and transformers |
+| `binoc-sdk/` | Plugin SDK: traits, IR types, `DataAccess`, `export_plugin!` macro, C ABI wire types |
+| `binoc-core/` | Controller loop, config, plugin registry, output functions |
+| `binoc-stdlib/` | Standard comparators and transformers (architecturally identical to third-party plugins) |
 | `binoc-cli/` | CLI library + standalone Rust binary |
-| `binoc-python/` | PyO3 bindings, Python plugin discovery, and `binoc` CLI entry point |
-| `binoc-sqlite/` | Demo plugin: SQLite schema and row count diffing |
-| `test-vectors/` | Test files demonstrating (and confirming) binoc output for major capabilities |
-| `docs/` | Documentation and design notes |
+| `binoc-python/` | PyO3 bindings, native plugin loader (`libloading`), Python plugin bridges, `binoc` CLI entry point |
+| `model-plugins/` | Reference plugin implementations: `binoc-sqlite` (Rust comparator), `binoc-row-reorder` (Rust transformer), `binoc-html` (Python outputter) |
+| `test-vectors/` | Shared test fixtures for standard library plugins |
+| `docs/` | Documentation, design notes, and ADRs |
 
 
 ## Future Work
@@ -185,7 +186,8 @@ This builds both packages from source and wires up entry-point discovery automat
 - Additional plugins such as Excel, Parquet, PDF
 - `binoc plugin install` / `binoc plugin list` CLI subcommands
 - Richer Python notebook ergonomics
-- Additional output formatters (HTML, LLM-summarized)
+- LLM-summarized output formatter
+- WASM/IPC plugin transport (ABI designed for it; not yet implemented)
 - Memory-bounded processing for very large trees
 - Similarity-based rename detection for modified-and-moved files
-- Fixed-point transformer iteration (tranformers currently run in a single pass, may miss optimizations)
+- Fixed-point transformer iteration (transformers currently run in a single pass, may miss optimizations)

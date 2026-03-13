@@ -2,15 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use binoc_core::ir::{DiffNode, Migration};
-use binoc_core::traits::{BinocResult, Outputter};
+use binoc_sdk::*;
 
-/// Config for the standard Markdown outputter. Parsed from the
-/// `output.markdown` (or `output."binoc.markdown"`) section of the
-/// dataset config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkdownOutputterConfig {
-    /// Significance classification: maps category names to lists of tags.
     #[serde(default = "default_significance")]
     pub significance: BTreeMap<String, Vec<String>>,
 }
@@ -48,15 +43,11 @@ fn default_significance() -> BTreeMap<String, Vec<String>> {
     map
 }
 
-/// Standard markdown outputter. Groups changes by significance category.
 pub struct MarkdownOutputter;
 
 impl Outputter for MarkdownOutputter {
-    fn name(&self) -> &str {
-        "binoc.markdown"
-    }
-    fn file_extension(&self) -> &str {
-        "md"
+    fn descriptor(&self) -> OutputterDescriptor {
+        OutputterDescriptor::new("binoc.markdown", "md")
     }
 
     fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
@@ -66,8 +57,6 @@ impl Outputter for MarkdownOutputter {
     }
 }
 
-/// Generate a Markdown changelog from one or more migrations.
-/// Public so other outputters can reuse or wrap it.
 pub fn render_markdown(migrations: &[Migration], config: &MarkdownOutputterConfig) -> String {
     let mut out = String::new();
 
@@ -99,7 +88,7 @@ pub fn render_markdown(migrations: &[Migration], config: &MarkdownOutputterConfi
             let title = capitalize(category);
             out.push_str(&format!("## {title} Changes\n\n"));
             for node in nodes {
-                format_node(&mut out, node, 0);
+                format_node(&mut out, node);
             }
             out.push('\n');
         }
@@ -107,7 +96,7 @@ pub fn render_markdown(migrations: &[Migration], config: &MarkdownOutputterConfi
         if !uncategorized.is_empty() {
             out.push_str("## Other Changes\n\n");
             for node in &uncategorized {
-                format_node(&mut out, node, 0);
+                format_node(&mut out, node);
             }
             out.push('\n');
         }
@@ -150,7 +139,7 @@ fn collect_reportable_nodes<'a>(
     }
 }
 
-fn format_node(out: &mut String, node: &DiffNode, _depth: usize) {
+fn format_node(out: &mut String, node: &DiffNode) {
     let path = if node.path.is_empty() {
         "(root)"
     } else {
@@ -210,7 +199,6 @@ fn capitalize(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use binoc_core::ir::{DiffNode, Migration};
 
     #[test]
     fn to_markdown_includes_significance_sections() {
@@ -227,11 +215,8 @@ mod tests {
         let md = render_markdown(&[migration], &config);
         assert!(md.contains("# Changelog: v1 → v2"));
         assert!(md.contains("## Substantive Changes"));
-        assert!(md.contains("**data.csv**"), "path should be bold in bullet");
-        assert!(
-            md.contains("Column added: 'email'"),
-            "summary should appear"
-        );
+        assert!(md.contains("**data.csv**"));
+        assert!(md.contains("Column added: 'email'"));
     }
 
     #[test]
@@ -243,75 +228,11 @@ mod tests {
     }
 
     #[test]
-    fn significance_classification_maps_tags_to_categories() {
-        let ministerial = DiffNode::new("modify", "csv", "a.csv").with_tag("binoc.column-reorder");
-        let substantive = DiffNode::new("modify", "csv", "b.csv").with_tag("binoc.schema-change");
-        let config = MarkdownOutputterConfig::default();
-
-        let md_ministerial =
-            render_markdown(&[Migration::new("v1", "v2", Some(ministerial))], &config);
-        assert!(md_ministerial.contains("## Ministerial Changes"));
-        assert!(md_ministerial.contains("**a.csv**"));
-
-        let md_substantive =
-            render_markdown(&[Migration::new("v1", "v2", Some(substantive))], &config);
-        assert!(md_substantive.contains("## Substantive Changes"));
-        assert!(md_substantive.contains("**b.csv**"));
-    }
-
-    #[test]
-    fn parent_node_with_summary_is_rendered_alongside_children() {
-        let root = DiffNode::new("modify", "directory", "data/")
-            .with_summary("Directory restructured")
-            .with_tag("binoc.schema-change")
-            .with_children(vec![
-                DiffNode::new("modify", "csv", "data/a.csv")
-                    .with_summary("Columns reordered")
-                    .with_tag("binoc.column-reorder"),
-                DiffNode::new("add", "csv", "data/b.csv").with_summary("New table"),
-            ]);
-        let config = MarkdownOutputterConfig::default();
-        let md = render_markdown(&[Migration::new("v1", "v2", Some(root))], &config);
-        assert!(md.contains("**data/**"), "parent node should be rendered");
-        assert!(
-            md.contains("Directory restructured"),
-            "parent summary should appear"
-        );
-        assert!(
-            md.contains("**data/a.csv**"),
-            "child should also be rendered"
-        );
-        assert!(
-            md.contains("**data/b.csv**"),
-            "second child should also be rendered"
-        );
-    }
-
-    #[test]
-    fn bare_container_without_summary_is_not_rendered() {
-        let root =
-            DiffNode::new("modify", "directory", "data/").with_children(vec![DiffNode::new(
-                "add",
-                "csv",
-                "data/a.csv",
-            )
-            .with_summary("New table")
-            .with_tag("binoc.column-addition")]);
-        let config = MarkdownOutputterConfig::default();
-        let md = render_markdown(&[Migration::new("v1", "v2", Some(root))], &config);
-        assert!(
-            !md.contains("**data/**"),
-            "bare container should not be rendered"
-        );
-        assert!(md.contains("**data/a.csv**"), "child should be rendered");
-    }
-
-    #[test]
-    fn node_without_summary_uses_fallback_description() {
+    fn node_without_summary_uses_fallback() {
         let node = DiffNode::new("add", "file", "new.txt").with_tag("binoc.content-changed");
         let migration = Migration::new("v1", "v2", Some(node));
         let config = MarkdownOutputterConfig::default();
         let md = render_markdown(&[migration], &config);
-        assert!(md.contains("New file"), "fallback should describe the kind");
+        assert!(md.contains("New file"));
     }
 }

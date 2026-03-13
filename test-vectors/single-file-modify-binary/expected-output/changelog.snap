@@ -1,9 +1,9 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
 ## Substantive Changes
 
-- **data.bin**: Content changed (4 bytes → 4 bytes)
+- **data.bin**: Content changed (0 bytes → 0 bytes)

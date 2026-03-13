@@ -1,0 +1,22 @@
+[project]
+name = "binoc-html"
+version = "0.1.0"
+description = "HTML outputter plugin for binoc"
+requires-python = ">=3.10"
+dependencies = ["binoc"]
+
+[project.entry-points."binoc.plugins"]
+binoc-html = "binoc_html:register"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+binoc = { path = "../../binoc-python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,8 +1,6 @@
 use std::collections::BTreeSet;
 
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// File-correspondence by relative path. Expands into child item pairs for
 /// each matched, added, or removed file. Pre-computes BLAKE3 hashes for all
@@ -35,121 +33,122 @@ fn relative_name(entry: &std::path::Path, base: &std::path::Path) -> String {
         })
 }
 
-/// Read a file's bytes, compute BLAKE3 hash and detect media type in one pass.
-fn read_and_identify(
-    path: &std::path::Path,
-    logical_path: &str,
-) -> BinocResult<(String, Option<String>)> {
-    let data = std::fs::read(path).map_err(BinocError::Io)?;
-    let hash = blake3::hash(&data).to_hex().to_string();
-    let media_type = infer::get(&data)
+fn identify(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, Option<String>)> {
+    let bytes = data.read_bytes(item)?;
+    let hash = blake3::hash(&bytes).to_hex().to_string();
+    let media_type = infer::get(&bytes)
         .map(|t| t.mime_type().to_string())
         .or_else(|| {
-            mime_guess::from_path(logical_path)
+            mime_guess::from_path(&item.logical_path)
                 .first()
                 .map(|m| m.essence_str().to_string())
         });
     Ok((hash, media_type))
 }
 
-fn make_item(path: std::path::PathBuf, logical: String) -> Item {
-    let mut item = Item::new(&path, logical.clone());
+fn make_item_ref(
+    path: &std::path::Path,
+    logical: String,
+    data: &dyn DataAccess,
+) -> BinocResult<ItemRef> {
+    let mut item = data.register_local(path, &logical)?;
     if !item.is_dir {
-        if let Ok((hash, media_type)) = read_and_identify(&path, &logical) {
+        if let Ok((hash, media_type)) = identify(&item, data) {
             item.content_hash = Some(hash);
             item.media_type = media_type;
         }
     }
-    item
+    Ok(item)
 }
 
 impl Comparator for DirectoryComparator {
-    fn name(&self) -> &str {
-        "binoc.directory"
-    }
-
-    fn can_handle(&self, pair: &ItemPair) -> bool {
-        pair.is_dir()
+    fn descriptor(&self) -> ComparatorDescriptor {
+        ComparatorDescriptor::new("binoc.directory")
+            .with_scope(ItemScope::Containers)
+            .with_handles_identical(true)
     }
 
     fn reopen(
         &self,
         pair: &ItemPair,
         child_path: &str,
-        _ctx: &CompareContext,
+        data: &dyn DataAccess,
     ) -> BinocResult<ItemPair> {
-        // Resolve a child's physical path from the parent directory pair.
-        // child_path is the full logical path; we need the relative segment.
-        let parent_logical = pair
-            .left
-            .as_ref()
-            .or(pair.right.as_ref())
-            .map(|i| i.logical_path.as_str())
-            .unwrap_or("");
+        let child_rel = child_path
+            .strip_prefix(&format!("{}/", pair.logical_path()))
+            .or_else(|| {
+                let lp = pair.logical_path();
+                if lp.is_empty() {
+                    Some(child_path)
+                } else {
+                    child_path.strip_prefix(lp)
+                }
+            })
+            .unwrap_or(child_path);
 
-        let relative = if parent_logical.is_empty() {
-            child_path.to_string()
-        } else if let Some(stripped) = child_path.strip_prefix(parent_logical) {
-            stripped.trim_start_matches('/').to_string()
-        } else {
-            child_path.to_string()
+        let first_component = child_rel.split('/').next().unwrap_or(child_rel);
+
+        let make_child = |item: &ItemRef| -> BinocResult<ItemRef> {
+            let phys = data.local_path(item)?;
+            let child_phys = phys.join(first_component);
+            let logical = if item.logical_path.is_empty() {
+                first_component.to_string()
+            } else {
+                format!("{}/{}", item.logical_path, first_component)
+            };
+            data.register_local(&child_phys, &logical)
         };
 
-        let left = pair.left.as_ref().map(|item| {
-            let phys = item.physical_path.join(&relative);
-            Item::new(phys, child_path)
-        });
-        let right = pair.right.as_ref().map(|item| {
-            let phys = item.physical_path.join(&relative);
-            Item::new(phys, child_path)
-        });
-
-        match (left, right) {
-            (Some(l), Some(r)) => Ok(ItemPair::both(l, r)),
-            (None, Some(r)) => Ok(ItemPair::added(r)),
-            (Some(l), None) => Ok(ItemPair::removed(l)),
-            (None, None) => Err(BinocError::Extract("both sides missing in reopen".into())),
+        match (&pair.left, &pair.right) {
+            (Some(l), Some(r)) => Ok(ItemPair::both(make_child(l)?, make_child(r)?)),
+            (None, Some(r)) => Ok(ItemPair::added(make_child(r)?)),
+            (Some(l), None) => Ok(ItemPair::removed(make_child(l)?)),
+            (None, None) => Err(BinocError::Extract("empty pair in reopen".into())),
         }
     }
 
-    fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
-            (Some(left), Some(right)) => self.compare_dirs(left, right),
+            (Some(left), Some(right)) => self.compare_dirs(left, right, data),
             (None, Some(right)) => {
-                let entries = list_entries(&right.physical_path)?;
-                let children: Vec<ItemPair> = entries
+                let phys = data.local_path(right)?;
+                let entries = list_entries(&phys)?;
+                let children: BinocResult<Vec<ItemPair>> = entries
                     .into_iter()
                     .map(|path| {
-                        let name = relative_name(&path, &right.physical_path);
+                        let name = relative_name(&path, &phys);
                         let logical = if right.logical_path.is_empty() {
                             name
                         } else {
                             format!("{}/{}", right.logical_path, name)
                         };
-                        ItemPair::added(make_item(path, logical))
+                        let item = make_item_ref(&path, logical, data)?;
+                        Ok(ItemPair::added(item))
                     })
                     .collect();
 
                 let node = DiffNode::new("add", "directory", &right.logical_path);
-                Ok(CompareResult::Expand(node, children))
+                Ok(CompareResult::Expand(node, children?))
             }
             (Some(left), None) => {
-                let entries = list_entries(&left.physical_path)?;
-                let children: Vec<ItemPair> = entries
+                let phys = data.local_path(left)?;
+                let entries = list_entries(&phys)?;
+                let children: BinocResult<Vec<ItemPair>> = entries
                     .into_iter()
                     .map(|path| {
-                        let name = relative_name(&path, &left.physical_path);
+                        let name = relative_name(&path, &phys);
                         let logical = if left.logical_path.is_empty() {
                             name
                         } else {
                             format!("{}/{}", left.logical_path, name)
                         };
-                        ItemPair::removed(make_item(path, logical))
+                        let item = make_item_ref(&path, logical, data)?;
+                        Ok(ItemPair::removed(item))
                     })
                     .collect();
 
                 let node = DiffNode::new("remove", "directory", &left.logical_path);
-                Ok(CompareResult::Expand(node, children))
+                Ok(CompareResult::Expand(node, children?))
             }
             (None, None) => Ok(CompareResult::Identical),
         }
@@ -157,53 +156,60 @@ impl Comparator for DirectoryComparator {
 }
 
 impl DirectoryComparator {
-    fn compare_dirs(&self, left: &Item, right: &Item) -> BinocResult<CompareResult> {
-        let entries_l = list_entries(&left.physical_path)?;
-        let entries_r = list_entries(&right.physical_path)?;
+    fn compare_dirs(
+        &self,
+        left: &ItemRef,
+        right: &ItemRef,
+        data: &dyn DataAccess,
+    ) -> BinocResult<CompareResult> {
+        let phys_l = data.local_path(left)?;
+        let phys_r = data.local_path(right)?;
+
+        let entries_l = list_entries(&phys_l)?;
+        let entries_r = list_entries(&phys_r)?;
 
         let names_l: BTreeSet<String> = entries_l
             .iter()
-            .map(|e| relative_name(e, &left.physical_path))
+            .map(|e| relative_name(e, &phys_l))
             .collect();
         let names_r: BTreeSet<String> = entries_r
             .iter()
-            .map(|e| relative_name(e, &right.physical_path))
+            .map(|e| relative_name(e, &phys_r))
             .collect();
 
         let mut children = Vec::new();
 
         for name in names_l.intersection(&names_r) {
-            let path_l = left.physical_path.join(name);
-            let path_r = right.physical_path.join(name);
+            let path_l = phys_l.join(name);
+            let path_r = phys_r.join(name);
             let logical = if right.logical_path.is_empty() {
                 name.clone()
             } else {
                 format!("{}/{}", right.logical_path, name)
             };
-            children.push(ItemPair::both(
-                make_item(path_l, logical.clone()),
-                make_item(path_r, logical),
-            ));
+            let item_l = make_item_ref(&path_l, logical.clone(), data)?;
+            let item_r = make_item_ref(&path_r, logical, data)?;
+            children.push(ItemPair::both(item_l, item_r));
         }
 
         for name in names_r.difference(&names_l) {
-            let path_r = right.physical_path.join(name);
+            let path_r = phys_r.join(name);
             let logical = if right.logical_path.is_empty() {
                 name.clone()
             } else {
                 format!("{}/{}", right.logical_path, name)
             };
-            children.push(ItemPair::added(make_item(path_r, logical)));
+            children.push(ItemPair::added(make_item_ref(&path_r, logical, data)?));
         }
 
         for name in names_l.difference(&names_r) {
-            let path_l = left.physical_path.join(name);
+            let path_l = phys_l.join(name);
             let logical = if left.logical_path.is_empty() {
                 name.clone()
             } else {
                 format!("{}/{}", left.logical_path, name)
             };
-            children.push(ItemPair::removed(make_item(path_l, logical)));
+            children.push(ItemPair::removed(make_item_ref(&path_l, logical, data)?));
         }
 
         let kind = if children.is_empty() {

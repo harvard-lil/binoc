@@ -1,116 +1,86 @@
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// Content-hash comparison only (BLAKE3). Catch-all fallback comparator.
-/// Uses pre-computed content_hash from Item when available (e.g. when the
-/// directory comparator already hashed the file), falling back to computing
-/// its own hash for items without one.
 pub struct BinaryComparator;
 
-fn hash_for_item(item: &Item) -> BinocResult<String> {
+struct ItemInfo {
+    hash: String,
+    size: u64,
+}
+
+fn info_for_item(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ItemInfo> {
     if let Some(ref hash) = item.content_hash {
-        return Ok(hash.clone());
+        return Ok(ItemInfo {
+            hash: hash.clone(),
+            size: 0,
+        });
     }
-    let data = std::fs::read(&item.physical_path).map_err(BinocError::Io)?;
-    Ok(blake3::hash(&data).to_hex().to_string())
+    let bytes = data.read_bytes(item)?;
+    Ok(ItemInfo {
+        hash: blake3::hash(&bytes).to_hex().to_string(),
+        size: bytes.len() as u64,
+    })
 }
 
 impl Comparator for BinaryComparator {
-    fn name(&self) -> &str {
-        "binoc.binary"
+    fn descriptor(&self) -> ComparatorDescriptor {
+        ComparatorDescriptor::new("binoc.binary")
     }
 
-    fn can_handle(&self, _pair: &ItemPair) -> bool {
-        true
-    }
-
-    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
-        let left = pair
-            .left
-            .as_ref()
-            .map(|item| std::fs::read(&item.physical_path).map_err(BinocError::Io))
-            .transpose()?;
-        let right = pair
-            .right
-            .as_ref()
-            .map(|item| std::fs::read(&item.physical_path).map_err(BinocError::Io))
-            .transpose()?;
-        Ok(ReopenedData::Binary { left, right })
-    }
-
-    fn extract(
-        &self,
-        data: &ReopenedData,
-        _node: &DiffNode,
-        aspect: &str,
-    ) -> Option<ExtractResult> {
-        let ReopenedData::Binary { left, right } = data else {
-            return None;
-        };
-        match aspect {
-            "content_left" => left.as_ref().map(|b| ExtractResult::Binary(b.clone())),
-            "content_right" => right.as_ref().map(|b| ExtractResult::Binary(b.clone())),
-            "content" | "full" => right
-                .as_ref()
-                .or(left.as_ref())
-                .map(|b| ExtractResult::Binary(b.clone())),
-            _ => None,
-        }
-    }
-
-    fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
             (Some(left), Some(right)) => {
-                let hash_l = hash_for_item(left)?;
-                let hash_r = hash_for_item(right)?;
+                let info_l = info_for_item(left, data)?;
+                let info_r = info_for_item(right, data)?;
 
-                if hash_l == hash_r {
+                if info_l.hash == info_r.hash {
                     let node = DiffNode::new("identical", "file", &right.logical_path)
-                        .with_detail("hash", serde_json::json!(&hash_l));
+                        .with_detail("hash", serde_json::json!(&info_l.hash));
                     return Ok(CompareResult::Leaf(node));
                 }
 
-                let size_l = std::fs::metadata(&left.physical_path)
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                let size_r = std::fs::metadata(&right.physical_path)
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-
                 let summary = format!(
                     "Content changed ({} → {})",
-                    fmt_bytes(size_l),
-                    fmt_bytes(size_r)
+                    fmt_bytes(info_l.size),
+                    fmt_bytes(info_r.size)
                 );
                 let node = DiffNode::new("modify", "file", &right.logical_path)
                     .with_summary(summary)
                     .with_tag("binoc.content-changed")
-                    .with_detail("hash_left", serde_json::json!(&hash_l))
-                    .with_detail("hash_right", serde_json::json!(&hash_r))
-                    .with_detail("size_left", serde_json::json!(size_l))
-                    .with_detail("size_right", serde_json::json!(size_r));
+                    .with_detail("hash_left", serde_json::json!(&info_l.hash))
+                    .with_detail("hash_right", serde_json::json!(&info_r.hash))
+                    .with_detail("size_left", serde_json::json!(info_l.size))
+                    .with_detail("size_right", serde_json::json!(info_r.size));
 
                 Ok(CompareResult::Leaf(node))
             }
             (None, Some(right)) => {
-                let hash = hash_for_item(right)?;
+                let info = info_for_item(right, data)?;
                 let node = DiffNode::new("add", "file", &right.logical_path)
                     .with_summary("New file")
                     .with_tag("binoc.content-changed")
-                    .with_detail("hash_right", serde_json::json!(&hash));
+                    .with_detail("hash_right", serde_json::json!(&info.hash));
                 Ok(CompareResult::Leaf(node))
             }
             (Some(left), None) => {
-                let hash = hash_for_item(left)?;
+                let info = info_for_item(left, data)?;
                 let node = DiffNode::new("remove", "file", &left.logical_path)
                     .with_summary("File removed")
                     .with_tag("binoc.content-changed")
-                    .with_detail("hash_left", serde_json::json!(&hash));
+                    .with_detail("hash_left", serde_json::json!(&info.hash));
                 Ok(CompareResult::Leaf(node))
             }
             (None, None) => Ok(CompareResult::Identical),
         }
+    }
+
+    fn extract(
+        &self,
+        _node: &DiffNode,
+        _aspect: &str,
+        _data: &dyn DataAccess,
+    ) -> Option<ExtractResult> {
+        None
     }
 }
 

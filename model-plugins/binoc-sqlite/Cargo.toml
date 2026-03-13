@@ -1,0 +1,24 @@
+[package]
+name = "binoc-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "binoc_sqlite"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["dep:pyo3"]
+
+[dependencies]
+binoc-sdk = { path = "../../binoc-sdk" }
+rusqlite = { version = "0.35", features = ["bundled"] }
+serde_json = "1.0"
+pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+
+[dev-dependencies]
+binoc-core = { path = "../../binoc-core" }
+binoc-sdk = { path = "../../binoc-sdk", features = ["test-support"] }
+binoc-stdlib = { path = "../../binoc-stdlib", features = ["test-vectors"] }
+tempfile = "3"
