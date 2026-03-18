@@ -38,7 +38,7 @@ fn diff_default_stdout_is_markdown() {
 }
 
 #[test]
-fn diff_format_json_outputs_raw_migration() {
+fn diff_format_json_outputs_raw_changeset() {
     let dir = vectors_dir().join("single-file-modify-text");
     binoc()
         .arg("diff")
@@ -67,7 +67,7 @@ fn diff_csv_column_addition_markdown() {
 #[test]
 fn diff_output_json_file() {
     let tmp = tempfile::tempdir().unwrap();
-    let out_path = tmp.path().join("migration.json");
+    let out_path = tmp.path().join("changeset.json");
     let dir = vectors_dir().join("single-file-add");
     binoc()
         .arg("diff")
@@ -105,7 +105,7 @@ fn diff_output_md_file() {
 #[test]
 fn diff_multiple_outputs() {
     let tmp = tempfile::tempdir().unwrap();
-    let json_path = tmp.path().join("migration.json");
+    let json_path = tmp.path().join("changeset.json");
     let md_path = tmp.path().join("changelog.md");
     let dir = vectors_dir().join("csv-row-addition");
     binoc()
@@ -129,7 +129,7 @@ fn diff_multiple_outputs() {
 #[test]
 fn diff_quiet_suppresses_stdout() {
     let tmp = tempfile::tempdir().unwrap();
-    let out_path = tmp.path().join("migration.json");
+    let out_path = tmp.path().join("changeset.json");
     let dir = vectors_dir().join("single-file-add");
     binoc()
         .arg("diff")
@@ -240,26 +240,26 @@ fn diff_unknown_extension_without_prefix_fails() {
 // ── changelog subcommand ───────────────────────────────────────────
 
 #[test]
-fn changelog_from_migration_file() {
+fn changelog_from_changeset_file() {
     let tmp = tempfile::tempdir().unwrap();
-    let migration_path = tmp.path().join("migration.json");
+    let changeset_path = tmp.path().join("changeset.json");
     let dir = vectors_dir().join("csv-column-addition");
 
-    // Generate migration JSON
+    // Generate changeset JSON
     binoc()
         .arg("diff")
         .arg(dir.join("snapshot-a"))
         .arg(dir.join("snapshot-b"))
         .arg("-o")
-        .arg(&migration_path)
+        .arg(&changeset_path)
         .arg("-q")
         .assert()
         .success();
 
-    // Generate changelog from saved migration
+    // Generate changelog from saved changeset
     binoc()
         .arg("changelog")
-        .arg(&migration_path)
+        .arg(&changeset_path)
         .assert()
         .success()
         .stdout(predicates::str::contains("Changelog:"))
@@ -269,7 +269,7 @@ fn changelog_from_migration_file() {
 #[test]
 fn changelog_output_to_file() {
     let tmp = tempfile::tempdir().unwrap();
-    let migration_path = tmp.path().join("migration.json");
+    let changeset_path = tmp.path().join("changeset.json");
     let changelog_path = tmp.path().join("CHANGELOG.md");
     let dir = vectors_dir().join("csv-column-addition");
 
@@ -278,14 +278,14 @@ fn changelog_output_to_file() {
         .arg(dir.join("snapshot-a"))
         .arg(dir.join("snapshot-b"))
         .arg("-o")
-        .arg(&migration_path)
+        .arg(&changeset_path)
         .arg("-q")
         .assert()
         .success();
 
     binoc()
         .arg("changelog")
-        .arg(&migration_path)
+        .arg(&changeset_path)
         .arg("-o")
         .arg(&changelog_path)
         .arg("-q")

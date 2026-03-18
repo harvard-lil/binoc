@@ -1,6 +1,6 @@
 # Binoc Test Vectors
 
-This directory contains test vectors for the binoc diff engine. Each vector defines a pair of snapshots (A and B) and expected structural assertions on the resulting migration.
+This directory contains test vectors for the binoc diff engine. Each vector defines a pair of snapshots (A and B) and expected structural assertions on the resulting changeset.
 
 ## Directory Layout
 
@@ -50,7 +50,7 @@ tags = ["tag1", "tag2"]
 
 - **`[vector]`** — Metadata: `name`, `description`, `tags`
 - **`[config]`** — Optional pipeline overrides: `comparators`, `transformers`
-- **`[expected]`** — Assertions on the migration output:
+- **`[expected]`** — Assertions on the changeset output:
   - `root_kind` — Kind of the root diff node (e.g. `modify`, `add`, `remove`)
   - `child_count` — Number of children at root
   - `has_tags` — Tags that must appear (in root or descendants)
@@ -98,7 +98,7 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 
 | Vector | Description |
 |--------|-------------|
-| trivial-identical | Two identical directories → empty migration |
+| trivial-identical | Two identical directories → empty changeset |
 | single-file-add | File present in B but not A |
 | single-file-remove | File present in A but not B |
 | single-file-modify-text | Text file with line-level changes |

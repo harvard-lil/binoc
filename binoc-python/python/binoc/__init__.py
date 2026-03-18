@@ -8,16 +8,16 @@ Quick start::
 
     import binoc
 
-    migration = binoc.diff("snapshots/2024-03", "snapshots/2024-06")
-    print(migration)
+    changeset = binoc.diff("snapshots/2024-03", "snapshots/2024-06")
+    print(changeset)
 
     # Inspect the diff tree
-    for child in migration.root:
+    for child in changeset.root:
         print(f"{child.path}: {child.kind}")
 
     # Serialize
-    json_str = migration.to_json()
-    markdown = binoc.to_markdown([migration])
+    json_str = changeset.to_json()
+    markdown = binoc.to_markdown([changeset])
 """
 
 from binoc._binoc import (
@@ -27,7 +27,7 @@ from binoc._binoc import (
     Identical,
     ItemPair,
     Leaf,
-    Migration,
+    Changeset,
     PluginRegistry,
     Remove,
     Replace,
@@ -61,7 +61,7 @@ class Comparator:
 
         config = binoc.Config.default()
         config.add_comparator(FastaComparator())
-        migration = binoc.diff("a", "b", config=config)
+        changeset = binoc.diff("a", "b", config=config)
     """
 
     name: str = ""
@@ -134,7 +134,7 @@ __all__ = [
     "to_json",
     "to_markdown",
     "DiffNode",
-    "Migration",
+    "Changeset",
     "Config",
     "PluginRegistry",
     "ItemPair",

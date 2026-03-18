@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{DiffNode, Migration};
+use crate::ir::{Changeset, DiffNode};
 use crate::types::*;
 
 pub type BinocResult<T> = Result<T, BinocError>;
@@ -317,11 +317,11 @@ pub trait Transformer: Send + Sync {
     }
 }
 
-/// A plugin that renders migrations into a human-readable format.
+/// A plugin that renders changesets into a human-readable format.
 pub trait Renderer: Send + Sync {
     fn descriptor(&self) -> RendererDescriptor;
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String>;
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String>;
 }
 
 #[cfg(test)]

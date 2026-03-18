@@ -65,8 +65,8 @@ Generic diff tools don't understand data formats, while version control systems 
 - Compare text files at line level
 - Compare binary files by content hash
 - Detect moves and copies from content hashes
-- Extract actual changed data from migration nodes (added rows, text diffs, etc.)
-- Render migrations as JSON or Markdown changelogs
+- Extract actual changed data from changeset nodes (added rows, text diffs, etc.)
+- Render changesets as JSON or Markdown changelogs
 - Extend comparison and transformation pipelines via Rust native plugins (C ABI), Python plugins, or in-workspace stdlib plugins
 
 ## Documentation
@@ -97,7 +97,7 @@ Diff two snapshots (prints a Markdown changelog to stdout by default):
 binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-Get raw migration JSON instead:
+Get raw changeset JSON instead:
 
 ```bash
 binoc diff path/to/snapshot-a path/to/snapshot-b --format json
@@ -107,19 +107,19 @@ Save outputs to files (format inferred from extension, or use `format:path` synt
 
 ```bash
 binoc diff path/to/snapshot-a path/to/snapshot-b \
-  -o migration.json -o CHANGELOG.md -q
+  -o changeset.json -o CHANGELOG.md -q
 ```
 
-Combine saved migrations into a changelog:
+Combine saved changesets into a changelog:
 
 ```bash
-binoc changelog migrations/*.json
+binoc changelog changesets/*.json
 ```
 
-Extract the actual changed data from a migration node (requires original snapshots):
+Extract the actual changed data from a changeset node (requires original snapshots):
 
 ```bash
-binoc extract migration.json data.csv rows_added
+binoc extract changeset.json data.csv rows_added
 ```
 
 ### Plugins

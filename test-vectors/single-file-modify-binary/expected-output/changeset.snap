@@ -1,6 +1,6 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
@@ -13,14 +13,14 @@ expression: "&stable_migration"
       {
         "kind": "modify",
         "item_type": "file",
-        "path": "data.sqlite",
+        "path": "data.bin",
         "summary": "Content changed (0 bytes → 0 bytes)",
         "tags": [
           "binoc.content-changed"
         ],
         "details": {
-          "hash_left": "5642b90b69b50b45075fabf9f4b990c42ac7c020cf84db343cdfa4f2aad485d2",
-          "hash_right": "21c6dfd96f7aca55c266d5af918149e63f806433065750b55114b6faad7e9b7b",
+          "hash_left": "f30f5ab28fe047904037f77b6da4fea1e27241c5d132638d8bedce9d40494f32",
+          "hash_right": "3d9931d0c7afd26a680f6305c583cfdb2ecd9c18096c12069e8f054fac45251b",
           "size_left": 0,
           "size_right": 0
         },

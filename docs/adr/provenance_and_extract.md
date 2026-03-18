@@ -7,9 +7,9 @@
 
 Binoc can tell you *what* changed — "2 rows were added to data.csv" — but not show you the actual data. Users (archivists, data scientists) need to pull out the changed content: which rows were added, what does the text diff look like, what columns were reordered. This is the `extract` verb.
 
-The hard question isn't "how do we read a CSV" — it's **who is responsible for formatting the extracted data?** A node in the migration tree may have been created by one plugin and then rewritten by another. A CSV comparator produces a generic `modify` node with row/column stats. A column reorder transformer then rewrites that node to `kind: "reorder"`. If you ask to extract that node, do you get CSV data (from the comparator) or a column order summary (from the transformer)?
+The hard question isn't "how do we read a CSV" — it's **who is responsible for formatting the extracted data?** A node in the changeset tree may have been created by one plugin and then rewritten by another. A CSV comparator produces a generic `modify` node with row/column stats. A column reorder transformer then rewrites that node to `kind: "reorder"`. If you ask to extract that node, do you get CSV data (from the comparator) or a column order summary (from the transformer)?
 
-This interacts with container nesting. A file `archive.zip/data/records.csv` was reached by the directory comparator (expanding the root), then the zip comparator (extracting the archive), then another directory comparator (expanding the extracted contents), then the CSV comparator (parsing the file). At extract time, we need to reconstruct that physical access chain from the migration JSON alone.
+This interacts with container nesting. A file `archive.zip/data/records.csv` was reached by the directory comparator (expanding the root), then the zip comparator (extracting the archive), then another directory comparator (expanding the extracted contents), then the CSV comparator (parsing the file). At extract time, we need to reconstruct that physical access chain from the changeset JSON alone.
 
 ## Decision
 
@@ -17,7 +17,7 @@ This interacts with container nesting. A file `archive.zip/data/records.csv` was
 
 Concretely:
 
-1. `DiffNode` gains two fields: `comparator: Option<String>` and `transformed_by: Vec<String>`. These are serialized into the migration JSON.
+1. `DiffNode` gains two fields: `comparator: Option<String>` and `transformed_by: Vec<String>`. These are serialized into the changeset JSON.
 
 2. Comparators implement `reopen(pair, child_path, data)` to reconstruct physical access to a child item (directory resolves a path, zip re-extracts to a temp dir). Container comparators override this; leaf comparators use the default (error).
 
@@ -40,11 +40,11 @@ The alternative was a separate `extract_registry` where plugins explicitly regis
 
 The `transformed_by` list makes this automatic: if the list is empty, the comparator extracts; otherwise, the last entry extracts.
 
-## Why record provenance in the serialized migration?
+## Why record provenance in the serialized changeset?
 
-Extract must work on a saved migration file, potentially on a different machine or at a later time. The migration JSON must contain enough information to reconstruct the access chain without re-running the diff. Storing `comparator` and `transformed_by` as strings (plugin names) makes this possible — the extract command looks up the named plugins in the current registry and calls their `reopen`/`extract` methods.
+Extract must work on a saved changeset file, potentially on a different machine or at a later time. The changeset JSON must contain enough information to reconstruct the access chain without re-running the diff. Storing `comparator` and `transformed_by` as strings (plugin names) makes this possible — the extract command looks up the named plugins in the current registry and calls their `reopen`/`extract` methods.
 
-This does mean extract requires the same plugin set that produced the migration. A migration produced with a custom BioBinoc plugin can only be extracted if BioBinoc is installed. This is acceptable — the migration JSON itself is always readable (it's just JSON), only the `extract` verb requires the plugins.
+This does mean extract requires the same plugin set that produced the changeset. A changeset produced with a custom BioBinoc plugin can only be extracted if BioBinoc is installed. This is acceptable — the changeset JSON itself is always readable (it's just JSON), only the `extract` verb requires the plugins.
 
 ## The reopen chain
 
@@ -54,13 +54,13 @@ The chain is walked from root to target: directory → zip → directory → csv
 
 ## Cross-phase data sharing
 
-The primary mechanism is `DiffNode.source_items`: the controller sets it on every node during the diff, and again during the extract chain after reconstructing physical access via the reopen walk. Transformers and extractors that need the original data re-parse it from these source references. The field is `#[serde(skip)]` (transient, not in migration JSON) and carried explicitly in ABI request types.
+The primary mechanism is `DiffNode.source_items`: the controller sets it on every node during the diff, and again during the extract chain after reconstructing physical access via the reopen walk. Transformers and extractors that need the original data re-parse it from these source references. The field is `#[serde(skip)]` (transient, not in changeset JSON) and carried explicitly in ABI request types.
 
 For plugins where re-parsing is expensive (e.g., SQLite schema introspection) or where the cached format is genuinely more efficient than the source (e.g., Arrow IPC for large columnar data), `DataAccess::store(key, bytes)` / `load(key)` provides a filesystem-backed cache under `<data_root>/.cache/`. The cache survives across plugin boundaries — the host and a separately-compiled native plugin share the same `data_root`. This replaced the old `ReopenedData` closed enum, which couldn't be extended by third-party plugins.
 
 ## Alternatives considered
 
-- **Re-run the diff and intercept intermediate data:** Simpler to implement (no new traits), but wasteful for large datasets and doesn't work on saved migrations.
-- **Store extracted data in the migration JSON:** Would balloon the migration size. The whole point of extract is on-demand access.
+- **Re-run the diff and intercept intermediate data:** Simpler to implement (no new traits), but wasteful for large datasets and doesn't work on saved changesets.
+- **Store extracted data in the changeset JSON:** Would balloon the changeset size. The whole point of extract is on-demand access.
 - **Generic `Extractor` trait separate from Comparator/Transformer:** Adds a third plugin axis. The "last toucher" rule achieves the same dispatch without a new concept.
 - **`reopen_data` as a separate method:** The original design had comparators implement `reopen_data(pair, ctx)` to parse leaf content into a `ReopenedData` enum. Replaced by `store()`/`load()` during the normal `compare()` call, which is more general (plugins choose their own serialization format) and works across the C ABI boundary.

@@ -27,7 +27,7 @@ enum ReopenedData {
 }
 ```
 
-The CSV comparator calls `ctx.cache_data(logical_path, data)` after parsing. The column reorder detector calls `ctx.get_cached_data(path)` during `transform` and falls back to details-scraping if the cache is empty (which happens when the migration was loaded from JSON rather than computed live).
+The CSV comparator calls `ctx.cache_data(logical_path, data)` after parsing. The column reorder detector calls `ctx.get_cached_data(path)` during `transform` and falls back to details-scraping if the cache is empty (which happens when the changeset was loaded from JSON rather than computed live).
 
 The `Transformer::transform` signature changes from `fn transform(&self, node: DiffNode)` to `fn transform(&self, node: DiffNode, ctx: &CompareContext)`. Transformers that don't need data ignore the parameter.
 
@@ -39,11 +39,11 @@ The transformer doesn't have file paths — it only has the `DiffNode`, which co
 
 Putting entire CSV contents into the `details` map was considered. This would work but:
 
-- It balloons the serialized migration JSON for every CSV comparison, even when no transformer or extract needs the data.
+- It balloons the serialized changeset JSON for every CSV comparison, even when no transformer or extract needs the data.
 - `details` values are `serde_json::Value`, so tabular data would need to be serialized to JSON arrays and deserialized back — pointless round-tripping.
 - It conflates summary metadata (for output formatting) with raw data (for semantic analysis).
 
-The cache is ephemeral — it exists during a live diff/extract session and is not serialized. This keeps migration JSON lean.
+The cache is ephemeral — it exists during a live diff/extract session and is not serialized. This keeps changeset JSON lean.
 
 ## Trade-offs
 

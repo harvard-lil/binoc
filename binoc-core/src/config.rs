@@ -422,7 +422,7 @@ mod tests {
             }
             fn render(
                 &self,
-                _migrations: &[Migration],
+                _changesets: &[Changeset],
                 _config: &serde_json::Value,
             ) -> BinocResult<String> {
                 Ok(String::new())

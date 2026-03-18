@@ -90,7 +90,7 @@ def run_vector(
     vectors_root: str | Path | None = None,
     registry: binoc.PluginRegistry | None = None,
     prepare: Callable[[Path, Path], None] | None = None,
-) -> binoc.Migration:
+) -> binoc.Changeset:
     """Run a single test vector and check its manifest assertions.
 
     Steps:
@@ -103,7 +103,7 @@ def run_vector(
       6. Run ``binoc.diff()`` with the config and optional *registry*.
       7. Check ``[expected]`` assertions from the manifest.
 
-    Returns the resulting :class:`binoc.Migration`.
+    Returns the resulting :class:`binoc.Changeset`.
     """
     vector_dir = Path(vector_dir)
     vectors_root = Path(vectors_root) if vectors_root else vector_dir.parent
@@ -127,29 +127,29 @@ def run_vector(
         if prepare:
             prepare(snap_a, snap_b)
 
-        migration = binoc.diff(
+        changeset = binoc.diff(
             str(snap_a), str(snap_b), config=config, registry=registry
         )
 
     expected = manifest.get("expected", {})
     if expected:
-        check_assertions(name, migration, expected)
+        check_assertions(name, changeset, expected)
 
-    return migration
+    return changeset
 
 
 def check_assertions(
     name: str,
-    migration: binoc.Migration,
+    changeset: binoc.Changeset,
     expected: dict,
 ) -> None:
-    """Verify a migration against ``[expected]`` assertions from a manifest."""
+    """Verify a changeset against ``[expected]`` assertions from a manifest."""
     if "root_kind" in expected:
         root_kind = expected["root_kind"]
-        assert migration.root is not None, (
-            f"[{name}] Expected root with kind '{root_kind}' but migration has no root"
+        assert changeset.root is not None, (
+            f"[{name}] Expected root with kind '{root_kind}' but changeset has no root"
         )
-        root = migration.root
+        root = changeset.root
         if root.item_type == "directory" and root.kind != root_kind:
             child_kinds = [c.kind for c in root]
             assert root.kind == root_kind or root_kind in child_kinds, (
@@ -159,19 +159,19 @@ def check_assertions(
 
     if "child_count" in expected:
         child_count = expected["child_count"]
-        assert migration.root is not None, (
-            f"[{name}] Expected child_count={child_count} but migration has no root"
+        assert changeset.root is not None, (
+            f"[{name}] Expected child_count={child_count} but changeset has no root"
         )
-        actual = len(list(migration.root))
+        actual = len(list(changeset.root))
         assert actual == child_count, (
             f"[{name}] Expected child_count={child_count}, got {actual}"
         )
 
     if "has_tags" in expected:
-        assert migration.root is not None, (
-            f"[{name}] Expected tags but migration has no root"
+        assert changeset.root is not None, (
+            f"[{name}] Expected tags but changeset has no root"
         )
-        all_tags = migration.root.all_tags()
+        all_tags = changeset.root.all_tags()
         for tag in expected["has_tags"]:
             assert tag in all_tags, (
                 f"[{name}] Expected tag '{tag}' not found. All tags: {sorted(all_tags)}"

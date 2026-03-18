@@ -1,6 +1,6 @@
 """Simple HTML renderer plugin for binoc.
 
-Renders migrations as a self-contained HTML changelog.
+Renders changesets as a self-contained HTML changelog.
 """
 
 from html import escape
@@ -10,7 +10,7 @@ class HtmlRenderer:
     name = "binoc.html"
     file_extension = "html"
 
-    def render(self, migrations, config):
+    def render(self, changesets, config):
         title = (
             config.get("title", "Changelog")
             if isinstance(config, dict)
@@ -36,12 +36,12 @@ class HtmlRenderer:
             f"<h1>{escape(title)}</h1>",
         ]
 
-        for migration in migrations:
+        for changeset in changesets:
             parts.append(
-                f"<h2>{escape(str(migration.from_snapshot))} &rarr; "
-                f"{escape(str(migration.to_snapshot))}</h2>"
+                f"<h2>{escape(str(changeset.from_snapshot))} &rarr; "
+                f"{escape(str(changeset.to_snapshot))}</h2>"
             )
-            root = migration.root
+            root = changeset.root
             if root is None:
                 parts.append("<p>No changes detected.</p>")
             else:

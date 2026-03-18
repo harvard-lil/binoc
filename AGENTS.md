@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Binoc generates changelogs for datasets that don't ship with them. Given two snapshots of a dataset, it detects structural and content changes, records them as a migration tree (the IR), and renders changes as JSON or Markdown. The primary audience is archivists, data scientists, and stewards tracking undocumented changes to published datasets.
+Binoc generates changelogs for datasets that don't ship with them. Given two snapshots of a dataset, it detects structural and content changes, records them as a changeset tree (the IR), and renders changes as JSON or Markdown. The primary audience is archivists, data scientists, and stewards tracking undocumented changes to published datasets.
 
 Rust workspace with five crates:
 

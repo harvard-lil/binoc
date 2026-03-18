@@ -1,6 +1,6 @@
 ---
 source: binoc-stdlib/tests/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
@@ -14,26 +14,26 @@ expression: "&stable_migration"
         "kind": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "2 cells changed",
+        "summary": "2 rows added",
         "tags": [
-          "binoc.cell-change"
+          "binoc.row-addition"
         ],
         "details": {
-          "cells_changed": 2,
+          "cells_changed": 0,
           "columns_added": [],
           "columns_left": [
             "name",
-            "score"
+            "age"
           ],
           "columns_removed": [],
           "columns_right": [
             "name",
-            "score"
+            "age"
           ],
-          "hash_left": "bed182a183cdfc4b775833b347569c98740d8e000d85278e82ac9602d2af36fa",
-          "hash_right": "b083286a3ada2ec6791d8793982075d220b30857177753b12ce45e864a584d10",
-          "rows_added": 0,
-          "rows_left": 3,
+          "hash_left": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
+          "hash_right": "9d3084af09a1a8977f5664439bbc23cc0734ffa5eeb3f68e6f1afc635ab48ee3",
+          "rows_added": 2,
+          "rows_left": 1,
           "rows_removed": 0,
           "rows_right": 3
         },

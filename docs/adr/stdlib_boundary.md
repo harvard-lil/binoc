@@ -41,7 +41,7 @@ The core team must be willing to maintain the plugin indefinitely under the `bin
 | SQLite | plugin | Application format; requires bundled C library (`rusqlite`) |
 | Excel, Parquet, HDF5 | plugin | Domain-specific; heavy or native dependencies |
 
-Transformers and renderers follow the same logic: move/copy detection and Markdown output are generally useful and have no external dependencies, so they belong in stdlib. A domain-specific transformer (e.g., database migration generation) belongs in the plugin that understands the domain.
+Transformers and renderers follow the same logic: move/copy detection and Markdown output are generally useful and have no external dependencies, so they belong in stdlib. A domain-specific transformer (e.g., database changeset generation) belongs in the plugin that understands the domain.
 
 ## Alternatives Considered
 

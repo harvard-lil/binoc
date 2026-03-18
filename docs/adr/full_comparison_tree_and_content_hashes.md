@@ -19,7 +19,7 @@ A secondary symptom: the `trivial-identical` test vector produced `"kind": "modi
 
 `process_pair` always returns a `DiffNode`, never `Option<DiffNode>`. When a comparator returns `Identical`, or when the controller detects matching content hashes, it produces a node with `kind: "identical"`. The tree seen by transformers is the *full comparison result*, not a delta.
 
-After all transformers run, `prune_identical` removes `identical` nodes and any containers that become empty as a result. The final migration is a clean delta.
+After all transformers run, `prune_identical` removes `identical` nodes and any containers that become empty as a result. The final changeset is a clean delta.
 
 This is the key invariant: **transformers see the full tree; renderers see the pruned tree.**
 

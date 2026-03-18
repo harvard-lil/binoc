@@ -316,13 +316,13 @@ impl Renderer for NativeRenderer {
         self.desc.clone()
     }
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String> {
         let render_fn = self
             .plugin
             .render_fn
             .ok_or_else(|| BinocError::Other("plugin missing _binoc_renderer_render".into()))?;
         let request = RenderRequest {
-            migrations: migrations.to_vec(),
+            changesets: changesets.to_vec(),
             config: config.clone(),
         };
         let request_json = serde_json::to_string(&request)
@@ -730,22 +730,22 @@ impl PyDiffNodeIter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PyMigration
+// PyChangeset
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Migration")]
+#[pyclass(name = "Changeset")]
 #[derive(Clone)]
-pub struct PyMigration {
-    inner: Migration,
+pub struct PyChangeset {
+    inner: Changeset,
 }
 
 #[pymethods]
-impl PyMigration {
+impl PyChangeset {
     #[new]
     #[pyo3(signature = (from_snapshot, to_snapshot, root=None))]
     fn new(from_snapshot: String, to_snapshot: String, root: Option<PyDiffNode>) -> Self {
         Self {
-            inner: Migration::new(from_snapshot, to_snapshot, root.map(|n| n.inner)),
+            inner: Changeset::new(from_snapshot, to_snapshot, root.map(|n| n.inner)),
         }
     }
 
@@ -811,7 +811,7 @@ impl PyMigration {
 
     #[staticmethod]
     fn from_json(json_str: &str) -> PyResult<Self> {
-        let inner: Migration =
+        let inner: Changeset =
             serde_json::from_str(json_str).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self { inner })
     }
@@ -824,7 +824,7 @@ impl PyMigration {
 
     fn __repr__(&self) -> String {
         format!(
-            "Migration(from={:?}, to={:?}, nodes={})",
+            "Changeset(from={:?}, to={:?}, nodes={})",
             self.inner.from_snapshot,
             self.inner.to_snapshot,
             self.inner.node_count()
@@ -1259,12 +1259,12 @@ impl Renderer for PyRendererBridge {
         self.desc.clone()
     }
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String> {
         Python::attach(|py| {
-            let py_migrations = PyList::new(
+            let py_changesets = PyList::new(
                 py,
-                migrations.iter().map(|m| {
-                    PyMigration { inner: m.clone() }
+                changesets.iter().map(|m| {
+                    PyChangeset { inner: m.clone() }
                         .into_pyobject(py)
                         .unwrap()
                         .into_any()
@@ -1281,7 +1281,7 @@ impl Renderer for PyRendererBridge {
 
             let result = self
                 .py_obj
-                .call_method1(py, "render", (py_migrations, py_config))
+                .call_method1(py, "render", (py_changesets, py_config))
                 .map_err(|e| BinocError::Other(format!("Python renderer error: {e}")))?;
 
             result
@@ -1425,7 +1425,7 @@ fn diff(
     snapshot_b: &str,
     config: Option<&PyConfig>,
     registry: Option<&PyPluginRegistry>,
-) -> PyResult<PyMigration> {
+) -> PyResult<PyChangeset> {
     let default_config;
     let config = match config {
         Some(c) => c,
@@ -1441,23 +1441,23 @@ fn diff(
 
     let controller = build_controller(py, config, registry)?;
 
-    let migration = py
+    let changeset = py
         .detach(|| controller.diff(snapshot_a, snapshot_b))
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-    Ok(PyMigration { inner: migration })
+    Ok(PyChangeset { inner: changeset })
 }
 
 #[pyfunction]
-fn to_json(migration: &PyMigration) -> PyResult<String> {
-    migration.to_json()
+fn to_json(changeset: &PyChangeset) -> PyResult<String> {
+    changeset.to_json()
 }
 
 #[pyfunction]
-#[pyo3(signature = (migration, node_path, aspect="content", *, snapshot_a=None, snapshot_b=None, config=None))]
+#[pyo3(signature = (changeset, node_path, aspect="content", *, snapshot_a=None, snapshot_b=None, config=None))]
 fn extract(
     py: Python<'_>,
-    migration: &PyMigration,
+    changeset: &PyChangeset,
     node_path: &str,
     aspect: &str,
     snapshot_a: Option<&str>,
@@ -1481,13 +1481,13 @@ fn extract(
 
     let snap_a = snapshot_a
         .map(|s| s.to_string())
-        .unwrap_or_else(|| migration.inner.from_snapshot.clone());
+        .unwrap_or_else(|| changeset.inner.from_snapshot.clone());
     let snap_b = snapshot_b
         .map(|s| s.to_string())
-        .unwrap_or_else(|| migration.inner.to_snapshot.clone());
+        .unwrap_or_else(|| changeset.inner.to_snapshot.clone());
 
     let result = py
-        .detach(|| controller.extract(&migration.inner, node_path, aspect, &snap_a, &snap_b))
+        .detach(|| controller.extract(&changeset.inner, node_path, aspect, &snap_a, &snap_b))
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
     match result {
@@ -1497,8 +1497,8 @@ fn extract(
 }
 
 #[pyfunction]
-#[pyo3(signature = (migrations, *, config=None))]
-fn to_markdown(migrations: Vec<PyMigration>, config: Option<&PyConfig>) -> String {
+#[pyo3(signature = (changesets, *, config=None))]
+fn to_markdown(changesets: Vec<PyChangeset>, config: Option<&PyConfig>) -> String {
     let md_config: md_renderer::MarkdownRendererConfig = config
         .map(|c| {
             let val = c.dataset_config.output.get_for_renderer("binoc.markdown");
@@ -1506,8 +1506,8 @@ fn to_markdown(migrations: Vec<PyMigration>, config: Option<&PyConfig>) -> Strin
         })
         .unwrap_or_default();
 
-    let rust_migrations: Vec<Migration> = migrations.into_iter().map(|m| m.inner).collect();
-    md_renderer::render_markdown(&rust_migrations, &md_config)
+    let rust_changesets: Vec<Changeset> = changesets.into_iter().map(|m| m.inner).collect();
+    md_renderer::render_markdown(&rust_changesets, &md_config)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1587,7 +1587,7 @@ fn run_cli(registry: &mut PyPluginRegistry, args: Vec<String>) -> PyResult<()> {
 #[pymodule]
 fn _binoc(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDiffNode>()?;
-    m.add_class::<PyMigration>()?;
+    m.add_class::<PyChangeset>()?;
     m.add_class::<PyItemPair>()?;
     m.add_class::<PyConfig>()?;
     m.add_class::<PyPluginRegistry>()?;

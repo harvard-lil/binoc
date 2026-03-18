@@ -28,9 +28,9 @@ class TestPythonComparator:
             transformers=[],
         )
         config.add_comparator(AlwaysModified())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.custom-diff" in all_tags
 
     def test_identical_comparator(self, snapshot_pair):
@@ -48,11 +48,11 @@ class TestPythonComparator:
             comparators=["binoc.directory", "binoc.binary"],
         )
         config.add_comparator(AlwaysIdentical())
-        migration = binoc.diff(a, b, config=config)
+        changeset = binoc.diff(a, b, config=config)
         # The txt files should be seen as identical since our comparator says so.
         # The directory may still have a root node but no text-file children.
-        if migration.root is not None:
-            all_tags = migration.root.all_tags()
+        if changeset.root is not None:
+            all_tags = changeset.root.all_tags()
             assert "test.custom-diff" not in all_tags
 
     def test_can_handle_comparator(self, snapshot_pair):
@@ -79,9 +79,9 @@ class TestPythonComparator:
             comparators=["binoc.directory"],
         )
         config.add_comparator(SpecialHandler())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.special-handled" in all_tags
 
 
@@ -99,9 +99,9 @@ class TestPythonTransformer:
         a, b = snapshot_pair("single-file-modify-text")
         config = binoc.Config.default()
         config.add_transformer(Tagger())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.tagged-by-python" in all_tags
 
     def test_unchanged_transformer(self, snapshot_pair):
@@ -117,9 +117,9 @@ class TestPythonTransformer:
         a, b = snapshot_pair("single-file-modify-text")
         config = binoc.Config.default()
         config.add_transformer(NoOp())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.tagged-by-python" not in all_tags
 
     def test_remove_transformer(self, snapshot_pair):
@@ -150,9 +150,9 @@ class TestPythonTransformer:
         a, b = snapshot_pair("csv-cell-changes")
         config = binoc.Config.default()
         config.add_transformer(TagMatcher())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.saw-content-change" in all_tags
 
     def test_match_by_type_transformer(self, snapshot_pair):
@@ -168,9 +168,9 @@ class TestPythonTransformer:
         a, b = snapshot_pair("directory-nested")
         config = binoc.Config.default()
         config.add_transformer(TypeMatcher())
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "test.saw-directory" in all_tags
 
 

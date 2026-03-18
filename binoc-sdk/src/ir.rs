@@ -56,7 +56,7 @@ pub struct DiffNode {
 
     /// The original item pair that produced this node. Transient — available
     /// during the live diff/transform session for transformers and extractors
-    /// that need to re-read source data. Not serialized into migration JSON.
+    /// that need to re-read source data. Not serialized into changeset JSON.
     #[serde(skip)]
     pub source_items: Option<ItemPair>,
 }
@@ -128,7 +128,7 @@ impl DiffNode {
 
 /// A structured description of how to get from one snapshot to the next.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Migration {
+pub struct Changeset {
     pub from_snapshot: String,
     pub to_snapshot: String,
     pub root: Option<DiffNode>,
@@ -136,7 +136,7 @@ pub struct Migration {
     pub metadata: BTreeMap<String, String>,
 }
 
-impl Migration {
+impl Changeset {
     pub fn new(from: impl Into<String>, to: impl Into<String>, root: Option<DiffNode>) -> Self {
         Self {
             from_snapshot: from.into(),
@@ -244,20 +244,20 @@ mod tests {
     }
 
     #[test]
-    fn migration_construction_and_node_count() {
+    fn changeset_construction_and_node_count() {
         let root = DiffNode::new("modify", "dir", "root").with_children(vec![
             DiffNode::new("add", "file", "root/a.txt"),
             DiffNode::new("remove", "file", "root/b.txt"),
         ]);
-        let migration = Migration::new("v1", "v2", Some(root));
-        assert_eq!(migration.from_snapshot, "v1");
-        assert_eq!(migration.to_snapshot, "v2");
-        assert_eq!(migration.node_count(), 3);
+        let changeset = Changeset::new("v1", "v2", Some(root));
+        assert_eq!(changeset.from_snapshot, "v1");
+        assert_eq!(changeset.to_snapshot, "v2");
+        assert_eq!(changeset.node_count(), 3);
     }
 
     #[test]
-    fn migration_node_count_none_root() {
-        let migration = Migration::new("v1", "v2", None);
-        assert_eq!(migration.node_count(), 0);
+    fn changeset_node_count_none_root() {
+        let changeset = Changeset::new("v1", "v2", None);
+        assert_eq!(changeset.node_count(), 0);
     }
 }

@@ -29,7 +29,7 @@ The CSV comparator needs row-oriented access (iterate rows, compare cells at col
 
 ### Lazy Python traversal
 
-Would require `PyDiffNode` to hold an `Arc<Migration>` plus a path/index into the tree, with every getter navigating from the root (O(depth) per access). The actual clone cost is negligible — a `DiffNode` is a handful of strings and small maps. The Python GC overhead of wrapper objects dwarfs the Rust clone cost. The implementation would be a full rewrite of the PyDiffNode section for marginal benefit, while making the code substantially harder to reason about.
+Would require `PyDiffNode` to hold an `Arc<Changeset>` plus a path/index into the tree, with every getter navigating from the root (O(depth) per access). The actual clone cost is negligible — a `DiffNode` is a handful of strings and small maps. The Python GC overhead of wrapper objects dwarfs the Rust clone cost. The implementation would be a full rewrite of the PyDiffNode section for marginal benefit, while making the code substantially harder to reason about.
 
 ## Decision
 

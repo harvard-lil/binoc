@@ -104,7 +104,7 @@ impl TransformResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenderRequest {
-    pub migrations: Vec<crate::ir::Migration>,
+    pub changesets: Vec<crate::ir::Changeset>,
     pub config: serde_json::Value,
 }
 
@@ -438,7 +438,7 @@ macro_rules! export_plugin {
                 let renderers: Vec<Box<dyn $crate::Renderer>> =
                     vec![$(Box::new(<$out as ::std::default::Default>::default())),+];
                 let out = &renderers[index as usize];
-                match $crate::Renderer::render(out.as_ref(), &req.migrations, &req.config) {
+                match $crate::Renderer::render(out.as_ref(), &req.changesets, &req.config) {
                     Ok(output) => $crate::plugin_abi::RenderResponse::Ok { output },
                     Err(e) => $crate::plugin_abi::RenderResponse::Error {
                         message: e.to_string(),

@@ -14,8 +14,8 @@ Binoc introduces a number of domain-specific terms. This ADR catalogs the delibe
 | Chosen term | Meaning |
 |---|---|---|---|
 | **Snapshot** | A set of files representing a dataset's state at a point in time. |
-| **Migration** | The structured description of how to get from one snapshot to the next. A tree of diff nodes. |
-| **Changelog** | A human-level summary rendered from migrations. |
+| **Changeset** | The stored finalized IR: a structured description of how one snapshot differs from the next. A tree of diff nodes. Chosen over *migration* (strongly implies an executable transformation — database migrations are scripts you run — but binoc changesets are descriptive records, not replayable operations), *diff* (already overloaded: verb, command name, `DiffNode`), *delta* (precise but abstract for user-facing contexts), *patch* (implies applicability, same problem as migration). |
+| **Changelog** | A human-level summary rendered from changesets. |
 
 ### Program Components
 
@@ -24,7 +24,7 @@ Binoc introduces a number of domain-specific terms. This ADR catalogs the delibe
 | **Controller** | The work loop that dispatches item pairs to comparators, assembles the diff tree, and runs transformers. |
 | **Comparator** | A plugin that claims an item pair and either emits a leaf diff or expands into child items. |
 | **Transformer** | A plugin that rewrites the completed diff tree (IR → IR). |
-| **Renderer** | A plugin that renders migrations into a presentation format. |
+| **Renderer** | A plugin that renders changesets into a presentation format. |
 | **Porcelain** (for the CLI) | Borrowed from git's terminology: the CLI is a user-facing layer over the library. |
 
 ### IR Fields

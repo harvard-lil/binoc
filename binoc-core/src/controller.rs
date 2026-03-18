@@ -40,8 +40,8 @@ impl Controller {
         }
     }
 
-    /// Diff two snapshots and produce a migration.
-    pub fn diff(&self, from_path: &str, to_path: &str) -> BinocResult<Migration> {
+    /// Diff two snapshots and produce a changeset.
+    pub fn diff(&self, from_path: &str, to_path: &str) -> BinocResult<Changeset> {
         let data = Arc::new(LocalDataAccess::new());
 
         let left = data.register_local(Path::new(from_path), "")?;
@@ -54,10 +54,10 @@ impl Controller {
             .run_transformers(root_node, &data)
             .and_then(Self::prune_identical);
 
-        Ok(Migration::new(from_path, to_path, root_node))
+        Ok(Changeset::new(from_path, to_path, root_node))
     }
 
-    /// Extract data from a specific node in a migration.
+    /// Extract data from a specific node in a changeset.
     ///
     /// Implements the reopen walk: traverses the ancestor chain calling
     /// `reopen()` on each container comparator to reconstruct the
@@ -65,16 +65,16 @@ impl Controller {
     /// and finally `extract()` on the last toucher.
     pub fn extract(
         &self,
-        migration: &Migration,
+        changeset: &Changeset,
         node_path: &str,
         aspect: &str,
         snapshot_a: &str,
         snapshot_b: &str,
     ) -> BinocResult<ExtractResult> {
-        let root = migration
+        let root = changeset
             .root
             .as_ref()
-            .ok_or_else(|| BinocError::Extract("migration has no root".into()))?;
+            .ok_or_else(|| BinocError::Extract("changeset has no root".into()))?;
 
         let target = Self::find_node(root, node_path)
             .ok_or_else(|| BinocError::Extract(format!("node not found: {node_path}")))?;
@@ -350,7 +350,7 @@ impl Controller {
                 _ => {
                     panic!(
                         "transformer '{}' returned ReplaceMany at the root level, \
-                         which is not supported (a migration must have a single root node)",
+                         which is not supported (a changeset must have a single root node)",
                         desc.name
                     );
                 }
@@ -573,8 +573,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().to_string();
         let controller = Controller::new(vec![identical_comparator()], vec![]);
-        let migration = controller.diff(&path, &path).unwrap();
-        assert!(migration.root.is_none());
+        let changeset = controller.diff(&path, &path).unwrap();
+        assert!(changeset.root.is_none());
     }
 
     #[test]
@@ -582,8 +582,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().to_string();
         let controller = Controller::new(vec![leaf_comparator()], vec![]);
-        let migration = controller.diff(&path, &path).unwrap();
-        let root = migration.root.as_ref().unwrap();
+        let changeset = controller.diff(&path, &path).unwrap();
+        let root = changeset.root.as_ref().unwrap();
         assert_eq!(root.kind, "modify");
         assert_eq!(root.item_type, "file");
     }
@@ -601,13 +601,13 @@ mod tests {
             vec![Arc::new(DirExpandComparator), leaf_comparator()],
             vec![],
         );
-        let migration = controller
+        let changeset = controller
             .diff(
                 from_dir.path().to_string_lossy().as_ref(),
                 to_dir.path().to_string_lossy().as_ref(),
             )
             .unwrap();
-        let root = migration.root.as_ref().unwrap();
+        let root = changeset.root.as_ref().unwrap();
         assert_eq!(root.kind, "modify");
         assert_eq!(root.item_type, "directory");
         assert!(!root.children.is_empty());
@@ -711,13 +711,13 @@ mod tests {
             })],
         );
         let dir = tempfile::tempdir().unwrap();
-        let migration = controller
+        let changeset = controller
             .diff(
                 dir.path().to_string_lossy().as_ref(),
                 dir.path().to_string_lossy().as_ref(),
             )
             .unwrap();
-        let root = migration.root.as_ref().unwrap();
+        let root = changeset.root.as_ref().unwrap();
         assert!(root.tags.contains("transformed"));
     }
 
@@ -733,13 +733,13 @@ mod tests {
             })],
         );
         let dir = tempfile::tempdir().unwrap();
-        let migration = controller
+        let changeset = controller
             .diff(
                 dir.path().to_string_lossy().as_ref(),
                 dir.path().to_string_lossy().as_ref(),
             )
             .unwrap();
-        let root = migration.root.as_ref().unwrap();
+        let root = changeset.root.as_ref().unwrap();
         assert!(root.tags.contains("transformed"));
     }
 
@@ -764,13 +764,13 @@ mod tests {
         std::fs::write(from_dir.path().join("a.txt"), b"x").unwrap();
         std::fs::write(to_dir.path().join("a.txt"), b"y").unwrap();
 
-        let migration = controller
+        let changeset = controller
             .diff(
                 from_dir.path().to_string_lossy().as_ref(),
                 to_dir.path().to_string_lossy().as_ref(),
             )
             .unwrap();
-        assert!(migration.root.is_none());
+        assert!(changeset.root.is_none());
     }
 
     #[test]
@@ -791,13 +791,13 @@ mod tests {
 
         let controller = Controller::new(vec![Arc::new(SkipComparator), leaf_comparator()], vec![]);
         let dir = tempfile::tempdir().unwrap();
-        let migration = controller
+        let changeset = controller
             .diff(
                 dir.path().to_string_lossy().as_ref(),
                 dir.path().to_string_lossy().as_ref(),
             )
             .unwrap();
-        let root = migration.root.as_ref().unwrap();
+        let root = changeset.root.as_ref().unwrap();
         assert_eq!(root.comparator.as_deref(), Some("catch-all"));
     }
 }

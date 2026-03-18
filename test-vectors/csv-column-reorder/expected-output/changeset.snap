@@ -1,6 +1,6 @@
 ---
 source: binoc-stdlib/tests/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
@@ -11,13 +11,12 @@ expression: "&stable_migration"
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "kind": "reorder",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "Column removed: 'city'",
+        "summary": "Columns reordered (content unchanged)",
         "tags": [
-          "binoc.column-removal",
-          "binoc.schema-change"
+          "binoc.column-reorder"
         ],
         "details": {
           "cells_changed": 0,
@@ -27,21 +26,23 @@ expression: "&stable_migration"
             "age",
             "city"
           ],
-          "columns_removed": [
-            "city"
-          ],
+          "columns_removed": [],
           "columns_right": [
+            "city",
             "name",
             "age"
           ],
           "hash_left": "a765f1321a212e939b76c668a316010b8404cf9c8219d987f0413dc9d12fcf58",
-          "hash_right": "5c23cb3199c0882f4743d97b03873b1fb881bf2592ff4ab318ba8213593162e3",
+          "hash_right": "672609d4cbc59c84ab7d49867a61464d1d8f54b13e2101c5727e1616c9ec7ffa",
           "rows_added": 0,
           "rows_left": 2,
           "rows_removed": 0,
           "rows_right": 2
         },
-        "comparator": "binoc.csv"
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.column_reorder_detector"
+        ]
       }
     ],
     "comparator": "binoc.directory"

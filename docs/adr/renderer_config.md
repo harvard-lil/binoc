@@ -18,7 +18,7 @@ output:
 
 This had two problems:
 
-1. **It "knew too much" for the config layer.** The significance mapping is inherently format-specific — it only matters to renderers that render human-readable changelogs (Markdown, potentially HTML). JSON migration output doesn't use it. A CI-check renderer might want a completely different mapping. Putting it at the top level of `output` implied it was a universal output concern.
+1. **It "knew too much" for the config layer.** The significance mapping is inherently format-specific — it only matters to renderers that render human-readable changelogs (Markdown, potentially HTML). JSON changeset output doesn't use it. A CI-check renderer might want a completely different mapping. Putting it at the top level of `output` implied it was a universal output concern.
 
 2. **No mechanism for renderer-specific config.** The `Renderer` trait's `render` method received a monolithic `OutputConfig` struct. Every new renderer-specific knob would require modifying this shared struct — the opposite of a plugin architecture. A future HTML renderer wanting a `theme` setting, or a CI renderer wanting a `fail_on` list, would all crowd into the same type.
 
@@ -28,7 +28,7 @@ This had two problems:
 
 Make significance classification a transformer that annotates IR nodes with a `significance` field. Renderers read annotations.
 
-Rejected because it pushes a renderer concern into the IR phase, violating the design principle that the IR carries factual tags and the renderer interprets them. It would bake a significance judgment into the migration JSON, which is supposed to be format-agnostic and judgment-free. Different renderers couldn't apply different significance mappings to the same migration.
+Rejected because it pushes a renderer concern into the IR phase, violating the design principle that the IR carries factual tags and the renderer interprets them. It would bake a significance judgment into the changeset JSON, which is supposed to be format-agnostic and judgment-free. Different renderers couldn't apply different significance mappings to the same changeset.
 
 ### B: Per-renderer config sections (chosen)
 
@@ -56,7 +56,7 @@ Option B. The implementation:
 
 - **`MarkdownRendererConfig`** is a new public type in `binoc-core::output` with a `significance: BTreeMap<String, Vec<String>>` field. Default significance (the standard clerical/substantive mapping) lives here, not in the global config.
 
-- **The migration IR is unchanged.** Tags remain factual; significance classification remains a renderer concern. Different renderers can apply different significance mappings to the same migration.
+- **The changeset IR is unchanged.** Tags remain factual; significance classification remains a renderer concern. Different renderers can apply different significance mappings to the same changeset.
 
 ## Consequences
 

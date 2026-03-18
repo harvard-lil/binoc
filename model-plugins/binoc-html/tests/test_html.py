@@ -4,7 +4,7 @@ import binoc
 from binoc_html import HtmlRenderer
 
 
-def test_html_renderer_renders_basic_migration():
+def test_html_renderer_renders_basic_changeset():
     root = binoc.DiffNode(
         "modify",
         "directory",
@@ -14,9 +14,9 @@ def test_html_renderer_renders_basic_migration():
             binoc.DiffNode("remove", "file", "root/old.txt"),
         ],
     )
-    migration = binoc.Migration("v1", "v2", root)
+    changeset = binoc.Changeset("v1", "v2", root)
     renderer = HtmlRenderer()
-    html = renderer.render([migration], {})
+    html = renderer.render([changeset], {})
 
     assert "<!DOCTYPE html>" in html
     assert "v1" in html
@@ -26,18 +26,18 @@ def test_html_renderer_renders_basic_migration():
     assert "New file added" in html
 
 
-def test_html_renderer_empty_migration():
-    migration = binoc.Migration("v1", "v2")
+def test_html_renderer_empty_changeset():
+    changeset = binoc.Changeset("v1", "v2")
     renderer = HtmlRenderer()
-    html = renderer.render([migration], {})
+    html = renderer.render([changeset], {})
 
     assert "No changes detected" in html
 
 
 def test_html_renderer_custom_title():
-    migration = binoc.Migration("v1", "v2")
+    changeset = binoc.Changeset("v1", "v2")
     renderer = HtmlRenderer()
-    html = renderer.render([migration], {"title": "My Dataset"})
+    html = renderer.render([changeset], {"title": "My Dataset"})
 
     assert "My Dataset" in html
 

@@ -138,7 +138,7 @@ binoc diff test-vectors/single-file-modify-text/snapshot-a test-vectors/single-f
 Key observations:
 - The **directory comparator** expanded the root pair into child file pairs.
 - The **text comparator** claimed `story.txt` (by `.txt` extension) and produced a leaf diff with the summary you see above.
-- Under the hood, the diff node carries **semantic tags** like `binoc.content-changed` and `binoc.lines-added` (factual observations, not judgments) and **details** with exact line counts. The markdown renderer renders these into the human-readable summary; the JSON migration artifact preserves the full structured data.
+- Under the hood, the diff node carries **semantic tags** like `binoc.content-changed` and `binoc.lines-added` (factual observations, not judgments) and **details** with exact line counts. The markdown renderer renders these into the human-readable summary; the JSON changeset artifact preserves the full structured data.
 
 ### File Addition and Removal
 
@@ -216,7 +216,7 @@ binoc diff test-vectors/csv-column-reorder/snapshot-a test-vectors/csv-column-re
 Notice:
 - The output says "Columns reordered (content unchanged)" — the **column reorder transformer** detected that the only change was column ordering and collapsed it from a `modify` to a `reorder`.
 - This appears under **Clerical Changes**, not Substantive. The tag `binoc.column-reorder` maps to the "clerical" significance category — housekeeping, not a policy change.
-- Under the hood, the diff tree records exactly which columns were in which order, with zero cells changed and zero rows added/removed. That structured detail is available in the JSON migration artifact and via the `extract` command.
+- Under the hood, the diff tree records exactly which columns were in which order, with zero cells changed and zero rows added/removed. That structured detail is available in the JSON changeset artifact and via the `extract` command.
 
 #### Mixed CSV Changes
 
@@ -262,10 +262,10 @@ Because the tags include `binoc.column-addition` (substantive), not just `binoc.
 
 ### Markdown Changelog Output
 
-By default, `binoc diff` prints Markdown to stdout. You can also save specific output formats to files with `-o`. Here we save the raw migration JSON and separately save a Markdown changelog:
+By default, `binoc diff` prints Markdown to stdout. You can also save specific output formats to files with `-o`. Here we save the raw changeset JSON and separately save a Markdown changelog:
 
 ```bash
-binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-changes/snapshot-b -o /tmp/migration.json -o /tmp/migration.md -q && cat /tmp/migration.md
+binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-changes/snapshot-b -o /tmp/changeset.json -o /tmp/changeset.md -q && cat /tmp/changeset.md
 ```
 
 ```output
@@ -277,17 +277,17 @@ binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-chan
 
 ```
 
-The migration JSON is the canonical machine-readable artifact. The Markdown is a derived view produced by the output formatter. You can also generate changelogs from saved migrations using `binoc changelog`.
+The changeset JSON is the canonical machine-readable artifact. The Markdown is a derived view produced by the output formatter. You can also generate changelogs from saved changesets using `binoc changelog`.
 
 The markdown output groups changes by significance category. Here, `binoc.column-addition` and `binoc.schema-change` match the default `substantive` significance rules, so the change appears under "Substantive Changes." The column reorder alone (as in the earlier example) would appear under "Clerical Changes."
 
 ### Extracting Changed Data
 
-A migration tells you *what* changed — "2 rows were added to data.csv." But sometimes you want the actual data: which rows? `binoc extract` reopens the original snapshots and pulls out the changed content. Extract requires *both* snapshots to be present, as well as the json migration file, so it can reopen the data through the correct comparator layers.
+A changeset tells you *what* changed — "2 rows were added to data.csv." But sometimes you want the actual data: which rows? `binoc extract` reopens the original snapshots and pulls out the changed content. Extract requires *both* snapshots to be present, as well as the json changeset file, so it can reopen the data through the correct comparator layers.
 
 #### New CSV Rows
 
-The `csv-row-addition` test vector adds two rows to a CSV. First, generate the migration:
+The `csv-row-addition` test vector adds two rows to a CSV. First, generate the changeset:
 
 ```bash
 binoc diff test-vectors/csv-row-addition/snapshot-a test-vectors/csv-row-addition/snapshot-b -o /tmp/tut-csv.json -q
@@ -307,11 +307,11 @@ Charlie,35
 
 The output is valid CSV — the added rows with their headers. You could pipe this into another tool, load it into a database, or just eyeball what changed.
 
-The extract command works by walking the provenance chain recorded in the migration. Each node knows which comparator produced it (`comparator` field) and which transformers modified it (`transformed_by` field). During extract, the controller reopens the snapshot files through each layer (directory → file), then asks the responsible plugin to format the result.
+The extract command works by walking the provenance chain recorded in the changeset. Each node knows which comparator produced it (`comparator` field) and which transformers modified it (`transformed_by` field). During extract, the controller reopens the snapshot files through each layer (directory → file), then asks the responsible plugin to format the result.
 
 #### Text File Diff
 
-For text files, `extract` can produce a unified diff. First generate and save the migration:
+For text files, `extract` can produce a unified diff. First generate and save the changeset:
 
 ```bash
 binoc diff test-vectors/single-file-modify-text/snapshot-a test-vectors/single-file-modify-text/snapshot-b -o /tmp/tut-text.json -q
@@ -475,7 +475,7 @@ Now that you've seen the user-facing behavior, let's look under the hood.
 
 Here's the flow for a single `binoc diff` invocation, from input to output:
 
-    Snapshot A ──┐                                          ┌── JSON migration
+    Snapshot A ──┐                                          ┌── JSON changeset
                  ├── Controller ─── Comparators ─── IR ─── Transformers ─── Renderer ──┤
     Snapshot B ──┘   (type-ignorant)  (format-aware) (tree) (pattern-aware)  (format)   └── Markdown changelog
 
@@ -788,12 +788,12 @@ Register it and run:
     config = binoc.Config.default()
     config.add_comparator(FastaComparator())
 
-    migration = binoc.diff(
+    changeset = binoc.diff(
         "docs/examples/fasta-demo/snapshot-a",
         "docs/examples/fasta-demo/snapshot-b",
         config=config,
     )
-    print(binoc.to_markdown([migration]))
+    print(binoc.to_markdown([changeset]))
 
 Now the output reads:
 
@@ -825,8 +825,8 @@ Load this config alongside your custom comparator:
     config = binoc.Config.from_file("dataset.yaml")
     config.add_comparator(FastaComparator())
 
-    migration = binoc.diff("snapshot-a", "snapshot-b", config=config)
-    print(binoc.to_markdown([migration]))
+    changeset = binoc.diff("snapshot-a", "snapshot-b", config=config)
+    print(binoc.to_markdown([changeset]))
 
 Now the same diff appears under **Clerical Changes** instead, clearly separated from real data changes in the changelog.
 

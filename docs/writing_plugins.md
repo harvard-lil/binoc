@@ -10,7 +10,7 @@ Before writing a plugin, understand what each type does:
 
 - **Comparator**: Claims item pairs by file extension, media type, or imperative `can_handle` logic. Produces a diff (leaf node or expansion into children). This is the parser — it turns raw data into IR.
 - **Transformer**: Rewrites the completed diff tree. Operates on structure, not raw data. For example, the move detector correlates add/remove pairs by content hash.
-- **Renderer**: Renders finalized migrations into a presentation format (Markdown, HTML, etc.).
+- **Renderer**: Renders finalized changesets into a presentation format (Markdown, HTML, etc.).
 
 The IR is a tree of `DiffNode` values. See `docs/design.md` for the full schema.
 
@@ -124,7 +124,7 @@ import binoc
 config = binoc.Config.default()
 config.add_comparator(FastaComparator())
 config.add_transformer(SequenceNormalizer())
-migration = binoc.diff("snapshot-a", "snapshot-b", config=config)
+changeset = binoc.diff("snapshot-a", "snapshot-b", config=config)
 ```
 
 This bypasses entry-point discovery entirely. The plugin doesn't need to be packaged or installed.
@@ -372,7 +372,7 @@ config = binoc.Config(
     transformers=["binoc.move_detector"],
 )
 config.add_comparator(FastaComparator())
-migration = binoc.diff("test-data/snapshot-a", "test-data/snapshot-b", config=config)
+changeset = binoc.diff("test-data/snapshot-a", "test-data/snapshot-b", config=config)
 ```
 
 You can also create test vectors following the pattern in `test-vectors/` — see `test-vectors/README.md` for the manifest format. To avoid duplicating harness code, depend on `binoc-stdlib` (with its default `test-vectors` feature) and use `binoc_stdlib::test_vectors::{discover_vectors, run_vector}` with a registry that includes your plugin; see `binoc-sqlite/tests/test_vectors.rs` for a minimal example.

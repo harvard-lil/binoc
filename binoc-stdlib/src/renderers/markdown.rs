@@ -50,23 +50,23 @@ impl Renderer for MarkdownRenderer {
         RendererDescriptor::new("binoc.markdown", "md")
     }
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String> {
         let md_config: MarkdownRendererConfig =
             serde_json::from_value(config.clone()).unwrap_or_default();
-        Ok(render_markdown(migrations, &md_config))
+        Ok(render_markdown(changesets, &md_config))
     }
 }
 
-pub fn render_markdown(migrations: &[Migration], config: &MarkdownRendererConfig) -> String {
+pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig) -> String {
     let mut out = String::new();
 
-    for migration in migrations {
+    for changeset in changesets {
         out.push_str(&format!(
             "# Changelog: {} → {}\n\n",
-            migration.from_snapshot, migration.to_snapshot
+            changeset.from_snapshot, changeset.to_snapshot
         ));
 
-        let root = match &migration.root {
+        let root = match &changeset.root {
             Some(r) => r,
             None => {
                 out.push_str("No changes detected.\n\n");
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn to_markdown_includes_significance_sections() {
-        let migration = Migration::new(
+        let changeset = Changeset::new(
             "v1",
             "v2",
             Some(
@@ -212,7 +212,7 @@ mod tests {
             ),
         );
         let config = MarkdownRendererConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("# Changelog: v1 → v2"));
         assert!(md.contains("## Substantive Changes"));
         assert!(md.contains("**data.csv**"));
@@ -221,18 +221,18 @@ mod tests {
 
     #[test]
     fn to_markdown_no_changes_shows_message() {
-        let migration = Migration::new("v1", "v2", None);
+        let changeset = Changeset::new("v1", "v2", None);
         let config = MarkdownRendererConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("No changes detected"));
     }
 
     #[test]
     fn node_without_summary_uses_fallback() {
         let node = DiffNode::new("add", "file", "new.txt").with_tag("binoc.content-changed");
-        let migration = Migration::new("v1", "v2", Some(node));
+        let changeset = Changeset::new("v1", "v2", Some(node));
         let config = MarkdownRendererConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("New file"));
     }
 }

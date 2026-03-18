@@ -1,4 +1,4 @@
-"""Tests for DiffNode and Migration construction, traversal, and serialization."""
+"""Tests for DiffNode and Changeset construction, traversal, and serialization."""
 
 import json
 
@@ -180,9 +180,9 @@ class TestDiffNode:
         assert bool(node) is True
 
 
-class TestMigration:
+class TestChangeset:
     def test_construction_no_root(self):
-        m = binoc.Migration("v1", "v2")
+        m = binoc.Changeset("v1", "v2")
         assert m.from_snapshot == "v1"
         assert m.to_snapshot == "v2"
         assert m.root is None
@@ -191,7 +191,7 @@ class TestMigration:
 
     def test_construction_with_root(self):
         root = binoc.DiffNode("modify", "dir", "root")
-        m = binoc.Migration("v1", "v2", root)
+        m = binoc.Changeset("v1", "v2", root)
         assert m.root is not None
         assert m.root.kind == "modify"
         assert m.node_count == 1
@@ -204,7 +204,7 @@ class TestMigration:
             "root",
             children=[binoc.DiffNode("add", "file", "root/a.txt")],
         )
-        m = binoc.Migration("v1", "v2", root)
+        m = binoc.Changeset("v1", "v2", root)
         found = m.find_node("root/a.txt")
         assert found is not None
         assert found.kind == "add"
@@ -217,9 +217,9 @@ class TestMigration:
             tags=["binoc.content-changed"],
             details={"lines": 42},
         )
-        m = binoc.Migration("v1", "v2", root)
+        m = binoc.Changeset("v1", "v2", root)
         j = m.to_json()
-        restored = binoc.Migration.from_json(j)
+        restored = binoc.Changeset.from_json(j)
         assert restored.from_snapshot == "v1"
         assert restored.to_snapshot == "v2"
         assert restored.root.path == "data.csv"
@@ -227,22 +227,22 @@ class TestMigration:
 
     def test_save_and_load(self, tmp_path):
         root = binoc.DiffNode("modify", "file", "data.csv")
-        m = binoc.Migration("v1", "v2", root)
-        path = str(tmp_path / "migration.json")
+        m = binoc.Changeset("v1", "v2", root)
+        path = str(tmp_path / "changeset.json")
         m.save(path)
-        loaded = binoc.Migration.from_file(path)
+        loaded = binoc.Changeset.from_file(path)
         assert loaded.from_snapshot == "v1"
         assert loaded.root.path == "data.csv"
 
     def test_to_dict(self):
         root = binoc.DiffNode("add", "file", "f.txt")
-        m = binoc.Migration("a", "b", root)
+        m = binoc.Changeset("a", "b", root)
         d = m.to_dict()
         assert d["from_snapshot"] == "a"
         assert d["to_snapshot"] == "b"
         assert d["root"]["kind"] == "add"
 
     def test_repr_and_str(self):
-        m = binoc.Migration("v1", "v2")
+        m = binoc.Changeset("v1", "v2")
         assert "v1" in repr(m)
         assert "no changes" in str(m)

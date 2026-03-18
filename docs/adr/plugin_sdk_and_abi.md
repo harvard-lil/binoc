@@ -25,7 +25,7 @@ SDK ← Sqlite["binoc-sqlite"]
 
 **Registration layer (descriptors).** Each plugin type has a serializable descriptor struct (`ComparatorDescriptor`, `TransformerDescriptor`, `RendererDescriptor`). Descriptors carry static metadata: name, extensions, media types, scope, `sdk_version` (auto-set from `CARGO_PKG_VERSION`). All structs are `#[non_exhaustive]` so new fields can be added without breaking compiled plugins.
 
-**Typed data layer (IR and results).** `DiffNode`, `Migration`, `CompareResult`, `TransformResult`, `ExtractResult` live in the SDK. These were already `Serialize`/`Deserialize` and wire-friendly. `CompareResult` gains a `Skip` variant (see below). Enums are `#[non_exhaustive]` for forward compatibility.
+**Typed data layer (IR and results).** `DiffNode`, `Changeset`, `CompareResult`, `TransformResult`, `ExtractResult` live in the SDK. These were already `Serialize`/`Deserialize` and wire-friendly. `CompareResult` gains a `Skip` variant (see below). Enums are `#[non_exhaustive]` for forward compatibility.
 
 **Raw data layer (`DataAccess` trait).** Replaces both `Item.physical_path` and `CompareContext`. Plugin I/O goes through `read_bytes`, `open_read`, `local_path`, `provide`, `workspace`, `register_local`, `store`, `load`, and `data_root` methods on a `&dyn DataAccess` argument. The engine supplies `LocalDataAccess` (filesystem-backed) in three modes:
 - `new()` — owns a session temp dir as `data_root` (used by the controller)
@@ -42,7 +42,7 @@ If a comparator is dispatched by descriptor match but discovers at compare-time 
 
 The closed `ReopenedData { Tabular, Text, Binary }` enum was an extensibility bottleneck — third-party plugins couldn't add variants. Replaced by two mechanisms:
 
-**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. The field is `#[serde(skip)]` — present at runtime, absent from migration JSON (handles are ephemeral temp paths). For the C ABI, `source_items` is carried explicitly in `TransformRequest` and `ExtractRequest`, and the `export_plugin!` macro reconstructs it on the plugin side.
+**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. The field is `#[serde(skip)]` — present at runtime, absent from changeset JSON (handles are ephemeral temp paths). For the C ABI, `source_items` is carried explicitly in `TransformRequest` and `ExtractRequest`, and the `export_plugin!` macro reconstructs it on the plugin side.
 
 This is the preferred pattern for tabular transformers. The CSV comparator no longer caches its parsed data — the row-reorder transformer and column-reorder detector re-parse the source CSVs directly. This avoids writing a JSON-serialized copy of the CSV to disk (which was strictly larger and slower to parse than the original).
 
@@ -77,7 +77,7 @@ The macro conditionally generates entry points based on declared plugin types:
 - `_binoc_transformer_transform`, `_binoc_transformer_extract` — transformer entry points (generated when transformers are declared)
 - `_binoc_renderer_render` — renderer entry point (generated when renderers are declared)
 
-Each entry point takes an `index` (selecting which plugin within the pack) and a JSON request, and returns a JSON response. Request types carry the necessary context for cross-process operation: `CompareRequest` and `ReopenRequest` include `data_root` and `workspace` paths; `TransformRequest` and `ExtractRequest` include `data_root`; `RenderRequest` includes serialized migrations and config.
+Each entry point takes an `index` (selecting which plugin within the pack) and a JSON request, and returns a JSON response. Request types carry the necessary context for cross-process operation: `CompareRequest` and `ReopenRequest` include `data_root` and `workspace` paths; `TransformRequest` and `ExtractRequest` include `data_root`; `RenderRequest` includes serialized changesets and config.
 
 The host (`binoc-python`) uses `libloading` to dlopen the plugin `.so`, reads the descriptor, and wraps each plugin in a `NativeComparator`, `NativeTransformer`, or `NativeRenderer` that implements the corresponding trait by serializing/deserializing through the C ABI. Before each comparator call, the host allocates a workspace in the controller's `DataAccess` and passes its path in the request. The controller doesn't know the difference between a same-build and a native-loaded plugin.
 
@@ -129,7 +129,7 @@ The `model-plugins/` directory contains example plugins that are architecturally
 
 **`binoc-row-reorder` — Rust transformer** (native C ABI). Detects re-sorted CSV tables by loading cached `TabularDataPair` via `data.load()` and checking whether rows are a permutation. Demonstrates `export_plugin!` with transformers and cross-phase cache access.
 
-**`binoc-html` — Pure Python renderer**. Renders migrations as self-contained HTML changelogs. Demonstrates the Python plugin authoring path: a class with `name`, `file_extension`, and `render()`, plus a `register(registry)` entry point.
+**`binoc-html` — Pure Python renderer**. Renders changesets as self-contained HTML changelogs. Demonstrates the Python plugin authoring path: a class with `name`, `file_extension`, and `render()`, plus a `register(registry)` entry point.
 
 Layout of a Rust plugin:
 
