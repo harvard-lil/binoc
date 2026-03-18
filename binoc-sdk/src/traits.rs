@@ -189,16 +189,16 @@ impl TransformerDescriptor {
     }
 }
 
-/// Static metadata for an outputter plugin.
+/// Static metadata for a renderer plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct OutputterDescriptor {
+pub struct RendererDescriptor {
     pub sdk_version: String,
     pub name: String,
     pub file_extension: String,
 }
 
-impl OutputterDescriptor {
+impl RendererDescriptor {
     pub fn new(name: impl Into<String>, file_extension: impl Into<String>) -> Self {
         Self {
             sdk_version: SDK_VERSION.into(),
@@ -318,8 +318,8 @@ pub trait Transformer: Send + Sync {
 }
 
 /// A plugin that renders migrations into a human-readable format.
-pub trait Outputter: Send + Sync {
-    fn descriptor(&self) -> OutputterDescriptor;
+pub trait Renderer: Send + Sync {
+    fn descriptor(&self) -> RendererDescriptor;
 
     fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String>;
 }

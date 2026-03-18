@@ -1,7 +1,7 @@
 [project]
 name = "binoc-html"
 version = "0.1.0"
-description = "HTML outputter plugin for binoc"
+description = "HTML renderer plugin for binoc"
 requires-python = ">=3.10"
 dependencies = ["binoc"]
 

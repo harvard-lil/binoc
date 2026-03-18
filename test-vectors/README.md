@@ -43,7 +43,7 @@ tags = ["tag1", "tag2"]
 # root_kind = "modify"
 # child_count = 1
 # has_tags = ["binoc.column-reorder"]
-# significance = "ministerial"
+# significance = "clerical"
 ```
 
 ### Sections
@@ -54,7 +54,7 @@ tags = ["tag1", "tag2"]
   - `root_kind` — Kind of the root diff node (e.g. `modify`, `add`, `remove`)
   - `child_count` — Number of children at root
   - `has_tags` — Tags that must appear (in root or descendants)
-  - `significance` — e.g. `ministerial`, `substantive`
+  - `significance` — e.g. `clerical`, `substantive`
 
 ## Snapshot Layout
 

@@ -25,10 +25,10 @@ class TestPluginRegistry:
         assert "binoc.copy_detector" in transformers
         assert "binoc.column_reorder_detector" in transformers
 
-    def test_default_registry_has_stdlib_outputters(self):
+    def test_default_registry_has_stdlib_renderers(self):
         registry = binoc.PluginRegistry.default()
-        outputters = registry.list_outputters()
-        assert "binoc.markdown" in outputters
+        renderers = registry.list_renderers()
+        assert "binoc.markdown" in renderers
 
     def test_register_python_comparator(self):
         registry = binoc.PluginRegistry.default()

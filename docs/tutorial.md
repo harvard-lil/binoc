@@ -138,7 +138,7 @@ binoc diff test-vectors/single-file-modify-text/snapshot-a test-vectors/single-f
 Key observations:
 - The **directory comparator** expanded the root pair into child file pairs.
 - The **text comparator** claimed `story.txt` (by `.txt` extension) and produced a leaf diff with the summary you see above.
-- Under the hood, the diff node carries **semantic tags** like `binoc.content-changed` and `binoc.lines-added` (factual observations, not judgments) and **details** with exact line counts. The markdown outputter renders these into the human-readable summary; the JSON migration artifact preserves the full structured data.
+- Under the hood, the diff node carries **semantic tags** like `binoc.content-changed` and `binoc.lines-added` (factual observations, not judgments) and **details** with exact line counts. The markdown renderer renders these into the human-readable summary; the JSON migration artifact preserves the full structured data.
 
 ### File Addition and Removal
 
@@ -178,7 +178,7 @@ CSV is the most common format in data archiving, and an example of Binoc's value
 
 #### Column Reordering
 
-Columns shuffled but content identical — a ministerial change that generic diff would flag as a total rewrite:
+Columns shuffled but content identical — a clerical change that generic diff would flag as a total rewrite:
 
 ```bash
 cat test-vectors/csv-column-reorder/snapshot-a/data.csv
@@ -207,7 +207,7 @@ binoc diff test-vectors/csv-column-reorder/snapshot-a test-vectors/csv-column-re
 ```output
 # Changelog: test-vectors/csv-column-reorder/snapshot-a → test-vectors/csv-column-reorder/snapshot-b
 
-## Ministerial Changes
+## Clerical Changes
 
 - **data.csv**: Columns reordered (content unchanged)
 
@@ -215,7 +215,7 @@ binoc diff test-vectors/csv-column-reorder/snapshot-a test-vectors/csv-column-re
 
 Notice:
 - The output says "Columns reordered (content unchanged)" — the **column reorder transformer** detected that the only change was column ordering and collapsed it from a `modify` to a `reorder`.
-- This appears under **Ministerial Changes**, not Substantive. The tag `binoc.column-reorder` maps to the "ministerial" significance category — housekeeping, not a policy change.
+- This appears under **Clerical Changes**, not Substantive. The tag `binoc.column-reorder` maps to the "clerical" significance category — housekeeping, not a policy change.
 - Under the hood, the diff tree records exactly which columns were in which order, with zero cells changed and zero rows added/removed. That structured detail is available in the JSON migration artifact and via the `extract` command.
 
 #### Mixed CSV Changes
@@ -258,7 +258,7 @@ binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-chan
 
 The summary line packs three distinct changes into one sentence. Under the hood, these map to separate semantic tags: `binoc.column-addition`, `binoc.column-reorder`, `binoc.row-addition`, and `binoc.schema-change`. The column reorder transformer only collapses a diff to `reorder` when reordering is the *only* change — here there's also an added column and row, so it stays as `modify` with the full detail preserved.
 
-Because the tags include `binoc.column-addition` (substantive), not just `binoc.column-reorder` (ministerial), this appears under **Substantive Changes**. The significance classification maps tags to categories independently — a single node with both ministerial and substantive tags gets classified by the highest-priority match.
+Because the tags include `binoc.column-addition` (substantive), not just `binoc.column-reorder` (clerical), this appears under **Substantive Changes**. The significance classification maps tags to categories independently — a single node with both clerical and substantive tags gets classified by the highest-priority match.
 
 ### Markdown Changelog Output
 
@@ -279,7 +279,7 @@ binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-chan
 
 The migration JSON is the canonical machine-readable artifact. The Markdown is a derived view produced by the output formatter. You can also generate changelogs from saved migrations using `binoc changelog`.
 
-The markdown output groups changes by significance category. Here, `binoc.column-addition` and `binoc.schema-change` match the default `substantive` significance rules, so the change appears under "Substantive Changes." The column reorder alone (as in the earlier example) would appear under "Ministerial Changes."
+The markdown output groups changes by significance category. Here, `binoc.column-addition` and `binoc.schema-change` match the default `substantive` significance rules, so the change appears under "Substantive Changes." The column reorder alone (as in the earlier example) would appear under "Clerical Changes."
 
 ### Extracting Changed Data
 
@@ -476,14 +476,14 @@ Now that you've seen the user-facing behavior, let's look under the hood.
 Here's the flow for a single `binoc diff` invocation, from input to output:
 
     Snapshot A ──┐                                          ┌── JSON migration
-                 ├── Controller ─── Comparators ─── IR ─── Transformers ─── Outputter ──┤
+                 ├── Controller ─── Comparators ─── IR ─── Transformers ─── Renderer ──┤
     Snapshot B ──┘   (type-ignorant)  (format-aware) (tree) (pattern-aware)  (format)   └── Markdown changelog
 
 **Separation of concerns**:
 - The **controller** is a generic tree-processing engine. It never imports or references any data format.
 - **Comparators** are the parsers: raw data → IR. They have data access. They're where format knowledge lives.
 - **Transformers** are optimization passes: IR → IR. They detect patterns (moves, reorders) across the tree. They don't need raw data.
-- **Outputters** serialize the IR. Significance classification (ministerial vs. substantive) lives here.
+- **Renderers** serialize the IR. Significance classification (clerical vs. substantive) lives here.
 - **Config** controls ordering and composition. Plugins suggest; config decides.
 
 ### The Controller Loop
@@ -525,7 +525,7 @@ Every comparator emits `DiffNode` values. Every transformer rewrites them. The C
 | `item_type` | open string | `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, etc. The core never interprets it. |
 | `path` | string | Logical path within snapshot, e.g. `"archive.zip/data/file.csv"`. |
 | `source_path` | optional | For moves/renames: the original path. |
-| `summary` | optional | Human-readable one-liner (e.g. "2 lines added, 1 removed"). Set by comparators/transformers, rendered by outputters. |
+| `summary` | optional | Human-readable one-liner (e.g. "2 lines added, 1 removed"). Set by comparators/transformers, rendered by renderers. |
 | `tags` | set of strings | Semantic observations: `binoc.column-reorder`, `binoc.content-changed`, etc. Open and namespaced by convention. |
 | `children` | list | Child diff nodes forming the tree structure. |
 | `details` | map | Comparator-specific structured data (column lists, row counts, hashes). |
@@ -572,14 +572,14 @@ Significance is an output concern, not a core IR concern. The mapping is layered
 2. **Transformers** may add more tags or annotations.
 3. **The output config** maps tags to categories — different users and domains can define different mappings over the same tags.
 
-The default significance mapping lives in the markdown outputter (`binoc-stdlib/src/outputters/markdown.rs`) — since classification is an outputter concern, not a core concern:
+The default significance mapping lives in the markdown renderer (`binoc-stdlib/src/renderers/markdown.rs`) — since classification is a renderer concern, not a core concern:
 
 | Category | Tags |
 |---|---|
-| **Ministerial** | `binoc.column-reorder`, `binoc.whitespace-change`, `binoc.folder-rename`, `binoc.encoding-change` |
+| **Clerical** | `binoc.column-reorder`, `binoc.whitespace-change`, `binoc.folder-rename`, `binoc.encoding-change` |
 | **Substantive** | `binoc.column-addition`, `binoc.column-removal`, `binoc.schema-change`, `binoc.row-addition`, `binoc.row-removal`, `binoc.content-changed` |
 
-Column reordering is ministerial (housekeeping). Column addition is substantive (policy change). A bio research lab could define `biobinoc.alignment-gap` as ministerial and `biobinoc.sequence-deletion` as substantive, using the same mechanism. Users override these defaults via the `output.markdown.significance` section of their dataset config YAML.
+Column reordering is clerical (housekeeping). Column addition is substantive (policy change). A bio research lab could define `biobinoc.alignment-gap` as clerical and `biobinoc.sequence-deletion` as substantive, using the same mechanism. Users override these defaults via the `output.markdown.significance` section of their dataset config YAML.
 
 ### The Transformer Pattern
 
@@ -617,7 +617,7 @@ The trait interfaces (in `binoc-core/src/traits.rs`) — everything a plugin aut
 
 ### The Standard Library
 
-The stdlib (`binoc-stdlib`) registers itself into a `PluginRegistry` by name — exactly as a third-party plugin pack would. Its `register_stdlib()` function registers each comparator, transformer, and outputter under its `binoc.*` name. A third-party pack (e.g., BioBinoc for genomics) would do the same: implement the traits, register by name, and users reference them in their dataset config YAML.
+The stdlib (`binoc-stdlib`) registers itself into a `PluginRegistry` by name — exactly as a third-party plugin pack would. Its `register_stdlib()` function registers each comparator, transformer, and renderer under its `binoc.*` name. A third-party pack (e.g., BioBinoc for genomics) would do the same: implement the traits, register by name, and users reference them in their dataset config YAML.
 
 ## Test Vectors: How Testing Works
 
@@ -631,7 +631,7 @@ cat test-vectors/csv-column-reorder/manifest.toml
 [vector]
 name = "csv-column-reorder"
 description = "Columns shuffled, content identical"
-tags = ["csv", "column-reorder", "ministerial"]
+tags = ["csv", "column-reorder", "clerical"]
 
 [config]
 comparators = ["binoc.directory", "binoc.csv"]
@@ -641,7 +641,7 @@ transformers = ["binoc.column_reorder_detector"]
 root_kind = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
-significance = "ministerial"
+significance = "clerical"
 ```
 
 Structural assertions in the manifest (`root_kind`, `child_count`, `has_tags`) are the primary check — they survive IR schema evolution. The `[config]` section specifies which plugins to use, so vectors test specific comparators in isolation.
@@ -805,13 +805,13 @@ The archivist immediately knows this is metadata noise, not a data change.
 
 ### Classifying Custom Tags with Config
 
-The output says "Other Changes" because the default significance mapping doesn't know about `bio.header-change`. A dataset config YAML file can teach the outputter about your domain-specific tags:
+The output says "Other Changes" because the default significance mapping doesn't know about `bio.header-change`. A dataset config YAML file can teach the renderer about your domain-specific tags:
 
     # dataset.yaml
     output:
       markdown:
         significance:
-          ministerial:
+          clerical:
             - binoc.column-reorder
             - binoc.whitespace-change
             - bio.header-change       # header-only changes are housekeeping
@@ -828,11 +828,11 @@ Load this config alongside your custom comparator:
     migration = binoc.diff("snapshot-a", "snapshot-b", config=config)
     print(binoc.to_markdown([migration]))
 
-Now the same diff appears under **Ministerial Changes** instead, clearly separated from real data changes in the changelog.
+Now the same diff appears under **Clerical Changes** instead, clearly separated from real data changes in the changelog.
 
 The `add_comparator()` call above is the scripting path — great for Jupyter notebooks and one-off analysis. For reusable plugins, Binoc uses **Python entry points** for automatic discovery: `pip install biobinoc` makes the plugin available to the `binoc` CLI automatically, and the config file can reference it by name (`comparators: [biobinoc.fasta]`).
 
-This is the separation of concerns in practice: the **comparator** reports facts (which tags apply), **config** decides what those facts mean (ministerial vs. substantive), and the **outputter** renders the result. Different teams tracking the same dataset can use different configs to prioritize different kinds of changes.
+This is the separation of concerns in practice: the **comparator** reports facts (which tags apply), **config** decides what those facts mean (clerical vs. substantive), and the **renderer** renders the result. Different teams tracking the same dataset can use different configs to prioritize different kinds of changes.
 
 For the full story on packaging plugins (Python and Rust), entry-point discovery, the `PluginRegistry` API, naming conventions, and the two-CLI architecture (`binoc` vs `binoc-cli`), see [Writing Binoc Plugins](writing_plugins.md).
 
@@ -847,7 +847,7 @@ For the full story on packaging plugins (Python and Rust), entry-point discovery
 | Add Python API surface | `binoc-python/src/lib.rs` (PyO3) + `binoc-python/python/binoc/__init__.py` |
 | Change the IR | `binoc-core/src/ir.rs` — affects everything downstream |
 | Modify dispatch logic | `binoc-core/src/controller.rs` — the `find_comparator` and `process_pair` methods |
-| Tune default significance | `binoc-stdlib/src/outputters/markdown.rs` — the `default_significance` function |
+| Tune default significance | `binoc-stdlib/src/renderers/markdown.rs` — the `default_significance` function |
 
 Run the full test suite before submitting:
 

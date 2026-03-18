@@ -18,7 +18,7 @@ use binoc_sdk::test_support::{AbiCall, AbiComparator, AbiLogCollector, AbiTransf
 use binoc_sdk::Migration;
 use serde::Deserialize;
 
-use crate::outputters::markdown;
+use crate::renderers::markdown;
 
 // ── Manifest schema ───────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ pub fn abi_wrapped_default_registry() -> (
     wrap_transformer!(column_reorder::ColumnReorderDetector);
 
     registry
-        .register_outputter(Arc::new(markdown::MarkdownOutputter))
+        .register_renderer(Arc::new(markdown::MarkdownRenderer))
         .expect("same-build plugin");
 
     (registry, collectors, counter)
@@ -194,7 +194,7 @@ pub fn run_vector(
     stable_migration.to_snapshot = "snapshot-b".into();
     let md = markdown::render_markdown(
         &[stable_migration.clone()],
-        &markdown::MarkdownOutputterConfig::default(),
+        &markdown::MarkdownRendererConfig::default(),
     );
 
     let mut settings = insta::Settings::clone_current();
@@ -272,7 +272,7 @@ pub fn run_vector_with_abi_log(
     stable_migration.to_snapshot = "snapshot-b".into();
     let md = markdown::render_markdown(
         &[stable_migration.clone()],
-        &markdown::MarkdownOutputterConfig::default(),
+        &markdown::MarkdownRendererConfig::default(),
     );
 
     let mut settings = insta::Settings::clone_current();
@@ -325,7 +325,7 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
             DatasetConfig {
                 comparators: cfg.comparators.clone().unwrap_or(default.comparators),
                 transformers: cfg.transformers.clone().unwrap_or(default.transformers),
-                outputters: default.outputters,
+                renderers: default.renderers,
                 output: default.output,
             }
         }
@@ -584,13 +584,13 @@ fn check_assertions(
             .as_ref()
             .unwrap_or_else(|| panic!("[{name}] Expected significance but migration has no root"));
         let all_tags = root.all_tags();
-        let md_val = config.output.get_for_outputter("binoc.markdown");
-        let md_config: markdown::MarkdownOutputterConfig =
+        let md_val = config.output.get_for_renderer("binoc.markdown");
+        let md_config: markdown::MarkdownRendererConfig =
             serde_json::from_value(md_val).unwrap_or_default();
         let sig_tags = md_config.significance.get(significance.as_str());
         assert!(
             sig_tags.is_some(),
-            "[{name}] Significance category '{significance}' not in markdown outputter config"
+            "[{name}] Significance category '{significance}' not in markdown renderer config"
         );
         let sig_tags = sig_tags.unwrap();
         let has_sig_tag = all_tags.iter().any(|t| sig_tags.contains(t));

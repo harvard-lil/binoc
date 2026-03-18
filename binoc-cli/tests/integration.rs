@@ -333,8 +333,8 @@ fn test_markdown_output() {
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let md_config = binoc_stdlib::outputters::markdown::MarkdownOutputterConfig::default();
-    let md = binoc_stdlib::outputters::markdown::render_markdown(&[migration], &md_config);
+    let md_config = binoc_stdlib::renderers::markdown::MarkdownRendererConfig::default();
+    let md = binoc_stdlib::renderers::markdown::render_markdown(&[migration], &md_config);
     assert!(md.contains("Changelog:"));
     assert!(md.contains("data.csv"));
 }

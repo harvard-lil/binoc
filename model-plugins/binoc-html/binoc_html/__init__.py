@@ -1,4 +1,4 @@
-"""Simple HTML outputter plugin for binoc.
+"""Simple HTML renderer plugin for binoc.
 
 Renders migrations as a self-contained HTML changelog.
 """
@@ -6,7 +6,7 @@ Renders migrations as a self-contained HTML changelog.
 from html import escape
 
 
-class HtmlOutputter:
+class HtmlRenderer:
     name = "binoc.html"
     file_extension = "html"
 
@@ -79,4 +79,4 @@ def _render_node(node, parts, depth=0):
 
 def register(registry):
     """Entry point called by binoc plugin discovery."""
-    registry.register_outputter("binoc.html", HtmlOutputter())
+    registry.register_renderer("binoc.html", HtmlRenderer())

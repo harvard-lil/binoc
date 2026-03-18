@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
 use binoc_core::output;
-use binoc_sdk::{BinocError, ExtractResult, Migration, Outputter};
+use binoc_sdk::{BinocError, ExtractResult, Migration, Renderer};
 
 #[derive(Parser)]
 #[command(name = "binoc", about = "The missing changelog for datasets")]
@@ -85,7 +85,7 @@ impl OutputSpec {
 
 enum ResolvedFormat {
     Json,
-    Outputter(Arc<dyn Outputter>),
+    Renderer(Arc<dyn Renderer>),
 }
 
 fn resolve_format(
@@ -99,8 +99,8 @@ fn resolve_format(
             if ext == "json" {
                 return Ok(ResolvedFormat::Json);
             }
-            match resolved.outputter_for_extension(ext)? {
-                Some(o) => Ok(ResolvedFormat::Outputter(o)),
+            match resolved.renderer_for_extension(ext)? {
+                Some(o) => Ok(ResolvedFormat::Renderer(o)),
                 None => Err(BinocError::Config(format!(
                     "cannot infer format for .{ext}; use format:path syntax (e.g. markdown:{path})",
                     path = spec.path.display(),
@@ -118,8 +118,8 @@ fn resolve_format_name(
         return Ok(ResolvedFormat::Json);
     }
     resolved
-        .outputter_by_name(name)
-        .map(ResolvedFormat::Outputter)
+        .renderer_by_name(name)
+        .map(ResolvedFormat::Renderer)
         .ok_or_else(|| BinocError::Config(format!("unknown output format: {name}")))
 }
 
@@ -137,9 +137,9 @@ fn render(
                     .map_err(|e| BinocError::Other(e.to_string()))
             }
         }
-        ResolvedFormat::Outputter(o) => {
-            let outputter_config = config.output.get_for_outputter(&o.descriptor().name);
-            o.render(migrations, &outputter_config)
+        ResolvedFormat::Renderer(o) => {
+            let renderer_config = config.output.get_for_renderer(&o.descriptor().name);
+            o.render(migrations, &renderer_config)
         }
     }
 }

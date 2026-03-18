@@ -16,7 +16,7 @@ use binoc_sdk::plugin_abi::{
 };
 use binoc_sdk::*;
 
-use binoc_stdlib::outputters::markdown as md_outputter;
+use binoc_stdlib::renderers::markdown as md_renderer;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Native plugin loader — loads Rust plugins via C ABI (libloading)
@@ -77,10 +77,7 @@ impl NativePlugin {
                 .get::<AbiFn>(b"_binoc_transformer_extract")
                 .ok()
                 .map(|s| *s);
-            let render_fn = lib
-                .get::<AbiFn>(b"_binoc_outputter_render")
-                .ok()
-                .map(|s| *s);
+            let render_fn = lib.get::<AbiFn>(b"_binoc_renderer_render").ok().map(|s| *s);
 
             Ok(Self {
                 _lib: lib,
@@ -306,16 +303,16 @@ impl Transformer for NativeTransformer {
     }
 }
 
-// ── NativeOutputter ────────────────────────────────────────────────
+// ── NativeRenderer ────────────────────────────────────────────────
 
-struct NativeOutputter {
+struct NativeRenderer {
     plugin: Arc<NativePlugin>,
-    desc: OutputterDescriptor,
+    desc: RendererDescriptor,
     index: u32,
 }
 
-impl Outputter for NativeOutputter {
-    fn descriptor(&self) -> OutputterDescriptor {
+impl Renderer for NativeRenderer {
+    fn descriptor(&self) -> RendererDescriptor {
         self.desc.clone()
     }
 
@@ -323,7 +320,7 @@ impl Outputter for NativeOutputter {
         let render_fn = self
             .plugin
             .render_fn
-            .ok_or_else(|| BinocError::Other("plugin missing _binoc_outputter_render".into()))?;
+            .ok_or_else(|| BinocError::Other("plugin missing _binoc_renderer_render".into()))?;
         let request = RenderRequest {
             migrations: migrations.to_vec(),
             config: config.clone(),
@@ -409,14 +406,14 @@ fn load_native_plugin_into_registry(
             .map_err(|e| e.to_string())?;
     }
 
-    for (i, desc) in description.outputters.into_iter().enumerate() {
-        let native = NativeOutputter {
+    for (i, desc) in description.renderers.into_iter().enumerate() {
+        let native = NativeRenderer {
             plugin: Arc::clone(&plugin),
             desc,
             index: i as u32,
         };
         registry
-            .register_outputter(Arc::new(native))
+            .register_renderer(Arc::new(native))
             .map_err(|e| e.to_string())?;
     }
 
@@ -1249,16 +1246,16 @@ fn create_transformer_bridge(
     })
 }
 
-struct PyOutputterBridge {
+struct PyRendererBridge {
     py_obj: Py<PyAny>,
-    desc: OutputterDescriptor,
+    desc: RendererDescriptor,
 }
 
-unsafe impl Send for PyOutputterBridge {}
-unsafe impl Sync for PyOutputterBridge {}
+unsafe impl Send for PyRendererBridge {}
+unsafe impl Sync for PyRendererBridge {}
 
-impl Outputter for PyOutputterBridge {
-    fn descriptor(&self) -> OutputterDescriptor {
+impl Renderer for PyRendererBridge {
+    fn descriptor(&self) -> RendererDescriptor {
         self.desc.clone()
     }
 
@@ -1285,26 +1282,26 @@ impl Outputter for PyOutputterBridge {
             let result = self
                 .py_obj
                 .call_method1(py, "render", (py_migrations, py_config))
-                .map_err(|e| BinocError::Other(format!("Python outputter error: {e}")))?;
+                .map_err(|e| BinocError::Other(format!("Python renderer error: {e}")))?;
 
             result
                 .extract::<String>(py)
-                .map_err(|e| BinocError::Other(format!("Python outputter must return str: {e}")))
+                .map_err(|e| BinocError::Other(format!("Python renderer must return str: {e}")))
         })
     }
 }
 
-fn create_outputter_bridge(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyOutputterBridge> {
+fn create_renderer_bridge(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyRendererBridge> {
     let name: String = obj
         .getattr("name")
         .and_then(|n| n.extract())
-        .unwrap_or_else(|_| "python_outputter".to_string());
+        .unwrap_or_else(|_| "python_renderer".to_string());
     let file_extension: String = obj
         .getattr("file_extension")
         .and_then(|e| e.extract())
         .unwrap_or_else(|_| "txt".to_string());
-    let desc = OutputterDescriptor::new(name, file_extension);
-    Ok(PyOutputterBridge {
+    let desc = RendererDescriptor::new(name, file_extension);
+    Ok(PyRendererBridge {
         py_obj: obj.clone().unbind(),
         desc,
     })
@@ -1502,15 +1499,15 @@ fn extract(
 #[pyfunction]
 #[pyo3(signature = (migrations, *, config=None))]
 fn to_markdown(migrations: Vec<PyMigration>, config: Option<&PyConfig>) -> String {
-    let md_config: md_outputter::MarkdownOutputterConfig = config
+    let md_config: md_renderer::MarkdownRendererConfig = config
         .map(|c| {
-            let val = c.dataset_config.output.get_for_outputter("binoc.markdown");
+            let val = c.dataset_config.output.get_for_renderer("binoc.markdown");
             serde_json::from_value(val).unwrap_or_default()
         })
         .unwrap_or_default();
 
     let rust_migrations: Vec<Migration> = migrations.into_iter().map(|m| m.inner).collect();
-    md_outputter::render_markdown(&rust_migrations, &md_config)
+    md_renderer::render_markdown(&rust_migrations, &md_config)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1552,15 +1549,10 @@ impl PyPluginRegistry {
             .register_transformer(Arc::new(bridge))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
-    fn register_outputter(
-        &mut self,
-        py: Python<'_>,
-        _name: String,
-        obj: Py<PyAny>,
-    ) -> PyResult<()> {
-        let bridge = create_outputter_bridge(py, obj.bind(py))?;
+    fn register_renderer(&mut self, py: Python<'_>, _name: String, obj: Py<PyAny>) -> PyResult<()> {
+        let bridge = create_renderer_bridge(py, obj.bind(py))?;
         self.inner
-            .register_outputter(Arc::new(bridge))
+            .register_renderer(Arc::new(bridge))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
     fn load_native_plugin(&mut self, module_path: String) -> PyResult<()> {
@@ -1573,8 +1565,8 @@ impl PyPluginRegistry {
     fn list_transformers(&self) -> Vec<String> {
         self.inner.transformer_names()
     }
-    fn list_outputters(&self) -> Vec<String> {
-        self.inner.outputter_names()
+    fn list_renderers(&self) -> Vec<String> {
+        self.inner.renderer_names()
     }
 }
 

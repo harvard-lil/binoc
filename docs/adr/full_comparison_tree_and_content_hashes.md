@@ -21,7 +21,7 @@ A secondary symptom: the `trivial-identical` test vector produced `"kind": "modi
 
 After all transformers run, `prune_identical` removes `identical` nodes and any containers that become empty as a result. The final migration is a clean delta.
 
-This is the key invariant: **transformers see the full tree; outputters see the pruned tree.**
+This is the key invariant: **transformers see the full tree; renderers see the pruned tree.**
 
 ### 2. Expanding comparators pre-compute content hashes on Items
 

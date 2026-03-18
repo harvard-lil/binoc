@@ -25,7 +25,7 @@ pub struct DiffNode {
     pub source_path: Option<String>,
 
     /// Optional human-readable one-liner describing the change.
-    /// Set by comparator or transformer; used by outputters for narrative rendering.
+    /// Set by comparator or transformer; used by renderers for narrative rendering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
 

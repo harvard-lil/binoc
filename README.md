@@ -1,6 +1,6 @@
 # Binoc: The Missing Changelog for Datasets
 
-Binoc generates changelogs for datasets that don't have them. Given a series of snapshots of a dataset downloaded at different times, Binoc detects what changed, expresses those changes as a minimal structured diff, and produces human-readable summaries that distinguish substantive policy changes from ministerial housekeeping.
+Binoc generates changelogs for datasets that don't have them. Given a series of snapshots of a dataset downloaded at different times, Binoc detects what changed, expresses those changes as a minimal structured diff, and produces human-readable summaries that distinguish substantive policy changes from clerical housekeeping.
 
 The core workflow: an archivist, data scientist, or steward has five copies of a government dataset containing CSVs, downloaded over two years. Some are identical. Some have reordered columns. One has a new category relevant to their research. Binoc tells them exactly what changed, when, and whether (by their definition) it matters.
 
@@ -15,7 +15,7 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Ministerial Changes
+## Clerical Changes
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
 
@@ -24,7 +24,7 @@ binoc diff release-q3/ release-q4/
 - **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip and compared the CSV column-by-column — the reorder is flagged as ministerial housekeeping, not a real data change. But `.sqlite` is opaque to the standard library, so you only learn that the bytes differ.
+Binoc looked inside the zip and compared the CSV column-by-column — the reorder is flagged as clerical housekeeping, not a real data change. But `.sqlite` is opaque to the standard library, so you only learn that the bytes differ.
 
 ```bash
 pip install binoc-sqlite
@@ -34,7 +34,7 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Ministerial Changes
+## Clerical Changes
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
 
@@ -50,7 +50,7 @@ Same command, richer output. The plugin parsed the database and found the actual
 Datasets published by governments, research institutions, and public bodies are living artifacts, and can change without warning or documentation (or without consistent documentation). The archival and data science communities need tooling to:
 
 - Detect whether a new snapshot of a dataset actually differs from the previous one.
-- Describe changes precisely — not just "the file changed," but "three columns were reordered (ministerial) and one column was split into two (substantive)."
+- Describe changes precisely — not just "the file changed," but "three columns were reordered (clerical) and one column was split into two (substantive)."
 - Produce changelogs that are machine-readable for automated pipelines and human-readable for policy analysis.
 - Handle real-world messiness: datasets inside zip archives, nested containers, mixed formats, renamed files.
 
@@ -176,7 +176,7 @@ This builds both packages from source and wires up entry-point discovery automat
 | `binoc-stdlib/` | Standard comparators and transformers (architecturally identical to third-party plugins) |
 | `binoc-cli/` | CLI library + standalone Rust binary |
 | `binoc-python/` | PyO3 bindings, native plugin loader (`libloading`), Python plugin bridges, `binoc` CLI entry point |
-| `model-plugins/` | Reference plugin implementations: `binoc-sqlite` (Rust comparator), `binoc-row-reorder` (Rust transformer), `binoc-html` (Python outputter) |
+| `model-plugins/` | Reference plugin implementations: `binoc-sqlite` (Rust comparator), `binoc-row-reorder` (Rust transformer), `binoc-html` (Python renderer) |
 | `test-vectors/` | Shared test fixtures for standard library plugins |
 | `docs/` | Documentation, design notes, and ADRs |
 

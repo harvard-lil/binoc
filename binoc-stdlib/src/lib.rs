@@ -1,11 +1,11 @@
 pub mod comparators;
-pub mod outputters;
+pub mod renderers;
 pub mod transformers;
 
 use std::sync::Arc;
 
 use binoc_core::config::PluginRegistry;
-use outputters::markdown::MarkdownOutputter;
+use renderers::markdown::MarkdownRenderer;
 
 /// Register all standard library plugins into a registry.
 pub fn register_stdlib(registry: &mut PluginRegistry) {
@@ -23,7 +23,7 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
         transformers::column_reorder::ColumnReorderDetector,
     )));
 
-    r(registry.register_outputter(Arc::new(MarkdownOutputter)));
+    r(registry.register_renderer(Arc::new(MarkdownRenderer)));
 }
 
 /// Create a fully configured registry with all stdlib plugins.

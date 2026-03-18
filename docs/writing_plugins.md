@@ -1,6 +1,6 @@
 # Writing Binoc Plugins
 
-This guide covers how to write a binoc plugin — a comparator, transformer, or outputter — and distribute it so `pip install your-package` makes it available to the `binoc` CLI automatically.
+This guide covers how to write a binoc plugin — a comparator, transformer, or renderer — and distribute it so `pip install your-package` makes it available to the `binoc` CLI automatically.
 
 Plugins can be written in **Python** (quick to prototype, GIL cost per file) or **Rust** (zero per-file overhead, more boilerplate). Both use the same distribution mechanism: Python entry points.
 
@@ -10,7 +10,7 @@ Before writing a plugin, understand what each type does:
 
 - **Comparator**: Claims item pairs by file extension, media type, or imperative `can_handle` logic. Produces a diff (leaf node or expansion into children). This is the parser — it turns raw data into IR.
 - **Transformer**: Rewrites the completed diff tree. Operates on structure, not raw data. For example, the move detector correlates add/remove pairs by content hash.
-- **Outputter**: Renders finalized migrations into a presentation format (Markdown, HTML, etc.).
+- **Renderer**: Renders finalized migrations into a presentation format (Markdown, HTML, etc.).
 
 The IR is a tree of `DiffNode` values. See `docs/design.md` for the full schema.
 
@@ -327,7 +327,7 @@ Standard `binoc.*` names are reserved for the standard library.
 
 ## Summary field
 
-The `DiffNode.summary` field is an optional human-readable one-liner describing the change. Outputters use it for narrative rendering. If your comparator produces a domain-specific diff, set `summary` so the standard Markdown outputter can describe it without understanding your format:
+The `DiffNode.summary` field is an optional human-readable one-liner describing the change. Renderers use it for narrative rendering. If your comparator produces a domain-specific diff, set `summary` so the standard Markdown renderer can describe it without understanding your format:
 
 ```python
 node = binoc.DiffNode(
@@ -337,7 +337,7 @@ node = binoc.DiffNode(
 ).with_detail("summary", "3 sequences added, 1 removed")
 ```
 
-When `summary` is absent, outputters fall back to a generic description from `kind`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
+When `summary` is absent, renderers fall back to a generic description from `kind`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
 
 ## Performance expectations
 
