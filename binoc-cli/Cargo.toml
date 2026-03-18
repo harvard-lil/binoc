@@ -12,6 +12,7 @@ name = "binoc-cli"
 path = "src/main.rs"
 
 [dependencies]
+binoc-sdk = { path = "../binoc-sdk" }
 binoc-core = { path = "../binoc-core" }
 binoc-stdlib = { path = "../binoc-stdlib" }
 clap = { version = "4.5.60", features = ["derive"] }

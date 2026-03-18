@@ -1,6 +1,4 @@
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_sdk::*;
 use similar::{ChangeTag, TextDiff};
 
 const TEXT_EXTENSIONS: &[&str] = &[
@@ -13,94 +11,25 @@ const TEXT_EXTENSIONS: &[&str] = &[
 pub struct TextComparator;
 
 impl Comparator for TextComparator {
-    fn name(&self) -> &str {
-        "binoc.text"
+    fn descriptor(&self) -> ComparatorDescriptor {
+        ComparatorDescriptor::new("binoc.text")
+            .with_extensions(TEXT_EXTENSIONS.iter().map(|s| s.to_string()).collect())
     }
 
-    fn handles_extensions(&self) -> &[&str] {
-        TEXT_EXTENSIONS
-    }
-
-    fn can_handle(&self, pair: &ItemPair) -> bool {
-        let item = pair.right.as_ref().or(pair.left.as_ref());
-        if let Some(item) = item {
-            if let Some(guess) = mime_guess::from_path(&item.logical_path).first() {
-                return guess.type_() == mime_guess::mime::TEXT;
-            }
-        }
-        false
-    }
-
-    fn reopen_data(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<ReopenedData> {
-        let left = pair
-            .left
-            .as_ref()
-            .map(|item| std::fs::read_to_string(&item.physical_path).map_err(BinocError::Io))
-            .transpose()?;
-        let right = pair
-            .right
-            .as_ref()
-            .map(|item| std::fs::read_to_string(&item.physical_path).map_err(BinocError::Io))
-            .transpose()?;
-        Ok(ReopenedData::Text { left, right })
-    }
-
-    fn extract(
-        &self,
-        data: &ReopenedData,
-        _node: &DiffNode,
-        aspect: &str,
-    ) -> Option<ExtractResult> {
-        let ReopenedData::Text { left, right } = data else {
-            return None;
-        };
-        match aspect {
-            "diff" => {
-                let l = left.as_deref().unwrap_or("");
-                let r = right.as_deref().unwrap_or("");
-                let diff = TextDiff::from_lines(l, r);
-                let mut out = String::new();
-                for change in diff.iter_all_changes() {
-                    let sign = match change.tag() {
-                        ChangeTag::Insert => "+",
-                        ChangeTag::Delete => "-",
-                        ChangeTag::Equal => " ",
-                    };
-                    out.push_str(&format!("{sign}{change}"));
-                }
-                Some(ExtractResult::Text(out))
-            }
-            "content_left" => left.as_ref().map(|s| ExtractResult::Text(s.clone())),
-            "content_right" => right.as_ref().map(|s| ExtractResult::Text(s.clone())),
-            "content" | "full" => {
-                let mut out = String::new();
-                if let Some(l) = left {
-                    out.push_str("--- left\n");
-                    out.push_str(l);
-                    if !l.ends_with('\n') {
-                        out.push('\n');
-                    }
-                }
-                if let Some(r) = right {
-                    out.push_str("+++ right\n");
-                    out.push_str(r);
-                    if !r.ends_with('\n') {
-                        out.push('\n');
-                    }
-                }
-                Some(ExtractResult::Text(out))
-            }
-            _ => None,
-        }
-    }
-
-    fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
             (Some(left), Some(right)) => {
-                let text_l =
-                    std::fs::read_to_string(&left.physical_path).map_err(BinocError::Io)?;
-                let text_r =
-                    std::fs::read_to_string(&right.physical_path).map_err(BinocError::Io)?;
+                let bytes_l = data.read_bytes(left)?;
+                let bytes_r = data.read_bytes(right)?;
+
+                let text_l = match std::str::from_utf8(&bytes_l) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => return Ok(CompareResult::Skip),
+                };
+                let text_r = match std::str::from_utf8(&bytes_r) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => return Ok(CompareResult::Skip),
+                };
 
                 if text_l == text_r {
                     return Ok(CompareResult::Identical);
@@ -142,7 +71,11 @@ impl Comparator for TextComparator {
                 Ok(CompareResult::Leaf(node))
             }
             (None, Some(right)) => {
-                let text = std::fs::read_to_string(&right.physical_path).map_err(BinocError::Io)?;
+                let bytes = data.read_bytes(right)?;
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => return Ok(CompareResult::Skip),
+                };
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("add", "text", &right.logical_path)
@@ -156,7 +89,11 @@ impl Comparator for TextComparator {
                 Ok(CompareResult::Leaf(node))
             }
             (Some(left), None) => {
-                let text = std::fs::read_to_string(&left.physical_path).map_err(BinocError::Io)?;
+                let bytes = data.read_bytes(left)?;
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => return Ok(CompareResult::Skip),
+                };
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("remove", "text", &left.logical_path)

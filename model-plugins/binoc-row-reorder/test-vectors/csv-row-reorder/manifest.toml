@@ -1,0 +1,13 @@
+[vector]
+name = "csv-row-reorder"
+description = "Rows reordered, same data as multiset"
+tags = ["csv", "row-reorder"]
+
+[config]
+comparators = ["binoc.directory", "binoc.csv"]
+transformers = ["binoc.row_reorder_detector"]
+
+[expected]
+root_kind = "modify"
+child_count = 1
+has_tags = ["binoc.row-reorder"]

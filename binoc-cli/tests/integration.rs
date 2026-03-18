@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use binoc_core::config::DatasetConfig;
 use binoc_core::controller::Controller;
-use binoc_core::ir::Migration;
+use binoc_sdk::Migration;
 
 fn setup_test_dir() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
@@ -337,6 +337,176 @@ fn test_markdown_output() {
     let md = binoc_stdlib::outputters::markdown::render_markdown(&[migration], &md_config);
     assert!(md.contains("Changelog:"));
     assert!(md.contains("data.csv"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Extract chain tests (reopen walk)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_extract_csv_rows_added() {
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    fs::write(dir_a.join("data.csv"), "name,age\nAlice,30\n").unwrap();
+    fs::write(dir_b.join("data.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
+
+    let controller = create_controller();
+    let migration = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let result = controller
+        .extract(
+            &migration,
+            "data.csv",
+            "rows_added",
+            dir_a.to_str().unwrap(),
+            dir_b.to_str().unwrap(),
+        )
+        .unwrap();
+
+    match result {
+        binoc_sdk::ExtractResult::Text(text) => {
+            assert!(text.contains("Bob"), "should contain the added row: {text}");
+        }
+        _ => panic!("expected Text result"),
+    }
+}
+
+#[test]
+fn test_extract_csv_cells_changed() {
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    fs::write(dir_a.join("data.csv"), "name,age\nAlice,30\n").unwrap();
+    fs::write(dir_b.join("data.csv"), "name,age\nAlice,31\n").unwrap();
+
+    let controller = create_controller();
+    let migration = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let result = controller
+        .extract(
+            &migration,
+            "data.csv",
+            "cells_changed",
+            dir_a.to_str().unwrap(),
+            dir_b.to_str().unwrap(),
+        )
+        .unwrap();
+
+    match result {
+        binoc_sdk::ExtractResult::Text(text) => {
+            assert!(
+                text.contains("age") && text.contains("30") && text.contains("31"),
+                "should show cell change: {text}"
+            );
+        }
+        _ => panic!("expected Text result"),
+    }
+}
+
+#[test]
+fn test_extract_csv_full_content() {
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    fs::write(dir_a.join("data.csv"), "name,age\nAlice,30\n").unwrap();
+    fs::write(dir_b.join("data.csv"), "name,age\nAlice,31\n").unwrap();
+
+    let controller = create_controller();
+    let migration = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let result = controller
+        .extract(
+            &migration,
+            "data.csv",
+            "content",
+            dir_a.to_str().unwrap(),
+            dir_b.to_str().unwrap(),
+        )
+        .unwrap();
+
+    match result {
+        binoc_sdk::ExtractResult::Text(text) => {
+            assert!(text.contains("left"), "should contain left side: {text}");
+            assert!(text.contains("right"), "should contain right side: {text}");
+        }
+        _ => panic!("expected Text result"),
+    }
+}
+
+#[test]
+fn test_extract_through_zip() {
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    create_test_zip(
+        &dir_a.join("archive.zip"),
+        &[("data.csv", "name,age\nAlice,30\n")],
+    );
+    create_test_zip(
+        &dir_b.join("archive.zip"),
+        &[("data.csv", "name,age\nAlice,30\nBob,25\n")],
+    );
+
+    let controller = create_controller();
+    let migration = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let csv_node = migration
+        .root
+        .as_ref()
+        .expect("should have root")
+        .children
+        .iter()
+        .flat_map(|c| {
+            // zip -> dir -> csv
+            std::iter::once(c).chain(
+                c.children
+                    .iter()
+                    .flat_map(|gc| std::iter::once(gc).chain(gc.children.iter())),
+            )
+        })
+        .find(|n| n.item_type == "tabular")
+        .expect("should have tabular node in zip");
+
+    let result = controller
+        .extract(
+            &migration,
+            &csv_node.path,
+            "rows_added",
+            dir_a.to_str().unwrap(),
+            dir_b.to_str().unwrap(),
+        )
+        .unwrap();
+
+    match result {
+        binoc_sdk::ExtractResult::Text(text) => {
+            assert!(
+                text.contains("Bob"),
+                "should extract added row from inside zip: {text}"
+            );
+        }
+        _ => panic!("expected Text result"),
+    }
 }
 
 fn create_test_zip(path: &PathBuf, entries: &[(&str, &str)]) {

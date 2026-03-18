@@ -1,0 +1,169 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "data"
+      },
+      {
+        "op": "register_local",
+        "logical": "data"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "data"
+      },
+      {
+        "op": "local_path",
+        "handle": "data"
+      },
+      {
+        "op": "register_local",
+        "logical": "data/records.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data/records.csv",
+        "result_size": 22
+      },
+      {
+        "op": "register_local",
+        "logical": "data/records.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data/records.csv",
+        "result_size": 32
+      },
+      {
+        "op": "register_local",
+        "logical": "data/extra.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data/extra.csv",
+        "result_size": 15
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "data/records.csv"
+      },
+      {
+        "op": "local_path",
+        "handle": "data/records.csv"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "data/extra.csv"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "docs"
+      },
+      {
+        "op": "local_path",
+        "handle": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 17
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 35
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 17
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 35
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.move_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.copy_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.column_reorder_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.column_reorder_detector",
+    "data_ops": []
+  }
+]

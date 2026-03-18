@@ -1,31 +1,19 @@
 use std::collections::BTreeMap;
 
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::{CompareContext, Transformer};
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// Detects when an added file has the same content hash as an identical
-/// (unchanged) file elsewhere in the same container. Converts the add
-/// into a "copy" node with source_path pointing to the original.
-///
-/// Relies on identical nodes being present in the tree (pre-pruning)
-/// with hash metadata attached by the binary comparator.
+/// (unchanged) file elsewhere in the same container.
 pub struct CopyDetector;
 
 impl Transformer for CopyDetector {
-    fn name(&self) -> &str {
-        "binoc.copy_detector"
+    fn descriptor(&self) -> TransformerDescriptor {
+        TransformerDescriptor::new("binoc.copy_detector")
+            .with_match_types(vec!["directory".into(), "zip_archive".into()])
+            .with_scope(TransformScope::Subtree)
     }
 
-    fn match_types(&self) -> &[&str] {
-        &["directory", "zip_archive"]
-    }
-
-    fn scope(&self) -> TransformScope {
-        TransformScope::Subtree
-    }
-
-    fn transform(&self, mut node: DiffNode, _ctx: &CompareContext) -> TransformResult {
+    fn transform(&self, mut node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
         let has_adds = node.children.iter().any(|c| c.kind == "add");
         let has_identicals = node.children.iter().any(|c| c.kind == "identical");
 
@@ -48,7 +36,7 @@ impl Transformer for CopyDetector {
             }
         }
 
-        let mut copy_pairs: Vec<(usize, usize)> = Vec::new(); // (identical_idx, add_idx)
+        let mut copy_pairs: Vec<(usize, usize)> = Vec::new();
         for (hash, add_idxs) in &add_by_hash {
             if let Some(identical_idxs) = identical_by_hash.get(hash) {
                 for add_idx in add_idxs {

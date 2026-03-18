@@ -5,9 +5,8 @@ use clap::{Parser, Subcommand};
 
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
-use binoc_core::ir::Migration;
 use binoc_core::output;
-use binoc_core::traits::{BinocError, Outputter};
+use binoc_sdk::{BinocError, ExtractResult, Migration, Outputter};
 
 #[derive(Parser)]
 #[command(name = "binoc", about = "The missing changelog for datasets")]
@@ -20,62 +19,39 @@ struct Cli {
 enum Commands {
     /// Diff two snapshots and produce a changelog.
     Diff {
-        /// Path to snapshot A (the "before" state).
         snapshot_a: PathBuf,
-        /// Path to snapshot B (the "after" state).
         snapshot_b: PathBuf,
-        /// Path to dataset config file (YAML). Uses defaults if not provided.
         #[arg(long)]
         config: Option<PathBuf>,
-        /// Write output to a file. Format is inferred from extension (.json for
-        /// raw migration, .md for markdown, etc.) or set explicitly with
-        /// format:path syntax (e.g. "json:output.dat"). Repeatable.
         #[arg(long, short)]
         output: Vec<String>,
-        /// Format for stdout output. Default: "markdown". Use "json" for raw
-        /// migration JSON.
         #[arg(long, default_value = "markdown")]
         format: String,
-        /// Suppress stdout output. Useful with -o to only write files.
         #[arg(long, short)]
         quiet: bool,
     },
     /// Generate a human-readable changelog from one or more migrations.
     Changelog {
-        /// One or more migration JSON files.
         migrations: Vec<PathBuf>,
-        /// Path to dataset config file (YAML). Uses defaults if not provided.
         #[arg(long)]
         config: Option<PathBuf>,
-        /// Write output to a file. Format is inferred from extension or set
-        /// explicitly with format:path syntax. Repeatable.
         #[arg(long, short)]
         output: Vec<String>,
-        /// Format for stdout output. Default: "markdown".
         #[arg(long, default_value = "markdown")]
         format: String,
-        /// Suppress stdout output. Useful with -o to only write files.
         #[arg(long, short)]
         quiet: bool,
     },
     /// Extract actual changed data from a migration node.
-    /// Requires access to the original snapshots.
     Extract {
-        /// Migration JSON file.
         migration: PathBuf,
-        /// Path of the node to extract from (logical path within the diff tree).
         node: String,
-        /// What to extract: rows_added, rows_removed, cells_changed,
-        /// columns_added, columns_removed, diff, content, column_order, etc.
         #[arg(default_value = "content")]
         aspect: String,
-        /// Override path to snapshot A. Defaults to the path stored in the migration.
         #[arg(long)]
         snapshot_a: Option<PathBuf>,
-        /// Override path to snapshot B. Defaults to the path stored in the migration.
         #[arg(long)]
         snapshot_b: Option<PathBuf>,
-        /// Path to dataset config file (YAML). Uses defaults if not provided.
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -162,7 +138,7 @@ fn render(
             }
         }
         ResolvedFormat::Outputter(o) => {
-            let outputter_config = config.output.get_for_outputter(o.name());
+            let outputter_config = config.output.get_for_outputter(&o.descriptor().name);
             o.render(migrations, &outputter_config)
         }
     }
@@ -197,11 +173,6 @@ fn write_outputs(
     Ok(())
 }
 
-/// Run the binoc CLI with the given plugin registry and command-line arguments.
-///
-/// This is the main entry point for the CLI, parameterized on the registry so
-/// that callers (the standalone Rust binary, the Python console_script) can
-/// populate it with different plugin sets before invoking the CLI.
 pub fn run(
     registry: PluginRegistry,
     args: impl IntoIterator<Item = impl Into<std::ffi::OsString> + Clone>,
@@ -320,10 +291,10 @@ pub fn run(
 
             match controller.extract(&migration, &node, &aspect, &snap_a, &snap_b) {
                 Ok(result) => match result {
-                    binoc_core::types::ExtractResult::Text(text) => {
+                    ExtractResult::Text(text) => {
                         print!("{text}");
                     }
-                    binoc_core::types::ExtractResult::Binary(bytes) => {
+                    ExtractResult::Binary(bytes) => {
                         use std::io::Write;
                         std::io::stdout().write_all(&bytes)?;
                     }

@@ -32,6 +32,10 @@ Shared test fixtures live in `test-vectors/`. Authoritative architecture spec is
 
 7. **No global state. No process-level side effects.** Configuration is passed in, not read from the environment.
 
+8. **Build with the assumption that layer separation already matters.** Currently all plugins are in the same workspace, but build assuming that plugins like binoc-sqlite are separately compiled and provided by third parties.
+
+9. **As of now this is greenfield development.** You can note backwards incompatible changes, but don't put any effort into backwards compatibility.
+
 ## Build & Test
 
 ```bash

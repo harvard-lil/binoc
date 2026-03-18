@@ -1,4 +1,19 @@
 [workspace]
-members = ["binoc-core", "binoc-stdlib", "binoc-cli", "binoc-python", "binoc-sqlite"]
-default-members = ["binoc-core", "binoc-stdlib", "binoc-cli", "binoc-sqlite"]
+members = [
+    "binoc-sdk",
+    "binoc-core",
+    "binoc-stdlib",
+    "binoc-cli",
+    "binoc-python",
+    "model-plugins/binoc-sqlite",
+    "model-plugins/binoc-row-reorder",
+]
+default-members = [
+    "binoc-sdk",
+    "binoc-core",
+    "binoc-stdlib",
+    "binoc-cli",
+    "model-plugins/binoc-sqlite",
+    "model-plugins/binoc-row-reorder",
+]
 resolver = "2"

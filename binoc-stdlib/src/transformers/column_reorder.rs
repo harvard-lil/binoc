@@ -1,42 +1,27 @@
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::{CompareContext, Transformer};
-use binoc_core::types::*;
+use binoc_sdk::*;
 
-use crate::comparators::csv_compare::tabular_extract;
+use crate::comparators::csv_compare::{tabular_extract, tabular_pair_from_source};
 
 /// Detects pure column reordering in tabular diffs.
-/// When the only difference between two CSVs is the column order (same columns,
-/// same data), replaces the modify node with a reorder node.
-///
-/// Uses cached tabular data from the CompareContext when available, falling
-/// back to details inspection for migrations loaded from JSON.
 pub struct ColumnReorderDetector;
 
 impl Transformer for ColumnReorderDetector {
-    fn name(&self) -> &str {
-        "binoc.column_reorder_detector"
+    fn descriptor(&self) -> TransformerDescriptor {
+        TransformerDescriptor::new("binoc.column_reorder_detector")
+            .with_match_types(vec!["tabular".into()])
     }
 
-    fn match_types(&self) -> &[&str] {
-        &["tabular"]
-    }
-
-    fn scope(&self) -> TransformScope {
-        TransformScope::Node
-    }
-
-    fn transform(&self, mut node: DiffNode, ctx: &CompareContext) -> TransformResult {
+    fn transform(&self, mut node: DiffNode, data: &dyn DataAccess) -> TransformResult {
         let has_reorder_tag = node.tags.contains("binoc.column-reorder");
         if !has_reorder_tag {
             return TransformResult::Unchanged;
         }
 
-        let is_pure_reorder =
-            if let Some(ReopenedData::Tabular(pair)) = ctx.get_cached_data(&node.path) {
-                check_pure_reorder_from_data(&pair)
-            } else {
-                check_pure_reorder_from_details(&node)
-            };
+        let is_pure_reorder = if let Some(pair) = tabular_pair_from_source(&node, data) {
+            check_pure_reorder_from_data(&pair)
+        } else {
+            check_pure_reorder_from_details(&node)
+        };
 
         if is_pure_reorder {
             node.kind = "reorder".into();
@@ -49,12 +34,15 @@ impl Transformer for ColumnReorderDetector {
         }
     }
 
-    fn extract(&self, data: &ReopenedData, node: &DiffNode, aspect: &str) -> Option<ExtractResult> {
+    fn extract(
+        &self,
+        node: &DiffNode,
+        aspect: &str,
+        data: &dyn DataAccess,
+    ) -> Option<ExtractResult> {
+        let pair = tabular_pair_from_source(node, data)?;
         match aspect {
             "column_order" => {
-                let ReopenedData::Tabular(pair) = data else {
-                    return None;
-                };
                 let mut out = String::new();
                 if let Some(left) = &pair.left {
                     out.push_str("before: ");
@@ -68,17 +56,11 @@ impl Transformer for ColumnReorderDetector {
                 }
                 Some(ExtractResult::Text(out))
             }
-            _ => {
-                let ReopenedData::Tabular(pair) = data else {
-                    return None;
-                };
-                tabular_extract(pair, node, aspect)
-            }
+            _ => tabular_extract(&pair, node, aspect),
         }
     }
 }
 
-/// Check for pure reorder using actual tabular data.
 fn check_pure_reorder_from_data(pair: &TabularDataPair) -> bool {
     let (Some(left), Some(right)) = (&pair.left, &pair.right) else {
         return false;
@@ -95,7 +77,6 @@ fn check_pure_reorder_from_data(pair: &TabularDataPair) -> bool {
         return false;
     }
 
-    // Verify all cell values match when indexed by column name
     for (i, left_row) in left.rows.iter().enumerate() {
         let right_row = &right.rows[i];
         for col in &left.headers {
@@ -112,7 +93,6 @@ fn check_pure_reorder_from_data(pair: &TabularDataPair) -> bool {
     true
 }
 
-/// Fallback: check using details metadata (for loaded migrations without cache).
 fn check_pure_reorder_from_details(node: &DiffNode) -> bool {
     let no_col_adds = node
         .details

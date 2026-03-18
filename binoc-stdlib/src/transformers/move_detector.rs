@@ -1,26 +1,18 @@
 use std::collections::BTreeMap;
 
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::{CompareContext, Transformer};
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// Correlates adds/removes by content hash; collapses matching pairs into `move` nodes.
 pub struct MoveDetector;
 
 impl Transformer for MoveDetector {
-    fn name(&self) -> &str {
-        "binoc.move_detector"
+    fn descriptor(&self) -> TransformerDescriptor {
+        TransformerDescriptor::new("binoc.move_detector")
+            .with_match_types(vec!["directory".into(), "zip_archive".into()])
+            .with_scope(TransformScope::Subtree)
     }
 
-    fn match_types(&self) -> &[&str] {
-        &["directory", "zip_archive"]
-    }
-
-    fn scope(&self) -> TransformScope {
-        TransformScope::Subtree
-    }
-
-    fn transform(&self, mut node: DiffNode, _ctx: &CompareContext) -> TransformResult {
+    fn transform(&self, mut node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
         let has_adds = node.children.iter().any(|c| c.kind == "add");
         let has_removes = node.children.iter().any(|c| c.kind == "remove");
 
@@ -28,7 +20,6 @@ impl Transformer for MoveDetector {
             return TransformResult::Unchanged;
         }
 
-        // Group adds and removes by their content hash
         let mut add_by_hash: BTreeMap<Option<String>, Vec<usize>> = BTreeMap::new();
         let mut remove_by_hash: BTreeMap<Option<String>, Vec<usize>> = BTreeMap::new();
 
@@ -51,8 +42,7 @@ impl Transformer for MoveDetector {
             }
         }
 
-        // Find matching hash pairs
-        let mut move_indices: Vec<(usize, usize)> = Vec::new(); // (remove_idx, add_idx)
+        let mut move_indices: Vec<(usize, usize)> = Vec::new();
         for (hash, remove_idxs) in &remove_by_hash {
             if let Some(add_idxs) = add_by_hash.get(hash) {
                 let pairs = remove_idxs.len().min(add_idxs.len());
@@ -69,7 +59,6 @@ impl Transformer for MoveDetector {
         let mut consumed: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
         let mut new_children = Vec::new();
 
-        // Create move nodes for matched pairs
         for (remove_idx, add_idx) in &move_indices {
             consumed.insert(*remove_idx);
             consumed.insert(*add_idx);
@@ -89,7 +78,6 @@ impl Transformer for MoveDetector {
             new_children.push(move_node);
         }
 
-        // Keep non-consumed children
         for (i, child) in node.children.into_iter().enumerate() {
             if !consumed.contains(&i) {
                 new_children.push(child);

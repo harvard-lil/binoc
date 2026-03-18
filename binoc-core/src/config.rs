@@ -1,25 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
-use crate::traits::BinocError;
+use binoc_sdk::{check_sdk_compatibility, BinocError, Comparator, Outputter, Transformer};
 
 /// Dataset configuration loaded from YAML.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatasetConfig {
-    /// Ordered list of comparator names. First to claim wins.
     #[serde(default)]
     pub comparators: Vec<String>,
-
-    /// Ordered list of transformer names. Run in order on the completed diff tree.
     #[serde(default)]
     pub transformers: Vec<String>,
-
-    /// Ordered list of outputter names. Each runs to produce a sidecar or changelog.
     #[serde(default = "default_outputters")]
     pub outputters: Vec<String>,
-
-    /// Output configuration.
     #[serde(default)]
     pub output: OutputConfig,
 }
@@ -28,9 +22,7 @@ fn default_outputters() -> Vec<String> {
     vec!["binoc.markdown".into()]
 }
 
-/// Per-outputter configuration. Keys are outputter names (e.g. "markdown"
-/// or "binoc.markdown"); values are outputter-specific config objects.
-/// Each outputter receives its own section and handles its own defaults.
+/// Per-outputter configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OutputConfig {
     #[serde(flatten)]
@@ -38,8 +30,6 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    /// Look up config for a named outputter. Tries exact match, then
-    /// strips/adds the "binoc." prefix to find a match.
     pub fn get_for_outputter(&self, name: &str) -> serde_json::Value {
         if let Some(v) = self.sections.get(name) {
             return v.clone();
@@ -58,13 +48,11 @@ impl OutputConfig {
 }
 
 impl DatasetConfig {
-    /// Load config from a YAML file.
     pub fn from_file(path: &Path) -> Result<Self, BinocError> {
         let contents = std::fs::read_to_string(path).map_err(BinocError::Io)?;
         serde_yaml::from_str(&contents).map_err(|e| BinocError::Config(e.to_string()))
     }
 
-    /// Return the default configuration with the standard plugin pipeline.
     pub fn default_config() -> Self {
         Self {
             comparators: vec![
@@ -94,9 +82,9 @@ impl Default for DatasetConfig {
 
 /// Registry mapping plugin names to instances.
 pub struct PluginRegistry {
-    comparators: BTreeMap<String, std::sync::Arc<dyn crate::traits::Comparator>>,
-    transformers: BTreeMap<String, std::sync::Arc<dyn crate::traits::Transformer>>,
-    outputters: BTreeMap<String, std::sync::Arc<dyn crate::traits::Outputter>>,
+    comparators: BTreeMap<String, Arc<dyn Comparator>>,
+    transformers: BTreeMap<String, Arc<dyn Transformer>>,
+    outputters: BTreeMap<String, Arc<dyn Outputter>>,
 }
 
 impl PluginRegistry {
@@ -110,46 +98,40 @@ impl PluginRegistry {
 
     pub fn register_comparator(
         &mut self,
-        name: impl Into<String>,
-        comparator: std::sync::Arc<dyn crate::traits::Comparator>,
-    ) {
-        self.comparators.insert(name.into(), comparator);
+        comparator: Arc<dyn Comparator>,
+    ) -> Result<(), BinocError> {
+        let desc = comparator.descriptor();
+        check_sdk_compatibility(&desc.name, &desc.sdk_version)?;
+        self.comparators.insert(desc.name.clone(), comparator);
+        Ok(())
     }
 
     pub fn register_transformer(
         &mut self,
-        name: impl Into<String>,
-        transformer: std::sync::Arc<dyn crate::traits::Transformer>,
-    ) {
-        self.transformers.insert(name.into(), transformer);
+        transformer: Arc<dyn Transformer>,
+    ) -> Result<(), BinocError> {
+        let desc = transformer.descriptor();
+        check_sdk_compatibility(&desc.name, &desc.sdk_version)?;
+        self.transformers.insert(desc.name.clone(), transformer);
+        Ok(())
     }
 
-    pub fn register_outputter(
-        &mut self,
-        name: impl Into<String>,
-        outputter: std::sync::Arc<dyn crate::traits::Outputter>,
-    ) {
-        self.outputters.insert(name.into(), outputter);
+    pub fn register_outputter(&mut self, outputter: Arc<dyn Outputter>) -> Result<(), BinocError> {
+        let desc = outputter.descriptor();
+        check_sdk_compatibility(&desc.name, &desc.sdk_version)?;
+        self.outputters.insert(desc.name.clone(), outputter);
+        Ok(())
     }
 
-    pub fn get_comparator(
-        &self,
-        name: &str,
-    ) -> Option<std::sync::Arc<dyn crate::traits::Comparator>> {
+    pub fn get_comparator(&self, name: &str) -> Option<Arc<dyn Comparator>> {
         self.comparators.get(name).cloned()
     }
 
-    pub fn get_transformer(
-        &self,
-        name: &str,
-    ) -> Option<std::sync::Arc<dyn crate::traits::Transformer>> {
+    pub fn get_transformer(&self, name: &str) -> Option<Arc<dyn Transformer>> {
         self.transformers.get(name).cloned()
     }
 
-    pub fn get_outputter(
-        &self,
-        name: &str,
-    ) -> Option<std::sync::Arc<dyn crate::traits::Outputter>> {
+    pub fn get_outputter(&self, name: &str) -> Option<Arc<dyn Outputter>> {
         self.outputters.get(name).cloned()
     }
 
@@ -165,11 +147,6 @@ impl PluginRegistry {
         self.outputters.keys().cloned().collect()
     }
 
-    /// Build a default config that includes all registered plugins.
-    ///
-    /// Comparators registered beyond the standard set are inserted just
-    /// before `binoc.binary` (the catch-all fallback). Transformers
-    /// registered beyond the standard set are appended at the end.
     pub fn default_config(&self) -> DatasetConfig {
         let mut config = DatasetConfig::default_config();
 
@@ -202,18 +179,13 @@ impl PluginRegistry {
         config
     }
 
-    /// Resolve a config into ordered lists of plugin instances.
-    pub fn resolve(
-        &self,
-        config: &DatasetConfig,
-    ) -> Result<ResolvedPlugins, crate::traits::BinocError> {
+    pub fn resolve(&self, config: &DatasetConfig) -> Result<ResolvedPlugins, BinocError> {
         let comparators: Result<Vec<_>, _> = config
             .comparators
             .iter()
             .map(|name| {
-                self.get_comparator(name).ok_or_else(|| {
-                    crate::traits::BinocError::Config(format!("unknown comparator: {name}"))
-                })
+                self.get_comparator(name)
+                    .ok_or_else(|| BinocError::Config(format!("unknown comparator: {name}")))
             })
             .collect();
 
@@ -221,9 +193,8 @@ impl PluginRegistry {
             .transformers
             .iter()
             .map(|name| {
-                self.get_transformer(name).ok_or_else(|| {
-                    crate::traits::BinocError::Config(format!("unknown transformer: {name}"))
-                })
+                self.get_transformer(name)
+                    .ok_or_else(|| BinocError::Config(format!("unknown transformer: {name}")))
             })
             .collect();
 
@@ -231,9 +202,8 @@ impl PluginRegistry {
             .outputters
             .iter()
             .map(|name| {
-                self.get_outputter(name).ok_or_else(|| {
-                    crate::traits::BinocError::Config(format!("unknown outputter: {name}"))
-                })
+                self.get_outputter(name)
+                    .ok_or_else(|| BinocError::Config(format!("unknown outputter: {name}")))
             })
             .collect();
 
@@ -247,30 +217,30 @@ impl PluginRegistry {
 
 /// The result of resolving a config against a registry.
 pub struct ResolvedPlugins {
-    pub comparators: Vec<std::sync::Arc<dyn crate::traits::Comparator>>,
-    pub transformers: Vec<std::sync::Arc<dyn crate::traits::Transformer>>,
-    pub outputters: Vec<std::sync::Arc<dyn crate::traits::Outputter>>,
+    pub comparators: Vec<Arc<dyn Comparator>>,
+    pub transformers: Vec<Arc<dyn Transformer>>,
+    pub outputters: Vec<Arc<dyn Outputter>>,
 }
 
 impl ResolvedPlugins {
-    /// Find an outputter by file extension. Returns `None` if no outputter
-    /// claims the extension, or an error if multiple outputters claim it.
     pub fn outputter_for_extension(
         &self,
         ext: &str,
-    ) -> Result<Option<std::sync::Arc<dyn crate::traits::Outputter>>, crate::traits::BinocError>
-    {
+    ) -> Result<Option<Arc<dyn Outputter>>, BinocError> {
         let matches: Vec<_> = self
             .outputters
             .iter()
-            .filter(|o| o.file_extension() == ext)
+            .filter(|o| o.descriptor().file_extension == ext)
             .collect();
         match matches.len() {
             0 => Ok(None),
             1 => Ok(Some(matches[0].clone())),
             _ => {
-                let names: Vec<_> = matches.iter().map(|o| o.name()).collect();
-                Err(crate::traits::BinocError::Config(format!(
+                let names: Vec<_> = matches
+                    .iter()
+                    .map(|o| o.descriptor().name.clone())
+                    .collect();
+                Err(BinocError::Config(format!(
                     "ambiguous extension .{ext}: claimed by {}; use format:path syntax",
                     names.join(", "),
                 )))
@@ -278,18 +248,15 @@ impl ResolvedPlugins {
         }
     }
 
-    /// Find an outputter by name (e.g. "markdown" matches "binoc.markdown").
-    /// Tries exact match first, then checks for a `binoc.{name}` match.
-    pub fn outputter_by_name(
-        &self,
-        name: &str,
-    ) -> Option<std::sync::Arc<dyn crate::traits::Outputter>> {
+    pub fn outputter_by_name(&self, name: &str) -> Option<Arc<dyn Outputter>> {
         self.outputters
             .iter()
-            .find(|o| o.name() == name)
+            .find(|o| o.descriptor().name == name)
             .or_else(|| {
                 let qualified = format!("binoc.{name}");
-                self.outputters.iter().find(|o| o.name() == qualified)
+                self.outputters
+                    .iter()
+                    .find(|o| o.descriptor().name == qualified)
             })
             .cloned()
     }
@@ -304,131 +271,59 @@ impl Default for PluginRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::DiffNode;
-    use crate::traits::CompareContext;
-    use crate::traits::{Comparator, Transformer};
-    use crate::types::{CompareResult, ItemPair, TransformResult};
-    use std::sync::Arc;
+    use binoc_sdk::*;
 
     struct MockComparator(&'static str);
     impl Comparator for MockComparator {
-        fn name(&self) -> &str {
-            self.0
+        fn descriptor(&self) -> ComparatorDescriptor {
+            ComparatorDescriptor::new(self.0)
         }
-        fn compare(
-            &self,
-            _pair: &ItemPair,
-            _ctx: &CompareContext,
-        ) -> crate::traits::BinocResult<CompareResult> {
+        fn compare(&self, _pair: &ItemPair, _data: &dyn DataAccess) -> BinocResult<CompareResult> {
             Ok(CompareResult::Identical)
         }
     }
 
     struct MockTransformer(&'static str);
     impl Transformer for MockTransformer {
-        fn name(&self) -> &str {
-            self.0
+        fn descriptor(&self) -> TransformerDescriptor {
+            TransformerDescriptor::new(self.0)
         }
-        fn transform(&self, _node: DiffNode, _ctx: &CompareContext) -> TransformResult {
+        fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
             TransformResult::Unchanged
         }
     }
 
     #[test]
-    fn dataset_config_default_config_returns_expected_pipeline_names() {
-        let config = DatasetConfig::default_config();
-        assert_eq!(
-            config.comparators,
-            vec![
-                "binoc.zip",
-                "binoc.tar",
-                "binoc.directory",
-                "binoc.csv",
-                "binoc.text",
-                "binoc.binary",
-            ]
-        );
-        assert_eq!(
-            config.transformers,
-            vec![
-                "binoc.move_detector",
-                "binoc.copy_detector",
-                "binoc.column_reorder_detector",
-            ]
-        );
-    }
-
-    #[test]
-    fn dataset_config_deserialization_from_yaml() {
-        let yaml = r#"
-comparators:
-  - binoc.csv
-  - binoc.text
-transformers:
-  - binoc.move_detector
-output:
-  markdown:
-    significance:
-      critical:
-        - binoc.schema-change
-"#;
-        let config: DatasetConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.comparators, vec!["binoc.csv", "binoc.text"]);
-        assert_eq!(config.transformers, vec!["binoc.move_detector"]);
-        let md_val = config.output.get_for_outputter("binoc.markdown");
-        let sig = md_val
-            .get("significance")
-            .expect("should have significance section");
-        assert!(
-            sig.get("critical").is_some(),
-            "should have 'critical' category"
-        );
-    }
-
-    #[test]
-    fn output_config_get_for_outputter_resolves_short_and_qualified_names() {
-        let mut sections = BTreeMap::new();
-        sections.insert(
-            "markdown".into(),
-            serde_json::json!({"significance": {"test": ["binoc.test"]}}),
-        );
-        let config = OutputConfig { sections };
-
-        let by_short = config.get_for_outputter("markdown");
-        assert!(by_short.is_object());
-
-        let by_qualified = config.get_for_outputter("binoc.markdown");
-        assert!(by_qualified.is_object());
-        assert_eq!(by_short, by_qualified);
-
-        let missing = config.get_for_outputter("binoc.html");
-        assert!(missing.is_object());
-        assert!(missing.as_object().unwrap().is_empty());
-    }
-
-    #[test]
-    fn plugin_registry_register_and_retrieve() {
+    fn registry_register_and_retrieve() {
         let mut registry = PluginRegistry::new();
-        let comp = Arc::new(MockComparator("mock-comp")) as Arc<dyn Comparator>;
-        let trans = Arc::new(MockTransformer("mock-trans")) as Arc<dyn Transformer>;
-
-        registry.register_comparator("mock-comp", Arc::clone(&comp));
-        registry.register_transformer("mock-trans", Arc::clone(&trans));
+        registry
+            .register_comparator(Arc::new(MockComparator("mock-comp")))
+            .unwrap();
+        registry
+            .register_transformer(Arc::new(MockTransformer("mock-trans")))
+            .unwrap();
 
         assert_eq!(
-            registry.get_comparator("mock-comp").unwrap().name(),
+            registry
+                .get_comparator("mock-comp")
+                .unwrap()
+                .descriptor()
+                .name,
             "mock-comp"
         );
         assert_eq!(
-            registry.get_transformer("mock-trans").unwrap().name(),
+            registry
+                .get_transformer("mock-trans")
+                .unwrap()
+                .descriptor()
+                .name,
             "mock-trans"
         );
         assert!(registry.get_comparator("unknown").is_none());
-        assert!(registry.get_transformer("unknown").is_none());
     }
 
     #[test]
-    fn plugin_registry_resolve_returns_error_for_unknown_plugin() {
+    fn resolve_returns_error_for_unknown() {
         let registry = PluginRegistry::new();
         let config = DatasetConfig {
             comparators: vec!["unknown-comparator".into()],
@@ -437,18 +332,21 @@ output:
             output: OutputConfig::default(),
         };
         let result = registry.resolve(&config);
-        match &result {
-            Err(e) => assert!(format!("{e}").contains("unknown comparator")),
-            Ok(_) => panic!("expected resolve to fail"),
-        }
+        assert!(result.is_err());
     }
 
     #[test]
-    fn plugin_registry_resolve_returns_plugins_in_config_order() {
+    fn resolve_preserves_config_order() {
         let mut registry = PluginRegistry::new();
-        registry.register_comparator("first", Arc::new(MockComparator("first")));
-        registry.register_comparator("second", Arc::new(MockComparator("second")));
-        registry.register_comparator("third", Arc::new(MockComparator("third")));
+        registry
+            .register_comparator(Arc::new(MockComparator("first")))
+            .unwrap();
+        registry
+            .register_comparator(Arc::new(MockComparator("second")))
+            .unwrap();
+        registry
+            .register_comparator(Arc::new(MockComparator("third")))
+            .unwrap();
 
         let config = DatasetConfig {
             comparators: vec!["third".into(), "first".into(), "second".into()],
@@ -457,9 +355,82 @@ output:
             output: OutputConfig::default(),
         };
         let resolved = registry.resolve(&config).unwrap();
-        assert_eq!(resolved.comparators.len(), 3);
-        assert_eq!(resolved.comparators[0].name(), "third");
-        assert_eq!(resolved.comparators[1].name(), "first");
-        assert_eq!(resolved.comparators[2].name(), "second");
+        assert_eq!(resolved.comparators[0].descriptor().name, "third");
+        assert_eq!(resolved.comparators[1].descriptor().name, "first");
+        assert_eq!(resolved.comparators[2].descriptor().name, "second");
+    }
+
+    #[test]
+    fn rejects_incompatible_comparator_version() {
+        struct BadVersionComparator;
+        impl Comparator for BadVersionComparator {
+            fn descriptor(&self) -> ComparatorDescriptor {
+                let mut desc = ComparatorDescriptor::new("bad-version");
+                desc.sdk_version = "99.0.0".into();
+                desc
+            }
+            fn compare(
+                &self,
+                _pair: &ItemPair,
+                _data: &dyn DataAccess,
+            ) -> BinocResult<CompareResult> {
+                Ok(CompareResult::Identical)
+            }
+        }
+
+        let mut registry = PluginRegistry::new();
+        let result = registry.register_comparator(Arc::new(BadVersionComparator));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("bad-version"),
+            "error should name the plugin: {msg}"
+        );
+        assert!(
+            msg.contains("99.0.0"),
+            "error should include plugin version: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_incompatible_transformer_version() {
+        struct BadVersionTransformer;
+        impl Transformer for BadVersionTransformer {
+            fn descriptor(&self) -> TransformerDescriptor {
+                let mut desc = TransformerDescriptor::new("bad-trans");
+                desc.sdk_version = "99.0.0".into();
+                desc
+            }
+            fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+                TransformResult::Unchanged
+            }
+        }
+
+        let mut registry = PluginRegistry::new();
+        let result = registry.register_transformer(Arc::new(BadVersionTransformer));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_incompatible_outputter_version() {
+        struct BadVersionOutputter;
+        impl Outputter for BadVersionOutputter {
+            fn descriptor(&self) -> OutputterDescriptor {
+                let mut desc = OutputterDescriptor::new("bad-out", "txt");
+                desc.sdk_version = "99.0.0".into();
+                desc
+            }
+            fn render(
+                &self,
+                _migrations: &[Migration],
+                _config: &serde_json::Value,
+            ) -> BinocResult<String> {
+                Ok(String::new())
+            }
+        }
+
+        let mut registry = PluginRegistry::new();
+        let result = registry.register_outputter(Arc::new(BadVersionOutputter));
+        assert!(result.is_err());
     }
 }

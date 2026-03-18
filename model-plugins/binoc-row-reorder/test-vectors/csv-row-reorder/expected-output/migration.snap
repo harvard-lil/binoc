@@ -1,0 +1,51 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_migration"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "kind": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "kind": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "Rows reordered (same data, different sort order)",
+        "tags": [
+          "binoc.cell-change",
+          "binoc.row-reorder"
+        ],
+        "details": {
+          "cells_changed": 9,
+          "columns_added": [],
+          "columns_left": [
+            "name",
+            "age",
+            "city"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "name",
+            "age",
+            "city"
+          ],
+          "hash_left": "7112d37915f13b5d6041b4e3be223d8fe24a25a98fa4b7661575f6dfaaf177fa",
+          "hash_right": "98de509972a451023f3cda6b0e385a654f0a6e06d024d2aaf9e86b396395db23",
+          "rows_added": 0,
+          "rows_left": 3,
+          "rows_removed": 0,
+          "rows_right": 3
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.row_reorder_detector"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

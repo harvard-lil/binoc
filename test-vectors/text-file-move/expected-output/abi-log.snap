@@ -1,0 +1,70 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "new_name.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "new_name.txt",
+        "result_size": 193
+      },
+      {
+        "op": "register_local",
+        "logical": "old_name.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "old_name.txt",
+        "result_size": 193
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "new_name.txt",
+        "result_size": 193
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "old_name.txt",
+        "result_size": 193
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.move_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.copy_detector",
+    "data_ops": []
+  }
+]

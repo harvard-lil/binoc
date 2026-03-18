@@ -1,13 +1,12 @@
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::{CompareContext, Transformer};
-use binoc_core::types::*;
+use binoc_core::data_access::LocalDataAccess;
+use binoc_sdk::*;
 
 use binoc_stdlib::transformers::column_reorder::ColumnReorderDetector;
 use binoc_stdlib::transformers::copy_detector::CopyDetector;
 use binoc_stdlib::transformers::move_detector::MoveDetector;
 
-fn ctx() -> CompareContext {
-    CompareContext::new()
+fn da() -> LocalDataAccess {
+    LocalDataAccess::new()
 }
 
 // ── Move detector ──────────────────────────────────────────────────
@@ -21,7 +20,7 @@ fn move_detector_collapses_matching_add_remove() {
             .with_detail("hash_right", serde_json::json!("abc123")),
     ]);
 
-    let result = MoveDetector.transform(container, &ctx());
+    let result = MoveDetector.transform(container, &da());
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(node.children.len(), 1);
@@ -42,7 +41,7 @@ fn move_detector_ignores_non_matching_hashes() {
             .with_detail("hash_right", serde_json::json!("bbb")),
     ]);
 
-    let result = MoveDetector.transform(container, &ctx());
+    let result = MoveDetector.transform(container, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -54,7 +53,7 @@ fn move_detector_unchanged_without_adds_and_removes() {
         "/changed.txt",
     )]);
 
-    let result = MoveDetector.transform(container, &ctx());
+    let result = MoveDetector.transform(container, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -70,7 +69,7 @@ fn move_detector_preserves_non_moved_children() {
             .with_detail("hash_right", serde_json::json!("xyz")),
     ]);
 
-    let result = MoveDetector.transform(container, &ctx());
+    let result = MoveDetector.transform(container, &da());
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(node.children.len(), 3, "1 move + 1 modify + 1 add");
@@ -84,10 +83,11 @@ fn move_detector_preserves_non_moved_children() {
 }
 
 #[test]
-fn move_detector_matches_directory_type() {
-    assert!(MoveDetector.match_types().contains(&"directory"));
-    assert!(MoveDetector.match_types().contains(&"zip_archive"));
-    assert_eq!(MoveDetector.scope(), TransformScope::Subtree);
+fn move_detector_descriptor() {
+    let desc = MoveDetector.descriptor();
+    assert!(desc.match_types.contains(&"directory".to_string()));
+    assert!(desc.match_types.contains(&"zip_archive".to_string()));
+    assert_eq!(desc.scope, TransformScope::Subtree);
 }
 
 // ── Copy detector ──────────────────────────────────────────────────
@@ -101,7 +101,7 @@ fn copy_detector_detects_add_matching_identical() {
             .with_detail("hash_right", serde_json::json!("abc123")),
     ]);
 
-    let result = CopyDetector.transform(container, &ctx());
+    let result = CopyDetector.transform(container, &da());
     match result {
         TransformResult::Replace(node) => {
             let copy = node.children.iter().find(|c| c.kind == "copy");
@@ -127,7 +127,7 @@ fn copy_detector_unchanged_without_identicals() {
         .with_children(vec![DiffNode::new("add", "file", "/new.bin")
             .with_detail("hash_right", serde_json::json!("abc123"))]);
 
-    let result = CopyDetector.transform(container, &ctx());
+    let result = CopyDetector.transform(container, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -140,7 +140,7 @@ fn copy_detector_unchanged_when_hashes_differ() {
             .with_detail("hash_right", serde_json::json!("bbb")),
     ]);
 
-    let result = CopyDetector.transform(container, &ctx());
+    let result = CopyDetector.transform(container, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -156,7 +156,7 @@ fn copy_detector_preserves_non_copy_children() {
             .with_detail("hash_right", serde_json::json!("xyz")),
     ]);
 
-    let result = CopyDetector.transform(container, &ctx());
+    let result = CopyDetector.transform(container, &da());
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(
@@ -175,10 +175,11 @@ fn copy_detector_preserves_non_copy_children() {
 }
 
 #[test]
-fn copy_detector_matches_directory_type() {
-    assert!(CopyDetector.match_types().contains(&"directory"));
-    assert!(CopyDetector.match_types().contains(&"zip_archive"));
-    assert_eq!(CopyDetector.scope(), TransformScope::Subtree);
+fn copy_detector_descriptor() {
+    let desc = CopyDetector.descriptor();
+    assert!(desc.match_types.contains(&"directory".to_string()));
+    assert!(desc.match_types.contains(&"zip_archive".to_string()));
+    assert_eq!(desc.scope, TransformScope::Subtree);
 }
 
 // ── Column reorder detector ────────────────────────────────────────
@@ -193,7 +194,7 @@ fn column_reorder_converts_pure_reorder() {
         .with_detail("rows_removed", serde_json::json!(0))
         .with_detail("cells_changed", serde_json::json!(0));
 
-    let result = ColumnReorderDetector.transform(node, &ctx());
+    let result = ColumnReorderDetector.transform(node, &da());
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(node.kind, "reorder");
@@ -215,7 +216,7 @@ fn column_reorder_unchanged_when_other_changes_present() {
         .with_detail("rows_removed", serde_json::json!(0))
         .with_detail("cells_changed", serde_json::json!(0));
 
-    let result = ColumnReorderDetector.transform(node, &ctx());
+    let result = ColumnReorderDetector.transform(node, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -223,12 +224,13 @@ fn column_reorder_unchanged_when_other_changes_present() {
 fn column_reorder_unchanged_without_reorder_tag() {
     let node = DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.row-addition");
 
-    let result = ColumnReorderDetector.transform(node, &ctx());
+    let result = ColumnReorderDetector.transform(node, &da());
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
 #[test]
-fn column_reorder_matches_tabular_type() {
-    assert!(ColumnReorderDetector.match_types().contains(&"tabular"));
-    assert_eq!(ColumnReorderDetector.scope(), TransformScope::Node);
+fn column_reorder_descriptor() {
+    let desc = ColumnReorderDetector.descriptor();
+    assert!(desc.match_types.contains(&"tabular".to_string()));
+    assert_eq!(desc.scope, TransformScope::Node);
 }

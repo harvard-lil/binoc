@@ -9,10 +9,13 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use binoc_core::config::{DatasetConfig, PluginRegistry};
 use binoc_core::controller::Controller;
-use binoc_core::ir::Migration;
+use binoc_sdk::test_support::{AbiCall, AbiComparator, AbiLogCollector, AbiTransformer};
+use binoc_sdk::Migration;
 use serde::Deserialize;
 
 use crate::outputters::markdown;
@@ -88,6 +91,55 @@ pub fn discover_vectors(vectors_dir: &Path) -> Vec<PathBuf> {
     vectors
 }
 
+/// Build a default stdlib registry with all plugins wrapped in ABI wrappers.
+/// Returns the registry, a vec of log collectors for snapshotting, and the
+/// shared sequence counter (pass to additional plugin wrappers to keep a
+/// single global ordering).
+pub fn abi_wrapped_default_registry() -> (
+    PluginRegistry,
+    Vec<Arc<dyn AbiLogCollector>>,
+    Arc<AtomicU64>,
+) {
+    use crate::comparators::*;
+    use crate::transformers::*;
+
+    let counter = Arc::new(AtomicU64::new(0));
+    let mut registry = PluginRegistry::new();
+    let mut collectors: Vec<Arc<dyn AbiLogCollector>> = Vec::new();
+
+    macro_rules! wrap_comparator {
+        ($ty:expr) => {{
+            let w = Arc::new(AbiComparator::new($ty, counter.clone()));
+            collectors.push(w.clone());
+            registry.register_comparator(w).expect("same-build plugin");
+        }};
+    }
+    macro_rules! wrap_transformer {
+        ($ty:expr) => {{
+            let w = Arc::new(AbiTransformer::new($ty, counter.clone()));
+            collectors.push(w.clone());
+            registry.register_transformer(w).expect("same-build plugin");
+        }};
+    }
+
+    wrap_comparator!(zip_compare::ZipComparator);
+    wrap_comparator!(tar_compare::TarComparator);
+    wrap_comparator!(directory::DirectoryComparator);
+    wrap_comparator!(csv_compare::CsvComparator);
+    wrap_comparator!(text::TextComparator);
+    wrap_comparator!(binary::BinaryComparator);
+
+    wrap_transformer!(move_detector::MoveDetector);
+    wrap_transformer!(copy_detector::CopyDetector);
+    wrap_transformer!(column_reorder::ColumnReorderDetector);
+
+    registry
+        .register_outputter(Arc::new(markdown::MarkdownOutputter))
+        .expect("same-build plugin");
+
+    (registry, collectors, counter)
+}
+
 /// Run one vector: copy snapshots to temp, build zips from `.zip.d`, optionally
 /// run `prepare(snap_a, snap_b)` for plugin-specific artifacts (e.g. SQLite from
 /// `.sqlite.d`), then resolve config, run diff, run assertions, snapshot.
@@ -151,6 +203,87 @@ pub fn run_vector(
     settings.bind(|| {
         insta::assert_json_snapshot!("migration", &stable_migration);
         insta::assert_snapshot!("changelog", &md);
+    });
+}
+
+/// Like [`run_vector`], but also collects ABI logs from the given collectors
+/// and snapshots them as `abi-log`. Use with plugins wrapped in
+/// [`AbiComparator`]/[`AbiTransformer`].
+pub fn run_vector_with_abi_log(
+    vector_dir: &Path,
+    vectors_root: &Path,
+    registry_builder: impl FnOnce() -> PluginRegistry,
+    prepare: Option<impl FnOnce(&Path, &Path)>,
+    abi_collectors: &[&dyn AbiLogCollector],
+) {
+    let manifest = load_manifest(vectors_root, vector_dir);
+    let config = build_config(&manifest);
+
+    let snap_a_src = vector_dir.join("snapshot-a");
+    let snap_b_src = vector_dir.join("snapshot-b");
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    copy_dir_all(&snap_a_src, &snap_a);
+    copy_dir_all(&snap_b_src, &snap_b);
+    build_zips_in_dir(&snap_a);
+    build_zips_in_dir(&snap_b);
+    remove_zipd_dirs(&snap_a);
+    remove_zipd_dirs(&snap_b);
+    build_tars_in_dir(&snap_a);
+    build_tars_in_dir(&snap_b);
+    remove_tard_dirs(&snap_a);
+    remove_tard_dirs(&snap_b);
+    if let Some(f) = prepare {
+        f(&snap_a, &snap_b);
+    }
+
+    let registry = registry_builder();
+    let resolved = registry.resolve(&config).unwrap_or_else(|e| {
+        panic!(
+            "Failed to resolve plugins for {}: {e}",
+            manifest.vector.name
+        )
+    });
+    let controller = Controller::new(resolved.comparators, resolved.transformers);
+
+    // Single-threaded rayon pool so the seq counter produces a deterministic
+    // depth-first traversal order for golden file stability.
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .expect("rayon pool");
+    let migration = pool
+        .install(|| controller.diff(snap_a.to_str().unwrap(), snap_b.to_str().unwrap()))
+        .unwrap_or_else(|e| panic!("Diff failed for {}: {e}", manifest.vector.name));
+
+    let mut abi_log: Vec<AbiCall> = Vec::new();
+    for collector in abi_collectors {
+        abi_log.extend(collector.take_abi_log());
+    }
+    abi_log.sort_by_key(|c| c.seq);
+
+    if let Some(expected) = &manifest.expected {
+        check_assertions(&manifest.vector.name, &migration, expected, &config);
+    }
+
+    let mut stable_migration = migration.clone();
+    stable_migration.from_snapshot = "snapshot-a".into();
+    stable_migration.to_snapshot = "snapshot-b".into();
+    let md = markdown::render_markdown(
+        &[stable_migration.clone()],
+        &markdown::MarkdownOutputterConfig::default(),
+    );
+
+    let mut settings = insta::Settings::clone_current();
+    settings.set_snapshot_path(vector_dir.join("expected-output"));
+    settings.set_prepend_module_to_snapshot(false);
+    settings.bind(|| {
+        insta::assert_json_snapshot!("migration", &stable_migration);
+        insta::assert_snapshot!("changelog", &md);
+        if !abi_log.is_empty() {
+            insta::assert_json_snapshot!("abi-log", &abi_log);
+        }
     });
 }
 

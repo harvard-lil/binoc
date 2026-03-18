@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyTypeError, PyValueError};
@@ -7,14 +8,420 @@ use pyo3::types::{PyDict, PyList, PySet, PyString};
 
 use binoc_core::config::{DatasetConfig, PluginRegistry};
 use binoc_core::controller::Controller;
-use binoc_core::ir;
 use binoc_core::output;
-use binoc_core::traits::{self, BinocError, BinocResult, CompareContext};
-use binoc_core::types::{
-    CompareResult, ExtractResult, Item, ItemPair, ReopenedData, TransformResult,
+use binoc_sdk::plugin_abi::{
+    CompareRequest, CompareResponse, ExtractRequest, ExtractResponse, PluginDescription,
+    RenderRequest, RenderResponse, ReopenRequest, ReopenResponse, TransformRequest,
+    TransformResponse,
 };
+use binoc_sdk::*;
 
 use binoc_stdlib::outputters::markdown as md_outputter;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Native plugin loader — loads Rust plugins via C ABI (libloading)
+// ═══════════════════════════════════════════════════════════════════════════
+
+type DescribeFn = unsafe extern "C" fn() -> *mut std::ffi::c_char;
+type AbiFn = unsafe extern "C" fn(u32, *const std::ffi::c_char) -> *mut std::ffi::c_char;
+type FreeFn = unsafe extern "C" fn(*mut std::ffi::c_char);
+
+struct NativePlugin {
+    _lib: libloading::Library,
+    describe_fn: DescribeFn,
+    free_fn: FreeFn,
+    compare_fn: Option<AbiFn>,
+    reopen_fn: Option<AbiFn>,
+    comparator_extract_fn: Option<AbiFn>,
+    transform_fn: Option<AbiFn>,
+    transformer_extract_fn: Option<AbiFn>,
+    render_fn: Option<AbiFn>,
+}
+
+unsafe impl Send for NativePlugin {}
+unsafe impl Sync for NativePlugin {}
+
+impl NativePlugin {
+    fn load(path: &str) -> Result<Self, String> {
+        unsafe {
+            let lib = libloading::Library::new(path)
+                .map_err(|e| format!("failed to load native plugin {path}: {e}"))?;
+
+            let describe: libloading::Symbol<DescribeFn> = lib
+                .get(b"_binoc_plugin_describe")
+                .map_err(|e| format!("missing _binoc_plugin_describe in {path}: {e}"))?;
+            let free: libloading::Symbol<FreeFn> = lib
+                .get(b"_binoc_free_string")
+                .map_err(|e| format!("missing _binoc_free_string in {path}: {e}"))?;
+
+            let describe_fn = *describe;
+            let free_fn = *free;
+
+            let compare_fn = lib
+                .get::<AbiFn>(b"_binoc_comparator_compare")
+                .ok()
+                .map(|s| *s);
+            let reopen_fn = lib
+                .get::<AbiFn>(b"_binoc_comparator_reopen")
+                .ok()
+                .map(|s| *s);
+            let comparator_extract_fn = lib
+                .get::<AbiFn>(b"_binoc_comparator_extract")
+                .ok()
+                .map(|s| *s);
+            let transform_fn = lib
+                .get::<AbiFn>(b"_binoc_transformer_transform")
+                .ok()
+                .map(|s| *s);
+            let transformer_extract_fn = lib
+                .get::<AbiFn>(b"_binoc_transformer_extract")
+                .ok()
+                .map(|s| *s);
+            let render_fn = lib
+                .get::<AbiFn>(b"_binoc_outputter_render")
+                .ok()
+                .map(|s| *s);
+
+            Ok(Self {
+                _lib: lib,
+                describe_fn,
+                free_fn,
+                compare_fn,
+                reopen_fn,
+                comparator_extract_fn,
+                transform_fn,
+                transformer_extract_fn,
+                render_fn,
+            })
+        }
+    }
+
+    fn describe(&self) -> Result<PluginDescription, String> {
+        unsafe {
+            let ptr = (self.describe_fn)();
+            if ptr.is_null() {
+                return Err("_binoc_plugin_describe returned null".into());
+            }
+            let json = CStr::from_ptr(ptr)
+                .to_str()
+                .map_err(|e| format!("invalid UTF-8 from describe: {e}"))?
+                .to_string();
+            (self.free_fn)(ptr);
+            serde_json::from_str(&json).map_err(|e| format!("invalid plugin description JSON: {e}"))
+        }
+    }
+
+    fn call_abi(&self, func: AbiFn, index: u32, request_json: &str) -> Result<String, String> {
+        unsafe {
+            let request =
+                CString::new(request_json).map_err(|e| format!("null byte in request: {e}"))?;
+            let ptr = func(index, request.as_ptr());
+            if ptr.is_null() {
+                return Err("ABI call returned null".into());
+            }
+            let json = CStr::from_ptr(ptr)
+                .to_str()
+                .map_err(|e| format!("invalid UTF-8 from ABI call: {e}"))?
+                .to_string();
+            (self.free_fn)(ptr);
+            Ok(json)
+        }
+    }
+}
+
+// ── NativeComparator ───────────────────────────────────────────────
+
+struct NativeComparator {
+    plugin: Arc<NativePlugin>,
+    desc: ComparatorDescriptor,
+    index: u32,
+}
+
+impl Comparator for NativeComparator {
+    fn descriptor(&self) -> ComparatorDescriptor {
+        self.desc.clone()
+    }
+
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
+        let compare_fn = self
+            .plugin
+            .compare_fn
+            .ok_or_else(|| BinocError::Other("plugin missing _binoc_comparator_compare".into()))?;
+        let ws = data.workspace()?;
+        let data_root = data.data_root()?;
+        let request = CompareRequest {
+            pair: pair.clone(),
+            data_root: data_root.to_string_lossy().to_string(),
+            workspace: ws.to_string_lossy().to_string(),
+        };
+        let request_json = serde_json::to_string(&request)
+            .map_err(|e| BinocError::Other(format!("serialize CompareRequest: {e}")))?;
+        let json = self
+            .plugin
+            .call_abi(compare_fn, self.index, &request_json)
+            .map_err(BinocError::Other)?;
+        let response: CompareResponse = serde_json::from_str(&json)
+            .map_err(|e| BinocError::Other(format!("deserialize CompareResponse: {e}")))?;
+        match response {
+            CompareResponse::Ok { result } => Ok(*result),
+            CompareResponse::Error { message } => Err(BinocError::Comparator {
+                comparator: self.desc.name.clone(),
+                message,
+            }),
+        }
+    }
+
+    fn reopen(
+        &self,
+        pair: &ItemPair,
+        child_path: &str,
+        data: &dyn DataAccess,
+    ) -> BinocResult<ItemPair> {
+        let reopen_fn = self.plugin.reopen_fn.ok_or_else(|| {
+            BinocError::Extract(format!("{} does not support reopen", self.desc.name))
+        })?;
+        let ws = data.workspace()?;
+        let data_root = data.data_root()?;
+        let request = ReopenRequest {
+            pair: pair.clone(),
+            child_path: child_path.to_string(),
+            data_root: data_root.to_string_lossy().to_string(),
+            workspace: ws.to_string_lossy().to_string(),
+        };
+        let request_json = serde_json::to_string(&request)
+            .map_err(|e| BinocError::Other(format!("serialize ReopenRequest: {e}")))?;
+        let json = self
+            .plugin
+            .call_abi(reopen_fn, self.index, &request_json)
+            .map_err(BinocError::Other)?;
+        let response: ReopenResponse = serde_json::from_str(&json)
+            .map_err(|e| BinocError::Other(format!("deserialize ReopenResponse: {e}")))?;
+        match response {
+            ReopenResponse::Ok { pair } => Ok(pair),
+            ReopenResponse::Error { message } => Err(BinocError::Extract(message)),
+        }
+    }
+
+    fn extract(
+        &self,
+        node: &DiffNode,
+        aspect: &str,
+        data: &dyn DataAccess,
+    ) -> Option<ExtractResult> {
+        let extract_fn = self.plugin.comparator_extract_fn?;
+        let data_root = data.data_root().ok()?;
+        let request = ExtractRequest {
+            node: node.clone(),
+            aspect: aspect.to_string(),
+            data_root: data_root.to_string_lossy().to_string(),
+            source_items: node.source_items.clone(),
+        };
+        let request_json = serde_json::to_string(&request).ok()?;
+        let json = self
+            .plugin
+            .call_abi(extract_fn, self.index, &request_json)
+            .ok()?;
+        let response: ExtractResponse = serde_json::from_str(&json).ok()?;
+        match response {
+            ExtractResponse::Text { content } => Some(ExtractResult::Text(content)),
+            ExtractResponse::Binary { content } => Some(ExtractResult::Binary(content)),
+            ExtractResponse::None | ExtractResponse::Error { .. } => None,
+        }
+    }
+}
+
+// ── NativeTransformer ──────────────────────────────────────────────
+
+struct NativeTransformer {
+    plugin: Arc<NativePlugin>,
+    desc: TransformerDescriptor,
+    index: u32,
+}
+
+impl Transformer for NativeTransformer {
+    fn descriptor(&self) -> TransformerDescriptor {
+        self.desc.clone()
+    }
+
+    fn transform(&self, node: DiffNode, data: &dyn DataAccess) -> TransformResult {
+        let Some(transform_fn) = self.plugin.transform_fn else {
+            return TransformResult::Unchanged;
+        };
+        let data_root = match data.data_root() {
+            Ok(p) => p,
+            Err(_) => return TransformResult::Unchanged,
+        };
+        let source_items = node.source_items.clone();
+        let request = TransformRequest {
+            node,
+            data_root: data_root.to_string_lossy().to_string(),
+            source_items,
+        };
+        let request_json = match serde_json::to_string(&request) {
+            Ok(j) => j,
+            Err(_) => return TransformResult::Unchanged,
+        };
+        let json = match self
+            .plugin
+            .call_abi(transform_fn, self.index, &request_json)
+        {
+            Ok(j) => j,
+            Err(_) => return TransformResult::Unchanged,
+        };
+        let response: TransformResponse = match serde_json::from_str(&json) {
+            Ok(r) => r,
+            Err(_) => return TransformResult::Unchanged,
+        };
+        match response.into_result() {
+            Ok(r) => r,
+            Err(_) => TransformResult::Unchanged,
+        }
+    }
+
+    fn extract(
+        &self,
+        node: &DiffNode,
+        aspect: &str,
+        data: &dyn DataAccess,
+    ) -> Option<ExtractResult> {
+        let extract_fn = self.plugin.transformer_extract_fn?;
+        let data_root = data.data_root().ok()?;
+        let request = ExtractRequest {
+            node: node.clone(),
+            aspect: aspect.to_string(),
+            data_root: data_root.to_string_lossy().to_string(),
+            source_items: node.source_items.clone(),
+        };
+        let request_json = serde_json::to_string(&request).ok()?;
+        let json = self
+            .plugin
+            .call_abi(extract_fn, self.index, &request_json)
+            .ok()?;
+        let response: ExtractResponse = serde_json::from_str(&json).ok()?;
+        match response {
+            ExtractResponse::Text { content } => Some(ExtractResult::Text(content)),
+            ExtractResponse::Binary { content } => Some(ExtractResult::Binary(content)),
+            ExtractResponse::None | ExtractResponse::Error { .. } => None,
+        }
+    }
+}
+
+// ── NativeOutputter ────────────────────────────────────────────────
+
+struct NativeOutputter {
+    plugin: Arc<NativePlugin>,
+    desc: OutputterDescriptor,
+    index: u32,
+}
+
+impl Outputter for NativeOutputter {
+    fn descriptor(&self) -> OutputterDescriptor {
+        self.desc.clone()
+    }
+
+    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
+        let render_fn = self
+            .plugin
+            .render_fn
+            .ok_or_else(|| BinocError::Other("plugin missing _binoc_outputter_render".into()))?;
+        let request = RenderRequest {
+            migrations: migrations.to_vec(),
+            config: config.clone(),
+        };
+        let request_json = serde_json::to_string(&request)
+            .map_err(|e| BinocError::Other(format!("serialize RenderRequest: {e}")))?;
+        let json = self
+            .plugin
+            .call_abi(render_fn, self.index, &request_json)
+            .map_err(BinocError::Other)?;
+        let response: RenderResponse = serde_json::from_str(&json)
+            .map_err(|e| BinocError::Other(format!("deserialize RenderResponse: {e}")))?;
+        match response {
+            RenderResponse::Ok { output } => Ok(output),
+            RenderResponse::Error { message } => Err(BinocError::Other(message)),
+        }
+    }
+}
+
+// ── Library resolution and loading ─────────────────────────────────
+
+/// Given a module's `__file__`, find the native shared library.
+///
+/// When maturin packages a pyo3 extension, the installed layout is a
+/// Python package directory containing both an `__init__.py` and the
+/// `.so`/`.dylib`/`.pyd`. If `__file__` points to `__init__.py`, we
+/// scan the directory for the native extension.
+fn resolve_native_library(file_path: &str) -> Result<String, String> {
+    if !file_path.ends_with("__init__.py") {
+        return Ok(file_path.to_string());
+    }
+    let dir = std::path::Path::new(file_path)
+        .parent()
+        .ok_or("no parent directory for __init__.py")?;
+    let entry = std::fs::read_dir(dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| matches!(ext, "so" | "dylib" | "pyd"))
+        })
+        .ok_or_else(|| format!("no native extension found in {}", dir.display()))?;
+    Ok(entry.path().to_string_lossy().to_string())
+}
+
+fn load_native_plugin_into_registry(
+    module_path: &str,
+    registry: &mut PluginRegistry,
+) -> Result<(), String> {
+    let lib_path = Python::attach(|py| -> PyResult<String> {
+        let module = py.import(module_path)?;
+        let file_attr = module.getattr("__file__")?;
+        file_attr.extract::<String>()
+    })
+    .map_err(|e| format!("could not import {module_path}: {e}"))?;
+
+    let lib_path = resolve_native_library(&lib_path)?;
+
+    let plugin = Arc::new(NativePlugin::load(&lib_path)?);
+    let description = plugin.describe()?;
+
+    for (i, desc) in description.comparators.into_iter().enumerate() {
+        let native = NativeComparator {
+            plugin: Arc::clone(&plugin),
+            desc,
+            index: i as u32,
+        };
+        registry
+            .register_comparator(Arc::new(native))
+            .map_err(|e| e.to_string())?;
+    }
+
+    for (i, desc) in description.transformers.into_iter().enumerate() {
+        let native = NativeTransformer {
+            plugin: Arc::clone(&plugin),
+            desc,
+            index: i as u32,
+        };
+        registry
+            .register_transformer(Arc::new(native))
+            .map_err(|e| e.to_string())?;
+    }
+
+    for (i, desc) in description.outputters.into_iter().enumerate() {
+        let native = NativeOutputter {
+            plugin: Arc::clone(&plugin),
+            desc,
+            index: i as u32,
+        };
+        registry
+            .register_outputter(Arc::new(native))
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // JSON <-> Python conversion helpers
@@ -97,13 +504,13 @@ fn py_dict_to_json_map(dict: &Bound<'_, PyDict>) -> PyResult<BTreeMap<String, se
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PyDiffNode — wraps binoc_core::ir::DiffNode
+// PyDiffNode
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyclass(name = "DiffNode")]
 #[derive(Clone)]
 pub struct PyDiffNode {
-    inner: ir::DiffNode,
+    inner: DiffNode,
 }
 
 #[pymethods]
@@ -122,7 +529,7 @@ impl PyDiffNode {
         annotations: Option<Bound<'_, PyDict>>,
         children: Option<Vec<PyDiffNode>>,
     ) -> PyResult<Self> {
-        let mut node = ir::DiffNode::new(kind, item_type, path);
+        let mut node = DiffNode::new(kind, item_type, path);
         node.source_path = source_path;
         node.summary = summary;
         if let Some(tags_obj) = tags {
@@ -154,32 +561,26 @@ impl PyDiffNode {
     fn kind(&self) -> &str {
         &self.inner.kind
     }
-
     #[getter]
     fn item_type(&self) -> &str {
         &self.inner.item_type
     }
-
     #[getter]
     fn path(&self) -> &str {
         &self.inner.path
     }
-
     #[getter]
     fn source_path(&self) -> Option<&str> {
         self.inner.source_path.as_deref()
     }
-
     #[getter]
     fn summary(&self) -> Option<&str> {
         self.inner.summary.as_deref()
     }
-
     #[getter]
     fn tags(&self) -> Vec<String> {
         self.inner.tags.iter().cloned().collect()
     }
-
     #[getter]
     fn children(&self) -> Vec<PyDiffNode> {
         self.inner
@@ -188,12 +589,10 @@ impl PyDiffNode {
             .map(|c| PyDiffNode { inner: c.clone() })
             .collect()
     }
-
     #[getter]
     fn details<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         json_map_to_py(py, &self.inner.details)
     }
-
     #[getter]
     fn annotations<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         json_map_to_py(py, &self.inner.annotations)
@@ -202,7 +601,6 @@ impl PyDiffNode {
     fn node_count(&self) -> usize {
         self.inner.node_count()
     }
-
     fn all_tags(&self) -> Vec<String> {
         self.inner.all_tags().into_iter().collect()
     }
@@ -215,7 +613,6 @@ impl PyDiffNode {
         dict.set_item("source_path", self.inner.source_path.as_deref())?;
         dict.set_item("summary", self.inner.summary.as_deref())?;
         dict.set_item("tags", self.tags())?;
-
         let children: PyResult<Vec<Bound<'py, PyDict>>> = self
             .inner
             .children
@@ -232,39 +629,33 @@ impl PyDiffNode {
         serde_json::to_string_pretty(&self.inner)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
-
     fn with_summary(&self, summary: String) -> Self {
         Self {
             inner: self.inner.clone().with_summary(summary),
         }
     }
-
     fn with_tag(&self, tag: String) -> Self {
         Self {
             inner: self.inner.clone().with_tag(tag),
         }
     }
-
     fn with_source_path(&self, source: String) -> Self {
         Self {
             inner: self.inner.clone().with_source_path(source),
         }
     }
-
     fn with_children(&self, children: Vec<PyDiffNode>) -> Self {
-        let children: Vec<ir::DiffNode> = children.into_iter().map(|c| c.inner).collect();
+        let children: Vec<DiffNode> = children.into_iter().map(|c| c.inner).collect();
         Self {
             inner: self.inner.clone().with_children(children),
         }
     }
-
     fn with_detail(&self, key: String, value: Bound<'_, PyAny>) -> PyResult<Self> {
         let json_val = py_to_json(&value)?;
         Ok(Self {
             inner: self.inner.clone().with_detail(key, json_val),
         })
     }
-
     fn find_node(&self, selector: &str) -> Option<PyDiffNode> {
         find_node_recursive(&self.inner, selector).map(|n| PyDiffNode { inner: n.clone() })
     }
@@ -275,18 +666,15 @@ impl PyDiffNode {
             self.inner.kind, self.inner.item_type, self.inner.path
         )
     }
-
     fn __str__(&self) -> String {
         format!(
             "{} {} at {}",
             self.inner.kind, self.inner.item_type, self.inner.path
         )
     }
-
     fn __len__(&self) -> usize {
         self.inner.children.len()
     }
-
     fn __getitem__(&self, idx: isize) -> PyResult<PyDiffNode> {
         let len = self.inner.children.len() as isize;
         let actual = if idx < 0 { len + idx } else { idx };
@@ -297,20 +685,18 @@ impl PyDiffNode {
             inner: self.inner.children[actual as usize].clone(),
         })
     }
-
     fn __iter__(&self) -> PyDiffNodeIter {
         PyDiffNodeIter {
             children: self.inner.children.clone(),
             index: 0,
         }
     }
-
     fn __bool__(&self) -> bool {
         true
     }
 }
 
-fn find_node_recursive<'a>(node: &'a ir::DiffNode, selector: &str) -> Option<&'a ir::DiffNode> {
+fn find_node_recursive<'a>(node: &'a DiffNode, selector: &str) -> Option<&'a DiffNode> {
     if node.path == selector {
         return Some(node);
     }
@@ -324,7 +710,7 @@ fn find_node_recursive<'a>(node: &'a ir::DiffNode, selector: &str) -> Option<&'a
 
 #[pyclass]
 struct PyDiffNodeIter {
-    children: Vec<ir::DiffNode>,
+    children: Vec<DiffNode>,
     index: usize,
 }
 
@@ -333,7 +719,6 @@ impl PyDiffNodeIter {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
-
     fn __next__(&mut self) -> Option<PyDiffNode> {
         if self.index < self.children.len() {
             let node = &self.children[self.index];
@@ -348,13 +733,13 @@ impl PyDiffNodeIter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PyMigration — wraps binoc_core::ir::Migration
+// PyMigration
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyclass(name = "Migration")]
 #[derive(Clone)]
 pub struct PyMigration {
-    inner: ir::Migration,
+    inner: Migration,
 }
 
 #[pymethods]
@@ -363,7 +748,7 @@ impl PyMigration {
     #[pyo3(signature = (from_snapshot, to_snapshot, root=None))]
     fn new(from_snapshot: String, to_snapshot: String, root: Option<PyDiffNode>) -> Self {
         Self {
-            inner: ir::Migration::new(from_snapshot, to_snapshot, root.map(|n| n.inner)),
+            inner: Migration::new(from_snapshot, to_snapshot, root.map(|n| n.inner)),
         }
     }
 
@@ -372,12 +757,10 @@ impl PyMigration {
     fn from_snapshot(&self) -> &str {
         &self.inner.from_snapshot
     }
-
     #[getter]
     fn to_snapshot(&self) -> &str {
         &self.inner.to_snapshot
     }
-
     #[getter]
     fn root(&self) -> Option<PyDiffNode> {
         self.inner
@@ -385,7 +768,6 @@ impl PyMigration {
             .as_ref()
             .map(|r| PyDiffNode { inner: r.clone() })
     }
-
     #[getter]
     fn metadata<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
@@ -394,7 +776,6 @@ impl PyMigration {
         }
         Ok(dict)
     }
-
     #[getter]
     fn node_count(&self) -> usize {
         self.inner.node_count()
@@ -405,11 +786,9 @@ impl PyMigration {
             find_node_recursive(root, selector).map(|n| PyDiffNode { inner: n.clone() })
         })
     }
-
     fn to_json(&self) -> PyResult<String> {
         output::to_json(&self.inner).map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
-
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("from_snapshot", &self.inner.from_snapshot)?;
@@ -428,7 +807,6 @@ impl PyMigration {
         dict.set_item("metadata", meta)?;
         Ok(dict)
     }
-
     fn save(&self, path: &str) -> PyResult<()> {
         let json = self.to_json()?;
         std::fs::write(path, json).map_err(|e| PyRuntimeError::new_err(e.to_string()))
@@ -436,11 +814,10 @@ impl PyMigration {
 
     #[staticmethod]
     fn from_json(json_str: &str) -> PyResult<Self> {
-        let inner: ir::Migration =
+        let inner: Migration =
             serde_json::from_str(json_str).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self { inner })
     }
-
     #[staticmethod]
     fn from_file(path: &str) -> PyResult<Self> {
         let data =
@@ -456,7 +833,6 @@ impl PyMigration {
             self.inner.node_count()
         )
     }
-
     fn __str__(&self) -> String {
         match self.inner.node_count() {
             0 => format!(
@@ -469,14 +845,13 @@ impl PyMigration {
             ),
         }
     }
-
     fn __bool__(&self) -> bool {
         self.inner.root.is_some()
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PyItemPair — for Python plugin comparators
+// PyItemPair — Python-facing item pair (physical paths for Python plugins)
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyclass(name = "ItemPair")]
@@ -491,34 +866,35 @@ pub struct PyItemPair {
 impl PyItemPair {
     fn from_rust(pair: &ItemPair) -> Self {
         Self {
-            left_physical: pair
-                .left
-                .as_ref()
-                .map(|i| i.physical_path.to_string_lossy().to_string()),
-            right_physical: pair
-                .right
-                .as_ref()
-                .map(|i| i.physical_path.to_string_lossy().to_string()),
+            left_physical: pair.left.as_ref().map(|i| i.handle.clone()),
+            right_physical: pair.right.as_ref().map(|i| i.handle.clone()),
             left_logical: pair.left.as_ref().map(|i| i.logical_path.clone()),
             right_logical: pair.right.as_ref().map(|i| i.logical_path.clone()),
         }
     }
 
     fn to_rust(&self) -> ItemPair {
+        let make_ref = |phys: &str, logical: &str| -> ItemRef {
+            ItemRef {
+                logical_path: logical.to_string(),
+                is_dir: std::path::Path::new(phys).is_dir(),
+                content_hash: None,
+                media_type: None,
+                handle: phys.to_string(),
+            }
+        };
         match (&self.left_physical, &self.right_physical) {
             (Some(l), Some(r)) => ItemPair::both(
-                Item::new(l.as_str(), self.left_logical.as_deref().unwrap_or("")),
-                Item::new(r.as_str(), self.right_logical.as_deref().unwrap_or("")),
+                make_ref(l, self.left_logical.as_deref().unwrap_or("")),
+                make_ref(r, self.right_logical.as_deref().unwrap_or("")),
             ),
-            (None, Some(r)) => ItemPair::added(Item::new(
-                r.as_str(),
-                self.right_logical.as_deref().unwrap_or(""),
-            )),
-            (Some(l), None) => ItemPair::removed(Item::new(
-                l.as_str(),
-                self.left_logical.as_deref().unwrap_or(""),
-            )),
-            (None, None) => ItemPair::both(Item::new("", ""), Item::new("", "")),
+            (None, Some(r)) => {
+                ItemPair::added(make_ref(r, self.right_logical.as_deref().unwrap_or("")))
+            }
+            (Some(l), None) => {
+                ItemPair::removed(make_ref(l, self.left_logical.as_deref().unwrap_or("")))
+            }
+            (None, None) => ItemPair::both(make_ref("", ""), make_ref("", "")),
         }
     }
 }
@@ -540,7 +916,6 @@ impl PyItemPair {
             right_logical: Some(right_logical.to_string()),
         }
     }
-
     #[staticmethod]
     #[pyo3(signature = (path, logical=""))]
     fn added(path: String, logical: &str) -> Self {
@@ -551,7 +926,6 @@ impl PyItemPair {
             right_logical: Some(logical.to_string()),
         }
     }
-
     #[staticmethod]
     #[pyo3(signature = (path, logical=""))]
     fn removed(path: String, logical: &str) -> Self {
@@ -567,12 +941,10 @@ impl PyItemPair {
     fn left_path(&self) -> Option<&str> {
         self.left_physical.as_deref()
     }
-
     #[getter]
     fn right_path(&self) -> Option<&str> {
         self.right_physical.as_deref()
     }
-
     #[getter]
     fn logical_path(&self) -> &str {
         self.right_logical
@@ -580,7 +952,6 @@ impl PyItemPair {
             .or(self.left_logical.as_deref())
             .unwrap_or("")
     }
-
     #[getter]
     fn extension(&self) -> Option<String> {
         let path = self.logical_path();
@@ -588,7 +959,6 @@ impl PyItemPair {
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy().to_lowercase()))
     }
-
     #[getter]
     fn is_dir(&self) -> bool {
         if let Some(p) = &self.right_physical {
@@ -603,7 +973,6 @@ impl PyItemPair {
         }
         false
     }
-
     fn __repr__(&self) -> String {
         format!("ItemPair(logical_path={:?})", self.logical_path())
     }
@@ -616,7 +985,6 @@ impl PyItemPair {
 #[pyclass(name = "Identical")]
 #[derive(Clone)]
 pub struct PyIdentical;
-
 #[pymethods]
 impl PyIdentical {
     #[new]
@@ -634,7 +1002,6 @@ pub struct PyLeaf {
     #[pyo3(get)]
     node: PyDiffNode,
 }
-
 #[pymethods]
 impl PyLeaf {
     #[new]
@@ -654,7 +1021,6 @@ pub struct PyExpand {
     #[pyo3(get)]
     children: Vec<PyItemPair>,
 }
-
 #[pymethods]
 impl PyExpand {
     #[new]
@@ -673,7 +1039,6 @@ impl PyExpand {
 #[pyclass(name = "Unchanged")]
 #[derive(Clone)]
 pub struct PyUnchanged;
-
 #[pymethods]
 impl PyUnchanged {
     #[new]
@@ -691,7 +1056,6 @@ pub struct PyReplace {
     #[pyo3(get)]
     node: PyDiffNode,
 }
-
 #[pymethods]
 impl PyReplace {
     #[new]
@@ -709,7 +1073,6 @@ pub struct PyReplaceMany {
     #[pyo3(get)]
     nodes: Vec<PyDiffNode>,
 }
-
 #[pymethods]
 impl PyReplaceMany {
     #[new]
@@ -724,7 +1087,6 @@ impl PyReplaceMany {
 #[pyclass(name = "Remove")]
 #[derive(Clone)]
 pub struct PyRemove;
-
 #[pymethods]
 impl PyRemove {
     #[new]
@@ -737,66 +1099,35 @@ impl PyRemove {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Python plugin bridges — wrap Python objects as Rust trait objects
+// Python plugin bridges — wrap Python objects as Rust SDK trait objects
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct PyComparatorBridge {
     py_obj: Py<PyAny>,
-    name: String,
-    extensions: Vec<String>,
+    desc: ComparatorDescriptor,
 }
 
-// Safety: PyComparatorBridge may be moved or shared across threads (rayon workers) because:
-// - Every use of `py_obj` is inside `Python::attach(|py| { ... })`, which acquires the GIL
-//   for the duration of the closure. No thread touches the Python object without the GIL.
-// - The other fields (`name`, `extensions`) are immutable and only read; no shared mutable state.
 unsafe impl Send for PyComparatorBridge {}
 unsafe impl Sync for PyComparatorBridge {}
 
-impl traits::Comparator for PyComparatorBridge {
-    fn name(&self) -> &str {
-        &self.name
+impl Comparator for PyComparatorBridge {
+    fn descriptor(&self) -> ComparatorDescriptor {
+        self.desc.clone()
     }
 
-    fn can_handle(&self, pair: &ItemPair) -> bool {
-        if !self.extensions.is_empty() && !pair.is_dir() {
-            if let Some(ext) = pair.extension() {
-                if self.extensions.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
-                    return true;
-                }
-            }
-        }
-        Python::attach(|py| {
-            let py_pair = PyItemPair::from_rust(pair);
-            self.py_obj
-                .call_method1(py, "can_handle", (py_pair,))
-                .and_then(|r| r.extract::<bool>(py))
-                .unwrap_or(false)
-        })
-    }
-
-    fn compare(&self, pair: &ItemPair, _ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, _data: &dyn DataAccess) -> BinocResult<CompareResult> {
         Python::attach(|py| {
             let py_pair = PyItemPair::from_rust(pair);
             let result = self
                 .py_obj
                 .call_method1(py, "compare", (py_pair,))
                 .map_err(|e| BinocError::Comparator {
-                    comparator: self.name.clone(),
+                    comparator: self.desc.name.clone(),
                     message: e.to_string(),
                 })?;
 
             convert_py_compare_result(py, &result)
         })
-    }
-
-    fn extract(
-        &self,
-        _data: &ReopenedData,
-        _diff: &ir::DiffNode,
-        _selector: &str,
-    ) -> Option<ExtractResult> {
-        None
     }
 }
 
@@ -817,59 +1148,25 @@ fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<Com
             .unwrap_or_else(|_| "<unknown>".to_string());
         Err(BinocError::Comparator {
             comparator: "python".into(),
-            message: format!("compare() must return Identical, Leaf, or Expand, got {type_name}",),
+            message: format!("compare() must return Identical, Leaf, or Expand, got {type_name}"),
         })
     }
 }
 
 struct PyTransformerBridge {
     py_obj: Py<PyAny>,
-    name: String,
-    match_types_val: Vec<String>,
-    match_tags_val: Vec<String>,
-    match_kinds_val: Vec<String>,
+    desc: TransformerDescriptor,
 }
 
-// Safety: PyTransformerBridge may be moved or shared across threads (controller/transform phase)
-// because:
-// - Every use of `py_obj` is inside `Python::attach(|py| { ... })`, which acquires the GIL
-//   for the duration of the closure. No thread touches the Python object without the GIL.
-// - The other fields (`name`, `match_*_val`) are immutable and only read; no shared mutable state.
 unsafe impl Send for PyTransformerBridge {}
 unsafe impl Sync for PyTransformerBridge {}
 
-impl traits::Transformer for PyTransformerBridge {
-    fn name(&self) -> &str {
-        &self.name
+impl Transformer for PyTransformerBridge {
+    fn descriptor(&self) -> TransformerDescriptor {
+        self.desc.clone()
     }
 
-    fn can_handle(&self, node: &ir::DiffNode) -> bool {
-        if !self.match_types_val.is_empty()
-            && self.match_types_val.iter().any(|t| t == &node.item_type)
-        {
-            return true;
-        }
-        if !self.match_tags_val.is_empty()
-            && self.match_tags_val.iter().any(|t| node.tags.contains(t))
-        {
-            return true;
-        }
-        if !self.match_kinds_val.is_empty() && self.match_kinds_val.iter().any(|k| k == &node.kind)
-        {
-            return true;
-        }
-        Python::attach(|py| {
-            let py_node = PyDiffNode {
-                inner: node.clone(),
-            };
-            self.py_obj
-                .call_method1(py, "can_handle", (py_node,))
-                .and_then(|r| r.extract::<bool>(py))
-                .unwrap_or(false)
-        })
-    }
-
-    fn transform(&self, node: ir::DiffNode, _ctx: &CompareContext) -> TransformResult {
+    fn transform(&self, node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
         Python::attach(|py| {
             let py_node = PyDiffNode {
                 inner: node.clone(),
@@ -877,7 +1174,7 @@ impl traits::Transformer for PyTransformerBridge {
             let result = match self.py_obj.call_method1(py, "transform", (py_node,)) {
                 Ok(r) => r,
                 Err(e) => {
-                    eprintln!("Python transformer {} error: {}", self.name, e);
+                    eprintln!("Python transformer {} error: {}", self.desc.name, e);
                     return TransformResult::Unchanged;
                 }
             };
@@ -894,7 +1191,7 @@ fn convert_py_transform_result(py: Python<'_>, obj: &Py<PyAny>) -> Option<Transf
     } else if let Ok(replace) = bound.extract::<PyReplace>() {
         Some(TransformResult::Replace(Box::new(replace.node.inner)))
     } else if let Ok(replace_many) = bound.extract::<PyReplaceMany>() {
-        let nodes: Vec<ir::DiffNode> = replace_many.nodes.into_iter().map(|n| n.inner).collect();
+        let nodes: Vec<DiffNode> = replace_many.nodes.into_iter().map(|n| n.inner).collect();
         Some(TransformResult::ReplaceMany(nodes))
     } else if bound.is_instance_of::<PyRemove>() {
         Some(TransformResult::Remove)
@@ -915,10 +1212,10 @@ fn create_comparator_bridge(
         .getattr("extensions")
         .and_then(|e| e.extract())
         .unwrap_or_default();
+    let desc = ComparatorDescriptor::new(name).with_extensions(extensions);
     Ok(PyComparatorBridge {
         py_obj: obj.clone().unbind(),
-        name,
-        extensions,
+        desc,
     })
 }
 
@@ -942,17 +1239,79 @@ fn create_transformer_bridge(
         .getattr("match_kinds")
         .and_then(|v| v.extract())
         .unwrap_or_default();
+    let desc = TransformerDescriptor::new(name)
+        .with_match_types(match_types)
+        .with_match_tags(match_tags)
+        .with_match_kinds(match_kinds);
     Ok(PyTransformerBridge {
         py_obj: obj.clone().unbind(),
-        name,
-        match_types_val: match_types,
-        match_tags_val: match_tags,
-        match_kinds_val: match_kinds,
+        desc,
+    })
+}
+
+struct PyOutputterBridge {
+    py_obj: Py<PyAny>,
+    desc: OutputterDescriptor,
+}
+
+unsafe impl Send for PyOutputterBridge {}
+unsafe impl Sync for PyOutputterBridge {}
+
+impl Outputter for PyOutputterBridge {
+    fn descriptor(&self) -> OutputterDescriptor {
+        self.desc.clone()
+    }
+
+    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
+        Python::attach(|py| {
+            let py_migrations = PyList::new(
+                py,
+                migrations.iter().map(|m| {
+                    PyMigration { inner: m.clone() }
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any()
+                }),
+            )
+            .map_err(|e| BinocError::Other(e.to_string()))?;
+
+            let config_json =
+                serde_json::to_string(config).map_err(|e| BinocError::Other(e.to_string()))?;
+            let py_config = py
+                .import("json")
+                .and_then(|json_mod| json_mod.call_method1("loads", (config_json,)))
+                .map_err(|e| BinocError::Other(e.to_string()))?;
+
+            let result = self
+                .py_obj
+                .call_method1(py, "render", (py_migrations, py_config))
+                .map_err(|e| BinocError::Other(format!("Python outputter error: {e}")))?;
+
+            result
+                .extract::<String>(py)
+                .map_err(|e| BinocError::Other(format!("Python outputter must return str: {e}")))
+        })
+    }
+}
+
+fn create_outputter_bridge(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyOutputterBridge> {
+    let name: String = obj
+        .getattr("name")
+        .and_then(|n| n.extract())
+        .unwrap_or_else(|_| "python_outputter".to_string());
+    let file_extension: String = obj
+        .getattr("file_extension")
+        .and_then(|e| e.extract())
+        .unwrap_or_else(|_| "txt".to_string());
+    let desc = OutputterDescriptor::new(name, file_extension);
+    Ok(PyOutputterBridge {
+        py_obj: obj.clone().unbind(),
+        desc,
     })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PyConfig — dataset configuration
+// PyConfig
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyclass(name = "Config")]
@@ -972,7 +1331,6 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         }
     }
-
     #[staticmethod]
     fn from_file(path: &str) -> PyResult<Self> {
         let config = DatasetConfig::from_file(std::path::Path::new(path))
@@ -983,7 +1341,6 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         })
     }
-
     #[new]
     #[pyo3(signature = (*, comparators=None, transformers=None))]
     fn new(comparators: Option<Vec<String>>, transformers: Option<Vec<String>>) -> Self {
@@ -1000,27 +1357,22 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         }
     }
-
     fn add_comparator(&mut self, comparator: Bound<'_, PyAny>) -> PyResult<()> {
         self.extra_comparators.push(comparator.unbind());
         Ok(())
     }
-
     fn add_transformer(&mut self, transformer: Bound<'_, PyAny>) -> PyResult<()> {
         self.extra_transformers.push(transformer.unbind());
         Ok(())
     }
-
     #[getter]
     fn comparators(&self) -> Vec<String> {
         self.dataset_config.comparators.clone()
     }
-
     #[getter]
     fn transformers(&self) -> Vec<String> {
         self.dataset_config.transformers.clone()
     }
-
     fn __repr__(&self) -> String {
         format!(
             "Config(comparators={:?}, transformers={:?}, extra_comparators={}, extra_transformers={})",
@@ -1036,8 +1388,19 @@ impl PyConfig {
 // Top-level functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_controller(py: Python<'_>, config: &PyConfig) -> PyResult<Controller> {
-    let registry = binoc_stdlib::default_registry();
+fn build_controller(
+    py: Python<'_>,
+    config: &PyConfig,
+    registry: Option<&PyPluginRegistry>,
+) -> PyResult<Controller> {
+    let default_registry;
+    let registry = match registry {
+        Some(r) => &r.inner,
+        None => {
+            default_registry = binoc_stdlib::default_registry();
+            &default_registry
+        }
+    };
     let resolved = registry
         .resolve(&config.dataset_config)
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -1058,12 +1421,13 @@ fn build_controller(py: Python<'_>, config: &PyConfig) -> PyResult<Controller> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None))]
+#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None, registry=None))]
 fn diff(
     py: Python<'_>,
     snapshot_a: &str,
     snapshot_b: &str,
     config: Option<&PyConfig>,
+    registry: Option<&PyPluginRegistry>,
 ) -> PyResult<PyMigration> {
     let default_config;
     let config = match config {
@@ -1078,7 +1442,7 @@ fn diff(
         }
     };
 
-    let controller = build_controller(py, config)?;
+    let controller = build_controller(py, config, registry)?;
 
     let migration = py
         .detach(|| controller.diff(snapshot_a, snapshot_b))
@@ -1116,7 +1480,7 @@ fn extract(
         }
     };
 
-    let controller = build_controller(py, config)?;
+    let controller = build_controller(py, config, None)?;
 
     let snap_a = snapshot_a
         .map(|s| s.to_string())
@@ -1145,14 +1509,12 @@ fn to_markdown(migrations: Vec<PyMigration>, config: Option<&PyConfig>) -> Strin
         })
         .unwrap_or_default();
 
-    let rust_migrations: Vec<ir::Migration> = migrations.into_iter().map(|m| m.inner).collect();
+    let rust_migrations: Vec<Migration> = migrations.into_iter().map(|m| m.inner).collect();
     md_outputter::render_markdown(&rust_migrations, &md_config)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Plugin registry — exposes PluginRegistry to Python for entry-point
-// discovery. Rust plugins register native trait objects (no per-file
-// Python bridge); Python plugins go through PyComparatorBridge as before.
+// Plugin registry
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyclass(name = "PluginRegistry")]
@@ -1162,56 +1524,62 @@ pub struct PyPluginRegistry {
 
 #[pymethods]
 impl PyPluginRegistry {
-    /// Create a registry pre-populated with the standard library plugins.
     #[staticmethod]
     fn default() -> Self {
         Self {
             inner: binoc_stdlib::default_registry(),
         }
     }
-
-    /// Register a Python comparator into the registry under `name`.
     fn register_comparator(
         &mut self,
         py: Python<'_>,
-        name: String,
+        _name: String,
         obj: Py<PyAny>,
     ) -> PyResult<()> {
         let bridge = create_comparator_bridge(py, obj.bind(py))?;
-        self.inner.register_comparator(name, Arc::new(bridge));
-        Ok(())
+        self.inner
+            .register_comparator(Arc::new(bridge))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
-
-    /// Register a Python transformer into the registry under `name`.
     fn register_transformer(
         &mut self,
         py: Python<'_>,
-        name: String,
+        _name: String,
         obj: Py<PyAny>,
     ) -> PyResult<()> {
         let bridge = create_transformer_bridge(py, obj.bind(py))?;
-        self.inner.register_transformer(name, Arc::new(bridge));
-        Ok(())
+        self.inner
+            .register_transformer(Arc::new(bridge))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
-
-    /// List all registered comparator names.
+    fn register_outputter(
+        &mut self,
+        py: Python<'_>,
+        _name: String,
+        obj: Py<PyAny>,
+    ) -> PyResult<()> {
+        let bridge = create_outputter_bridge(py, obj.bind(py))?;
+        self.inner
+            .register_outputter(Arc::new(bridge))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+    fn load_native_plugin(&mut self, module_path: String) -> PyResult<()> {
+        load_native_plugin_into_registry(&module_path, &mut self.inner)
+            .map_err(PyRuntimeError::new_err)
+    }
     fn list_comparators(&self) -> Vec<String> {
         self.inner.comparator_names()
     }
-
-    /// List all registered transformer names.
     fn list_transformers(&self) -> Vec<String> {
         self.inner.transformer_names()
     }
-
-    /// List all registered outputter names.
     fn list_outputters(&self) -> Vec<String> {
         self.inner.outputter_names()
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CLI entry point — delegates to the Rust CLI with a pre-populated registry
+// CLI entry point
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyfunction]
@@ -1221,35 +1589,27 @@ fn run_cli(registry: &mut PyPluginRegistry, args: Vec<String>) -> PyResult<()> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Module definition
+// Module
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pymodule]
 fn _binoc(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    // Core types
     m.add_class::<PyDiffNode>()?;
     m.add_class::<PyMigration>()?;
     m.add_class::<PyItemPair>()?;
     m.add_class::<PyConfig>()?;
     m.add_class::<PyPluginRegistry>()?;
-
-    // Compare result types
     m.add_class::<PyIdentical>()?;
     m.add_class::<PyLeaf>()?;
     m.add_class::<PyExpand>()?;
-
-    // Transform result types
     m.add_class::<PyUnchanged>()?;
     m.add_class::<PyReplace>()?;
     m.add_class::<PyReplaceMany>()?;
     m.add_class::<PyRemove>()?;
-
-    // Top-level functions
     m.add_function(wrap_pyfunction!(diff, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
     m.add_function(wrap_pyfunction!(to_markdown, m)?)?;
     m.add_function(wrap_pyfunction!(extract, m)?)?;
     m.add_function(wrap_pyfunction!(run_cli, m)?)?;
-
     Ok(())
 }

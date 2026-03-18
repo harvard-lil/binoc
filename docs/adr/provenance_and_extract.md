@@ -19,11 +19,14 @@ Concretely:
 
 1. `DiffNode` gains two fields: `comparator: Option<String>` and `transformed_by: Vec<String>`. These are serialized into the migration JSON.
 
-2. Comparators implement `reopen(pair, child_path, ctx)` to reconstruct physical access to a child item (directory resolves a path, zip re-extracts to a temp dir). They also implement `reopen_data(pair, ctx)` to parse leaf content into format-neutral form (`TabularData`, text, or binary).
+2. Comparators implement `reopen(pair, child_path, data)` to reconstruct physical access to a child item (directory resolves a path, zip re-extracts to a temp dir). Container comparators override this; leaf comparators use the default (error).
 
-3. Transformers implement `extract(data, node, aspect)` to format reopened data for the end user. For example, the column reorder detector formats a before/after column order summary.
+3. Comparators and transformers implement `extract(node, aspect, data)` to format cached data for the end user. The comparator populates the cache during `compare()` (e.g., CSV comparator calls `data.store("tabular:path", ...)`) and reads it back during `extract()` via `data.load()`. Transformers do the same if they have custom extraction logic.
 
-4. `Controller::extract()` walks the ancestor chain from root to target node, calling `reopen` at each container level to reconstruct physical paths. At the leaf, it calls `reopen_data` on the comparator, then `extract` on the last transformer (or the comparator itself if no transformer modified the node).
+4. `Controller::extract()` reconstructs the scratchpad by walking the ancestor chain from root to the target node:
+   - For each ancestor: call `reopen()` on its comparator to reconstruct physical access to the next level (directory → zip → directory → csv)
+   - At the leaf: call `compare()` on the node's comparator to re-derive and cache the data
+   - Finally: call `extract()` on the last transformer (or the comparator itself if no transformer modified the node)
 
 The rule is simple: **whoever last touched the node understands it best and is responsible for explaining it to the user.**
 
@@ -45,12 +48,19 @@ This does mean extract requires the same plugin set that produced the migration.
 
 ## The reopen chain
 
-Container comparators (directory, zip) implement `reopen` to reconstruct physical access. This is distinct from `compare` — `reopen` doesn't diff anything, it just resolves a child's physical path within the container. For directories, this is trivial (join the path). For zips, it re-extracts to a temp directory.
+Container comparators (directory, zip, tar) implement `reopen` to reconstruct physical access. This is distinct from `compare` — `reopen` doesn't diff anything, it just resolves a child's physical path within the container. For directories, this is trivial (join the path). For zips and tars, it re-extracts to a workspace directory via `data.workspace()`.
 
-The chain is walked from root to target: directory → zip → directory → csv. Each `reopen` call produces an `ItemPair` pointing at the next level's physical files. At the leaf, `reopen_data` parses the files into `ReopenedData` (a format-neutral enum: `Tabular`, `Text`, or `Binary`), which is then passed to the extractor.
+The chain is walked from root to target: directory → zip → directory → csv. Each `reopen` call produces an `ItemPair` pointing at the next level's physical files. At the leaf, `compare()` is called to re-derive the data. The controller then sets `source_items` on the target node with the reconstructed `ItemPair`, so `extract()` can re-parse source files directly.
+
+## Cross-phase data sharing
+
+The primary mechanism is `DiffNode.source_items`: the controller sets it on every node during the diff, and again during the extract chain after reconstructing physical access via the reopen walk. Transformers and extractors that need the original data re-parse it from these source references. The field is `#[serde(skip)]` (transient, not in migration JSON) and carried explicitly in ABI request types.
+
+For plugins where re-parsing is expensive (e.g., SQLite schema introspection) or where the cached format is genuinely more efficient than the source (e.g., Arrow IPC for large columnar data), `DataAccess::store(key, bytes)` / `load(key)` provides a filesystem-backed cache under `<data_root>/.cache/`. The cache survives across plugin boundaries — the host and a separately-compiled native plugin share the same `data_root`. This replaced the old `ReopenedData` closed enum, which couldn't be extended by third-party plugins.
 
 ## Alternatives considered
 
 - **Re-run the diff and intercept intermediate data:** Simpler to implement (no new traits), but wasteful for large datasets and doesn't work on saved migrations.
 - **Store extracted data in the migration JSON:** Would balloon the migration size. The whole point of extract is on-demand access.
 - **Generic `Extractor` trait separate from Comparator/Transformer:** Adds a third plugin axis. The "last toucher" rule achieves the same dispatch without a new concept.
+- **`reopen_data` as a separate method:** The original design had comparators implement `reopen_data(pair, ctx)` to parse leaf content into a `ReopenedData` enum. Replaced by `store()`/`load()` during the normal `compare()` call, which is more general (plugins choose their own serialization format) and works across the C ABI boundary.

@@ -112,6 +112,7 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "binoc-core",
+ "binoc-sdk",
  "binoc-stdlib",
  "clap",
  "predicates",
@@ -124,13 +125,13 @@ dependencies = [
 name = "binoc-core"
 version = "0.1.0"
 dependencies = [
+ "binoc-sdk",
  "insta",
  "rayon",
  "serde",
  "serde_json",
  "serde_yaml",
  "tempfile",
- "thiserror",
  "toml",
 ]
 
@@ -140,9 +141,34 @@ version = "0.1.0"
 dependencies = [
  "binoc-cli",
  "binoc-core",
+ "binoc-sdk",
  "binoc-stdlib",
+ "libloading",
  "pyo3",
  "serde_json",
+]
+
+[[package]]
+name = "binoc-row-reorder"
+version = "0.1.0"
+dependencies = [
+ "binoc-core",
+ "binoc-sdk",
+ "binoc-stdlib",
+ "csv",
+ "pyo3",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "binoc-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -150,6 +176,7 @@ name = "binoc-sqlite"
 version = "0.1.0"
 dependencies = [
  "binoc-core",
+ "binoc-sdk",
  "binoc-stdlib",
  "pyo3",
  "rusqlite",
@@ -162,12 +189,14 @@ name = "binoc-stdlib"
 version = "0.1.0"
 dependencies = [
  "binoc-core",
+ "binoc-sdk",
  "blake3",
  "csv",
  "flate2",
  "infer",
  "insta",
  "mime_guess",
+ "rayon",
  "serde",
  "serde_json",
  "similar",
@@ -602,6 +631,16 @@ name = "libc"
 version = "0.2.182"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
 
 [[package]]
 name = "libredox"

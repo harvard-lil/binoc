@@ -1,0 +1,187 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz",
+        "result_size": 240
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz",
+        "result_size": 247
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.tar",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz/inner.tar.gz",
+        "result_size": 128
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz/inner.tar.gz",
+        "result_size": 135
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.tar",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz/data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz/inner.tar.gz/data.csv",
+        "result_size": 18
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.tar.gz/inner.tar.gz/data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.tar.gz/inner.tar.gz/data.csv",
+        "result_size": 25
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz/data.csv"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.tar.gz/inner.tar.gz/data.csv"
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.move_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.copy_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.column_reorder_detector",
+    "data_ops": []
+  }
+]

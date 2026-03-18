@@ -12,3 +12,4 @@
 * 2026-03-09: [Test vector root defaults and plugin test vectors](test_vector_defaults_and_plugin_vectors.md)
 * 2026-03-09: [Shared test-vector harness for plugins](plugin_test_vector_harness.md)
 * 2026-03-09: [Standard library boundary policy](stdlib_boundary.md)
+* 2026-03-12: [Plugin SDK, ABI safety, and native plugin loading](plugin_sdk_and_abi.md)

@@ -1,12 +1,9 @@
 use std::io::Read;
 use std::path::Path;
 
-use binoc_core::ir::DiffNode;
-use binoc_core::traits::*;
-use binoc_core::types::*;
+use binoc_sdk::*;
 
 /// Extracts both sides to temp dirs, expands into child item pairs.
-/// Handles nested zips by re-entering the controller queue.
 pub struct ZipComparator;
 
 fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<()> {
@@ -38,96 +35,67 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<()> {
     Ok(())
 }
 
+fn extract_side(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ItemRef> {
+    let phys = data.local_path(item)?;
+    let ws = data.workspace()?;
+    extract_zip(&phys, &ws)?;
+    data.register_local(&ws, &item.logical_path)
+}
+
 impl Comparator for ZipComparator {
-    fn name(&self) -> &str {
-        "binoc.zip"
-    }
-
-    fn handles_extensions(&self) -> &[&str] {
-        &[".zip"]
-    }
-
-    fn handles_media_types(&self) -> &[&str] {
-        &["application/zip"]
+    fn descriptor(&self) -> ComparatorDescriptor {
+        ComparatorDescriptor::new("binoc.zip")
+            .with_extensions(vec![".zip".into()])
+            .with_media_types(vec!["application/zip".into()])
     }
 
     fn reopen(
         &self,
         pair: &ItemPair,
-        child_path: &str,
-        ctx: &CompareContext,
+        _child_path: &str,
+        data: &dyn DataAccess,
     ) -> BinocResult<ItemPair> {
-        // Extract zip contents to temp dirs and return a directory pair.
-        // The child_path for a zip is typically the same as the zip's logical path
-        // (the zip comparator expands into a single directory pair with the same path).
-        let _ = child_path;
-
-        let left = if let Some(item) = &pair.left {
-            let tmp = tempfile::tempdir().map_err(BinocError::Io)?;
-            extract_zip(&item.physical_path, tmp.path())?;
-            let path = ctx.keep_temp_dir(tmp);
-            Some(Item::new(path, item.logical_path.clone()))
-        } else {
-            None
-        };
-
-        let right = if let Some(item) = &pair.right {
-            let tmp = tempfile::tempdir().map_err(BinocError::Io)?;
-            extract_zip(&item.physical_path, tmp.path())?;
-            let path = ctx.keep_temp_dir(tmp);
-            Some(Item::new(path, item.logical_path.clone()))
-        } else {
-            None
-        };
-
-        match (left, right) {
-            (Some(l), Some(r)) => Ok(ItemPair::both(l, r)),
-            (None, Some(r)) => Ok(ItemPair::added(r)),
-            (Some(l), None) => Ok(ItemPair::removed(l)),
-            (None, None) => Err(BinocError::Extract(
-                "both sides missing in zip reopen".into(),
-            )),
+        match (&pair.left, &pair.right) {
+            (Some(left), Some(right)) => {
+                let item_l = extract_side(left, data)?;
+                let item_r = extract_side(right, data)?;
+                Ok(ItemPair::both(item_l, item_r))
+            }
+            (None, Some(right)) => {
+                let item_r = extract_side(right, data)?;
+                Ok(ItemPair::added(item_r))
+            }
+            (Some(left), None) => {
+                let item_l = extract_side(left, data)?;
+                Ok(ItemPair::removed(item_l))
+            }
+            (None, None) => Err(BinocError::Extract("empty pair in zip reopen".into())),
         }
     }
 
-    fn compare(&self, pair: &ItemPair, ctx: &CompareContext) -> BinocResult<CompareResult> {
+    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
         match (&pair.left, &pair.right) {
             (Some(left), Some(right)) => {
-                let tmp_l = tempfile::tempdir().map_err(BinocError::Io)?;
-                let tmp_r = tempfile::tempdir().map_err(BinocError::Io)?;
-
-                extract_zip(&left.physical_path, tmp_l.path())?;
-                extract_zip(&right.physical_path, tmp_r.path())?;
-
-                let path_l = ctx.keep_temp_dir(tmp_l);
-                let path_r = ctx.keep_temp_dir(tmp_r);
+                let item_l = extract_side(left, data)?;
+                let item_r = extract_side(right, data)?;
 
                 let logical = &right.logical_path;
-                let item_l = Item::new(path_l, logical.clone());
-                let item_r = Item::new(path_r, logical.clone());
-
                 let dir_pair = ItemPair::both(item_l, item_r);
                 let node = DiffNode::new("modify", "zip_archive", logical);
                 Ok(CompareResult::Expand(node, vec![dir_pair]))
             }
             (None, Some(right)) => {
-                let tmp_r = tempfile::tempdir().map_err(BinocError::Io)?;
-                extract_zip(&right.physical_path, tmp_r.path())?;
-                let path_r = ctx.keep_temp_dir(tmp_r);
+                let item_r = extract_side(right, data)?;
 
                 let logical = &right.logical_path;
-                let item_r = Item::new(path_r, logical.clone());
                 let dir_pair = ItemPair::added(item_r);
                 let node = DiffNode::new("add", "zip_archive", logical);
                 Ok(CompareResult::Expand(node, vec![dir_pair]))
             }
             (Some(left), None) => {
-                let tmp_l = tempfile::tempdir().map_err(BinocError::Io)?;
-                extract_zip(&left.physical_path, tmp_l.path())?;
-                let path_l = ctx.keep_temp_dir(tmp_l);
+                let item_l = extract_side(left, data)?;
 
                 let logical = &left.logical_path;
-                let item_l = Item::new(path_l, logical.clone());
                 let dir_pair = ItemPair::removed(item_l);
                 let node = DiffNode::new("remove", "zip_archive", logical);
                 Ok(CompareResult::Expand(node, vec![dir_pair]))
