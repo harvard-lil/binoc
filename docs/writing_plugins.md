@@ -12,7 +12,7 @@ Before writing a plugin, understand what each type does:
 - **Transformer**: Rewrites the completed diff tree. Operates on structure, not raw data. For example, the move detector correlates add/remove pairs by content hash.
 - **Renderer**: Renders finalized changesets into a presentation format (Markdown, HTML, etc.).
 
-The IR is a tree of `DiffNode` values. See `docs/design.md` for the full schema.
+The IR is a tree of `DiffNode` values.
 
 ## Python Plugins
 

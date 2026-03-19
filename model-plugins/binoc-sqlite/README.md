@@ -62,4 +62,4 @@ just snapshot-update
 
 (Run from `binoc-sqlite/`; the justfile runs the insta update from the workspace root.)
 
-For writing your own Binoc plugins (Rust or Python), see the main repo’s [Writing Binoc Plugins](../docs/writing_plugins.md) and [design doc](../docs/design.md).
+For writing your own Binoc plugins (Rust or Python), see the main repo’s [Writing Binoc Plugins](../docs/writing_plugins.md).
