@@ -6,22 +6,22 @@ expression: "&stable_changeset"
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "tar_archive",
         "path": "archive.tar.gz",
         "children": [
           {
-            "kind": "modify",
+            "action": "modify",
             "item_type": "directory",
             "path": "archive.tar.gz",
             "children": [
               {
-                "kind": "modify",
+                "action": "modify",
                 "item_type": "tabular",
                 "path": "archive.tar.gz/data.csv",
                 "summary": "1 row added",
@@ -50,7 +50,7 @@ expression: "&stable_changeset"
                 "comparator": "binoc.csv"
               },
               {
-                "kind": "modify",
+                "action": "modify",
                 "item_type": "text",
                 "path": "archive.tar.gz/hello.txt",
                 "summary": "1 line added",

@@ -170,7 +170,7 @@ binoc diff test-vectors/single-file-remove/snapshot-a test-vectors/single-file-r
 
 ```
 
-Files present only in snapshot B get `kind: "add"`. Files only in snapshot A get `kind: "remove"`. The directory comparator creates `ItemPair::added()` or `ItemPair::removed()` entries, and downstream comparators handle the one-sided case.
+Files present only in snapshot B get `action: "add"`. Files only in snapshot A get `action: "remove"`. The directory comparator creates `ItemPair::added()` or `ItemPair::removed()` entries, and downstream comparators handle the one-sided case.
 
 ### CSV Comparisons
 
@@ -521,7 +521,7 @@ Every comparator emits `DiffNode` values. Every transformer rewrites them. The C
 
 | Field | Type | Purpose |
 |---|---|---|
-| `kind` | open enum | `"add"`, `"remove"`, `"modify"`, `"move"`, `"reorder"`, etc. Plugins may define new kinds. |
+| `action` | open enum | `"add"`, `"remove"`, `"modify"`, `"move"`, `"reorder"`, etc. Plugins may define new actions. |
 | `item_type` | open string | `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, etc. The core never interprets it. |
 | `path` | string | Logical path within snapshot, e.g. `"archive.zip/data/file.csv"`. |
 | `source_path` | optional | For moves/renames: the original path. |
@@ -534,7 +534,7 @@ Every comparator emits `DiffNode` values. Every transformer rewrites them. The C
 | `transformed_by` | list | Transformers that modified this node, in order (provenance for extract chain). |
 
 Key design decisions:
-- **Everything is openly typed.** `kind`, `item_type`, and `tags` are plain strings — conventions, not enforcement. A genomics plugin can define `kind: "gap-change"` without touching core.
+- **Everything is openly typed.** `action`, `item_type`, and `tags` are plain strings — conventions, not enforcement. A genomics plugin can define `action: "gap-change"` without touching core.
 - **Tags are factual observations, not judgments.** Significance classification maps tags to categories in output config, not in the IR.
 - **Provenance is tracked.** `comparator` and `transformed_by` record who produced and modified each node, enabling `binoc extract` to reopen data through the right plugin chain.
 
@@ -583,7 +583,7 @@ Column reordering is clerical (housekeeping). Column addition is substantive (po
 
 ### The Transformer Pattern
 
-Transformers rewrite the completed diff tree. They run in declared order, matching nodes by type, tag, kind, or imperative `can_handle`. Two scopes:
+Transformers rewrite the completed diff tree. They run in declared order, matching nodes by type, tag, action, or imperative `can_handle`. Two scopes:
 - **Node**: the controller recurses into children first, then the transformer sees each matched node individually.
 - **Subtree**: the transformer receives the entire subtree and can rewrite it freely.
 
@@ -610,7 +610,7 @@ The trait interfaces (in `binoc-core/src/traits.rs`) — everything a plugin aut
 | `transform(node, ctx)` | yes | Rewrite a matched node. Returns `Unchanged`, `Replace(node)`, `ReplaceMany(nodes)`, or `Remove`. |
 | `match_types()` | no | Match nodes by `item_type` |
 | `match_tags()` | no | Match nodes that have any of these tags |
-| `match_kinds()` | no | Match nodes by `kind` |
+| `match_actions()` | no | Match nodes by `action` |
 | `scope()` | no | `Node` (bottom-up, default) or `Subtree` (receives entire subtree) |
 | `can_handle(node)` | no | Imperative filter |
 | `extract(data, node, aspect)` | no | Extract data from nodes this transformer modified |
@@ -638,13 +638,13 @@ comparators = ["binoc.directory", "binoc.csv"]
 transformers = ["binoc.column_reorder_detector"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
 significance = "clerical"
 ```
 
-Structural assertions in the manifest (`root_kind`, `child_count`, `has_tags`) are the primary check — they survive IR schema evolution. The `[config]` section specifies which plugins to use, so vectors test specific comparators in isolation.
+Structural assertions in the manifest (`root_action`, `child_count`, `has_tags`) are the primary check — they survive IR schema evolution. The `[config]` section specifies which plugins to use, so vectors test specific comparators in isolation.
 
 The test vector runner discovers all vectors, loads each manifest, runs the full pipeline, and checks assertions. Let's see how many vectors we have:
 
@@ -767,7 +767,7 @@ A custom comparator that understands FASTA can parse the format and report what 
                 summary = f"Headers updated ({hdrs_changed} records); sequences unchanged"
 
             return binoc.Leaf(binoc.DiffNode(
-                kind="modify", item_type="fasta", path=pair.logical_path,
+                action="modify", item_type="fasta", path=pair.logical_path,
                 summary=summary, tags=tags,
             ))
 

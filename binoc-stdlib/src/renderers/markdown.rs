@@ -123,7 +123,7 @@ fn collect_reportable_nodes<'a>(
 ) {
     let is_reportable = node.summary.is_some()
         || !node.tags.is_empty()
-        || (node.children.is_empty() && node.kind != "identical");
+        || (node.children.is_empty() && node.action != "identical");
 
     if is_reportable {
         let category = node.tags.iter().find_map(|tag| tag_map.get(tag)).cloned();
@@ -158,14 +158,14 @@ fn format_node(out: &mut String, node: &DiffNode) {
 }
 
 fn fallback_description(node: &DiffNode) -> String {
-    let kind = &node.kind;
+    let action = &node.action;
     let item_type = if node.item_type.is_empty() {
         "item"
     } else {
         &node.item_type
     };
 
-    match kind.as_str() {
+    match action.as_str() {
         "add" => format!("New {item_type}"),
         "remove" => format!("{} removed", capitalize(item_type)),
         "modify" => format!("{} modified", capitalize(item_type)),
@@ -184,7 +184,7 @@ fn fallback_description(node: &DiffNode) -> String {
             }
         }
         "reorder" => format!("{} reordered", capitalize(item_type)),
-        _ => format!("{kind} ({item_type})"),
+        _ => format!("{action} ({item_type})"),
     }
 }
 

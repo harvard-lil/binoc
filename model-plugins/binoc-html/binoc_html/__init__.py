@@ -52,18 +52,18 @@ class HtmlRenderer:
 
 
 def _render_node(node, parts, depth=0):
-    kind = node.kind
+    action = node.action
     css_class = "node"
-    if kind in ("add",):
+    if action in ("add",):
         css_class += " add"
-    elif kind in ("remove",):
+    elif action in ("remove",):
         css_class += " remove"
-    elif kind in ("modify",):
+    elif action in ("modify",):
         css_class += " modify"
 
     parts.append(f'<div class="{css_class}">')
     parts.append(f'<span class="path">{escape(node.path)}</span>')
-    parts.append(f" <strong>{escape(kind)}</strong>")
+    parts.append(f" <strong>{escape(action)}</strong>")
 
     for tag in node.tags:
         parts.append(f'<span class="tag">{escape(tag)}</span>')

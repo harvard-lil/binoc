@@ -51,7 +51,7 @@ struct ManifestConfig {
 #[derive(Debug, Deserialize)]
 struct ExpectedAssertions {
     #[serde(default)]
-    root_kind: Option<String>,
+    root_action: Option<String>,
     #[serde(default)]
     child_count: Option<usize>,
     #[serde(default)]
@@ -537,16 +537,17 @@ fn check_assertions(
     expected: &ExpectedAssertions,
     config: &DatasetConfig,
 ) {
-    if let Some(root_kind) = &expected.root_kind {
+    if let Some(root_action) = &expected.root_action {
         let root = changeset.root.as_ref().unwrap_or_else(|| {
-            panic!("[{name}] Expected root with kind '{root_kind}' but changeset has no root")
+            panic!("[{name}] Expected root with action '{root_action}' but changeset has no root")
         });
-        if root.item_type == "directory" && root.kind != *root_kind {
-            let child_kinds: Vec<&str> = root.children.iter().map(|c| c.kind.as_str()).collect();
+        if root.item_type == "directory" && root.action != *root_action {
+            let child_actions: Vec<&str> =
+                root.children.iter().map(|c| c.action.as_str()).collect();
             assert!(
-                child_kinds.contains(&root_kind.as_str()) || root.kind == *root_kind,
-                "[{name}] Expected root_kind '{root_kind}', got root.kind='{}' with child kinds: {child_kinds:?}",
-                root.kind
+                child_actions.contains(&root_action.as_str()) || root.action == *root_action,
+                "[{name}] Expected root_action '{root_action}', got root.action='{}' with child actions: {child_actions:?}",
+                root.action
             );
         }
     }
@@ -561,7 +562,7 @@ fn check_assertions(
             root.children.len(),
             root.children
                 .iter()
-                .map(|c| (&c.kind, &c.path))
+                .map(|c| (&c.action, &c.path))
                 .collect::<Vec<_>>()
         );
     }

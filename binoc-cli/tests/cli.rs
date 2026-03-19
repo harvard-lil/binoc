@@ -49,7 +49,7 @@ fn diff_format_json_outputs_raw_changeset() {
         .assert()
         .success()
         .stdout(predicates::str::contains("\"from_snapshot\""))
-        .stdout(predicates::str::contains("\"kind\""));
+        .stdout(predicates::str::contains("\"action\""));
 }
 
 #[test]

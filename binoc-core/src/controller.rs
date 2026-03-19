@@ -360,7 +360,7 @@ impl Controller {
     }
 
     fn prune_identical(node: DiffNode) -> Option<DiffNode> {
-        if node.kind == "identical" {
+        if node.action == "identical" {
             return None;
         }
 
@@ -453,7 +453,7 @@ impl Controller {
         if !desc.match_tags.is_empty() && desc.match_tags.iter().any(|t| node.tags.contains(t)) {
             return true;
         }
-        if !desc.match_kinds.is_empty() && desc.match_kinds.iter().any(|k| k == &node.kind) {
+        if !desc.match_actions.is_empty() && desc.match_actions.iter().any(|k| k == &node.action) {
             return true;
         }
         false
@@ -535,7 +535,7 @@ mod tests {
     struct ReplaceTransformerMock {
         match_types: Vec<String>,
         match_tags: Vec<String>,
-        match_kinds: Vec<String>,
+        match_actions: Vec<String>,
         scope: TransformScope,
     }
     impl Transformer for ReplaceTransformerMock {
@@ -543,7 +543,7 @@ mod tests {
             TransformerDescriptor::new("replace-test")
                 .with_match_types(self.match_types.clone())
                 .with_match_tags(self.match_tags.clone())
-                .with_match_kinds(self.match_kinds.clone())
+                .with_match_actions(self.match_actions.clone())
                 .with_scope(self.scope)
         }
         fn transform(&self, node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
@@ -584,7 +584,7 @@ mod tests {
         let controller = Controller::new(vec![leaf_comparator()], vec![]);
         let changeset = controller.diff(&path, &path).unwrap();
         let root = changeset.root.as_ref().unwrap();
-        assert_eq!(root.kind, "modify");
+        assert_eq!(root.action, "modify");
         assert_eq!(root.item_type, "file");
     }
 
@@ -608,7 +608,7 @@ mod tests {
             )
             .unwrap();
         let root = changeset.root.as_ref().unwrap();
-        assert_eq!(root.kind, "modify");
+        assert_eq!(root.action, "modify");
         assert_eq!(root.item_type, "directory");
         assert!(!root.children.is_empty());
     }
@@ -706,7 +706,7 @@ mod tests {
             vec![Arc::new(ReplaceTransformerMock {
                 match_types: vec!["csv".into()],
                 match_tags: vec![],
-                match_kinds: vec![],
+                match_actions: vec![],
                 scope: TransformScope::Node,
             })],
         );
@@ -722,13 +722,13 @@ mod tests {
     }
 
     #[test]
-    fn transformer_matches_by_kind() {
+    fn transformer_matches_by_action() {
         let controller = Controller::new(
             vec![leaf_comparator()],
             vec![Arc::new(ReplaceTransformerMock {
                 match_types: vec![],
                 match_tags: vec![],
-                match_kinds: vec!["modify".into()],
+                match_actions: vec!["modify".into()],
                 scope: TransformScope::Node,
             })],
         );
@@ -746,7 +746,7 @@ mod tests {
     struct RemoveTransformerMock;
     impl Transformer for RemoveTransformerMock {
         fn descriptor(&self) -> TransformerDescriptor {
-            TransformerDescriptor::new("remove-test").with_match_kinds(vec!["modify".into()])
+            TransformerDescriptor::new("remove-test").with_match_actions(vec!["modify".into()])
         }
         fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
             TransformResult::Remove

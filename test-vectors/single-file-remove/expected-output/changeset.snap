@@ -6,12 +6,12 @@ expression: "&stable_changeset"
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "remove",
+        "action": "remove",
         "item_type": "text",
         "path": "removed_file.txt",
         "summary": "File removed (1 line)",

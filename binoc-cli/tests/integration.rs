@@ -66,7 +66,7 @@ fn test_added_file() {
     let added = root
         .children
         .iter()
-        .find(|c| c.kind == "add")
+        .find(|c| c.action == "add")
         .expect("should have add node");
     assert!(added.path.contains("new_file.txt"));
 }
@@ -92,7 +92,7 @@ fn test_removed_file() {
     let removed = root
         .children
         .iter()
-        .find(|c| c.kind == "remove")
+        .find(|c| c.action == "remove")
         .expect("should have remove node");
     assert!(removed.path.contains("old_file.txt"));
 }
@@ -121,7 +121,7 @@ fn test_modified_text_file() {
     let modified = root
         .children
         .iter()
-        .find(|c| c.kind == "modify")
+        .find(|c| c.action == "modify")
         .expect("should have modify node");
     assert_eq!(modified.item_type, "text");
     assert!(modified.tags.contains("binoc.content-changed"));
@@ -173,7 +173,7 @@ fn test_csv_column_changes() {
         .find(|c| c.item_type == "tabular")
         .expect("should have tabular node");
 
-    assert_eq!(csv_node.kind, "modify");
+    assert_eq!(csv_node.action, "modify");
     assert!(csv_node.tags.contains("binoc.column-addition"));
     assert!(csv_node.tags.contains("binoc.row-addition"));
 
@@ -219,7 +219,7 @@ fn test_csv_column_reorder_only() {
         .expect("should have tabular node");
 
     // The column_reorder_detector transformer should have converted this to "reorder"
-    assert_eq!(csv_node.kind, "reorder");
+    assert_eq!(csv_node.action, "reorder");
     assert!(csv_node.tags.contains("binoc.column-reorder"));
 }
 
@@ -241,13 +241,13 @@ fn test_move_detection() {
         .unwrap();
 
     let root = changeset.root.expect("should have root");
-    let move_node = root.children.iter().find(|c| c.kind == "move");
+    let move_node = root.children.iter().find(|c| c.action == "move");
     assert!(
         move_node.is_some(),
         "should detect move, got: {:?}",
         root.children
             .iter()
-            .map(|c| (&c.kind, &c.path))
+            .map(|c| (&c.action, &c.path))
             .collect::<Vec<_>>()
     );
 

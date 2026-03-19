@@ -144,7 +144,7 @@ pub struct TransformerDescriptor {
     #[serde(default)]
     pub match_tags: Vec<String>,
     #[serde(default)]
-    pub match_kinds: Vec<String>,
+    pub match_actions: Vec<String>,
     #[serde(default)]
     pub scope: TransformScope,
     #[serde(default = "default_phase")]
@@ -162,7 +162,7 @@ impl TransformerDescriptor {
             name: name.into(),
             match_types: Vec::new(),
             match_tags: Vec::new(),
-            match_kinds: Vec::new(),
+            match_actions: Vec::new(),
             scope: TransformScope::Node,
             suggested_phase: "default".into(),
         }
@@ -178,8 +178,8 @@ impl TransformerDescriptor {
         self
     }
 
-    pub fn with_match_kinds(mut self, kinds: Vec<String>) -> Self {
-        self.match_kinds = kinds;
+    pub fn with_match_actions(mut self, actions: Vec<String>) -> Self {
+        self.match_actions = actions;
         self
     }
 

@@ -118,4 +118,4 @@ class TestPythonCLI:
             text=True,
         )
         assert result.returncode == 0
-        assert '"kind": "add"' in result.stdout
+        assert '"action": "add"' in result.stdout

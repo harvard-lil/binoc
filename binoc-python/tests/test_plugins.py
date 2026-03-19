@@ -91,7 +91,7 @@ class TestPythonTransformer:
 
         class Tagger(binoc.Transformer):
             name = "test.tagger"
-            match_kinds = ["modify"]
+            match_actions = ["modify"]
 
             def transform(self, node):
                 return binoc.Replace(node.with_tag("test.tagged-by-python"))
@@ -109,7 +109,7 @@ class TestPythonTransformer:
 
         class NoOp(binoc.Transformer):
             name = "test.noop"
-            match_kinds = ["modify"]
+            match_actions = ["modify"]
 
             def transform(self, node):
                 return binoc.Unchanged()

@@ -13,7 +13,7 @@ Quick start::
 
     # Inspect the diff tree
     for child in changeset.root:
-        print(f"{child.path}: {child.kind}")
+        print(f"{child.path}: {child.action}")
 
     # Serialize
     json_str = changeset.to_json()
@@ -54,7 +54,7 @@ class Comparator:
             def compare(self, pair):
                 # Your comparison logic here
                 return binoc.Leaf(binoc.DiffNode(
-                    kind="modify",
+                    action="modify",
                     item_type="fasta",
                     path=pair.logical_path,
                 ))
@@ -107,13 +107,13 @@ class Transformer:
     name: str = ""
     match_types: list[str] = []
     match_tags: list[str] = []
-    match_kinds: list[str] = []
+    match_actions: list[str] = []
 
     def can_handle(self, node: DiffNode) -> bool:
         """Return True if this transformer should process the given node.
 
         Override for imperative matching. For most transformers, setting
-        ``match_types``, ``match_tags``, or ``match_kinds`` is sufficient.
+        ``match_types``, ``match_tags``, or ``match_actions`` is sufficient.
         """
         return False
 

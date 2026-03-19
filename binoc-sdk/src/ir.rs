@@ -9,8 +9,8 @@ use crate::types::ItemPair;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffNode {
     /// Open enum: "add", "remove", "modify", "move", "reorder",
-    /// "schema_change", etc. Plugins may define new kinds.
-    pub kind: String,
+    /// "schema_change", etc. Plugins may define new actions.
+    pub action: String,
 
     /// Open string: "directory", "file", "tabular", "zip_archive", etc.
     /// No built-in types — conventions, not enforcement.
@@ -63,12 +63,12 @@ pub struct DiffNode {
 
 impl DiffNode {
     pub fn new(
-        kind: impl Into<String>,
+        action: impl Into<String>,
         item_type: impl Into<String>,
         path: impl Into<String>,
     ) -> Self {
         Self {
-            kind: kind.into(),
+            action: action.into(),
             item_type: item_type.into(),
             path: path.into(),
             source_path: None,
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn diff_node_new_creates_node_with_correct_fields() {
         let node = DiffNode::new("modify", "file", "path/to/file.csv");
-        assert_eq!(node.kind, "modify");
+        assert_eq!(node.action, "modify");
         assert_eq!(node.item_type, "file");
         assert_eq!(node.path, "path/to/file.csv");
         assert!(node.source_path.is_none());
@@ -235,7 +235,7 @@ mod tests {
             .with_source_path("old/path.csv");
         let json = serde_json::to_string(&node).unwrap();
         let restored: DiffNode = serde_json::from_str(&json).unwrap();
-        assert_eq!(node.kind, restored.kind);
+        assert_eq!(node.action, restored.action);
         assert_eq!(node.item_type, restored.item_type);
         assert_eq!(node.path, restored.path);
         assert_eq!(node.source_path, restored.source_path);

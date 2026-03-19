@@ -443,7 +443,7 @@ mod tests {
 
         match result {
             CompareResult::Leaf(node) => {
-                assert_eq!(node.kind, "modify");
+                assert_eq!(node.action, "modify");
                 assert_eq!(node.item_type, "sqlite_database");
                 assert_eq!(node.children.len(), 1);
                 let child = &node.children[0];
@@ -481,10 +481,10 @@ mod tests {
 
         match result {
             CompareResult::Leaf(node) => {
-                assert_eq!(node.kind, "modify");
+                assert_eq!(node.action, "modify");
                 assert_eq!(node.children.len(), 1);
                 let child = &node.children[0];
-                assert_eq!(child.kind, "add");
+                assert_eq!(child.action, "add");
                 assert_eq!(child.item_type, "sqlite_table");
                 assert!(child.tags.contains("binoc-sqlite.table-addition"));
             }
@@ -551,7 +551,7 @@ mod tests {
 
         match result {
             CompareResult::Leaf(node) => {
-                assert_eq!(node.kind, "add");
+                assert_eq!(node.action, "add");
                 assert_eq!(node.item_type, "sqlite_database");
                 assert!(node.summary.unwrap().contains("1 table"));
             }
@@ -577,7 +577,7 @@ mod tests {
 
         match result {
             CompareResult::Leaf(node) => {
-                assert_eq!(node.kind, "remove");
+                assert_eq!(node.action, "remove");
                 assert_eq!(node.item_type, "sqlite_database");
                 assert!(node.summary.unwrap().contains("2 tables"));
             }

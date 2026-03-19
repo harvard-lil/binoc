@@ -513,10 +513,10 @@ pub struct PyDiffNode {
 #[pymethods]
 impl PyDiffNode {
     #[new]
-    #[pyo3(signature = (kind, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
+    #[pyo3(signature = (action, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        kind: String,
+        action: String,
         item_type: String,
         path: String,
         source_path: Option<String>,
@@ -526,7 +526,7 @@ impl PyDiffNode {
         annotations: Option<Bound<'_, PyDict>>,
         children: Option<Vec<PyDiffNode>>,
     ) -> PyResult<Self> {
-        let mut node = DiffNode::new(kind, item_type, path);
+        let mut node = DiffNode::new(action, item_type, path);
         node.source_path = source_path;
         node.summary = summary;
         if let Some(tags_obj) = tags {
@@ -555,8 +555,8 @@ impl PyDiffNode {
     }
 
     #[getter]
-    fn kind(&self) -> &str {
-        &self.inner.kind
+    fn action(&self) -> &str {
+        &self.inner.action
     }
     #[getter]
     fn item_type(&self) -> &str {
@@ -604,7 +604,7 @@ impl PyDiffNode {
 
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
-        dict.set_item("kind", &self.inner.kind)?;
+        dict.set_item("action", &self.inner.action)?;
         dict.set_item("item_type", &self.inner.item_type)?;
         dict.set_item("path", &self.inner.path)?;
         dict.set_item("source_path", self.inner.source_path.as_deref())?;
@@ -659,14 +659,14 @@ impl PyDiffNode {
 
     fn __repr__(&self) -> String {
         format!(
-            "DiffNode(kind={:?}, item_type={:?}, path={:?})",
-            self.inner.kind, self.inner.item_type, self.inner.path
+            "DiffNode(action={:?}, item_type={:?}, path={:?})",
+            self.inner.action, self.inner.item_type, self.inner.path
         )
     }
     fn __str__(&self) -> String {
         format!(
             "{} {} at {}",
-            self.inner.kind, self.inner.item_type, self.inner.path
+            self.inner.action, self.inner.item_type, self.inner.path
         )
     }
     fn __len__(&self) -> usize {
@@ -1232,14 +1232,14 @@ fn create_transformer_bridge(
         .getattr("match_tags")
         .and_then(|v| v.extract())
         .unwrap_or_default();
-    let match_kinds: Vec<String> = obj
-        .getattr("match_kinds")
+    let match_actions: Vec<String> = obj
+        .getattr("match_actions")
         .and_then(|v| v.extract())
         .unwrap_or_default();
     let desc = TransformerDescriptor::new(name)
         .with_match_types(match_types)
         .with_match_tags(match_tags)
-        .with_match_kinds(match_kinds);
+        .with_match_actions(match_actions);
     Ok(PyTransformerBridge {
         py_obj: obj.clone().unbind(),
         desc,

@@ -6,12 +6,12 @@ expression: "&stable_changeset"
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "reorder",
+        "action": "reorder",
         "item_type": "tabular",
         "path": "data.csv",
         "summary": "Columns reordered (content unchanged)",

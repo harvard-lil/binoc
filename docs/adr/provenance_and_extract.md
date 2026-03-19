@@ -7,7 +7,7 @@
 
 Binoc can tell you *what* changed — "2 rows were added to data.csv" — but not show you the actual data. Users (archivists, data scientists) need to pull out the changed content: which rows were added, what does the text diff look like, what columns were reordered. This is the `extract` verb.
 
-The hard question isn't "how do we read a CSV" — it's **who is responsible for formatting the extracted data?** A node in the changeset tree may have been created by one plugin and then rewritten by another. A CSV comparator produces a generic `modify` node with row/column stats. A column reorder transformer then rewrites that node to `kind: "reorder"`. If you ask to extract that node, do you get CSV data (from the comparator) or a column order summary (from the transformer)?
+The hard question isn't "how do we read a CSV" — it's **who is responsible for formatting the extracted data?** A node in the changeset tree may have been created by one plugin and then rewritten by another. A CSV comparator produces a generic `modify` node with row/column stats. A column reorder transformer then rewrites that node to `action: "reorder"`. If you ask to extract that node, do you get CSV data (from the comparator) or a column order summary (from the transformer)?
 
 This interacts with container nesting. A file `archive.zip/data/records.csv` was reached by the directory comparator (expanding the root), then the zip comparator (extracting the archive), then another directory comparator (expanding the extracted contents), then the CSV comparator (parsing the file). At extract time, we need to reconstruct that physical access chain from the changeset JSON alone.
 
@@ -32,9 +32,9 @@ The rule is simple: **whoever last touched the node understands it best and is r
 
 ## Why "last toucher" and not explicit registration?
 
-The alternative was a separate `extract_registry` where plugins explicitly register which `(item_type, kind)` combinations they can extract. We rejected this because:
+The alternative was a separate `extract_registry` where plugins explicitly register which `(item_type, action)` combinations they can extract. We rejected this because:
 
-- It's redundant. The transformer already declared what it matches via `match_types`/`match_tags`/`match_kinds`. If it rewrites a node, it understands the node.
+- It's redundant. The transformer already declared what it matches via `match_types`/`match_tags`/`match_actions`. If it rewrites a node, it understands the node.
 - It creates a coordination problem. A transformer author would need to register extraction handlers separately from the transform itself, and the two could drift out of sync.
 - It doesn't handle the common case where no transformer fires. If the CSV comparator produces a `modify` node and no transformer touches it, the comparator should extract — but a registry-based approach would need the comparator to register as *both* a comparator and an extractor.
 

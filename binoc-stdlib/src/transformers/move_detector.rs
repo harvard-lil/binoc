@@ -13,8 +13,8 @@ impl Transformer for MoveDetector {
     }
 
     fn transform(&self, mut node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
-        let has_adds = node.children.iter().any(|c| c.kind == "add");
-        let has_removes = node.children.iter().any(|c| c.kind == "remove");
+        let has_adds = node.children.iter().any(|c| c.action == "add");
+        let has_removes = node.children.iter().any(|c| c.action == "remove");
 
         if !has_adds || !has_removes {
             return TransformResult::Unchanged;
@@ -31,11 +31,11 @@ impl Transformer for MoveDetector {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            if child.kind == "add" {
+            if child.action == "add" {
                 if let Some(h) = hash {
                     add_by_hash.entry(Some(h)).or_default().push(i);
                 }
-            } else if child.kind == "remove" {
+            } else if child.action == "remove" {
                 if let Some(h) = hash {
                     remove_by_hash.entry(Some(h)).or_default().push(i);
                 }

@@ -92,9 +92,9 @@ The IR is a tree of `DiffNode` values. This is the central data structure of the
 
 ```
 DiffNode:
-    kind: string            # open enum: "add", "remove", "modify", "move",
+    action: string            # open enum: "add", "remove", "modify", "move",
                             #   "rename", "reorder", "schema_change", ...
-                            #   Plugins may define new kinds.
+                            #   Plugins may define new actions.
     item_type: string       # open string: "directory", "file", "tabular",
                             #   "zip_archive", "tar_archive", "alignment", ...
                             #   No built-in types. Conventions, not enforcement.
@@ -114,7 +114,7 @@ DiffNode:
 
 **Design decisions embedded here:**
 
-- **`kind` is an open enum.** Plugins can define new kinds. Transformers that don't recognize a kind pass nodes through unchanged. A future `custom` subkind mechanism may be added if collision becomes a problem.
+- **`action` is an open enum.** Plugins can define new actions. Transformers that don't recognize an action pass nodes through unchanged. A future `custom` subaction mechanism may be added if collision becomes a problem.
 - **`item_type` is an open string.** The core system does not interpret it. Type conventions are documented (e.g., "if you emit `item_type: tabular`, your `details` should conform to this schema"). This avoids hardcoding the wrong primitives while enabling shared tooling (e.g., all tabular comparators emit a common detail schema, so a single tabular transformer works across CSV, Excel, Parquet).
 - **`tags` are an open bag.** No built-in semantics. Comparators attach tags describing what they observed ("column-reorder", "row-addition"). Significance classification maps tags to user-facing categories in the renderer config.
 
@@ -142,7 +142,7 @@ A comparator claims item pairs it knows how to handle and either produces a term
 
 A transformer rewrites the completed diff tree. Transformers are optimization passes — they operate on IR structure, not raw data.
 
-**Matching nodes.** Transformers declare which nodes they care about via filters on `item_type`, `tags`, and/or diff `kind`. A `can_handle` method provides an imperative escape hatch.
+**Matching nodes.** Transformers declare which nodes they care about via filters on `item_type`, `tags`, and/or diff `action`. A `can_handle` method provides an imperative escape hatch.
 
 **Scope.** A transformer operates in either Node scope (receives individual matched nodes; the controller recurses into children) or Subtree scope (receives the whole subtree rooted at the matched node and can rewrite it freely).
 
@@ -214,7 +214,7 @@ The changelog is the primary human-facing output. Its purpose is to answer: "Wha
 
 This is the same pattern as Rust's `Display` trait or Python's `__str__`: the type that understands the data provides the human representation.
 
-- `summary` is optional. When absent, the renderer renders a generic description from kind, item_type, and tags.
+- `summary` is optional. When absent, the renderer renders a generic description from action, item_type, and tags.
 - `summary` is a hint, not a mandate. Renderers may ignore it and render their own description from raw details.
 - The last plugin to touch a node should set the summary. Transformers that rewrite a node's meaning (e.g. collapsing add+remove into a move) should update or clear the summary from the original comparator.
 - Standard library comparators and transformers always set `summary` so that the default renderer produces good output without any configuration.
@@ -473,7 +473,7 @@ comparators = ["binoc.directory", "binoc.csv"]
 transformers = ["binoc.column_reorder_detector"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
 significance = "clerical"

@@ -24,7 +24,7 @@ impl Transformer for ColumnReorderDetector {
         };
 
         if is_pure_reorder {
-            node.kind = "reorder".into();
+            node.action = "reorder".into();
             node.summary = Some("Columns reordered (content unchanged)".into());
             node.tags.clear();
             node.tags.insert("binoc.column-reorder".into());

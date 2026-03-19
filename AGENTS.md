@@ -24,7 +24,7 @@ Shared test fixtures live in `test-vectors/`. Authoritative architecture spec is
 
 3. **Comparators are the parser** (raw data → IR). **Transformers are optimization passes** (IR → IR, no raw data access). **Significance classification is a renderer concern**, mapped from semantic tags via config—not baked into the IR.
 
-4. **The IR is tree-structured, openly typed, and tag-annotated.** `kind`, `item_type`, and `tags` are open enums/strings. No built-in types or significance levels. Conventions, not enforcement.
+4. **The IR is tree-structured, openly typed, and tag-annotated.** `action`, `item_type`, and `tags` are open enums/strings. No built-in types or significance levels. Conventions, not enforcement.
 
 5. **Dispatch is declarative-first** (type/extension filters) **with an imperative escape hatch** (`can_handle`). First comparator to claim an item wins. Ordering is a config concern, not a plugin concern.
 

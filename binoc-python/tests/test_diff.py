@@ -15,22 +15,22 @@ class TestDiffWithTestVectors:
         changeset = binoc.diff(a, b)
         assert changeset.root is not None
         changeset.root.all_tags()
-        kinds = _collect_kinds(changeset.root)
-        assert "add" in kinds
+        actions = _collect_actions(changeset.root)
+        assert "add" in actions
 
     def test_single_file_remove(self, snapshot_pair):
         a, b = snapshot_pair("single-file-remove")
         changeset = binoc.diff(a, b)
         assert changeset.root is not None
-        kinds = _collect_kinds(changeset.root)
-        assert "remove" in kinds
+        actions = _collect_actions(changeset.root)
+        assert "remove" in actions
 
     def test_single_file_modify_text(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-text")
         changeset = binoc.diff(a, b)
         assert changeset.root is not None
-        kinds = _collect_kinds(changeset.root)
-        assert "modify" in kinds
+        actions = _collect_actions(changeset.root)
+        assert "modify" in actions
 
     def test_single_file_modify_binary(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-binary")
@@ -82,8 +82,8 @@ class TestDiffWithTestVectors:
         a, b = snapshot_pair("directory-file-move")
         changeset = binoc.diff(a, b)
         assert changeset.root is not None
-        kinds = _collect_kinds(changeset.root)
-        assert "move" in kinds or ("add" in kinds and "remove" in kinds)
+        actions = _collect_actions(changeset.root)
+        assert "move" in actions or ("add" in actions and "remove" in actions)
 
     def test_directory_nested(self, snapshot_pair):
         a, b = snapshot_pair("directory-nested")
@@ -137,9 +137,9 @@ class TestDiffConfig:
         assert "binoc.csv" in r
 
 
-def _collect_kinds(node):
-    """Recursively collect all 'kind' values from a diff tree."""
-    kinds = {node.kind}
+def _collect_actions(node):
+    """Recursively collect all 'action' values from a diff tree."""
+    actions = {node.action}
     for child in node:
-        kinds |= _collect_kinds(child)
-    return kinds
+        actions |= _collect_actions(child)
+    return actions

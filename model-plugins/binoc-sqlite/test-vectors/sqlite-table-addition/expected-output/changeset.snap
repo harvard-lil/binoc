@@ -6,17 +6,17 @@ expression: "&stable_changeset"
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "sqlite_database",
         "path": "data.sqlite",
         "children": [
           {
-            "kind": "add",
+            "action": "add",
             "item_type": "sqlite_table",
             "path": "data.sqlite/posts",
             "summary": "Table added (3 columns, 1 row)",

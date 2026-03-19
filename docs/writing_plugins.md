@@ -34,7 +34,7 @@ class FastaComparator(binoc.Comparator):
                 return binoc.Identical()
 
             node = binoc.DiffNode(
-                kind="modify",
+                action="modify",
                 item_type="fasta",
                 path=pair.logical_path,
                 tags=["biobinoc.sequence-changed"],
@@ -50,7 +50,7 @@ class FastaComparator(binoc.Comparator):
         elif pair.right_path:
             # Added
             return binoc.Leaf(binoc.DiffNode(
-                kind="add",
+                action="add",
                 item_type="fasta",
                 path=pair.logical_path,
             ))
@@ -58,7 +58,7 @@ class FastaComparator(binoc.Comparator):
         else:
             # Removed
             return binoc.Leaf(binoc.DiffNode(
-                kind="remove",
+                action="remove",
                 item_type="fasta",
                 path=pair.logical_path,
             ))
@@ -82,14 +82,14 @@ class SequenceNormalizer(binoc.Transformer):
 
     def transform(self, node):
         # Collapse trivial whitespace-only changes
-        if node.kind == "modify" and node.details.get("sequences_left") == node.details.get("sequences_right"):
+        if node.action == "modify" and node.details.get("sequences_left") == node.details.get("sequences_right"):
             return binoc.Replace(node.with_tag("biobinoc.whitespace-only"))
         return binoc.Unchanged()
 ```
 
 **Key points:**
 
-- Set `match_types`, `match_tags`, and/or `match_kinds` for declarative matching. Override `can_handle(self, node)` for imperative logic.
+- Set `match_types`, `match_tags`, and/or `match_actions` for declarative matching. Override `can_handle(self, node)` for imperative logic.
 - `transform()` must return `Unchanged()`, `Replace(node)`, `ReplaceMany(nodes)`, or `Remove()`.
 - Transformers see the completed tree. They don't have access to raw file data.
 
@@ -98,14 +98,14 @@ class SequenceNormalizer(binoc.Transformer):
 Nodes are immutable-ish. Builder methods return new nodes:
 
 ```python
-node = binoc.DiffNode(kind="modify", item_type="fasta", path="seqs.fa")
+node = binoc.DiffNode(action="modify", item_type="fasta", path="seqs.fa")
 node = node.with_tag("biobinoc.gap-change")
 node = node.with_detail("gap_count", 42)
 node = node.with_source_path("old_seqs.fa")  # for moves/renames
 node = node.with_children([child1, child2])
 
 # Reading
-node.kind          # "modify"
+node.action          # "modify"
 node.item_type     # "fasta"
 node.path          # "seqs.fa"
 node.tags          # ["biobinoc.gap-change"]
@@ -331,13 +331,13 @@ The `DiffNode.summary` field is an optional human-readable one-liner describing 
 
 ```python
 node = binoc.DiffNode(
-    kind="modify",
+    action="modify",
     item_type="fasta",
     path="sequences.fa",
 ).with_detail("summary", "3 sequences added, 1 removed")
 ```
 
-When `summary` is absent, renderers fall back to a generic description from `kind`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
+When `summary` is absent, renderers fall back to a generic description from `action`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
 
 ## Performance expectations
 
@@ -360,7 +360,7 @@ pair = binoc.ItemPair.both(
 )
 result = comp.compare(pair)
 assert isinstance(result, binoc.Leaf)
-assert result.node.kind == "modify"
+assert result.node.action == "modify"
 assert "biobinoc.sequence-changed" in result.node.tags
 ```
 

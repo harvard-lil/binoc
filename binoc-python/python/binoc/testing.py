@@ -144,17 +144,17 @@ def check_assertions(
     expected: dict,
 ) -> None:
     """Verify a changeset against ``[expected]`` assertions from a manifest."""
-    if "root_kind" in expected:
-        root_kind = expected["root_kind"]
+    if "root_action" in expected:
+        root_action = expected["root_action"]
         assert changeset.root is not None, (
-            f"[{name}] Expected root with kind '{root_kind}' but changeset has no root"
+            f"[{name}] Expected root with action '{root_action}' but changeset has no root"
         )
         root = changeset.root
-        if root.item_type == "directory" and root.kind != root_kind:
-            child_kinds = [c.kind for c in root]
-            assert root.kind == root_kind or root_kind in child_kinds, (
-                f"[{name}] Expected root_kind '{root_kind}', got root.kind='{root.kind}'"
-                f" with child kinds: {child_kinds}"
+        if root.item_type == "directory" and root.action != root_action:
+            child_actions = [c.action for c in root]
+            assert root.action == root_action or root_action in child_actions, (
+                f"[{name}] Expected root_action '{root_action}', got root.action='{root.action}'"
+                f" with child actions: {child_actions}"
             )
 
     if "child_count" in expected:

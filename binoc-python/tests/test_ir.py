@@ -8,7 +8,7 @@ import binoc
 class TestDiffNode:
     def test_basic_construction(self):
         node = binoc.DiffNode("modify", "file", "data.csv")
-        assert node.kind == "modify"
+        assert node.action == "modify"
         assert node.item_type == "file"
         assert node.path == "data.csv"
         assert node.source_path is None
@@ -108,7 +108,7 @@ class TestDiffNode:
         )
         found = tree.find_node("root/sub/b.txt")
         assert found is not None
-        assert found.kind == "remove"
+        assert found.action == "remove"
         assert tree.find_node("nonexistent") is None
 
     def test_to_dict(self):
@@ -120,7 +120,7 @@ class TestDiffNode:
             details={"lines": 10},
         )
         d = node.to_dict()
-        assert d["kind"] == "modify"
+        assert d["action"] == "modify"
         assert d["item_type"] == "file"
         assert d["path"] == "data.csv"
         assert "binoc.test" in d["tags"]
@@ -131,7 +131,7 @@ class TestDiffNode:
         node = binoc.DiffNode("add", "file", "new.txt")
         j = node.to_json()
         parsed = json.loads(j)
-        assert parsed["kind"] == "add"
+        assert parsed["action"] == "add"
         assert parsed["path"] == "new.txt"
 
     def test_indexing(self):
@@ -193,7 +193,7 @@ class TestChangeset:
         root = binoc.DiffNode("modify", "dir", "root")
         m = binoc.Changeset("v1", "v2", root)
         assert m.root is not None
-        assert m.root.kind == "modify"
+        assert m.root.action == "modify"
         assert m.node_count == 1
         assert bool(m) is True
 
@@ -207,7 +207,7 @@ class TestChangeset:
         m = binoc.Changeset("v1", "v2", root)
         found = m.find_node("root/a.txt")
         assert found is not None
-        assert found.kind == "add"
+        assert found.action == "add"
 
     def test_json_round_trip(self):
         root = binoc.DiffNode(
@@ -240,7 +240,7 @@ class TestChangeset:
         d = m.to_dict()
         assert d["from_snapshot"] == "a"
         assert d["to_snapshot"] == "b"
-        assert d["root"]["kind"] == "add"
+        assert d["root"]["action"] == "add"
 
     def test_repr_and_str(self):
         m = binoc.Changeset("v1", "v2")
