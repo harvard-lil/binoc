@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use binoc_sdk::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MarkdownOutputterConfig {
+pub struct MarkdownRendererConfig {
     #[serde(default = "default_significance")]
     pub significance: BTreeMap<String, Vec<String>>,
 }
 
-impl Default for MarkdownOutputterConfig {
+impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
             significance: default_significance(),
@@ -21,7 +21,7 @@ impl Default for MarkdownOutputterConfig {
 fn default_significance() -> BTreeMap<String, Vec<String>> {
     let mut map = BTreeMap::new();
     map.insert(
-        "ministerial".into(),
+        "clerical".into(),
         vec![
             "binoc.column-reorder".into(),
             "binoc.whitespace-change".into(),
@@ -43,30 +43,30 @@ fn default_significance() -> BTreeMap<String, Vec<String>> {
     map
 }
 
-pub struct MarkdownOutputter;
+pub struct MarkdownRenderer;
 
-impl Outputter for MarkdownOutputter {
-    fn descriptor(&self) -> OutputterDescriptor {
-        OutputterDescriptor::new("binoc.markdown", "md")
+impl Renderer for MarkdownRenderer {
+    fn descriptor(&self) -> RendererDescriptor {
+        RendererDescriptor::new("binoc.markdown", "md")
     }
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String> {
-        let md_config: MarkdownOutputterConfig =
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String> {
+        let md_config: MarkdownRendererConfig =
             serde_json::from_value(config.clone()).unwrap_or_default();
-        Ok(render_markdown(migrations, &md_config))
+        Ok(render_markdown(changesets, &md_config))
     }
 }
 
-pub fn render_markdown(migrations: &[Migration], config: &MarkdownOutputterConfig) -> String {
+pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig) -> String {
     let mut out = String::new();
 
-    for migration in migrations {
+    for changeset in changesets {
         out.push_str(&format!(
             "# Changelog: {} → {}\n\n",
-            migration.from_snapshot, migration.to_snapshot
+            changeset.from_snapshot, changeset.to_snapshot
         ));
 
-        let root = match &migration.root {
+        let root = match &changeset.root {
             Some(r) => r,
             None => {
                 out.push_str("No changes detected.\n\n");
@@ -123,7 +123,7 @@ fn collect_reportable_nodes<'a>(
 ) {
     let is_reportable = node.summary.is_some()
         || !node.tags.is_empty()
-        || (node.children.is_empty() && node.kind != "identical");
+        || (node.children.is_empty() && node.action != "identical");
 
     if is_reportable {
         let category = node.tags.iter().find_map(|tag| tag_map.get(tag)).cloned();
@@ -158,14 +158,14 @@ fn format_node(out: &mut String, node: &DiffNode) {
 }
 
 fn fallback_description(node: &DiffNode) -> String {
-    let kind = &node.kind;
+    let action = &node.action;
     let item_type = if node.item_type.is_empty() {
         "item"
     } else {
         &node.item_type
     };
 
-    match kind.as_str() {
+    match action.as_str() {
         "add" => format!("New {item_type}"),
         "remove" => format!("{} removed", capitalize(item_type)),
         "modify" => format!("{} modified", capitalize(item_type)),
@@ -184,7 +184,7 @@ fn fallback_description(node: &DiffNode) -> String {
             }
         }
         "reorder" => format!("{} reordered", capitalize(item_type)),
-        _ => format!("{kind} ({item_type})"),
+        _ => format!("{action} ({item_type})"),
     }
 }
 
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn to_markdown_includes_significance_sections() {
-        let migration = Migration::new(
+        let changeset = Changeset::new(
             "v1",
             "v2",
             Some(
@@ -211,8 +211,8 @@ mod tests {
                     .with_tag("binoc.column-addition"),
             ),
         );
-        let config = MarkdownOutputterConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let config = MarkdownRendererConfig::default();
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("# Changelog: v1 → v2"));
         assert!(md.contains("## Substantive Changes"));
         assert!(md.contains("**data.csv**"));
@@ -221,18 +221,18 @@ mod tests {
 
     #[test]
     fn to_markdown_no_changes_shows_message() {
-        let migration = Migration::new("v1", "v2", None);
-        let config = MarkdownOutputterConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let changeset = Changeset::new("v1", "v2", None);
+        let config = MarkdownRendererConfig::default();
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("No changes detected"));
     }
 
     #[test]
     fn node_without_summary_uses_fallback() {
         let node = DiffNode::new("add", "file", "new.txt").with_tag("binoc.content-changed");
-        let migration = Migration::new("v1", "v2", Some(node));
-        let config = MarkdownOutputterConfig::default();
-        let md = render_markdown(&[migration], &config);
+        let changeset = Changeset::new("v1", "v2", Some(node));
+        let config = MarkdownRendererConfig::default();
+        let md = render_markdown(&[changeset], &config);
         assert!(md.contains("New file"));
     }
 }

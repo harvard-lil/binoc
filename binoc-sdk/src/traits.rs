@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{DiffNode, Migration};
+use crate::ir::{Changeset, DiffNode};
 use crate::types::*;
 
 pub type BinocResult<T> = Result<T, BinocError>;
@@ -144,7 +144,7 @@ pub struct TransformerDescriptor {
     #[serde(default)]
     pub match_tags: Vec<String>,
     #[serde(default)]
-    pub match_kinds: Vec<String>,
+    pub match_actions: Vec<String>,
     #[serde(default)]
     pub scope: TransformScope,
     #[serde(default = "default_phase")]
@@ -162,7 +162,7 @@ impl TransformerDescriptor {
             name: name.into(),
             match_types: Vec::new(),
             match_tags: Vec::new(),
-            match_kinds: Vec::new(),
+            match_actions: Vec::new(),
             scope: TransformScope::Node,
             suggested_phase: "default".into(),
         }
@@ -178,8 +178,8 @@ impl TransformerDescriptor {
         self
     }
 
-    pub fn with_match_kinds(mut self, kinds: Vec<String>) -> Self {
-        self.match_kinds = kinds;
+    pub fn with_match_actions(mut self, actions: Vec<String>) -> Self {
+        self.match_actions = actions;
         self
     }
 
@@ -189,16 +189,16 @@ impl TransformerDescriptor {
     }
 }
 
-/// Static metadata for an outputter plugin.
+/// Static metadata for a renderer plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct OutputterDescriptor {
+pub struct RendererDescriptor {
     pub sdk_version: String,
     pub name: String,
     pub file_extension: String,
 }
 
-impl OutputterDescriptor {
+impl RendererDescriptor {
     pub fn new(name: impl Into<String>, file_extension: impl Into<String>) -> Self {
         Self {
             sdk_version: SDK_VERSION.into(),
@@ -317,11 +317,11 @@ pub trait Transformer: Send + Sync {
     }
 }
 
-/// A plugin that renders migrations into a human-readable format.
-pub trait Outputter: Send + Sync {
-    fn descriptor(&self) -> OutputterDescriptor;
+/// A plugin that renders changesets into a human-readable format.
+pub trait Renderer: Send + Sync {
+    fn descriptor(&self) -> RendererDescriptor;
 
-    fn render(&self, migrations: &[Migration], config: &serde_json::Value) -> BinocResult<String>;
+    fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String>;
 }
 
 #[cfg(test)]

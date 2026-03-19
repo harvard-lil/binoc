@@ -11,17 +11,17 @@ The original controller filtered identical items immediately: when a comparator 
 
 2. **Content hashes were only available for binary files.** The binary comparator computed BLAKE3 hashes and stored them in `DiffNode::details`. But specialized comparators (text, CSV) didn't compute or propagate hashes. Move and copy detection silently failed for non-binary files: a renamed `.txt` file appeared as an unrelated add + remove.
 
-A secondary symptom: the `trivial-identical` test vector produced `"kind": "modify"` for a directory whose contents were all identical — semantically wrong, since nothing was modified.
+A secondary symptom: the `trivial-identical` test vector produced `"action": "modify"` for a directory whose contents were all identical — semantically wrong, since nothing was modified.
 
 ## Decision
 
 ### 1. The IR tree includes identical nodes during transformer execution
 
-`process_pair` always returns a `DiffNode`, never `Option<DiffNode>`. When a comparator returns `Identical`, or when the controller detects matching content hashes, it produces a node with `kind: "identical"`. The tree seen by transformers is the *full comparison result*, not a delta.
+`process_pair` always returns a `DiffNode`, never `Option<DiffNode>`. When a comparator returns `Identical`, or when the controller detects matching content hashes, it produces a node with `action: "identical"`. The tree seen by transformers is the *full comparison result*, not a delta.
 
-After all transformers run, `prune_identical` removes `identical` nodes and any containers that become empty as a result. The final migration is a clean delta.
+After all transformers run, `prune_identical` removes `identical` nodes and any containers that become empty as a result. The final changeset is a clean delta.
 
-This is the key invariant: **transformers see the full tree; outputters see the pruned tree.**
+This is the key invariant: **transformers see the full tree; renderers see the pruned tree.**
 
 ### 2. Expanding comparators pre-compute content hashes on Items
 

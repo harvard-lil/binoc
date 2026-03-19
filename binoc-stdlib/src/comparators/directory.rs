@@ -212,12 +212,12 @@ impl DirectoryComparator {
             children.push(ItemPair::removed(make_item_ref(&path_l, logical, data)?));
         }
 
-        let kind = if children.is_empty() {
+        let action = if children.is_empty() {
             "identical"
         } else {
             "modify"
         };
-        let node = DiffNode::new(kind, "directory", &right.logical_path);
+        let node = DiffNode::new(action, "directory", &right.logical_path);
         Ok(CompareResult::Expand(node, children))
     }
 }

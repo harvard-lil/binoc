@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use binoc_core::config::DatasetConfig;
 use binoc_core::controller::Controller;
-use binoc_sdk::Migration;
+use binoc_sdk::Changeset;
 
 fn setup_test_dir() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
@@ -28,13 +28,13 @@ fn test_identical_files() {
     fs::write(dir_b.join("data.txt"), "hello world\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
     // Root directory expand produces a node, but all children are identical
     // so the directory node should have no children with actual diffs
-    if let Some(root) = &migration.root {
+    if let Some(root) = &changeset.root {
         assert!(
             root.children.is_empty(),
             "identical files should produce no diff children, got: {:?}",
@@ -56,17 +56,17 @@ fn test_added_file() {
     fs::write(dir_b.join("new_file.txt"), "new content\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     assert!(!root.children.is_empty(), "should have children");
 
     let added = root
         .children
         .iter()
-        .find(|c| c.kind == "add")
+        .find(|c| c.action == "add")
         .expect("should have add node");
     assert!(added.path.contains("new_file.txt"));
 }
@@ -84,15 +84,15 @@ fn test_removed_file() {
     fs::write(dir_b.join("kept.txt"), "kept\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     let removed = root
         .children
         .iter()
-        .find(|c| c.kind == "remove")
+        .find(|c| c.action == "remove")
         .expect("should have remove node");
     assert!(removed.path.contains("old_file.txt"));
 }
@@ -113,15 +113,15 @@ fn test_modified_text_file() {
     .unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     let modified = root
         .children
         .iter()
-        .find(|c| c.kind == "modify")
+        .find(|c| c.action == "modify")
         .expect("should have modify node");
     assert_eq!(modified.item_type, "text");
     assert!(modified.tags.contains("binoc.content-changed"));
@@ -162,18 +162,18 @@ fn test_csv_column_changes() {
     .unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     let csv_node = root
         .children
         .iter()
         .find(|c| c.item_type == "tabular")
         .expect("should have tabular node");
 
-    assert_eq!(csv_node.kind, "modify");
+    assert_eq!(csv_node.action, "modify");
     assert!(csv_node.tags.contains("binoc.column-addition"));
     assert!(csv_node.tags.contains("binoc.row-addition"));
 
@@ -207,11 +207,11 @@ fn test_csv_column_reorder_only() {
     .unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     let csv_node = root
         .children
         .iter()
@@ -219,7 +219,7 @@ fn test_csv_column_reorder_only() {
         .expect("should have tabular node");
 
     // The column_reorder_detector transformer should have converted this to "reorder"
-    assert_eq!(csv_node.kind, "reorder");
+    assert_eq!(csv_node.action, "reorder");
     assert!(csv_node.tags.contains("binoc.column-reorder"));
 }
 
@@ -236,18 +236,18 @@ fn test_move_detection() {
     fs::write(dir_b.join("new_name.bin"), content).unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
-    let move_node = root.children.iter().find(|c| c.kind == "move");
+    let root = changeset.root.expect("should have root");
+    let move_node = root.children.iter().find(|c| c.action == "move");
     assert!(
         move_node.is_some(),
         "should detect move, got: {:?}",
         root.children
             .iter()
-            .map(|c| (&c.kind, &c.path))
+            .map(|c| (&c.action, &c.path))
             .collect::<Vec<_>>()
     );
 
@@ -277,11 +277,11 @@ fn test_zip_comparison() {
     );
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let root = migration.root.expect("should have root");
+    let root = changeset.root.expect("should have root");
     let zip_node = root
         .children
         .iter()
@@ -306,14 +306,14 @@ fn test_json_serialization() {
     fs::write(dir_b.join("file.txt"), "after\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let json = binoc_core::output::to_json(&migration).unwrap();
-    let roundtrip: Migration = serde_json::from_str(&json).unwrap();
-    assert_eq!(migration.from_snapshot, roundtrip.from_snapshot);
-    assert_eq!(migration.to_snapshot, roundtrip.to_snapshot);
+    let json = binoc_core::output::to_json(&changeset).unwrap();
+    let roundtrip: Changeset = serde_json::from_str(&json).unwrap();
+    assert_eq!(changeset.from_snapshot, roundtrip.from_snapshot);
+    assert_eq!(changeset.to_snapshot, roundtrip.to_snapshot);
     assert!(roundtrip.root.is_some());
 }
 
@@ -329,12 +329,12 @@ fn test_markdown_output() {
     fs::write(dir_b.join("data.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let md_config = binoc_stdlib::outputters::markdown::MarkdownOutputterConfig::default();
-    let md = binoc_stdlib::outputters::markdown::render_markdown(&[migration], &md_config);
+    let md_config = binoc_stdlib::renderers::markdown::MarkdownRendererConfig::default();
+    let md = binoc_stdlib::renderers::markdown::render_markdown(&[changeset], &md_config);
     assert!(md.contains("Changelog:"));
     assert!(md.contains("data.csv"));
 }
@@ -355,13 +355,13 @@ fn test_extract_csv_rows_added() {
     fs::write(dir_b.join("data.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
     let result = controller
         .extract(
-            &migration,
+            &changeset,
             "data.csv",
             "rows_added",
             dir_a.to_str().unwrap(),
@@ -389,13 +389,13 @@ fn test_extract_csv_cells_changed() {
     fs::write(dir_b.join("data.csv"), "name,age\nAlice,31\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
     let result = controller
         .extract(
-            &migration,
+            &changeset,
             "data.csv",
             "cells_changed",
             dir_a.to_str().unwrap(),
@@ -426,13 +426,13 @@ fn test_extract_csv_full_content() {
     fs::write(dir_b.join("data.csv"), "name,age\nAlice,31\n").unwrap();
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
     let result = controller
         .extract(
-            &migration,
+            &changeset,
             "data.csv",
             "content",
             dir_a.to_str().unwrap(),
@@ -467,11 +467,11 @@ fn test_extract_through_zip() {
     );
 
     let controller = create_controller();
-    let migration = controller
+    let changeset = controller
         .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
         .unwrap();
 
-    let csv_node = migration
+    let csv_node = changeset
         .root
         .as_ref()
         .expect("should have root")
@@ -490,7 +490,7 @@ fn test_extract_through_zip() {
 
     let result = controller
         .extract(
-            &migration,
+            &changeset,
             &csv_node.path,
             "rows_added",
             dir_a.to_str().unwrap(),

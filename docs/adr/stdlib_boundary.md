@@ -5,7 +5,7 @@
 
 ## Context
 
-`binoc-stdlib` is architecturally identical to a third-party plugin pack — the core engine has zero format knowledge. This raises the question: which comparators, transformers, and outputters belong in the standard library versus external plugin crates?
+`binoc-stdlib` is architecturally identical to a third-party plugin pack — the core engine has zero format knowledge. This raises the question: which comparators, transformers, and renderers belong in the standard library versus external plugin crates?
 
 The answer affects first-run UX (what works out of the box), build cost (every stdlib dependency is paid by every user), and maintenance commitment (the `binoc.*` namespace implies long-term support).
 
@@ -41,7 +41,7 @@ The core team must be willing to maintain the plugin indefinitely under the `bin
 | SQLite | plugin | Application format; requires bundled C library (`rusqlite`) |
 | Excel, Parquet, HDF5 | plugin | Domain-specific; heavy or native dependencies |
 
-Transformers and outputters follow the same logic: move/copy detection and Markdown output are generally useful and have no external dependencies, so they belong in stdlib. A domain-specific transformer (e.g., database migration generation) belongs in the plugin that understands the domain.
+Transformers and renderers follow the same logic: move/copy detection and Markdown output are generally useful and have no external dependencies, so they belong in stdlib. A domain-specific transformer (e.g., database changeset generation) belongs in the plugin that understands the domain.
 
 ## Alternatives Considered
 

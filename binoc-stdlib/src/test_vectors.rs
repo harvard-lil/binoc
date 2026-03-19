@@ -15,10 +15,10 @@ use std::sync::Arc;
 use binoc_core::config::{DatasetConfig, PluginRegistry};
 use binoc_core::controller::Controller;
 use binoc_sdk::test_support::{AbiCall, AbiComparator, AbiLogCollector, AbiTransformer};
-use binoc_sdk::Migration;
+use binoc_sdk::Changeset;
 use serde::Deserialize;
 
-use crate::outputters::markdown;
+use crate::renderers::markdown;
 
 // ── Manifest schema ───────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ struct ManifestConfig {
 #[derive(Debug, Deserialize)]
 struct ExpectedAssertions {
     #[serde(default)]
-    root_kind: Option<String>,
+    root_action: Option<String>,
     #[serde(default)]
     child_count: Option<usize>,
     #[serde(default)]
@@ -134,7 +134,7 @@ pub fn abi_wrapped_default_registry() -> (
     wrap_transformer!(column_reorder::ColumnReorderDetector);
 
     registry
-        .register_outputter(Arc::new(markdown::MarkdownOutputter))
+        .register_renderer(Arc::new(markdown::MarkdownRenderer))
         .expect("same-build plugin");
 
     (registry, collectors, counter)
@@ -143,7 +143,7 @@ pub fn abi_wrapped_default_registry() -> (
 /// Run one vector: copy snapshots to temp, build zips from `.zip.d`, optionally
 /// run `prepare(snap_a, snap_b)` for plugin-specific artifacts (e.g. SQLite from
 /// `.sqlite.d`), then resolve config, run diff, run assertions, snapshot.
-/// Snapshot paths in the migration are normalized to `snapshot-a` / `snapshot-b`.
+/// Snapshot paths in the changeset are normalized to `snapshot-a` / `snapshot-b`.
 pub fn run_vector(
     vector_dir: &Path,
     vectors_root: &Path,
@@ -181,27 +181,27 @@ pub fn run_vector(
     });
     let controller = Controller::new(resolved.comparators, resolved.transformers);
 
-    let migration = controller
+    let changeset = controller
         .diff(snap_a.to_str().unwrap(), snap_b.to_str().unwrap())
         .unwrap_or_else(|e| panic!("Diff failed for {}: {e}", manifest.vector.name));
 
     if let Some(expected) = &manifest.expected {
-        check_assertions(&manifest.vector.name, &migration, expected, &config);
+        check_assertions(&manifest.vector.name, &changeset, expected, &config);
     }
 
-    let mut stable_migration = migration.clone();
-    stable_migration.from_snapshot = "snapshot-a".into();
-    stable_migration.to_snapshot = "snapshot-b".into();
+    let mut stable_changeset = changeset.clone();
+    stable_changeset.from_snapshot = "snapshot-a".into();
+    stable_changeset.to_snapshot = "snapshot-b".into();
     let md = markdown::render_markdown(
-        &[stable_migration.clone()],
-        &markdown::MarkdownOutputterConfig::default(),
+        &[stable_changeset.clone()],
+        &markdown::MarkdownRendererConfig::default(),
     );
 
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(vector_dir.join("expected-output"));
     settings.set_prepend_module_to_snapshot(false);
     settings.bind(|| {
-        insta::assert_json_snapshot!("migration", &stable_migration);
+        insta::assert_json_snapshot!("changeset", &stable_changeset);
         insta::assert_snapshot!("changelog", &md);
     });
 }
@@ -253,7 +253,7 @@ pub fn run_vector_with_abi_log(
         .num_threads(1)
         .build()
         .expect("rayon pool");
-    let migration = pool
+    let changeset = pool
         .install(|| controller.diff(snap_a.to_str().unwrap(), snap_b.to_str().unwrap()))
         .unwrap_or_else(|e| panic!("Diff failed for {}: {e}", manifest.vector.name));
 
@@ -264,22 +264,22 @@ pub fn run_vector_with_abi_log(
     abi_log.sort_by_key(|c| c.seq);
 
     if let Some(expected) = &manifest.expected {
-        check_assertions(&manifest.vector.name, &migration, expected, &config);
+        check_assertions(&manifest.vector.name, &changeset, expected, &config);
     }
 
-    let mut stable_migration = migration.clone();
-    stable_migration.from_snapshot = "snapshot-a".into();
-    stable_migration.to_snapshot = "snapshot-b".into();
+    let mut stable_changeset = changeset.clone();
+    stable_changeset.from_snapshot = "snapshot-a".into();
+    stable_changeset.to_snapshot = "snapshot-b".into();
     let md = markdown::render_markdown(
-        &[stable_migration.clone()],
-        &markdown::MarkdownOutputterConfig::default(),
+        &[stable_changeset.clone()],
+        &markdown::MarkdownRendererConfig::default(),
     );
 
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(vector_dir.join("expected-output"));
     settings.set_prepend_module_to_snapshot(false);
     settings.bind(|| {
-        insta::assert_json_snapshot!("migration", &stable_migration);
+        insta::assert_json_snapshot!("changeset", &stable_changeset);
         insta::assert_snapshot!("changelog", &md);
         if !abi_log.is_empty() {
             insta::assert_json_snapshot!("abi-log", &abi_log);
@@ -325,7 +325,7 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
             DatasetConfig {
                 comparators: cfg.comparators.clone().unwrap_or(default.comparators),
                 transformers: cfg.transformers.clone().unwrap_or(default.transformers),
-                outputters: default.outputters,
+                renderers: default.renderers,
                 output: default.output,
             }
         }
@@ -533,26 +533,27 @@ fn add_dir_to_zip(
 
 fn check_assertions(
     name: &str,
-    migration: &Migration,
+    changeset: &Changeset,
     expected: &ExpectedAssertions,
     config: &DatasetConfig,
 ) {
-    if let Some(root_kind) = &expected.root_kind {
-        let root = migration.root.as_ref().unwrap_or_else(|| {
-            panic!("[{name}] Expected root with kind '{root_kind}' but migration has no root")
+    if let Some(root_action) = &expected.root_action {
+        let root = changeset.root.as_ref().unwrap_or_else(|| {
+            panic!("[{name}] Expected root with action '{root_action}' but changeset has no root")
         });
-        if root.item_type == "directory" && root.kind != *root_kind {
-            let child_kinds: Vec<&str> = root.children.iter().map(|c| c.kind.as_str()).collect();
+        if root.item_type == "directory" && root.action != *root_action {
+            let child_actions: Vec<&str> =
+                root.children.iter().map(|c| c.action.as_str()).collect();
             assert!(
-                child_kinds.contains(&root_kind.as_str()) || root.kind == *root_kind,
-                "[{name}] Expected root_kind '{root_kind}', got root.kind='{}' with child kinds: {child_kinds:?}",
-                root.kind
+                child_actions.contains(&root_action.as_str()) || root.action == *root_action,
+                "[{name}] Expected root_action '{root_action}', got root.action='{}' with child actions: {child_actions:?}",
+                root.action
             );
         }
     }
     if let Some(child_count) = expected.child_count {
-        let root = migration.root.as_ref().unwrap_or_else(|| {
-            panic!("[{name}] Expected child_count={child_count} but migration has no root")
+        let root = changeset.root.as_ref().unwrap_or_else(|| {
+            panic!("[{name}] Expected child_count={child_count} but changeset has no root")
         });
         assert_eq!(
             root.children.len(),
@@ -561,15 +562,15 @@ fn check_assertions(
             root.children.len(),
             root.children
                 .iter()
-                .map(|c| (&c.kind, &c.path))
+                .map(|c| (&c.action, &c.path))
                 .collect::<Vec<_>>()
         );
     }
     if let Some(has_tags) = &expected.has_tags {
-        let root = migration
+        let root = changeset
             .root
             .as_ref()
-            .unwrap_or_else(|| panic!("[{name}] Expected tags but migration has no root"));
+            .unwrap_or_else(|| panic!("[{name}] Expected tags but changeset has no root"));
         let all_tags = root.all_tags();
         for tag in has_tags {
             assert!(
@@ -579,18 +580,18 @@ fn check_assertions(
         }
     }
     if let Some(significance) = &expected.significance {
-        let root = migration
+        let root = changeset
             .root
             .as_ref()
-            .unwrap_or_else(|| panic!("[{name}] Expected significance but migration has no root"));
+            .unwrap_or_else(|| panic!("[{name}] Expected significance but changeset has no root"));
         let all_tags = root.all_tags();
-        let md_val = config.output.get_for_outputter("binoc.markdown");
-        let md_config: markdown::MarkdownOutputterConfig =
+        let md_val = config.output.get_for_renderer("binoc.markdown");
+        let md_config: markdown::MarkdownRendererConfig =
             serde_json::from_value(md_val).unwrap_or_default();
         let sig_tags = md_config.significance.get(significance.as_str());
         assert!(
             sig_tags.is_some(),
-            "[{name}] Significance category '{significance}' not in markdown outputter config"
+            "[{name}] Significance category '{significance}' not in markdown renderer config"
         );
         let sig_tags = sig_tags.unwrap();
         let has_sig_tag = all_tags.iter().any(|t| sig_tags.contains(t));

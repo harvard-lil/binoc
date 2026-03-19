@@ -1,26 +1,29 @@
 ---
 source: binoc-stdlib/tests/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "2 rows added",
+        "summary": "Column added: 'email'",
         "tags": [
-          "binoc.row-addition"
+          "binoc.column-addition",
+          "binoc.schema-change"
         ],
         "details": {
           "cells_changed": 0,
-          "columns_added": [],
+          "columns_added": [
+            "email"
+          ],
           "columns_left": [
             "name",
             "age"
@@ -28,14 +31,15 @@ expression: "&stable_migration"
           "columns_removed": [],
           "columns_right": [
             "name",
-            "age"
+            "age",
+            "email"
           ],
-          "hash_left": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
-          "hash_right": "9d3084af09a1a8977f5664439bbc23cc0734ffa5eeb3f68e6f1afc635ab48ee3",
-          "rows_added": 2,
-          "rows_left": 1,
+          "hash_left": "5c23cb3199c0882f4743d97b03873b1fb881bf2592ff4ab318ba8213593162e3",
+          "hash_right": "ba70ccdeb5e198834b1c94230f981cf9d54bc30877556ce6060921ba3db4441f",
+          "rows_added": 0,
+          "rows_left": 2,
           "rows_removed": 0,
-          "rows_right": 3
+          "rows_right": 2
         },
         "comparator": "binoc.csv"
       }

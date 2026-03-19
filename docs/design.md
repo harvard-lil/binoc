@@ -8,7 +8,7 @@ Detailed design decisions are also recorded in docs/adr/
 
 **2. Portable.** Rust compiles to libraries callable from other languages. A Python wrapper (PyO3) is a first-class distribution target. The Rust CLI serves batch and CI use; the Python library serves interactive exploration in Jupyter notebooks and integration into data science workflows. The library is the product; the CLI is one consumer of it.
 
-**3. Extensible by community.** The archival community is small and lightly funded. Binoc must be a platform that other communities (biology, climate science, public health) can extend with their own format-specific plugins. The target distribution model: vanilla Binoc ships a standard library of plugins; BioBinoc, ClimateBinoc, etc. are pip-installable packages that register domain-specific comparators, transformers, and outputter configs. The core engine has zero domain knowledge.
+**3. Extensible by community.** The archival community is small and lightly funded. Binoc must be a platform that other communities (biology, climate science, public health) can extend with their own format-specific plugins. The target distribution model: vanilla Binoc ships a standard library of plugins; BioBinoc, ClimateBinoc, etc. are pip-installable packages that register domain-specific comparators, transformers, and renderer configs. The core engine has zero domain knowledge.
 
 **4. Correct by default, tunable by experts.** Out of the box, Binoc produces accurate diffs using sensible defaults. Dataset-specific configuration allows experts to control comparator selection, transformer ordering, and significance classification, and add custom handlers.
 
@@ -32,11 +32,11 @@ Detailed design decisions are also recorded in docs/adr/
 
 ### CI Pipeline Operator
 
-> "I want to run `binoc diff snapshots/2024-03/ snapshots/2024-06/ --config census.yaml -o migration.json -q` in a GitHub Action and fail the build if substantive changes are detected without a corresponding human review."
+> "I want to run `binoc diff snapshots/2024-03/ snapshots/2024-06/ --config census.yaml -o changeset.json -q` in a GitHub Action and fail the build if substantive changes are detected without a corresponding human review."
 
 ### Interactive Explorer
 
-> "The changelog says '3,217 rows added to data.csv inside archive.zip.' I want to run `binoc extract migration.json archive.zip/data/data.csv rows_added` and see those actual rows."
+> "The changelog says '3,217 rows added to data.csv inside archive.zip.' I want to run `binoc extract changeset.json archive.zip/data/data.csv rows_added` and see those actual rows."
 
 ---
 
@@ -48,19 +48,19 @@ Detailed design decisions are also recorded in docs/adr/
 |---|---|
 | **Dataset** | A named resource that humans think of as a consistent semantic entity. |
 | **Snapshot** | A set of files representing the state of the dataset at a moment in time. Concretely, a directory on disk (primary), or potentially a manifest, archive, or other container. |
-| **Migration** | A structured description of how to get from one snapshot to the next. A tree of diff nodes. Does not contain data, but can reconstruct details on demand given access to the original snapshots. |
-| **Changelog** | A human-level summary of a series of migrations. Output in Markdown (default), rendered from migrations by an outputter (template-driven or LLM-summarized). |
-| **Dataset Config** | Optional YAML file specifying the comparator pipeline, transformer pipeline, outputter settings, significance rules, and any format-specific configuration for a particular dataset. |
+| **Changeset** | A structured description of how to get from one snapshot to the next. A tree of diff nodes. Does not contain data, but can reconstruct details on demand given access to the original snapshots. |
+| **Changelog** | A human-level summary of a series of changesets. Output in Markdown (default), rendered from changesets by a renderer (template-driven or LLM-summarized). |
+| **Dataset Config** | Optional YAML file specifying the comparator pipeline, transformer pipeline, renderer settings, significance rules, and any format-specific configuration for a particular dataset. |
 
 ### Program Components
 
 | Component | Role |
 |---|---|
-| **Controller** | Accepts two input snapshots and produces a migration. Processes a work queue of item pairs, dispatching to comparators, assembling the diff tree, then running transformers. Type-ignorant — it does not know what a directory, zip, or CSV is. |
+| **Controller** | Accepts two input snapshots and produces a changeset. Processes a work queue of item pairs, dispatching to comparators, assembling the diff tree, then running transformers. Type-ignorant — it does not know what a directory, zip, or CSV is. |
 | **Comparator** | A plugin that claims an item pair and either emits a leaf diff or expands the pair into child items for further processing. Comparators are the parser: raw data → IR. They have data access. |
 | **Transformer** | A plugin that rewrites the completed diff tree. Transformers are optimization passes: IR → IR. They operate on structure, not raw data. |
 | **Diff Node** | The unit of the intermediate representation (IR). A node in a tree representing one change or container of changes. |
-| **Outputter** | A plugin that renders migrations into a presentation format (Markdown changelog, HTML, custom). Each outputter receives its own config section and handles its own concerns (e.g. significance classification for the Markdown outputter). Raw JSON is the canonical migration format, not an outputter. |
+| **Renderer** | A plugin that renders changesets into a presentation format (Markdown changelog, HTML, custom). Each renderer receives its own config section and handles its own concerns (e.g. significance classification for the Markdown renderer). Raw JSON is the canonical changeset format, not a renderer. |
 
 ---
 
@@ -81,20 +81,20 @@ The controller is a work loop over a tree of item pairs. It does not know about 
    Independent siblings are processed in parallel (rayon).
 5. Once the tree is fully expanded, walk the transformer pipeline.
    Each transformer runs in declared order over the completed tree.
-6. The finalized tree is the migration.
+6. The finalized tree is the changeset.
 ```
 
 This handles arbitrary nesting naturally. A zip comparator expands into directory entries. A directory comparator matches files by path and expands into file pairs. A nested zip is expanded again. A CSV comparator diffs at the column/row level. The controller doesn't know or care about any of this.
 
 ### The Diff IR (Intermediate Representation)
 
-The IR is a tree of `DiffNode` values. This is the central data structure of the system — every comparator emits it, every transformer rewrites it, every outputter reads it.
+The IR is a tree of `DiffNode` values. This is the central data structure of the system — every comparator emits it, every transformer rewrites it, every renderer reads it.
 
 ```
 DiffNode:
-    kind: string            # open enum: "add", "remove", "modify", "move",
+    action: string            # open enum: "add", "remove", "modify", "move",
                             #   "rename", "reorder", "schema_change", ...
-                            #   Plugins may define new kinds.
+                            #   Plugins may define new actions.
     item_type: string       # open string: "directory", "file", "tabular",
                             #   "zip_archive", "tar_archive", "alignment", ...
                             #   No built-in types. Conventions, not enforcement.
@@ -114,9 +114,9 @@ DiffNode:
 
 **Design decisions embedded here:**
 
-- **`kind` is an open enum.** Plugins can define new kinds. Transformers that don't recognize a kind pass nodes through unchanged. A future `custom` subkind mechanism may be added if collision becomes a problem.
+- **`action` is an open enum.** Plugins can define new actions. Transformers that don't recognize an action pass nodes through unchanged. A future `custom` subaction mechanism may be added if collision becomes a problem.
 - **`item_type` is an open string.** The core system does not interpret it. Type conventions are documented (e.g., "if you emit `item_type: tabular`, your `details` should conform to this schema"). This avoids hardcoding the wrong primitives while enabling shared tooling (e.g., all tabular comparators emit a common detail schema, so a single tabular transformer works across CSV, Excel, Parquet).
-- **`tags` are an open bag.** No built-in semantics. Comparators attach tags describing what they observed ("column-reorder", "row-addition"). Significance classification maps tags to user-facing categories in the outputter config.
+- **`tags` are an open bag.** No built-in semantics. Comparators attach tags describing what they observed ("column-reorder", "row-addition"). Significance classification maps tags to user-facing categories in the renderer config.
 
 ### Comparator Interface
 
@@ -136,13 +136,13 @@ A comparator claims item pairs it knows how to handle and either produces a term
 
 **Dispatch semantics:** The controller walks the comparator pipeline in config order. For each comparator it checks extension filters, then media type filters, then `can_handle`. The first comparator to claim the item wins. Directories skip both extension and media type matching (they are claimed solely via `can_handle`) to prevent extracted archive contents from being re-claimed by the archive comparator. This is URL-routing semantics: specificity is controlled by ordering in config, not by plugin self-declaration.
 
-**The `extract` verb:** An optional method for on-demand detail retrieval. Migrations are descriptive — they record what changed but not the data itself. When a user wants to see the actual changed rows, the `extract` method is called with the original snapshots and a selector addressing the change of interest. Not all comparators implement it.
+**The `extract` verb:** An optional method for on-demand detail retrieval. Changesets are descriptive — they record what changed but not the data itself. When a user wants to see the actual changed rows, the `extract` method is called with the original snapshots and a selector addressing the change of interest. Not all comparators implement it.
 
 ### Transformer Interface
 
 A transformer rewrites the completed diff tree. Transformers are optimization passes — they operate on IR structure, not raw data.
 
-**Matching nodes.** Transformers declare which nodes they care about via filters on `item_type`, `tags`, and/or diff `kind`. A `can_handle` method provides an imperative escape hatch.
+**Matching nodes.** Transformers declare which nodes they care about via filters on `item_type`, `tags`, and/or diff `action`. A `can_handle` method provides an imperative escape hatch.
 
 **Scope.** A transformer operates in either Node scope (receives individual matched nodes; the controller recurses into children) or Subtree scope (receives the whole subtree rooted at the matched node and can rewrite it freely).
 
@@ -165,35 +165,35 @@ Each transformer declares a `suggested_phase` (e.g., "structural", "semantic", "
 | Copy detector | Container nodes with `add` and `identical` children | Detects adds whose content hash matches an existing unchanged file; collapses into `copy` nodes |
 | Column reorder detector | `item_type: tabular` with column-level `modify` children | Detects pure column reordering; collapses into a single `reorder` node |
 
-### Outputter Interface
+### Renderer Interface
 
-An outputter renders finalized migrations into a presentation format. Outputters are the final stage of the pipeline: IR → presentation. They are plugins, registered in the same registry as comparators and transformers.
+An renderer renders finalized changesets into a presentation format. Renderers are the final stage of the pipeline: IR → presentation. They are plugins, registered in the same registry as comparators and transformers.
 
-**Identity.** Each outputter declares a unique `name` (e.g. `"binoc.markdown"`) and a `file_extension` (e.g. `"md"`) used for automatic format inference when the user writes `-o changelog.md`.
+**Identity.** Each renderer declares a unique `name` (e.g. `"binoc.markdown"`) and a `file_extension` (e.g. `"md"`) used for automatic format inference when the user writes `-o changelog.md`.
 
-**Rendering.** The `render` method receives a slice of migrations and a `serde_json::Value` config object — the outputter-specific section from the dataset config's `output` block. The outputter is responsible for deserializing this into its own config type and applying its own defaults for missing fields.
+**Rendering.** The `render` method receives a slice of changesets and a `serde_json::Value` config object — the renderer-specific section from the dataset config's `output` block. The renderer is responsible for deserializing this into its own config type and applying its own defaults for missing fields.
 
-**Per-outputter config.** The dataset config's `output` section is a map from outputter names to outputter-specific config objects. Each outputter defines its own config schema. For example, the standard Markdown outputter expects:
+**Per-renderer config.** The dataset config's `output` section is a map from renderer names to renderer-specific config objects. Each renderer defines its own config schema. For example, the standard Markdown renderer expects:
 
 ```yaml
 output:
   markdown:
     significance:
-      ministerial: [binoc.column-reorder, ...]
+      clerical: [binoc.column-reorder, ...]
       substantive: [binoc.column-addition, ...]
 ```
 
-When the user provides no config for an outputter, the outputter receives an empty object and applies its own defaults. Name resolution is flexible: `markdown`, `binoc.markdown`, or the fully-qualified name all resolve to the same section.
+When the user provides no config for a renderer, the renderer receives an empty object and applies its own defaults. Name resolution is flexible: `markdown`, `binoc.markdown`, or the fully-qualified name all resolve to the same section.
 
-**Dispatch.** The CLI resolves output destinations by file extension (`.md` → the outputter claiming `"md"`) or by explicit format name (`--format markdown`, `-o markdown:output.dat`). When multiple outputters claim the same extension, the CLI errors with an ambiguity message.
+**Dispatch.** The CLI resolves output destinations by file extension (`.md` → the renderer claiming `"md"`) or by explicit format name (`--format markdown`, `-o markdown:output.dat`). When multiple renderers claim the same extension, the CLI errors with an ambiguity message.
 
-**Standard outputter: `binoc.markdown`.** Groups changes by significance category (using the tag-to-category mapping from its own config section), renders Markdown with sections like "Ministerial Changes", "Substantive Changes", "Other Changes". Unclassified changes (tags not in any category) appear under "Other Changes".
+**Standard renderer: `binoc.markdown`.** Groups changes by significance category (using the tag-to-category mapping from its own config section), renders Markdown with sections like "Clerical Changes", "Substantive Changes", "Other Changes". Unclassified changes (tags not in any category) appear under "Other Changes".
 
-**JSON is not an outputter.** Raw migration JSON is the canonical serialization format for migrations and is handled directly by the CLI, not through the outputter trait. JSON output is always available via `--format json` or `-o migration.json`.
+**JSON is not a renderer.** Raw changeset JSON is the canonical serialization format for changesets and is handled directly by the CLI, not through the renderer trait. JSON output is always available via `--format json` or `-o changeset.json`.
 
 ### Changelog Rendering Philosophy
 
-The changelog is the primary human-facing output. Its purpose is to answer: "What changed, and should I care?" The design of the standard Markdown outputter reflects this — it is a narrative document, not a schema dump.
+The changelog is the primary human-facing output. Its purpose is to answer: "What changed, and should I care?" The design of the standard Markdown renderer reflects this — it is a narrative document, not a schema dump.
 
 **Principles:**
 
@@ -206,20 +206,20 @@ The changelog is the primary human-facing output. Its purpose is to answer: "Wha
    - **Files:** Name the file and describe the change type. "2 lines added, 1 removed" is informative; a 64-character content hash is not.
    - **Containers (directories, archives):** Generally not reported in the changelog on their own. Their children carry the meaningful changes. A zip archive node that merely wraps changed CSV files adds no information.
 
-3. **No implementation artifacts.** Content hashes, raw left/right counters for both sides of the comparison, internal field names, test fixture paths — none of these belong in user-facing output. The JSON migration format is the machine-readable representation. The changelog is for humans.
+3. **No implementation artifacts.** Content hashes, raw left/right counters for both sides of the comparison, internal field names, test fixture paths — none of these belong in user-facing output. The JSON changeset format is the machine-readable representation. The changelog is for humans.
 
 4. **Logical paths only.** Paths in the changelog refer to user-meaningful locations: `archive.zip/data.csv`, not temporary extraction directories or build-system conventions.
 
-**Plugin-provided summaries.** The Markdown outputter cannot know how to describe every possible change type. A genomics comparator might emit `item_type: fasta_alignment` with domain-specific details; the standard outputter can't render that meaningfully. To solve this, DiffNode carries an optional `summary` field — a pre-formatted human-readable one-liner describing the change.
+**Plugin-provided summaries.** The Markdown renderer cannot know how to describe every possible change type. A genomics comparator might emit `item_type: fasta_alignment` with domain-specific details; the standard renderer can't render that meaningfully. To solve this, DiffNode carries an optional `summary` field — a pre-formatted human-readable one-liner describing the change.
 
 This is the same pattern as Rust's `Display` trait or Python's `__str__`: the type that understands the data provides the human representation.
 
-- `summary` is optional. When absent, the outputter renders a generic description from kind, item_type, and tags.
-- `summary` is a hint, not a mandate. Outputters may ignore it and render their own description from raw details.
+- `summary` is optional. When absent, the renderer renders a generic description from action, item_type, and tags.
+- `summary` is a hint, not a mandate. Renderers may ignore it and render their own description from raw details.
 - The last plugin to touch a node should set the summary. Transformers that rewrite a node's meaning (e.g. collapsing add+remove into a move) should update or clear the summary from the original comparator.
-- Standard library comparators and transformers always set `summary` so that the default outputter produces good output without any configuration.
+- Standard library comparators and transformers always set `summary` so that the default renderer produces good output without any configuration.
 
-This keeps domain-specific rendering knowledge near the domain knowledge (in comparators and transformers), while letting each outputter control final presentation. Third-party plugin packs get good changelogs for free — they describe their own changes, and any outputter can display those descriptions.
+This keeps domain-specific rendering knowledge near the domain knowledge (in comparators and transformers), while letting each renderer control final presentation. Third-party plugin packs get good changelogs for free — they describe their own changes, and any renderer can display those descriptions.
 
 ### Comparator/Transformer Ordering in Config
 
@@ -244,12 +244,12 @@ transformers:
   - binoc.column_reorder_detector
   - my_project.custom_normalizer
 
-# Per-outputter config. Keys are outputter names; each outputter
+# Per-renderer config. Keys are renderer names; each renderer
 # receives its own section and defines its own schema and defaults.
 output:
   markdown:
     significance:
-      ministerial:
+      clerical:
         - binoc.column-reorder
         - binoc.whitespace-change
         - binoc.folder-rename
@@ -262,7 +262,7 @@ output:
         - binoc.row-removal
 ```
 
-If no config is provided, a default pipeline is used (the standard library ordering). Plugins declare a `suggested_phase` as a hint for default ordering, but config overrides everything. Each outputter applies its own defaults when its config section is absent.
+If no config is provided, a default pipeline is used (the standard library ordering). Plugins declare a `suggested_phase` as a hint for default ordering, but config overrides everything. Each renderer applies its own defaults when its config section is absent.
 
 This parallels web framework middleware/URL routing: declarative, inspectable, order-controlled by the deployer.
 
@@ -270,16 +270,16 @@ This parallels web framework middleware/URL routing: declarative, inspectable, o
 
 ## Significance Classification
 
-One usecase is significance classification — creating a changelog that reports or automatically alerts on some changes but not others. Significance is an **outputter concern**, not a core IR concern. The migration IR carries only factual tags; the judgment of what those tags _mean_ for a given audience belongs to each outputter's config.
+One usecase is significance classification — creating a changelog that reports or automatically alerts on some changes but not others. Significance is an **renderer concern**, not a core IR concern. The changeset IR carries only factual tags; the judgment of what those tags _mean_ for a given audience belongs to each renderer's config.
 
 The design is layered:
 
 1. **Comparators** attach semantic tags to diff nodes describing what they observed. A CSV comparator that detects column reordering tags the node `binoc.column-reorder`. This is factual reporting, not judgment.
 2. **Transformers** may add additional tags or annotations.
-3. **The outputter's own config section** maps tags to user-facing significance categories (`ministerial`, `substantive`, or any user-defined categories). Different outputters, communities, datasets, or use cases can define different mappings over the same tags. For example, the standard Markdown outputter reads its significance mapping from `output.markdown.significance` in the dataset config.
+3. **The renderer's own config section** maps tags to user-facing significance categories (`clerical`, `substantive`, or any user-defined categories). Different renderers, communities, datasets, or use cases can define different mappings over the same tags. For example, the standard Markdown renderer reads its significance mapping from `output.markdown.significance` in the dataset config.
 4. **LLM summarizers** (optional) can further interpret unclassified changes, clearly marked as inferred.
 
-Because significance lives in per-outputter config rather than in the core IR, the same migration can be rendered by different outputters with different significance judgments. A CI-check outputter might classify `binoc.row-addition` as `critical` while the Markdown changelog calls it `substantive`.
+Because significance lives in per-renderer config rather than in the core IR, the same changeset can be rendered by different renderers with different significance judgments. A CI-check renderer might classify `binoc.row-addition` as `critical` while the Markdown changelog calls it `substantive`.
 
 Tags are namespaced by convention: `binoc.*` for the standard library, `biobinoc.*` for bio plugins, `myproject.*` for project-specific plugins.
 
@@ -291,7 +291,7 @@ The boundary between `binoc-core` and consumers (CLI, Python, other languages) i
 
 ### IR Tree Access from Python
 
-Python wrappers (`PyDiffNode`, `PyMigration`) own a copy of the underlying Rust node. Attribute access (`.children`, `.tags`, `.details`) reads from the owned Rust struct via PyO3 getters. Tree traversal uses standard Python iteration and indexing (`for child in node`, `node[0]`). `find_node(path)` searches the subtree by logical path. `to_dict()` and `to_json()` convert to Python-native representations for detailed exploration.
+Python wrappers (`PyDiffNode`, `PyChangeset`) own a copy of the underlying Rust node. Attribute access (`.children`, `.tags`, `.details`) reads from the owned Rust struct via PyO3 getters. Tree traversal uses standard Python iteration and indexing (`for child in node`, `node[0]`). `find_node(path)` searches the subtree by logical path. `to_dict()` and `to_json()` convert to Python-native representations for detailed exploration.
 
 This clone-on-access model is simple and adequate for realistic diff sizes. If profiling reveals a bottleneck for very large diffs (tens of thousands of nodes), a future optimization could hold a shared reference to the Rust-owned tree with lazy attribute access, but the current approach avoids lifetime complexity at the FFI boundary.
 
@@ -381,7 +381,7 @@ A community extension (e.g., BioBinoc) is a pip-installable package providing:
 
 - Comparators (FASTA comparator, alignment comparator, etc.)
 - Transformers (domain-specific simplifications)
-- Outputters with their own config schemas (e.g. a domain-specific significance mapping)
+- Renderers with their own config schemas (e.g. a domain-specific significance mapping)
 - Optionally, a default dataset config template
 - An entry point in `pyproject.toml` that registers all of the above
 
@@ -427,7 +427,7 @@ Known inefficiency in v1: a CSV comparator parses a file; a transformer or the `
 
 ### Non-goals
 
-- Replayable migrations (applying a migration to reconstruct snapshot B from A). We assume snapshots are preserved.
+- Replayable changesets (applying a changeset to reconstruct snapshot B from A). We assume snapshots are preserved.
 
 ## Open Questions
 
@@ -443,7 +443,7 @@ Known inefficiency in v1: a CSV comparator parses a file; a transformer or the `
 
 ### Shared Test Vectors
 
-Test vectors live in `test-vectors/` at the workspace root, shared across all crates and (future) Python bindings. Each vector is a directory containing two snapshot directories, a TOML manifest, and optionally a gold-file migration output:
+Test vectors live in `test-vectors/` at the workspace root, shared across all crates and (future) Python bindings. Each vector is a directory containing two snapshot directories, a TOML manifest, and optionally a gold-file changeset output:
 
 ```
 test-vectors/
@@ -456,7 +456,7 @@ test-vectors/
 │   ├── manifest.toml
 │   ├── snapshot-a/
 │   ├── snapshot-b/
-│   └── expected-migration.json   (optional gold file)
+│   └── expected-changeset.json   (optional gold file)
 └── ...
 ```
 
@@ -466,20 +466,20 @@ The manifest declares what the vector tests and what assertions to check:
 [vector]
 name = "csv-column-reorder"
 description = "Columns shuffled, content identical"
-tags = ["csv", "column-reorder", "ministerial"]
+tags = ["csv", "column-reorder", "clerical"]
 
 [config]
 comparators = ["binoc.directory", "binoc.csv"]
 transformers = ["binoc.column_reorder_detector"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
-significance = "ministerial"
+significance = "clerical"
 ```
 
-Structural assertions in the manifest are the primary check — they survive IR schema evolution. Gold files (`expected-migration.json`) are a secondary, opt-in check for vectors where exact output matters.
+Structural assertions in the manifest are the primary check — they survive IR schema evolution. Gold files (`expected-changeset.json`) are a secondary, opt-in check for vectors where exact output matters.
 
 Vectors are named for what they test, not how they test it: `csv-column-reorder`, not `test-comparator-csv-3`. They double as documentation — someone reading the vector directory should understand a Binoc capability.
 
@@ -502,7 +502,7 @@ Zip vectors use `.zip.d/` directories that the test harness builds into `.zip` f
 
 **`binoc-cli`** — CLI binary tested as subprocess.
 
-- *Subprocess tests:* `assert_cmd` crate runs the CLI binary. Tests cover `diff` (JSON and Markdown output, file output, config files), `changelog` (from saved migrations), error cases (missing snapshots, invalid config), and help flags.
+- *Subprocess tests:* `assert_cmd` crate runs the CLI binary. Tests cover `diff` (JSON and Markdown output, file output, config files), `changelog` (from saved changesets), error cases (missing snapshots, invalid config), and help flags.
 - *Test vectors consumed via CLI:* Feed vector snapshot paths to `binoc diff`, verify exit codes and stdout content.
 
 **`binoc-python`** — pytest suite consuming the same test vectors.
@@ -538,8 +538,8 @@ For reference and for contributors:
 3. **Transformers are optimization passes.** They rewrite the IR tree. They don't need raw data. (Revisit if this breaks.)
 4. **The IR is tree-structured, openly typed, and tag-annotated.** No built-in types or significance levels. Conventions, not enforcement.
 5. **Dispatch is declarative-first with an imperative escape hatch.**
-6. **Significance is an outputter concern**, mapped from semantic tags via per-outputter config. The IR carries only factual tags.
-7. **Migrations are descriptive. Detail extraction is on-demand** via comparator `extract` methods with access to original snapshots.
+6. **Significance is a renderer concern**, mapped from semantic tags via per-renderer config. The IR carries only factual tags.
+7. **Changesets are descriptive. Detail extraction is on-demand** via comparator `extract` methods with access to original snapshots.
 8. **The standard library is a plugin pack**, architecturally identical to third-party packs.
 9. **Distribution unit = core engine + plugin packs.** Community extensions are just plugin packs with configs.
 10. **Ordering is a config concern, not a plugin concern.** Plugins suggest; config decides.

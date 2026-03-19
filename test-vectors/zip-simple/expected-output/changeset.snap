@@ -1,27 +1,27 @@
 ---
 source: binoc-stdlib/tests/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "zip_archive",
         "path": "archive.zip",
         "children": [
           {
-            "kind": "modify",
+            "action": "modify",
             "item_type": "directory",
             "path": "archive.zip",
             "children": [
               {
-                "kind": "modify",
+                "action": "modify",
                 "item_type": "text",
                 "path": "archive.zip/data.txt",
                 "summary": "1 line added, 1 removed",
@@ -40,7 +40,7 @@ expression: "&stable_migration"
                 "comparator": "binoc.text"
               },
               {
-                "kind": "add",
+                "action": "add",
                 "item_type": "text",
                 "path": "archive.zip/extra.txt",
                 "summary": "New file (1 line)",

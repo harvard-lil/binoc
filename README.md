@@ -1,6 +1,6 @@
 # Binoc: The Missing Changelog for Datasets
 
-Binoc generates changelogs for datasets that don't have them. Given a series of snapshots of a dataset downloaded at different times, Binoc detects what changed, expresses those changes as a minimal structured diff, and produces human-readable summaries that distinguish substantive policy changes from ministerial housekeeping.
+Binoc generates changelogs for datasets that don't have them. Given a series of snapshots of a dataset downloaded at different times, Binoc detects what changed, expresses those changes as a minimal structured diff, and produces human-readable summaries that distinguish substantive policy changes from clerical housekeeping.
 
 The core workflow: an archivist, data scientist, or steward has five copies of a government dataset containing CSVs, downloaded over two years. Some are identical. Some have reordered columns. One has a new category relevant to their research. Binoc tells them exactly what changed, when, and whether (by their definition) it matters.
 
@@ -15,7 +15,7 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Ministerial Changes
+## Clerical Changes
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
 
@@ -24,7 +24,7 @@ binoc diff release-q3/ release-q4/
 - **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip and compared the CSV column-by-column — the reorder is flagged as ministerial housekeeping, not a real data change. But `.sqlite` is opaque to the standard library, so you only learn that the bytes differ.
+Binoc looked inside the zip and compared the CSV column-by-column — the reorder is flagged as clerical housekeeping, not a real data change. But `.sqlite` is opaque to the standard library, so you only learn that the bytes differ.
 
 ```bash
 pip install binoc-sqlite
@@ -34,7 +34,7 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Ministerial Changes
+## Clerical Changes
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
 
@@ -50,7 +50,7 @@ Same command, richer output. The plugin parsed the database and found the actual
 Datasets published by governments, research institutions, and public bodies are living artifacts, and can change without warning or documentation (or without consistent documentation). The archival and data science communities need tooling to:
 
 - Detect whether a new snapshot of a dataset actually differs from the previous one.
-- Describe changes precisely — not just "the file changed," but "three columns were reordered (ministerial) and one column was split into two (substantive)."
+- Describe changes precisely — not just "the file changed," but "three columns were reordered (clerical) and one column was split into two (substantive)."
 - Produce changelogs that are machine-readable for automated pipelines and human-readable for policy analysis.
 - Handle real-world messiness: datasets inside zip archives, nested containers, mixed formats, renamed files.
 
@@ -65,8 +65,8 @@ Generic diff tools don't understand data formats, while version control systems 
 - Compare text files at line level
 - Compare binary files by content hash
 - Detect moves and copies from content hashes
-- Extract actual changed data from migration nodes (added rows, text diffs, etc.)
-- Render migrations as JSON or Markdown changelogs
+- Extract actual changed data from changeset nodes (added rows, text diffs, etc.)
+- Render changesets as JSON or Markdown changelogs
 - Extend comparison and transformation pipelines via Rust native plugins (C ABI), Python plugins, or in-workspace stdlib plugins
 
 ## Documentation
@@ -97,7 +97,7 @@ Diff two snapshots (prints a Markdown changelog to stdout by default):
 binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-Get raw migration JSON instead:
+Get raw changeset JSON instead:
 
 ```bash
 binoc diff path/to/snapshot-a path/to/snapshot-b --format json
@@ -107,19 +107,19 @@ Save outputs to files (format inferred from extension, or use `format:path` synt
 
 ```bash
 binoc diff path/to/snapshot-a path/to/snapshot-b \
-  -o migration.json -o CHANGELOG.md -q
+  -o changeset.json -o CHANGELOG.md -q
 ```
 
-Combine saved migrations into a changelog:
+Combine saved changesets into a changelog:
 
 ```bash
-binoc changelog migrations/*.json
+binoc changelog changesets/*.json
 ```
 
-Extract the actual changed data from a migration node (requires original snapshots):
+Extract the actual changed data from a changeset node (requires original snapshots):
 
 ```bash
-binoc extract migration.json data.csv rows_added
+binoc extract changeset.json data.csv rows_added
 ```
 
 ### Plugins
@@ -176,7 +176,7 @@ This builds both packages from source and wires up entry-point discovery automat
 | `binoc-stdlib/` | Standard comparators and transformers (architecturally identical to third-party plugins) |
 | `binoc-cli/` | CLI library + standalone Rust binary |
 | `binoc-python/` | PyO3 bindings, native plugin loader (`libloading`), Python plugin bridges, `binoc` CLI entry point |
-| `model-plugins/` | Reference plugin implementations: `binoc-sqlite` (Rust comparator), `binoc-row-reorder` (Rust transformer), `binoc-html` (Python outputter) |
+| `model-plugins/` | Reference plugin implementations: `binoc-sqlite` (Rust comparator), `binoc-row-reorder` (Rust transformer), `binoc-html` (Python renderer) |
 | `test-vectors/` | Shared test fixtures for standard library plugins |
 | `docs/` | Documentation, design notes, and ADRs |
 

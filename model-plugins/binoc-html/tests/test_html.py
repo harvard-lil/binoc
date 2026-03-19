@@ -1,10 +1,10 @@
-"""Tests for the binoc-html outputter plugin."""
+"""Tests for the binoc-html renderer plugin."""
 
 import binoc
-from binoc_html import HtmlOutputter
+from binoc_html import HtmlRenderer
 
 
-def test_html_outputter_renders_basic_migration():
+def test_html_renderer_renders_basic_changeset():
     root = binoc.DiffNode(
         "modify",
         "directory",
@@ -14,9 +14,9 @@ def test_html_outputter_renders_basic_migration():
             binoc.DiffNode("remove", "file", "root/old.txt"),
         ],
     )
-    migration = binoc.Migration("v1", "v2", root)
-    outputter = HtmlOutputter()
-    html = outputter.render([migration], {})
+    changeset = binoc.Changeset("v1", "v2", root)
+    renderer = HtmlRenderer()
+    html = renderer.render([changeset], {})
 
     assert "<!DOCTYPE html>" in html
     assert "v1" in html
@@ -26,18 +26,18 @@ def test_html_outputter_renders_basic_migration():
     assert "New file added" in html
 
 
-def test_html_outputter_empty_migration():
-    migration = binoc.Migration("v1", "v2")
-    outputter = HtmlOutputter()
-    html = outputter.render([migration], {})
+def test_html_renderer_empty_changeset():
+    changeset = binoc.Changeset("v1", "v2")
+    renderer = HtmlRenderer()
+    html = renderer.render([changeset], {})
 
     assert "No changes detected" in html
 
 
-def test_html_outputter_custom_title():
-    migration = binoc.Migration("v1", "v2")
-    outputter = HtmlOutputter()
-    html = outputter.render([migration], {"title": "My Dataset"})
+def test_html_renderer_custom_title():
+    changeset = binoc.Changeset("v1", "v2")
+    renderer = HtmlRenderer()
+    html = renderer.render([changeset], {"title": "My Dataset"})
 
     assert "My Dataset" in html
 
@@ -47,4 +47,4 @@ def test_register_adds_to_registry():
     from binoc_html import register
 
     register(registry)
-    assert "binoc.html" in registry.list_outputters()
+    assert "binoc.html" in registry.list_renderers()

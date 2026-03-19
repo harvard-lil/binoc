@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ir::DiffNode;
-use crate::traits::{ComparatorDescriptor, OutputterDescriptor, TransformerDescriptor};
+use crate::traits::{ComparatorDescriptor, RendererDescriptor, TransformerDescriptor};
 use crate::types::{CompareResult, ItemPair, TransformResult};
 
 // ── Plugin description ─────────────────────────────────────────────
@@ -24,7 +24,7 @@ pub struct PluginDescription {
     #[serde(default)]
     pub transformers: Vec<TransformerDescriptor>,
     #[serde(default)]
-    pub outputters: Vec<OutputterDescriptor>,
+    pub renderers: Vec<RendererDescriptor>,
 }
 
 // ── Comparator wire types ──────────────────────────────────────────
@@ -100,11 +100,11 @@ impl TransformResponse {
     }
 }
 
-// ── Outputter wire types ───────────────────────────────────────────
+// ── Renderer wire types ───────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenderRequest {
-    pub migrations: Vec<crate::ir::Migration>,
+    pub changesets: Vec<crate::ir::Changeset>,
     pub config: serde_json::Value,
 }
 
@@ -144,7 +144,7 @@ pub enum ExtractResponse {
 // ── export_plugin! macro ───────────────────────────────────────────
 
 /// Export a plugin pack with any combination of comparators, transformers,
-/// and outputters.
+/// and renderers.
 ///
 /// Generates C ABI entry points conditionally based on declared types:
 /// - `_binoc_plugin_describe` (always)
@@ -153,7 +153,7 @@ pub enum ExtractResponse {
 ///   `_binoc_comparator_extract` (if comparators declared)
 /// - `_binoc_transformer_transform`, `_binoc_transformer_extract`
 ///   (if transformers declared)
-/// - `_binoc_outputter_render` (if outputters declared)
+/// - `_binoc_renderer_render` (if renderers declared)
 /// - Empty `#[pymodule]` when `python` feature active
 ///
 /// # Example
@@ -189,11 +189,11 @@ macro_rules! export_plugin {
         descs
     }};
 
-    // Internal: collect outputter descriptors
+    // Internal: collect renderer descriptors
     (@out_descs $($out:ty),*) => {{
         let mut descs = Vec::new();
         $(
-            descs.push($crate::Outputter::descriptor(
+            descs.push($crate::Renderer::descriptor(
                 &<$out as ::std::default::Default>::default(),
             ));
         )*
@@ -421,10 +421,10 @@ macro_rules! export_plugin {
         }
     };
 
-    // Internal: outputter entry points
-    (@outputter_fns $($out:ty),+) => {
+    // Internal: renderer entry points
+    (@renderer_fns $($out:ty),+) => {
         #[no_mangle]
-        pub unsafe extern "C" fn _binoc_outputter_render(
+        pub unsafe extern "C" fn _binoc_renderer_render(
             index: u32,
             request: *const ::std::ffi::c_char,
         ) -> *mut ::std::ffi::c_char {
@@ -435,10 +435,10 @@ macro_rules! export_plugin {
                 let req: $crate::plugin_abi::RenderRequest =
                     $crate::_reexport::serde_json::from_str(request_str)
                         .expect("binoc SDK: deserialize RenderRequest");
-                let outputters: Vec<Box<dyn $crate::Outputter>> =
+                let renderers: Vec<Box<dyn $crate::Renderer>> =
                     vec![$(Box::new(<$out as ::std::default::Default>::default())),+];
-                let out = &outputters[index as usize];
-                match $crate::Outputter::render(out.as_ref(), &req.migrations, &req.config) {
+                let out = &renderers[index as usize];
+                match $crate::Renderer::render(out.as_ref(), &req.changesets, &req.config) {
                     Ok(output) => $crate::plugin_abi::RenderResponse::Ok { output },
                     Err(e) => $crate::plugin_abi::RenderResponse::Error {
                         message: e.to_string(),
@@ -470,7 +470,7 @@ macro_rules! export_plugin {
                 sdk_version: $crate::SDK_VERSION.to_string(),
                 comparators: $crate::export_plugin!(@comp_descs $($comp),+),
                 transformers: vec![],
-                outputters: vec![],
+                renderers: vec![],
             };
             let json = $crate::_reexport::serde_json::to_string(&desc)
                 .expect("binoc SDK: serialize plugin description");
@@ -506,7 +506,7 @@ macro_rules! export_plugin {
                 sdk_version: $crate::SDK_VERSION.to_string(),
                 comparators: vec![],
                 transformers: $crate::export_plugin!(@trans_descs $($trans),+),
-                outputters: vec![],
+                renderers: vec![],
             };
             let json = $crate::_reexport::serde_json::to_string(&desc)
                 .expect("binoc SDK: serialize plugin description");
@@ -531,10 +531,10 @@ macro_rules! export_plugin {
         }
     };
 
-    // ── Public entry: outputters only ──────────────────────────────
+    // ── Public entry: renderers only ──────────────────────────────
     (
         module: $module_name:ident,
-        outputters: [$($out:ty),+ $(,)?] $(,)?
+        renderers: [$($out:ty),+ $(,)?] $(,)?
     ) => {
         #[no_mangle]
         pub extern "C" fn _binoc_plugin_describe() -> *mut ::std::ffi::c_char {
@@ -542,7 +542,7 @@ macro_rules! export_plugin {
                 sdk_version: $crate::SDK_VERSION.to_string(),
                 comparators: vec![],
                 transformers: vec![],
-                outputters: $crate::export_plugin!(@out_descs $($out),+),
+                renderers: $crate::export_plugin!(@out_descs $($out),+),
             };
             let json = $crate::_reexport::serde_json::to_string(&desc)
                 .expect("binoc SDK: serialize plugin description");
@@ -558,7 +558,7 @@ macro_rules! export_plugin {
             }
         }
 
-        $crate::export_plugin!(@outputter_fns $($out),+);
+        $crate::export_plugin!(@renderer_fns $($out),+);
 
         #[cfg(feature = "python")]
         #[::pyo3::pymodule]
@@ -579,7 +579,7 @@ macro_rules! export_plugin {
                 sdk_version: $crate::SDK_VERSION.to_string(),
                 comparators: $crate::export_plugin!(@comp_descs $($comp),+),
                 transformers: $crate::export_plugin!(@trans_descs $($trans),+),
-                outputters: vec![],
+                renderers: vec![],
             };
             let json = $crate::_reexport::serde_json::to_string(&desc)
                 .expect("binoc SDK: serialize plugin description");

@@ -31,10 +31,10 @@ fn binary_identical_files() {
     let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert_eq!(node.kind, "identical");
+            assert_eq!(node.action, "identical");
             assert!(node.details.contains_key("hash"));
         }
-        _ => panic!("Expected Leaf with kind 'identical'"),
+        _ => panic!("Expected Leaf with action 'identical'"),
     }
 }
 
@@ -54,7 +54,7 @@ fn binary_different_files() {
     let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert_eq!(node.kind, "modify");
+            assert_eq!(node.action, "modify");
             assert!(node.tags.contains("binoc.content-changed"));
             assert!(node.details.contains_key("hash_left"));
             assert!(node.details.contains_key("hash_right"));
@@ -76,7 +76,7 @@ fn binary_added_file_includes_hash() {
     let result = BinaryComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert_eq!(node.kind, "add");
+            assert_eq!(node.action, "add");
             assert!(node.details.contains_key("hash_right"));
         }
         _ => panic!("Expected Leaf"),
@@ -128,7 +128,7 @@ fn text_diff_counts_lines() {
     let result = TextComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert_eq!(node.kind, "modify");
+            assert_eq!(node.action, "modify");
             assert_eq!(node.item_type, "text");
             let added = node.details["lines_added"].as_u64().unwrap();
             let removed = node.details["lines_removed"].as_u64().unwrap();

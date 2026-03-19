@@ -24,7 +24,7 @@ fn move_detector_collapses_matching_add_remove() {
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(node.children.len(), 1);
-            assert_eq!(node.children[0].kind, "move");
+            assert_eq!(node.children[0].action, "move");
             assert_eq!(node.children[0].path, "/new.bin");
             assert_eq!(node.children[0].source_path.as_deref(), Some("/old.bin"));
         }
@@ -73,7 +73,7 @@ fn move_detector_preserves_non_moved_children() {
     match result {
         TransformResult::Replace(node) => {
             assert_eq!(node.children.len(), 3, "1 move + 1 modify + 1 add");
-            let kinds: Vec<&str> = node.children.iter().map(|c| c.kind.as_str()).collect();
+            let kinds: Vec<&str> = node.children.iter().map(|c| c.action.as_str()).collect();
             assert!(kinds.contains(&"move"));
             assert!(kinds.contains(&"modify"));
             assert!(kinds.contains(&"add"));
@@ -104,17 +104,17 @@ fn copy_detector_detects_add_matching_identical() {
     let result = CopyDetector.transform(container, &da());
     match result {
         TransformResult::Replace(node) => {
-            let copy = node.children.iter().find(|c| c.kind == "copy");
+            let copy = node.children.iter().find(|c| c.action == "copy");
             assert!(
                 copy.is_some(),
                 "should have a copy node, got: {:?}",
-                node.children.iter().map(|c| &c.kind).collect::<Vec<_>>()
+                node.children.iter().map(|c| &c.action).collect::<Vec<_>>()
             );
             let copy = copy.unwrap();
             assert_eq!(copy.path, "/duplicate.bin");
             assert_eq!(copy.source_path.as_deref(), Some("/original.bin"));
             assert!(copy.tags.contains("binoc.copy"));
-            let identical = node.children.iter().find(|c| c.kind == "identical");
+            let identical = node.children.iter().find(|c| c.action == "identical");
             assert!(identical.is_some(), "identical node should be preserved");
         }
         _ => panic!("Expected Replace"),
@@ -164,7 +164,7 @@ fn copy_detector_preserves_non_copy_children() {
                 4,
                 "1 copy + 1 identical + 1 modify + 1 add"
             );
-            let kinds: Vec<&str> = node.children.iter().map(|c| c.kind.as_str()).collect();
+            let kinds: Vec<&str> = node.children.iter().map(|c| c.action.as_str()).collect();
             assert!(kinds.contains(&"copy"));
             assert!(kinds.contains(&"identical"));
             assert!(kinds.contains(&"modify"));
@@ -197,7 +197,7 @@ fn column_reorder_converts_pure_reorder() {
     let result = ColumnReorderDetector.transform(node, &da());
     match result {
         TransformResult::Replace(node) => {
-            assert_eq!(node.kind, "reorder");
+            assert_eq!(node.action, "reorder");
             assert!(node.tags.contains("binoc.column-reorder"));
             assert_eq!(node.tags.len(), 1);
         }

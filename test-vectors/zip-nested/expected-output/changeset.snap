@@ -1,39 +1,39 @@
 ---
-source: binoc-stdlib/src/test_vectors.rs
-expression: "&stable_migration"
+source: binoc-stdlib/tests/test_vectors.rs
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
-        "item_type": "tar_archive",
-        "path": "outer.tar.gz",
+        "action": "modify",
+        "item_type": "zip_archive",
+        "path": "outer.zip",
         "children": [
           {
-            "kind": "modify",
+            "action": "modify",
             "item_type": "directory",
-            "path": "outer.tar.gz",
+            "path": "outer.zip",
             "children": [
               {
-                "kind": "modify",
-                "item_type": "tar_archive",
-                "path": "outer.tar.gz/inner.tar.gz",
+                "action": "modify",
+                "item_type": "zip_archive",
+                "path": "outer.zip/inner.zip",
                 "children": [
                   {
-                    "kind": "modify",
+                    "action": "modify",
                     "item_type": "directory",
-                    "path": "outer.tar.gz/inner.tar.gz",
+                    "path": "outer.zip/inner.zip",
                     "children": [
                       {
-                        "kind": "modify",
+                        "action": "modify",
                         "item_type": "tabular",
-                        "path": "outer.tar.gz/inner.tar.gz/data.csv",
+                        "path": "outer.zip/inner.zip/data.csv",
                         "summary": "1 row added",
                         "tags": [
                           "binoc.row-addition"
@@ -64,20 +64,20 @@ expression: "&stable_migration"
                   }
                 ],
                 "details": {
-                  "hash_left": "e6ba4fb522d84d861076a886dcd0d4c2ccb28fe0e518786d2c3d604df8f0ef74",
-                  "hash_right": "e17003399ba0e637f76f2ee8c34f40f69ca72eb90788644c75ad177af32dd06b"
+                  "hash_left": "1b56e82aa00813dda455426e0f04671097892fdc1250cc8f54163dca85f822ea",
+                  "hash_right": "c1e9067ea6f651c61a3874012b92c6ef6a7faa4a17d6d5c5fc168198e295a034"
                 },
-                "comparator": "binoc.tar"
+                "comparator": "binoc.zip"
               }
             ],
             "comparator": "binoc.directory"
           }
         ],
         "details": {
-          "hash_left": "6d1969e05e2716c9e523a01f2ea4b65b246fb64b0bf9475bbeafbc336d25722f",
-          "hash_right": "22c6cb4a43352f3f6f5f3cd55bebd2d7d5e6799a47278fd26639aa79ff21788a"
+          "hash_left": "f9fc5fb0555ddd8f40d2e4537fc61263bb426a6f741047309796dd48eb200197",
+          "hash_right": "c5d5ca595c4596820f0f5470d3c6990173da99d98aa0e2c0cd3d57f1810bb190"
         },
-        "comparator": "binoc.tar"
+        "comparator": "binoc.zip"
       }
     ],
     "comparator": "binoc.directory"

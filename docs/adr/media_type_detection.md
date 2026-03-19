@@ -70,7 +70,7 @@ This is additive — no changes to the existing dispatch contract.
 
 ### Surface media type in the IR
 
-Currently `media_type` lives only on `Item` (dispatch-time metadata) and doesn't appear in the IR tree. A future option is to attach the detected media type to `DiffNode.details` so outputters can report it (e.g., "file.dat was identified as application/zip"). This is a one-line change in the controller's `attach_content_hashes` method and has no architectural implications.
+Currently `media_type` lives only on `Item` (dispatch-time metadata) and doesn't appear in the IR tree. A future option is to attach the detected media type to `DiffNode.details` so renderers can report it (e.g., "file.dat was identified as application/zip"). This is a one-line change in the controller's `attach_content_hashes` method and has no architectural implications.
 
 ## Why `infer` over alternatives
 

@@ -6,111 +6,111 @@ import binoc
 class TestDiffWithTestVectors:
     def test_trivial_identical(self, snapshot_pair):
         a, b = snapshot_pair("trivial-identical")
-        migration = binoc.diff(a, b)
-        if migration.root is not None:
-            assert len(migration.root.children) == 0
+        changeset = binoc.diff(a, b)
+        if changeset.root is not None:
+            assert len(changeset.root.children) == 0
 
     def test_single_file_add(self, snapshot_pair):
         a, b = snapshot_pair("single-file-add")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        migration.root.all_tags()
-        kinds = _collect_kinds(migration.root)
-        assert "add" in kinds
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        changeset.root.all_tags()
+        actions = _collect_actions(changeset.root)
+        assert "add" in actions
 
     def test_single_file_remove(self, snapshot_pair):
         a, b = snapshot_pair("single-file-remove")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        kinds = _collect_kinds(migration.root)
-        assert "remove" in kinds
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        actions = _collect_actions(changeset.root)
+        assert "remove" in actions
 
     def test_single_file_modify_text(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-text")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        kinds = _collect_kinds(migration.root)
-        assert "modify" in kinds
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        actions = _collect_actions(changeset.root)
+        assert "modify" in actions
 
     def test_single_file_modify_binary(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-binary")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
 
     def test_csv_column_reorder(self, snapshot_pair):
         a, b = snapshot_pair("csv-column-reorder")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "binoc.column-reorder" in all_tags
 
     def test_csv_row_addition(self, snapshot_pair):
         a, b = snapshot_pair("csv-row-addition")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "binoc.row-addition" in all_tags
 
     def test_csv_column_addition(self, snapshot_pair):
         a, b = snapshot_pair("csv-column-addition")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "binoc.column-addition" in all_tags
 
     def test_csv_column_removal(self, snapshot_pair):
         a, b = snapshot_pair("csv-column-removal")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "binoc.column-removal" in all_tags
 
     def test_csv_cell_changes(self, snapshot_pair):
         a, b = snapshot_pair("csv-cell-changes")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        all_tags = migration.root.all_tags()
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
         assert "binoc.cell-change" in all_tags
 
     def test_csv_mixed_changes(self, snapshot_pair):
         a, b = snapshot_pair("csv-mixed-changes")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        assert migration.node_count > 1
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        assert changeset.node_count > 1
 
     def test_directory_file_move(self, snapshot_pair):
         a, b = snapshot_pair("directory-file-move")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        kinds = _collect_kinds(migration.root)
-        assert "move" in kinds or ("add" in kinds and "remove" in kinds)
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        actions = _collect_actions(changeset.root)
+        assert "move" in actions or ("add" in actions and "remove" in actions)
 
     def test_directory_nested(self, snapshot_pair):
         a, b = snapshot_pair("directory-nested")
-        migration = binoc.diff(a, b)
-        assert migration.root is not None
-        assert migration.node_count > 1
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        assert changeset.node_count > 1
 
 
 class TestDiffOutput:
     def test_to_json(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-text")
-        migration = binoc.diff(a, b)
-        json_str = binoc.to_json(migration)
+        changeset = binoc.diff(a, b)
+        json_str = binoc.to_json(changeset)
         assert '"from_snapshot"' in json_str
         assert '"to_snapshot"' in json_str
 
     def test_to_markdown(self, snapshot_pair):
         a, b = snapshot_pair("csv-column-addition")
-        migration = binoc.diff(a, b)
-        md = binoc.to_markdown([migration])
+        changeset = binoc.diff(a, b)
+        md = binoc.to_markdown([changeset])
         assert "Changelog" in md or "Changes" in md
 
     def test_to_markdown_with_config(self, snapshot_pair):
         a, b = snapshot_pair("csv-column-addition")
-        migration = binoc.diff(a, b)
+        changeset = binoc.diff(a, b)
         config = binoc.Config.default()
-        md = binoc.to_markdown([migration], config=config)
+        md = binoc.to_markdown([changeset], config=config)
         assert len(md) > 0
 
 
@@ -118,8 +118,8 @@ class TestDiffConfig:
     def test_default_config(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-text")
         config = binoc.Config.default()
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
 
     def test_custom_comparators(self, snapshot_pair):
         a, b = snapshot_pair("single-file-modify-text")
@@ -127,8 +127,8 @@ class TestDiffConfig:
             comparators=["binoc.directory", "binoc.text", "binoc.binary"],
             transformers=[],
         )
-        migration = binoc.diff(a, b, config=config)
-        assert migration.root is not None
+        changeset = binoc.diff(a, b, config=config)
+        assert changeset.root is not None
 
     def test_config_repr(self):
         config = binoc.Config.default()
@@ -137,9 +137,9 @@ class TestDiffConfig:
         assert "binoc.csv" in r
 
 
-def _collect_kinds(node):
-    """Recursively collect all 'kind' values from a diff tree."""
-    kinds = {node.kind}
+def _collect_actions(node):
+    """Recursively collect all 'action' values from a diff tree."""
+    actions = {node.action}
     for child in node:
-        kinds |= _collect_kinds(child)
-    return kinds
+        actions |= _collect_actions(child)
+    return actions

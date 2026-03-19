@@ -45,7 +45,7 @@ Without the plugin, the same files would be reported as “Content changed” by
 - **Schema**: tables added/removed, columns added/removed, column type changes.
 - **Row counts** per table (not cell-level diffs).
 
-Tags emitted include `binoc-sqlite.row-addition`, `binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure significance (e.g. ministerial vs substantive) in your dataset config; see [Writing Binoc Plugins](../docs/writing_plugins.md).
+Tags emitted include `binoc-sqlite.row-addition`, `binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure significance (e.g. clerical vs substantive) in your dataset config; see [Writing Binoc Plugins](../docs/writing_plugins.md).
 
 ## Development
 

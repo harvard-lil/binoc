@@ -9,8 +9,8 @@ use crate::types::ItemPair;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffNode {
     /// Open enum: "add", "remove", "modify", "move", "reorder",
-    /// "schema_change", etc. Plugins may define new kinds.
-    pub kind: String,
+    /// "schema_change", etc. Plugins may define new actions.
+    pub action: String,
 
     /// Open string: "directory", "file", "tabular", "zip_archive", etc.
     /// No built-in types — conventions, not enforcement.
@@ -25,7 +25,7 @@ pub struct DiffNode {
     pub source_path: Option<String>,
 
     /// Optional human-readable one-liner describing the change.
-    /// Set by comparator or transformer; used by outputters for narrative rendering.
+    /// Set by comparator or transformer; used by renderers for narrative rendering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
 
@@ -56,19 +56,19 @@ pub struct DiffNode {
 
     /// The original item pair that produced this node. Transient — available
     /// during the live diff/transform session for transformers and extractors
-    /// that need to re-read source data. Not serialized into migration JSON.
+    /// that need to re-read source data. Not serialized into changeset JSON.
     #[serde(skip)]
     pub source_items: Option<ItemPair>,
 }
 
 impl DiffNode {
     pub fn new(
-        kind: impl Into<String>,
+        action: impl Into<String>,
         item_type: impl Into<String>,
         path: impl Into<String>,
     ) -> Self {
         Self {
-            kind: kind.into(),
+            action: action.into(),
             item_type: item_type.into(),
             path: path.into(),
             source_path: None,
@@ -128,7 +128,7 @@ impl DiffNode {
 
 /// A structured description of how to get from one snapshot to the next.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Migration {
+pub struct Changeset {
     pub from_snapshot: String,
     pub to_snapshot: String,
     pub root: Option<DiffNode>,
@@ -136,7 +136,7 @@ pub struct Migration {
     pub metadata: BTreeMap<String, String>,
 }
 
-impl Migration {
+impl Changeset {
     pub fn new(from: impl Into<String>, to: impl Into<String>, root: Option<DiffNode>) -> Self {
         Self {
             from_snapshot: from.into(),
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn diff_node_new_creates_node_with_correct_fields() {
         let node = DiffNode::new("modify", "file", "path/to/file.csv");
-        assert_eq!(node.kind, "modify");
+        assert_eq!(node.action, "modify");
         assert_eq!(node.item_type, "file");
         assert_eq!(node.path, "path/to/file.csv");
         assert!(node.source_path.is_none());
@@ -235,7 +235,7 @@ mod tests {
             .with_source_path("old/path.csv");
         let json = serde_json::to_string(&node).unwrap();
         let restored: DiffNode = serde_json::from_str(&json).unwrap();
-        assert_eq!(node.kind, restored.kind);
+        assert_eq!(node.action, restored.action);
         assert_eq!(node.item_type, restored.item_type);
         assert_eq!(node.path, restored.path);
         assert_eq!(node.source_path, restored.source_path);
@@ -244,20 +244,20 @@ mod tests {
     }
 
     #[test]
-    fn migration_construction_and_node_count() {
+    fn changeset_construction_and_node_count() {
         let root = DiffNode::new("modify", "dir", "root").with_children(vec![
             DiffNode::new("add", "file", "root/a.txt"),
             DiffNode::new("remove", "file", "root/b.txt"),
         ]);
-        let migration = Migration::new("v1", "v2", Some(root));
-        assert_eq!(migration.from_snapshot, "v1");
-        assert_eq!(migration.to_snapshot, "v2");
-        assert_eq!(migration.node_count(), 3);
+        let changeset = Changeset::new("v1", "v2", Some(root));
+        assert_eq!(changeset.from_snapshot, "v1");
+        assert_eq!(changeset.to_snapshot, "v2");
+        assert_eq!(changeset.node_count(), 3);
     }
 
     #[test]
-    fn migration_node_count_none_root() {
-        let migration = Migration::new("v1", "v2", None);
-        assert_eq!(migration.node_count(), 0);
+    fn changeset_node_count_none_root() {
+        let changeset = Changeset::new("v1", "v2", None);
+        assert_eq!(changeset.node_count(), 0);
     }
 }

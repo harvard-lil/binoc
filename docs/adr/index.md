@@ -1,5 +1,5 @@
 * 2026-03-06: [Snapshot testing for test vectors](snapshot_testing_for_test_vectors.md)
-* 2026-03-06: [Per-outputter config and significance as an outputter concern](per_outputter_config.md)
+* 2026-03-06: [Per-Renderer Config and significance as a renderer concern](renderer_config.md)
 * 2026-03-06: [Deferred performance optimizations (arena, Arrow, lazy Python)](deferred_optimizations.md)
 * 2026-03-06: [Media type detection and content-aware dispatch](media_type_detection.md)
 * 2026-03-06: [Plugin discovery and the Rust/Python boundary](plugin_discovery.md)
@@ -13,3 +13,4 @@
 * 2026-03-09: [Shared test-vector harness for plugins](plugin_test_vector_harness.md)
 * 2026-03-09: [Standard library boundary policy](stdlib_boundary.md)
 * 2026-03-12: [Plugin SDK, ABI safety, and native plugin loading](plugin_sdk_and_abi.md)
+* 2026-03-18: [Terminology](terminology.md)

@@ -1,16 +1,16 @@
-"""Simple HTML outputter plugin for binoc.
+"""Simple HTML renderer plugin for binoc.
 
-Renders migrations as a self-contained HTML changelog.
+Renders changesets as a self-contained HTML changelog.
 """
 
 from html import escape
 
 
-class HtmlOutputter:
+class HtmlRenderer:
     name = "binoc.html"
     file_extension = "html"
 
-    def render(self, migrations, config):
+    def render(self, changesets, config):
         title = (
             config.get("title", "Changelog")
             if isinstance(config, dict)
@@ -36,12 +36,12 @@ class HtmlOutputter:
             f"<h1>{escape(title)}</h1>",
         ]
 
-        for migration in migrations:
+        for changeset in changesets:
             parts.append(
-                f"<h2>{escape(str(migration.from_snapshot))} &rarr; "
-                f"{escape(str(migration.to_snapshot))}</h2>"
+                f"<h2>{escape(str(changeset.from_snapshot))} &rarr; "
+                f"{escape(str(changeset.to_snapshot))}</h2>"
             )
-            root = migration.root
+            root = changeset.root
             if root is None:
                 parts.append("<p>No changes detected.</p>")
             else:
@@ -52,18 +52,18 @@ class HtmlOutputter:
 
 
 def _render_node(node, parts, depth=0):
-    kind = node.kind
+    action = node.action
     css_class = "node"
-    if kind in ("add",):
+    if action in ("add",):
         css_class += " add"
-    elif kind in ("remove",):
+    elif action in ("remove",):
         css_class += " remove"
-    elif kind in ("modify",):
+    elif action in ("modify",):
         css_class += " modify"
 
     parts.append(f'<div class="{css_class}">')
     parts.append(f'<span class="path">{escape(node.path)}</span>')
-    parts.append(f" <strong>{escape(kind)}</strong>")
+    parts.append(f" <strong>{escape(action)}</strong>")
 
     for tag in node.tags:
         parts.append(f'<span class="tag">{escape(tag)}</span>')
@@ -79,4 +79,4 @@ def _render_node(node, parts, depth=0):
 
 def register(registry):
     """Entry point called by binoc plugin discovery."""
-    registry.register_outputter("binoc.html", HtmlOutputter())
+    registry.register_renderer("binoc.html", HtmlRenderer())

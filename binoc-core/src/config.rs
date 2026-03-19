@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use binoc_sdk::{check_sdk_compatibility, BinocError, Comparator, Outputter, Transformer};
+use binoc_sdk::{check_sdk_compatibility, BinocError, Comparator, Renderer, Transformer};
 
 /// Dataset configuration loaded from YAML.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,17 +12,17 @@ pub struct DatasetConfig {
     pub comparators: Vec<String>,
     #[serde(default)]
     pub transformers: Vec<String>,
-    #[serde(default = "default_outputters")]
-    pub outputters: Vec<String>,
+    #[serde(default = "default_renderers")]
+    pub renderers: Vec<String>,
     #[serde(default)]
     pub output: OutputConfig,
 }
 
-fn default_outputters() -> Vec<String> {
+fn default_renderers() -> Vec<String> {
     vec!["binoc.markdown".into()]
 }
 
-/// Per-outputter configuration.
+/// Per-renderer configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OutputConfig {
     #[serde(flatten)]
@@ -30,7 +30,7 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    pub fn get_for_outputter(&self, name: &str) -> serde_json::Value {
+    pub fn get_for_renderer(&self, name: &str) -> serde_json::Value {
         if let Some(v) = self.sections.get(name) {
             return v.clone();
         }
@@ -68,7 +68,7 @@ impl DatasetConfig {
                 "binoc.copy_detector".into(),
                 "binoc.column_reorder_detector".into(),
             ],
-            outputters: default_outputters(),
+            renderers: default_renderers(),
             output: OutputConfig::default(),
         }
     }
@@ -84,7 +84,7 @@ impl Default for DatasetConfig {
 pub struct PluginRegistry {
     comparators: BTreeMap<String, Arc<dyn Comparator>>,
     transformers: BTreeMap<String, Arc<dyn Transformer>>,
-    outputters: BTreeMap<String, Arc<dyn Outputter>>,
+    renderers: BTreeMap<String, Arc<dyn Renderer>>,
 }
 
 impl PluginRegistry {
@@ -92,7 +92,7 @@ impl PluginRegistry {
         Self {
             comparators: BTreeMap::new(),
             transformers: BTreeMap::new(),
-            outputters: BTreeMap::new(),
+            renderers: BTreeMap::new(),
         }
     }
 
@@ -116,10 +116,10 @@ impl PluginRegistry {
         Ok(())
     }
 
-    pub fn register_outputter(&mut self, outputter: Arc<dyn Outputter>) -> Result<(), BinocError> {
-        let desc = outputter.descriptor();
+    pub fn register_renderer(&mut self, renderer: Arc<dyn Renderer>) -> Result<(), BinocError> {
+        let desc = renderer.descriptor();
         check_sdk_compatibility(&desc.name, &desc.sdk_version)?;
-        self.outputters.insert(desc.name.clone(), outputter);
+        self.renderers.insert(desc.name.clone(), renderer);
         Ok(())
     }
 
@@ -131,8 +131,8 @@ impl PluginRegistry {
         self.transformers.get(name).cloned()
     }
 
-    pub fn get_outputter(&self, name: &str) -> Option<Arc<dyn Outputter>> {
-        self.outputters.get(name).cloned()
+    pub fn get_renderer(&self, name: &str) -> Option<Arc<dyn Renderer>> {
+        self.renderers.get(name).cloned()
     }
 
     pub fn comparator_names(&self) -> Vec<String> {
@@ -143,8 +143,8 @@ impl PluginRegistry {
         self.transformers.keys().cloned().collect()
     }
 
-    pub fn outputter_names(&self) -> Vec<String> {
-        self.outputters.keys().cloned().collect()
+    pub fn renderer_names(&self) -> Vec<String> {
+        self.renderers.keys().cloned().collect()
     }
 
     pub fn default_config(&self) -> DatasetConfig {
@@ -198,19 +198,19 @@ impl PluginRegistry {
             })
             .collect();
 
-        let outputters: Result<Vec<_>, _> = config
-            .outputters
+        let renderers: Result<Vec<_>, _> = config
+            .renderers
             .iter()
             .map(|name| {
-                self.get_outputter(name)
-                    .ok_or_else(|| BinocError::Config(format!("unknown outputter: {name}")))
+                self.get_renderer(name)
+                    .ok_or_else(|| BinocError::Config(format!("unknown renderer: {name}")))
             })
             .collect();
 
         Ok(ResolvedPlugins {
             comparators: comparators?,
             transformers: transformers?,
-            outputters: outputters?,
+            renderers: renderers?,
         })
     }
 }
@@ -219,16 +219,16 @@ impl PluginRegistry {
 pub struct ResolvedPlugins {
     pub comparators: Vec<Arc<dyn Comparator>>,
     pub transformers: Vec<Arc<dyn Transformer>>,
-    pub outputters: Vec<Arc<dyn Outputter>>,
+    pub renderers: Vec<Arc<dyn Renderer>>,
 }
 
 impl ResolvedPlugins {
-    pub fn outputter_for_extension(
+    pub fn renderer_for_extension(
         &self,
         ext: &str,
-    ) -> Result<Option<Arc<dyn Outputter>>, BinocError> {
+    ) -> Result<Option<Arc<dyn Renderer>>, BinocError> {
         let matches: Vec<_> = self
-            .outputters
+            .renderers
             .iter()
             .filter(|o| o.descriptor().file_extension == ext)
             .collect();
@@ -248,13 +248,13 @@ impl ResolvedPlugins {
         }
     }
 
-    pub fn outputter_by_name(&self, name: &str) -> Option<Arc<dyn Outputter>> {
-        self.outputters
+    pub fn renderer_by_name(&self, name: &str) -> Option<Arc<dyn Renderer>> {
+        self.renderers
             .iter()
             .find(|o| o.descriptor().name == name)
             .or_else(|| {
                 let qualified = format!("binoc.{name}");
-                self.outputters
+                self.renderers
                     .iter()
                     .find(|o| o.descriptor().name == qualified)
             })
@@ -328,7 +328,7 @@ mod tests {
         let config = DatasetConfig {
             comparators: vec!["unknown-comparator".into()],
             transformers: vec![],
-            outputters: vec![],
+            renderers: vec![],
             output: OutputConfig::default(),
         };
         let result = registry.resolve(&config);
@@ -351,7 +351,7 @@ mod tests {
         let config = DatasetConfig {
             comparators: vec!["third".into(), "first".into(), "second".into()],
             transformers: vec![],
-            outputters: vec![],
+            renderers: vec![],
             output: OutputConfig::default(),
         };
         let resolved = registry.resolve(&config).unwrap();
@@ -412,17 +412,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_incompatible_outputter_version() {
-        struct BadVersionOutputter;
-        impl Outputter for BadVersionOutputter {
-            fn descriptor(&self) -> OutputterDescriptor {
-                let mut desc = OutputterDescriptor::new("bad-out", "txt");
+    fn rejects_incompatible_renderer_version() {
+        struct BadVersionRenderer;
+        impl Renderer for BadVersionRenderer {
+            fn descriptor(&self) -> RendererDescriptor {
+                let mut desc = RendererDescriptor::new("bad-out", "txt");
                 desc.sdk_version = "99.0.0".into();
                 desc
             }
             fn render(
                 &self,
-                _migrations: &[Migration],
+                _changesets: &[Changeset],
                 _config: &serde_json::Value,
             ) -> BinocResult<String> {
                 Ok(String::new())
@@ -430,7 +430,7 @@ mod tests {
         }
 
         let mut registry = PluginRegistry::new();
-        let result = registry.register_outputter(Arc::new(BadVersionOutputter));
+        let result = registry.register_renderer(Arc::new(BadVersionRenderer));
         assert!(result.is_err());
     }
 }

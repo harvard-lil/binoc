@@ -1,22 +1,22 @@
 ---
 source: binoc-stdlib/tests/test_vectors.rs
-expression: "&stable_migration"
+expression: "&stable_changeset"
 ---
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
   "root": {
-    "kind": "modify",
+    "action": "modify",
     "item_type": "directory",
     "path": "",
     "children": [
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "directory",
         "path": "data",
         "children": [
           {
-            "kind": "add",
+            "action": "add",
             "item_type": "tabular",
             "path": "data/extra.csv",
             "summary": "New table (2 columns, 1 rows)",
@@ -34,7 +34,7 @@ expression: "&stable_migration"
             "comparator": "binoc.csv"
           },
           {
-            "kind": "modify",
+            "action": "modify",
             "item_type": "tabular",
             "path": "data/records.csv",
             "summary": "1 row added",
@@ -66,12 +66,12 @@ expression: "&stable_migration"
         "comparator": "binoc.directory"
       },
       {
-        "kind": "modify",
+        "action": "modify",
         "item_type": "directory",
         "path": "docs",
         "children": [
           {
-            "kind": "modify",
+            "action": "modify",
             "item_type": "text",
             "path": "docs/readme.txt",
             "summary": "2 lines added, 1 removed",

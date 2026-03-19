@@ -8,7 +8,7 @@ pub mod types;
 pub mod test_support;
 
 pub use data_access::LocalDataAccess;
-pub use ir::{DiffNode, Migration};
+pub use ir::{Changeset, DiffNode};
 pub use traits::*;
 pub use types::*;
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Binoc generates changelogs for datasets that don't ship with them. Given two snapshots of a dataset, it detects structural and content changes, records them as a migration tree (the IR), and renders changes as JSON or Markdown. The primary audience is archivists, data scientists, and stewards tracking undocumented changes to published datasets.
+Binoc generates changelogs for datasets that don't ship with them. Given two snapshots of a dataset, it detects structural and content changes, records them as a changeset tree (the IR), and renders changes as JSON or Markdown. The primary audience is archivists, data scientists, and stewards tracking undocumented changes to published datasets.
 
 Rust workspace with five crates:
 
@@ -22,9 +22,9 @@ Shared test fixtures live in `test-vectors/`. Authoritative architecture spec is
 
 2. **The standard library (`binoc-stdlib`) is a plugin pack**, architecturally identical to third-party packs. The core engine has zero domain knowledge—not even about directories or text files.
 
-3. **Comparators are the parser** (raw data → IR). **Transformers are optimization passes** (IR → IR, no raw data access). **Significance classification is an outputter concern**, mapped from semantic tags via config—not baked into the IR.
+3. **Comparators are the parser** (raw data → IR). **Transformers are optimization passes** (IR → IR, no raw data access). **Significance classification is a renderer concern**, mapped from semantic tags via config—not baked into the IR.
 
-4. **The IR is tree-structured, openly typed, and tag-annotated.** `kind`, `item_type`, and `tags` are open enums/strings. No built-in types or significance levels. Conventions, not enforcement.
+4. **The IR is tree-structured, openly typed, and tag-annotated.** `action`, `item_type`, and `tags` are open enums/strings. No built-in types or significance levels. Conventions, not enforcement.
 
 5. **Dispatch is declarative-first** (type/extension filters) **with an imperative escape hatch** (`can_handle`). First comparator to claim an item wins. Ordering is a config concern, not a plugin concern.
 

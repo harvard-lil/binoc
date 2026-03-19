@@ -14,8 +14,8 @@ impl Transformer for CopyDetector {
     }
 
     fn transform(&self, mut node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
-        let has_adds = node.children.iter().any(|c| c.kind == "add");
-        let has_identicals = node.children.iter().any(|c| c.kind == "identical");
+        let has_adds = node.children.iter().any(|c| c.action == "add");
+        let has_identicals = node.children.iter().any(|c| c.action == "identical");
 
         if !has_adds || !has_identicals {
             return TransformResult::Unchanged;
@@ -25,11 +25,11 @@ impl Transformer for CopyDetector {
         let mut add_by_hash: BTreeMap<String, Vec<usize>> = BTreeMap::new();
 
         for (i, child) in node.children.iter().enumerate() {
-            if child.kind == "identical" {
+            if child.action == "identical" {
                 if let Some(hash) = extract_hash(child) {
                     identical_by_hash.entry(hash).or_default().push(i);
                 }
-            } else if child.kind == "add" {
+            } else if child.action == "add" {
                 if let Some(hash) = extract_hash(child) {
                     add_by_hash.entry(hash).or_default().push(i);
                 }

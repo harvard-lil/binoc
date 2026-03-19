@@ -23,9 +23,9 @@ SDK ← Sqlite["binoc-sqlite"]
 
 ### 2. Three-layer SDK design
 
-**Registration layer (descriptors).** Each plugin type has a serializable descriptor struct (`ComparatorDescriptor`, `TransformerDescriptor`, `OutputterDescriptor`). Descriptors carry static metadata: name, extensions, media types, scope, `sdk_version` (auto-set from `CARGO_PKG_VERSION`). All structs are `#[non_exhaustive]` so new fields can be added without breaking compiled plugins.
+**Registration layer (descriptors).** Each plugin type has a serializable descriptor struct (`ComparatorDescriptor`, `TransformerDescriptor`, `RendererDescriptor`). Descriptors carry static metadata: name, extensions, media types, scope, `sdk_version` (auto-set from `CARGO_PKG_VERSION`). All structs are `#[non_exhaustive]` so new fields can be added without breaking compiled plugins.
 
-**Typed data layer (IR and results).** `DiffNode`, `Migration`, `CompareResult`, `TransformResult`, `ExtractResult` live in the SDK. These were already `Serialize`/`Deserialize` and wire-friendly. `CompareResult` gains a `Skip` variant (see below). Enums are `#[non_exhaustive]` for forward compatibility.
+**Typed data layer (IR and results).** `DiffNode`, `Changeset`, `CompareResult`, `TransformResult`, `ExtractResult` live in the SDK. These were already `Serialize`/`Deserialize` and wire-friendly. `CompareResult` gains a `Skip` variant (see below). Enums are `#[non_exhaustive]` for forward compatibility.
 
 **Raw data layer (`DataAccess` trait).** Replaces both `Item.physical_path` and `CompareContext`. Plugin I/O goes through `read_bytes`, `open_read`, `local_path`, `provide`, `workspace`, `register_local`, `store`, `load`, and `data_root` methods on a `&dyn DataAccess` argument. The engine supplies `LocalDataAccess` (filesystem-backed) in three modes:
 - `new()` — owns a session temp dir as `data_root` (used by the controller)
@@ -42,7 +42,7 @@ If a comparator is dispatched by descriptor match but discovers at compare-time 
 
 The closed `ReopenedData { Tabular, Text, Binary }` enum was an extensibility bottleneck — third-party plugins couldn't add variants. Replaced by two mechanisms:
 
-**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. The field is `#[serde(skip)]` — present at runtime, absent from migration JSON (handles are ephemeral temp paths). For the C ABI, `source_items` is carried explicitly in `TransformRequest` and `ExtractRequest`, and the `export_plugin!` macro reconstructs it on the plugin side.
+**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. The field is `#[serde(skip)]` — present at runtime, absent from changeset JSON (handles are ephemeral temp paths). For the C ABI, `source_items` is carried explicitly in `TransformRequest` and `ExtractRequest`, and the `export_plugin!` macro reconstructs it on the plugin side.
 
 This is the preferred pattern for tabular transformers. The CSV comparator no longer caches its parsed data — the row-reorder transformer and column-reorder detector re-parse the source CSVs directly. This avoids writing a JSON-serialized copy of the CSV to disk (which was strictly larger and slower to parse than the original).
 
@@ -71,15 +71,15 @@ Rust has no stable ABI. `#[non_exhaustive]` is source-compatible but not binary-
 **Separately-compiled plugins (C ABI + JSON serialization).** The SDK provides an `export_plugin!` macro that generates `#[no_mangle] extern "C"` entry points. All data crossing the boundary is serialized as JSON. Version mismatch produces a runtime deserialization error, never UB.
 
 The macro conditionally generates entry points based on declared plugin types:
-- `_binoc_plugin_describe` — returns a JSON `PluginDescription` containing descriptors for all comparators, transformers, and outputters in the plugin (always generated)
+- `_binoc_plugin_describe` — returns a JSON `PluginDescription` containing descriptors for all comparators, transformers, and renderers in the plugin (always generated)
 - `_binoc_free_string` — deallocator for returned strings (always generated)
 - `_binoc_comparator_compare`, `_binoc_comparator_reopen`, `_binoc_comparator_extract` — comparator entry points (generated when comparators are declared)
 - `_binoc_transformer_transform`, `_binoc_transformer_extract` — transformer entry points (generated when transformers are declared)
-- `_binoc_outputter_render` — outputter entry point (generated when outputters are declared)
+- `_binoc_renderer_render` — renderer entry point (generated when renderers are declared)
 
-Each entry point takes an `index` (selecting which plugin within the pack) and a JSON request, and returns a JSON response. Request types carry the necessary context for cross-process operation: `CompareRequest` and `ReopenRequest` include `data_root` and `workspace` paths; `TransformRequest` and `ExtractRequest` include `data_root`; `RenderRequest` includes serialized migrations and config.
+Each entry point takes an `index` (selecting which plugin within the pack) and a JSON request, and returns a JSON response. Request types carry the necessary context for cross-process operation: `CompareRequest` and `ReopenRequest` include `data_root` and `workspace` paths; `TransformRequest` and `ExtractRequest` include `data_root`; `RenderRequest` includes serialized changesets and config.
 
-The host (`binoc-python`) uses `libloading` to dlopen the plugin `.so`, reads the descriptor, and wraps each plugin in a `NativeComparator`, `NativeTransformer`, or `NativeOutputter` that implements the corresponding trait by serializing/deserializing through the C ABI. Before each comparator call, the host allocates a workspace in the controller's `DataAccess` and passes its path in the request. The controller doesn't know the difference between a same-build and a native-loaded plugin.
+The host (`binoc-python`) uses `libloading` to dlopen the plugin `.so`, reads the descriptor, and wraps each plugin in a `NativeComparator`, `NativeTransformer`, or `NativeRenderer` that implements the corresponding trait by serializing/deserializing through the C ABI. Before each comparator call, the host allocates a workspace in the controller's `DataAccess` and passes its path in the request. The controller doesn't know the difference between a same-build and a native-loaded plugin.
 
 ### 7. Plugin authors write one line of transport glue
 
@@ -99,7 +99,7 @@ binoc_sdk::export_plugin! {
 }
 ```
 
-The `module:` argument is the Python module name (must match crate lib name). When the `python` feature is active, the macro also generates an empty `#[pymodule]` so maturin can package the `.so`. The plugin has no `pyo3` dependency in its own code, no knowledge of Python, and no `binoc-core` dependency. A single plugin pack can export any combination of comparators, transformers, and outputters.
+The `module:` argument is the Python module name (must match crate lib name). When the `python` feature is active, the macro also generates an empty `#[pymodule]` so maturin can package the `.so`. The plugin has no `pyo3` dependency in its own code, no knowledge of Python, and no `binoc-core` dependency. A single plugin pack can export any combination of comparators, transformers, and renderers.
 
 ### 8. Unified discovery — single entry point group
 
@@ -129,7 +129,7 @@ The `model-plugins/` directory contains example plugins that are architecturally
 
 **`binoc-row-reorder` — Rust transformer** (native C ABI). Detects re-sorted CSV tables by loading cached `TabularDataPair` via `data.load()` and checking whether rows are a permutation. Demonstrates `export_plugin!` with transformers and cross-phase cache access.
 
-**`binoc-html` — Pure Python outputter**. Renders migrations as self-contained HTML changelogs. Demonstrates the Python plugin authoring path: a class with `name`, `file_extension`, and `render()`, plus a `register(registry)` entry point.
+**`binoc-html` — Pure Python renderer**. Renders changesets as self-contained HTML changelogs. Demonstrates the Python plugin authoring path: a class with `name`, `file_extension`, and `render()`, plus a `register(registry)` entry point.
 
 Layout of a Rust plugin:
 
@@ -152,7 +152,7 @@ Layout of a pure Python plugin:
 model-plugins/binoc-html/
 ├── pyproject.toml
 ├── binoc_html/
-│   └── __init__.py     # Outputter class + register()
+│   └── __init__.py     # Renderer class + register()
 └── tests/
     └── test_html.py    # Python tests
 ```
@@ -175,6 +175,6 @@ Plugin-specific test vectors live within the plugin's own `test-vectors/` direct
 
 **JSON-serialized tabular cache as cross-phase data channel.** The first version of cross-phase data sharing had the CSV comparator `store()` its parsed `TabularDataPair` as JSON, and transformers `load()` it. This was strictly worse than re-parsing the CSV: the JSON encoding was larger and no faster to deserialize. Replaced by `source_items` on `DiffNode` — transformers re-parse the source files directly. The `store()`/`load()` API is retained for cases where the cached format is genuinely more efficient than re-parsing (e.g., Arrow IPC for large datasets, or expensive parses like SQLite schema introspection).
 
-**Separate `export_comparator!`, `export_transformer!`, `export_outputter!` macros.** Considered but rejected in favor of a unified `export_plugin!` that declares all types in one invocation. This better matches the reality that a single `.so` is one plugin pack that may contain any mix of plugin types, and avoids multiplying the number of `_binoc_plugin_describe` symbols.
+**Separate `export_comparator!`, `export_transformer!`, `export_renderer!` macros.** Considered but rejected in favor of a unified `export_plugin!` that declares all types in one invocation. This better matches the reality that a single `.so` is one plugin pack that may contain any mix of plugin types, and avoids multiplying the number of `_binoc_plugin_describe` symbols.
 
 **Removing `reopen()` from the Comparator trait.** During the initial SDK extraction, `reopen()` was removed under the assumption that `DataAccess` methods replaced its role. This was incorrect — `reopen()` serves a distinct purpose in the extract chain: on-demand reconstruction of physical access to nested items (e.g., extracting a file from a zip) without re-running the diff. It was restored with the same semantics, adapted to take `&dyn DataAccess` instead of the old `CompareContext`.

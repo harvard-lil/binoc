@@ -1,6 +1,6 @@
 [vector]
 name = "trivial-identical"
-description = "Two identical directories → empty migration"
+description = "Two identical directories → empty changeset"
 tags = ["identical", "baseline"]
 
 [expected]

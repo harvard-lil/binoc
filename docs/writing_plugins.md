@@ -1,6 +1,6 @@
 # Writing Binoc Plugins
 
-This guide covers how to write a binoc plugin — a comparator, transformer, or outputter — and distribute it so `pip install your-package` makes it available to the `binoc` CLI automatically.
+This guide covers how to write a binoc plugin — a comparator, transformer, or renderer — and distribute it so `pip install your-package` makes it available to the `binoc` CLI automatically.
 
 Plugins can be written in **Python** (quick to prototype, GIL cost per file) or **Rust** (zero per-file overhead, more boilerplate). Both use the same distribution mechanism: Python entry points.
 
@@ -10,7 +10,7 @@ Before writing a plugin, understand what each type does:
 
 - **Comparator**: Claims item pairs by file extension, media type, or imperative `can_handle` logic. Produces a diff (leaf node or expansion into children). This is the parser — it turns raw data into IR.
 - **Transformer**: Rewrites the completed diff tree. Operates on structure, not raw data. For example, the move detector correlates add/remove pairs by content hash.
-- **Outputter**: Renders finalized migrations into a presentation format (Markdown, HTML, etc.).
+- **Renderer**: Renders finalized changesets into a presentation format (Markdown, HTML, etc.).
 
 The IR is a tree of `DiffNode` values. See `docs/design.md` for the full schema.
 
@@ -34,7 +34,7 @@ class FastaComparator(binoc.Comparator):
                 return binoc.Identical()
 
             node = binoc.DiffNode(
-                kind="modify",
+                action="modify",
                 item_type="fasta",
                 path=pair.logical_path,
                 tags=["biobinoc.sequence-changed"],
@@ -50,7 +50,7 @@ class FastaComparator(binoc.Comparator):
         elif pair.right_path:
             # Added
             return binoc.Leaf(binoc.DiffNode(
-                kind="add",
+                action="add",
                 item_type="fasta",
                 path=pair.logical_path,
             ))
@@ -58,7 +58,7 @@ class FastaComparator(binoc.Comparator):
         else:
             # Removed
             return binoc.Leaf(binoc.DiffNode(
-                kind="remove",
+                action="remove",
                 item_type="fasta",
                 path=pair.logical_path,
             ))
@@ -82,14 +82,14 @@ class SequenceNormalizer(binoc.Transformer):
 
     def transform(self, node):
         # Collapse trivial whitespace-only changes
-        if node.kind == "modify" and node.details.get("sequences_left") == node.details.get("sequences_right"):
+        if node.action == "modify" and node.details.get("sequences_left") == node.details.get("sequences_right"):
             return binoc.Replace(node.with_tag("biobinoc.whitespace-only"))
         return binoc.Unchanged()
 ```
 
 **Key points:**
 
-- Set `match_types`, `match_tags`, and/or `match_kinds` for declarative matching. Override `can_handle(self, node)` for imperative logic.
+- Set `match_types`, `match_tags`, and/or `match_actions` for declarative matching. Override `can_handle(self, node)` for imperative logic.
 - `transform()` must return `Unchanged()`, `Replace(node)`, `ReplaceMany(nodes)`, or `Remove()`.
 - Transformers see the completed tree. They don't have access to raw file data.
 
@@ -98,14 +98,14 @@ class SequenceNormalizer(binoc.Transformer):
 Nodes are immutable-ish. Builder methods return new nodes:
 
 ```python
-node = binoc.DiffNode(kind="modify", item_type="fasta", path="seqs.fa")
+node = binoc.DiffNode(action="modify", item_type="fasta", path="seqs.fa")
 node = node.with_tag("biobinoc.gap-change")
 node = node.with_detail("gap_count", 42)
 node = node.with_source_path("old_seqs.fa")  # for moves/renames
 node = node.with_children([child1, child2])
 
 # Reading
-node.kind          # "modify"
+node.action          # "modify"
 node.item_type     # "fasta"
 node.path          # "seqs.fa"
 node.tags          # ["biobinoc.gap-change"]
@@ -124,7 +124,7 @@ import binoc
 config = binoc.Config.default()
 config.add_comparator(FastaComparator())
 config.add_transformer(SequenceNormalizer())
-migration = binoc.diff("snapshot-a", "snapshot-b", config=config)
+changeset = binoc.diff("snapshot-a", "snapshot-b", config=config)
 ```
 
 This bypasses entry-point discovery entirely. The plugin doesn't need to be packaged or installed.
@@ -327,17 +327,17 @@ Standard `binoc.*` names are reserved for the standard library.
 
 ## Summary field
 
-The `DiffNode.summary` field is an optional human-readable one-liner describing the change. Outputters use it for narrative rendering. If your comparator produces a domain-specific diff, set `summary` so the standard Markdown outputter can describe it without understanding your format:
+The `DiffNode.summary` field is an optional human-readable one-liner describing the change. Renderers use it for narrative rendering. If your comparator produces a domain-specific diff, set `summary` so the standard Markdown renderer can describe it without understanding your format:
 
 ```python
 node = binoc.DiffNode(
-    kind="modify",
+    action="modify",
     item_type="fasta",
     path="sequences.fa",
 ).with_detail("summary", "3 sequences added, 1 removed")
 ```
 
-When `summary` is absent, outputters fall back to a generic description from `kind`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
+When `summary` is absent, renderers fall back to a generic description from `action`, `item_type`, and `tags`. Setting it is optional but improves changelog quality.
 
 ## Performance expectations
 
@@ -360,7 +360,7 @@ pair = binoc.ItemPair.both(
 )
 result = comp.compare(pair)
 assert isinstance(result, binoc.Leaf)
-assert result.node.kind == "modify"
+assert result.node.action == "modify"
 assert "biobinoc.sequence-changed" in result.node.tags
 ```
 
@@ -372,7 +372,7 @@ config = binoc.Config(
     transformers=["binoc.move_detector"],
 )
 config.add_comparator(FastaComparator())
-migration = binoc.diff("test-data/snapshot-a", "test-data/snapshot-b", config=config)
+changeset = binoc.diff("test-data/snapshot-a", "test-data/snapshot-b", config=config)
 ```
 
 You can also create test vectors following the pattern in `test-vectors/` — see `test-vectors/README.md` for the manifest format. To avoid duplicating harness code, depend on `binoc-stdlib` (with its default `test-vectors` feature) and use `binoc_stdlib::test_vectors::{discover_vectors, run_vector}` with a registry that includes your plugin; see `binoc-sqlite/tests/test_vectors.rs` for a minimal example.
