@@ -19,6 +19,7 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
 
     r(registry.register_transformer(Arc::new(transformers::move_detector::MoveDetector)));
     r(registry.register_transformer(Arc::new(transformers::copy_detector::CopyDetector)));
+    r(registry.register_transformer(Arc::new(transformers::tabular_analyzer::TabularAnalyzer)));
     r(registry.register_transformer(Arc::new(
         transformers::column_reorder::ColumnReorderDetector,
     )));

@@ -4,6 +4,7 @@ use binoc_sdk::*;
 use binoc_stdlib::transformers::column_reorder::ColumnReorderDetector;
 use binoc_stdlib::transformers::copy_detector::CopyDetector;
 use binoc_stdlib::transformers::move_detector::MoveDetector;
+use binoc_stdlib::transformers::tabular_analyzer::TabularAnalyzer;
 
 fn da() -> LocalDataAccess {
     LocalDataAccess::new()
@@ -85,8 +86,8 @@ fn move_detector_preserves_non_moved_children() {
 #[test]
 fn move_detector_descriptor() {
     let desc = MoveDetector.descriptor();
-    assert!(desc.match_types.contains(&"directory".to_string()));
-    assert!(desc.match_types.contains(&"zip_archive".to_string()));
+    assert!(desc.match_types.is_empty());
+    assert_eq!(desc.node_shape, NodeShapeFilter::Container);
     assert_eq!(desc.scope, TransformScope::Subtree);
 }
 
@@ -177,52 +178,16 @@ fn copy_detector_preserves_non_copy_children() {
 #[test]
 fn copy_detector_descriptor() {
     let desc = CopyDetector.descriptor();
-    assert!(desc.match_types.contains(&"directory".to_string()));
-    assert!(desc.match_types.contains(&"zip_archive".to_string()));
+    assert!(desc.match_types.is_empty());
+    assert_eq!(desc.node_shape, NodeShapeFilter::Container);
     assert_eq!(desc.scope, TransformScope::Subtree);
 }
 
 // ── Column reorder detector ────────────────────────────────────────
 
 #[test]
-fn column_reorder_converts_pure_reorder() {
-    let node = DiffNode::new("modify", "tabular", "data.csv")
-        .with_tag("binoc.column-reorder")
-        .with_detail("columns_added", serde_json::json!([]))
-        .with_detail("columns_removed", serde_json::json!([]))
-        .with_detail("rows_added", serde_json::json!(0))
-        .with_detail("rows_removed", serde_json::json!(0))
-        .with_detail("cells_changed", serde_json::json!(0));
-
-    let result = ColumnReorderDetector.transform(node, &da());
-    match result {
-        TransformResult::Replace(node) => {
-            assert_eq!(node.action, "reorder");
-            assert!(node.tags.contains("binoc.column-reorder"));
-            assert_eq!(node.tags.len(), 1);
-        }
-        _ => panic!("Expected Replace"),
-    }
-}
-
-#[test]
-fn column_reorder_unchanged_when_other_changes_present() {
-    let node = DiffNode::new("modify", "tabular", "data.csv")
-        .with_tag("binoc.column-reorder")
-        .with_tag("binoc.row-addition")
-        .with_detail("columns_added", serde_json::json!([]))
-        .with_detail("columns_removed", serde_json::json!([]))
-        .with_detail("rows_added", serde_json::json!(5))
-        .with_detail("rows_removed", serde_json::json!(0))
-        .with_detail("cells_changed", serde_json::json!(0));
-
-    let result = ColumnReorderDetector.transform(node, &da());
-    assert!(matches!(result, TransformResult::Unchanged));
-}
-
-#[test]
-fn column_reorder_unchanged_without_reorder_tag() {
-    let node = DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.row-addition");
+fn column_reorder_unchanged_without_artifacts() {
+    let node = DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.column-reorder");
 
     let result = ColumnReorderDetector.transform(node, &da());
     assert!(matches!(result, TransformResult::Unchanged));
@@ -231,6 +196,192 @@ fn column_reorder_unchanged_without_reorder_tag() {
 #[test]
 fn column_reorder_descriptor() {
     let desc = ColumnReorderDetector.descriptor();
-    assert!(desc.match_types.contains(&"tabular".to_string()));
+    assert!(desc.match_types.is_empty());
+    assert_eq!(desc.match_tags, vec!["binoc.column-reorder".to_string()]);
+    assert_eq!(desc.match_artifacts, vec![tabular_v1()]);
+    assert_eq!(desc.scope, TransformScope::Node);
+}
+
+// ── Tabular analyzer ───────────────────────────────────────────────
+
+fn publish_and_attach(
+    data: &LocalDataAccess,
+    node: DiffNode,
+    left: Option<&TabularData>,
+    right: Option<&TabularData>,
+) -> DiffNode {
+    let mut node = node;
+    if let Some(l) = left {
+        let bytes = serde_json::to_vec(l).unwrap();
+        let desc = data
+            .publish_artifact(&tabular_v1(), ArtifactSubject::Left, "test", &bytes)
+            .unwrap();
+        node = node.with_artifact(desc);
+    }
+    if let Some(r) = right {
+        let bytes = serde_json::to_vec(r).unwrap();
+        let desc = data
+            .publish_artifact(&tabular_v1(), ArtifactSubject::Right, "test", &bytes)
+            .unwrap();
+        node = node.with_artifact(desc);
+    }
+    node
+}
+
+#[test]
+fn tabular_analyzer_detects_cell_changes() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "score".into()],
+        rows: vec![
+            vec!["Alice".into(), "85".into()],
+            vec!["Bob".into(), "90".into()],
+        ],
+    };
+    let right = TabularData {
+        headers: vec!["name".into(), "score".into()],
+        rows: vec![
+            vec!["Alice".into(), "92".into()],
+            vec!["Bob".into(), "88".into()],
+        ],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data) {
+        TransformResult::Replace(n) => {
+            assert!(n.tags.contains("binoc.cell-change"));
+            assert_eq!(n.details["cells_changed"], 2);
+            assert!(n.summary.as_ref().unwrap().contains("2 cells changed"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_detects_column_addition() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![vec!["Alice".into(), "30".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["name".into(), "age".into(), "email".into()],
+        rows: vec![vec!["Alice".into(), "30".into(), "a@test.com".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data) {
+        TransformResult::Replace(n) => {
+            assert!(n.tags.contains("binoc.column-addition"));
+            assert!(n.tags.contains("binoc.schema-change"));
+            assert_eq!(n.details["columns_added"], serde_json::json!(["email"]));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_detects_row_addition() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![vec!["Alice".into(), "30".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![
+            vec!["Alice".into(), "30".into()],
+            vec!["Bob".into(), "25".into()],
+        ],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data) {
+        TransformResult::Replace(n) => {
+            assert!(n.tags.contains("binoc.row-addition"));
+            assert_eq!(n.details["rows_added"], 1);
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_handles_add_action() {
+    let data = da();
+    let right = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![
+            vec!["Alice".into(), "30".into()],
+            vec!["Bob".into(), "25".into()],
+        ],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("add", "tabular", "data.csv"),
+        None,
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data) {
+        TransformResult::Replace(n) => {
+            assert!(n.tags.contains("binoc.content-changed"));
+            assert!(n.summary.as_ref().unwrap().contains("2 columns"));
+            assert!(n.summary.as_ref().unwrap().contains("2 rows"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_handles_remove_action() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["x".into(), "y".into(), "z".into()],
+        rows: vec![vec!["1".into(), "2".into(), "3".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("remove", "tabular", "data.csv"),
+        Some(&left),
+        None,
+    );
+
+    match TabularAnalyzer.transform(node, &data) {
+        TransformResult::Replace(n) => {
+            assert!(n.tags.contains("binoc.content-changed"));
+            assert!(n.summary.as_ref().unwrap().contains("3 columns"));
+            assert!(n.summary.as_ref().unwrap().contains("1 row"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_unchanged_without_artifacts() {
+    let node = DiffNode::new("modify", "tabular", "data.csv");
+    let result = TabularAnalyzer.transform(node, &da());
+    assert!(matches!(result, TransformResult::Unchanged));
+}
+
+#[test]
+fn tabular_analyzer_descriptor() {
+    let desc = TabularAnalyzer.descriptor();
+    assert_eq!(desc.name, "binoc.tabular_analyzer");
+    assert_eq!(desc.match_artifacts, vec![tabular_v1()]);
     assert_eq!(desc.scope, TransformScope::Node);
 }
