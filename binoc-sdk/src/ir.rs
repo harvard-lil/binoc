@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::types::ItemPair;
+use crate::types::{ArtifactDescriptor, ItemPair};
 
 /// A node in the diff tree — the central data structure of the system.
 /// Every comparator emits it, every transformer rewrites it, and serializers
@@ -59,6 +59,11 @@ pub struct DiffNode {
     /// that need to re-read source data. Not serialized into changeset JSON.
     #[serde(skip)]
     pub source_items: Option<ItemPair>,
+
+    /// Published artifacts for this node. Transient session data — not
+    /// serialized into changeset JSON. Keyed by `(subject, format_id)`.
+    #[serde(skip)]
+    pub artifacts: Vec<ArtifactDescriptor>,
 }
 
 impl DiffNode {
@@ -80,6 +85,7 @@ impl DiffNode {
             comparator: None,
             transformed_by: Vec::new(),
             source_items: None,
+            artifacts: Vec::new(),
         }
     }
 
@@ -110,6 +116,11 @@ impl DiffNode {
 
     pub fn with_source_items(mut self, items: ItemPair) -> Self {
         self.source_items = Some(items);
+        self
+    }
+
+    pub fn with_artifact(mut self, artifact: ArtifactDescriptor) -> Self {
+        self.artifacts.push(artifact);
         self
     }
 

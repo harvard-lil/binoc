@@ -14,3 +14,4 @@
 * 2026-03-09: [Standard library boundary policy](stdlib_boundary.md)
 * 2026-03-12: [Plugin SDK, ABI safety, and native plugin loading](plugin_sdk_and_abi.md)
 * 2026-03-18: [Terminology](terminology.md)
+* 2026-03-19: [Published artifacts for cross-plugin composition](published_artifacts_for_cross_plugin_composition.md)

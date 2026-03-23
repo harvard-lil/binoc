@@ -134,6 +134,11 @@ impl ComparatorDescriptor {
 }
 
 /// Static metadata for a transformer plugin.
+///
+/// Dispatch uses AND-of-ORs: all non-empty fields must pass (AND),
+/// and within each list field any single value satisfying it is enough
+/// (OR). Empty/default fields are unconstrained. A descriptor with
+/// every field empty/default matches nothing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct TransformerDescriptor {
@@ -149,6 +154,15 @@ pub struct TransformerDescriptor {
     pub scope: TransformScope,
     #[serde(default = "default_phase")]
     pub suggested_phase: String,
+    /// Artifact formats the node must have (any one suffices).
+    /// Empty means no artifact filter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub match_artifacts: Vec<ArtifactFormat>,
+    /// Dispatch filter on node shape. `Container` matches only nodes
+    /// with children; `Leaf` matches only childless nodes; `Any` (the
+    /// default) is unconstrained.
+    #[serde(default)]
+    pub node_shape: NodeShapeFilter,
 }
 
 fn default_phase() -> String {
@@ -165,6 +179,8 @@ impl TransformerDescriptor {
             match_actions: Vec::new(),
             scope: TransformScope::Node,
             suggested_phase: "default".into(),
+            match_artifacts: Vec::new(),
+            node_shape: NodeShapeFilter::Any,
         }
     }
 
@@ -185,6 +201,16 @@ impl TransformerDescriptor {
 
     pub fn with_scope(mut self, scope: TransformScope) -> Self {
         self.scope = scope;
+        self
+    }
+
+    pub fn with_match_artifacts(mut self, formats: Vec<ArtifactFormat>) -> Self {
+        self.match_artifacts = formats;
+        self
+    }
+
+    pub fn with_node_shape(mut self, shape: NodeShapeFilter) -> Self {
+        self.node_shape = shape;
         self
     }
 }
@@ -215,7 +241,7 @@ impl RendererDescriptor {
 ///
 /// In-process: backed by the local filesystem + temp dirs.
 /// Cross-ABI: backed by a shared `data_root` directory so host and plugin
-/// can exchange cached data via `store()`/`load()`.
+/// can exchange artifacts via `publish_artifact()`/`get_artifact()`.
 pub trait DataAccess: Send + Sync {
     /// Read the full contents of an item as bytes.
     fn read_bytes(&self, item: &ItemRef) -> BinocResult<Vec<u8>>;
@@ -239,18 +265,33 @@ pub trait DataAccess: Send + Sync {
     /// Returns an ItemRef that can be used in child ItemPairs.
     fn register_local(&self, physical: &Path, logical: &str) -> BinocResult<ItemRef>;
 
-    /// Cache opaque data for cross-phase access, keyed by a string.
-    /// Filesystem-backed under `data_root()` so data is visible across the
-    /// C ABI boundary (host and plugin share the same data_root).
-    fn store(&self, key: &str, data: &[u8]) -> BinocResult<()>;
+    /// Publish an artifact: store opaque bytes and return a descriptor.
+    ///
+    /// Artifacts are the unified mechanism for both private reuse and
+    /// cross-plugin composition. A comparator or transformer publishes
+    /// zero or more artifacts per node; downstream plugins retrieve them
+    /// by format and subject.
+    ///
+    /// `format` is a structured (package, name, version) tuple — see
+    /// [`ArtifactFormat`]. `subject` indicates which side of the
+    /// comparison the artifact describes. `producer` is the plugin name
+    /// for provenance. The returned `ArtifactDescriptor` should be
+    /// attached to the node via `DiffNode.artifacts`.
+    fn publish_artifact(
+        &self,
+        format: &ArtifactFormat,
+        subject: ArtifactSubject,
+        producer: &str,
+        data: &[u8],
+    ) -> BinocResult<ArtifactDescriptor>;
 
-    /// Retrieve cached data by key.
-    fn load(&self, key: &str) -> BinocResult<Option<Vec<u8>>>;
+    /// Retrieve the bytes for a previously published artifact.
+    fn get_artifact(&self, descriptor: &ArtifactDescriptor) -> BinocResult<Option<Vec<u8>>>;
 
     /// Session-level root directory shared between host and plugins.
-    /// Cache files live at `<data_root>/.cache/`. ABI requests carry this
-    /// path so native plugins can construct a `LocalDataAccess` that reads
-    /// from the same cache.
+    /// Artifact files live under `<data_root>/.artifacts/`. ABI requests
+    /// carry this path so native plugins can construct a `LocalDataAccess`
+    /// that reads from the same artifact store.
     fn data_root(&self) -> BinocResult<PathBuf>;
 }
 

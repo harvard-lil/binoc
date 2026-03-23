@@ -2,18 +2,19 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
+use crate::types::{ArtifactDescriptor, ArtifactFormat, ArtifactSubject};
 use crate::{BinocError, BinocResult, DataAccess, ItemRef};
 
 /// In-process DataAccess backed by the local filesystem, temp directories,
-/// and a filesystem-backed cache under `data_root/.cache/`.
+/// and a filesystem-backed artifact store under `data_root/.artifacts/`.
 ///
 /// Three construction modes:
 ///
 /// - `new()` — owns a session temp dir as data_root (used by the controller).
 /// - `for_plugin(data_root, workspace)` — shares the host's data_root for
-///   cache access, plus a pre-allocated workspace for expansion. Used by
+///   artifact access, plus a pre-allocated workspace for expansion. Used by
 ///   the `export_plugin!` macro across the C ABI.
-/// - `with_data_root(data_root)` — shares an existing data_root for cache
+/// - `with_data_root(data_root)` — shares an existing data_root for artifact
 ///   access only (no expansion workspace). Used for extract-only access.
 pub struct LocalDataAccess {
     _session_dir: Option<tempfile::TempDir>,
@@ -24,12 +25,12 @@ pub struct LocalDataAccess {
     provide_dir: Mutex<Option<tempfile::TempDir>>,
 }
 
-fn cache_dir(data_root: &Path) -> PathBuf {
-    data_root.join(".cache")
+fn artifacts_dir(data_root: &Path) -> PathBuf {
+    data_root.join(".artifacts")
 }
 
-fn safe_cache_key(key: &str) -> String {
-    key.bytes()
+fn safe_name(s: &str) -> String {
+    s.bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' {
                 (b as char).to_string()
@@ -38,6 +39,14 @@ fn safe_cache_key(key: &str) -> String {
             }
         })
         .collect()
+}
+
+fn subject_dir_name(subject: ArtifactSubject) -> &'static str {
+    match subject {
+        ArtifactSubject::Left => "left",
+        ArtifactSubject::Right => "right",
+        ArtifactSubject::Pair => "pair",
+    }
 }
 
 impl LocalDataAccess {
@@ -151,15 +160,31 @@ impl DataAccess for LocalDataAccess {
         Self::register_local_impl(physical, logical)
     }
 
-    fn store(&self, key: &str, data: &[u8]) -> BinocResult<()> {
-        let dir = cache_dir(&self.data_root);
+    fn publish_artifact(
+        &self,
+        format: &ArtifactFormat,
+        subject: ArtifactSubject,
+        producer: &str,
+        data: &[u8],
+    ) -> BinocResult<ArtifactDescriptor> {
+        let dir = artifacts_dir(&self.data_root)
+            .join(safe_name(&format.package))
+            .join(safe_name(&format.name))
+            .join(format!("v{}", format.version))
+            .join(subject_dir_name(subject));
         std::fs::create_dir_all(&dir).map_err(BinocError::Io)?;
-        let path = dir.join(safe_cache_key(key));
-        std::fs::write(path, data).map_err(BinocError::Io)
+        let handle = dir.join(safe_name(producer)).to_string_lossy().to_string();
+        std::fs::write(&handle, data).map_err(BinocError::Io)?;
+        Ok(ArtifactDescriptor {
+            format: format.clone(),
+            subject,
+            producer: producer.to_string(),
+            handle,
+        })
     }
 
-    fn load(&self, key: &str) -> BinocResult<Option<Vec<u8>>> {
-        let path = cache_dir(&self.data_root).join(safe_cache_key(key));
+    fn get_artifact(&self, descriptor: &ArtifactDescriptor) -> BinocResult<Option<Vec<u8>>> {
+        let path = PathBuf::from(&descriptor.handle);
         match std::fs::read(&path) {
             Ok(data) => Ok(Some(data)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -177,48 +202,58 @@ mod tests {
     use super::*;
 
     #[test]
-    fn store_load_round_trip() {
+    fn publish_and_get_artifact_round_trip() {
         let da = LocalDataAccess::new();
-        da.store("test-key", b"hello world").unwrap();
-        let loaded = da.load("test-key").unwrap();
+        let fmt = ArtifactFormat::new("binoc", "tabular", 1);
+        let desc = da
+            .publish_artifact(&fmt, ArtifactSubject::Left, "binoc.csv", b"hello world")
+            .unwrap();
+        assert_eq!(desc.format, fmt);
+        assert_eq!(desc.subject, ArtifactSubject::Left);
+        assert_eq!(desc.producer, "binoc.csv");
+        let loaded = da.get_artifact(&desc).unwrap();
         assert_eq!(loaded, Some(b"hello world".to_vec()));
     }
 
     #[test]
-    fn load_missing_returns_none() {
+    fn get_artifact_missing_returns_none() {
         let da = LocalDataAccess::new();
-        assert_eq!(da.load("nonexistent").unwrap(), None);
+        let desc = ArtifactDescriptor {
+            format: ArtifactFormat::new("nonexistent", "thing", 1),
+            subject: ArtifactSubject::Pair,
+            producer: "test".into(),
+            handle: "/tmp/does-not-exist-binoc-test".into(),
+        };
+        assert_eq!(da.get_artifact(&desc).unwrap(), None);
     }
 
     #[test]
-    fn store_load_with_special_chars_in_key() {
+    fn cross_instance_artifact_visibility() {
         let da = LocalDataAccess::new();
-        da.store("tabular:path/to/file.csv", b"data").unwrap();
-        let loaded = da.load("tabular:path/to/file.csv").unwrap();
-        assert_eq!(loaded, Some(b"data".to_vec()));
-    }
-
-    #[test]
-    fn cross_instance_cache_visibility() {
-        let da = LocalDataAccess::new();
-        da.store("shared-key", b"shared-value").unwrap();
+        let fmt = ArtifactFormat::new("binoc", "tabular", 1);
+        let desc = da
+            .publish_artifact(&fmt, ArtifactSubject::Right, "binoc.csv", b"shared-value")
+            .unwrap();
         let data_root = da.data_root().unwrap();
 
         let plugin_da = LocalDataAccess::with_data_root(data_root);
-        let loaded = plugin_da.load("shared-key").unwrap();
+        let loaded = plugin_da.get_artifact(&desc).unwrap();
         assert_eq!(loaded, Some(b"shared-value".to_vec()));
     }
 
     #[test]
-    fn for_plugin_shares_cache() {
+    fn for_plugin_shares_artifacts() {
         let da = LocalDataAccess::new();
         let data_root = da.data_root().unwrap();
         let ws = da.workspace().unwrap();
 
         let plugin_da = LocalDataAccess::for_plugin(data_root, ws);
-        plugin_da.store("from-plugin", b"plugin-data").unwrap();
+        let fmt = ArtifactFormat::new("myplugin", "schema", 1);
+        let desc = plugin_da
+            .publish_artifact(&fmt, ArtifactSubject::Pair, "myplugin", b"plugin-data")
+            .unwrap();
 
-        let loaded = da.load("from-plugin").unwrap();
+        let loaded = da.get_artifact(&desc).unwrap();
         assert_eq!(loaded, Some(b"plugin-data".to_vec()));
     }
 
