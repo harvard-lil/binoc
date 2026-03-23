@@ -1,4 +1,5 @@
 /target
+*.snap.new
 *.swp
 *.swo
 *.pyc

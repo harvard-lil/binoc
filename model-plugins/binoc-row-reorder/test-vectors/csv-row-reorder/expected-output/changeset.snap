@@ -42,6 +42,7 @@ expression: "&stable_changeset"
         },
         "comparator": "binoc.csv",
         "transformed_by": [
+          "binoc.tabular_analyzer",
           "binoc.row_reorder_detector"
         ]
       }

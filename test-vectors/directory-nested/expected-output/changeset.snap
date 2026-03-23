@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&stable_changeset"
 ---
 {
@@ -31,36 +31,49 @@ expression: "&stable_changeset"
               "hash_right": "6d8ed3ee1f5797232a5a3522173a8b531d34ee80c51b62b5f00cd677fa3baefc",
               "rows": 1
             },
-            "comparator": "binoc.csv"
+            "comparator": "binoc.csv",
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
           },
           {
             "action": "modify",
             "item_type": "tabular",
             "path": "data/records.csv",
-            "summary": "1 row added",
+            "summary": "Column added: 'value'; column removed: 'name'; 1 row removed",
             "tags": [
-              "binoc.row-addition"
+              "binoc.column-addition",
+              "binoc.column-removal",
+              "binoc.row-removal",
+              "binoc.schema-change"
             ],
             "details": {
               "cells_changed": 0,
-              "columns_added": [],
+              "columns_added": [
+                "value"
+              ],
               "columns_left": [
                 "id",
                 "name"
               ],
-              "columns_removed": [],
+              "columns_removed": [
+                "name"
+              ],
               "columns_right": [
                 "id",
-                "name"
+                "value"
               ],
               "hash_left": "cdd7d4de8f6297472ddf5dcf982eaec86337f445392c33635ef0d8e562817a7f",
               "hash_right": "cc53a354625fafc744e96856a6f732822bd6920f3852b5b565270e684783aebe",
-              "rows_added": 1,
+              "rows_added": 0,
               "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 3
+              "rows_removed": 1,
+              "rows_right": 1
             },
-            "comparator": "binoc.csv"
+            "comparator": "binoc.csv",
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
           }
         ],
         "comparator": "binoc.directory"

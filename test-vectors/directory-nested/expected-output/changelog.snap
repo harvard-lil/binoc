@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
@@ -7,5 +7,5 @@ expression: "&md"
 ## Substantive Changes
 
 - **data/extra.csv**: New table (2 columns, 1 rows)
-- **data/records.csv**: 1 row added
+- **data/records.csv**: Column added: 'value'; column removed: 'name'; 1 row removed
 - **docs/readme.txt**: 2 lines added, 1 removed
