@@ -61,8 +61,8 @@ impl Controller {
     ///
     /// Implements the reopen walk: traverses the ancestor chain calling
     /// `reopen()` on each container comparator to reconstruct the
-    /// scratchpad, then `compare()` at the target leaf to populate cache,
-    /// and finally `extract()` on the last toucher.
+    /// scratchpad, then `compare()` at the target leaf to regenerate
+    /// artifacts, and finally `extract()` on the last toucher.
     pub fn extract(
         &self,
         changeset: &Changeset,
@@ -109,10 +109,17 @@ impl Controller {
         let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
             BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
         })?;
-        let _ = comparator.compare(&current_pair, data.as_ref())?;
+        let compare_result = comparator.compare(&current_pair, data.as_ref())?;
 
         let mut target_node = target.clone();
         target_node.source_items = Some(current_pair);
+
+        match compare_result {
+            CompareResult::Leaf(n) | CompareResult::Expand(n, _) => {
+                target_node.artifacts = n.artifacts;
+            }
+            _ => {}
+        }
 
         if let Some(last_transformer_name) = target_node.transformed_by.last().cloned() {
             let transformer = self
@@ -446,17 +453,43 @@ impl Controller {
         }
     }
 
+    /// All fields are AND (every non-empty field must pass).
+    /// Within each field, values are OR (any value satisfies that field).
+    /// Empty/default fields are unconstrained (always pass).
+    /// A descriptor with all fields empty/default matches nothing.
     fn transformer_matches(desc: &TransformerDescriptor, node: &DiffNode) -> bool {
-        if !desc.match_types.is_empty() && desc.match_types.iter().any(|t| t == &node.item_type) {
-            return true;
+        let dominated = match desc.node_shape {
+            NodeShapeFilter::Container => !node.children.is_empty(),
+            NodeShapeFilter::Leaf => node.children.is_empty(),
+            NodeShapeFilter::Any => true,
+        };
+        if !dominated {
+            return false;
         }
-        if !desc.match_tags.is_empty() && desc.match_tags.iter().any(|t| node.tags.contains(t)) {
-            return true;
+
+        let types_ok =
+            desc.match_types.is_empty() || desc.match_types.iter().any(|t| t == &node.item_type);
+        let tags_ok =
+            desc.match_tags.is_empty() || desc.match_tags.iter().any(|t| node.tags.contains(t));
+        let actions_ok =
+            desc.match_actions.is_empty() || desc.match_actions.iter().any(|k| k == &node.action);
+        let artifacts_ok = desc.match_artifacts.is_empty()
+            || desc
+                .match_artifacts
+                .iter()
+                .any(|req| node.artifacts.iter().any(|a| a.format == *req));
+
+        if !types_ok || !tags_ok || !actions_ok || !artifacts_ok {
+            return false;
         }
-        if !desc.match_actions.is_empty() && desc.match_actions.iter().any(|k| k == &node.action) {
-            return true;
-        }
-        false
+
+        // At least one non-default field must be set, otherwise the
+        // descriptor is unconstrained and matches nothing.
+        !matches!(desc.node_shape, NodeShapeFilter::Any)
+            || !desc.match_types.is_empty()
+            || !desc.match_tags.is_empty()
+            || !desc.match_actions.is_empty()
+            || !desc.match_artifacts.is_empty()
     }
 }
 

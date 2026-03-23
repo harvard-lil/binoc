@@ -15,3 +15,5 @@
 * 2026-03-12: [Plugin SDK, ABI safety, and native plugin loading](plugin_sdk_and_abi.md)
 * 2026-03-18: [Terminology](terminology.md)
 * 2026-03-19: [Published artifacts for cross-plugin composition](published_artifacts_for_cross_plugin_composition.md)
+* 2026-03-20: [Transformer dispatch refinement](transformer_dispatch_refinement.md)
+* 2026-03-20: [Transformer composition and artifact flow](transformer_composition_and_artifact_flow.md)

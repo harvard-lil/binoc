@@ -32,7 +32,7 @@ Binoc introduces a number of domain-specific terms. This ADR catalogs the delibe
 |---|---|
 | **Intermediate Representation (IR)** | The tree of diff nodes that represents the changes between two snapshots. |
 | **action** | Open enum describing what happened: `"add"`, `"remove"`, `"modify"`, `"move"`, `"reorder"`, etc. Chosen over *kind* (ambiguous alongside `item_type` — both read as "type of something"). |
-| **item_type** | Open string describing what the item *is*: `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, etc. |
+| **item_type** | Human-readable label describing what the item *is*: `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, etc. Used by renderers for fallback descriptions (e.g. "File modified", "New tabular"). Not a dispatch key — transformer dispatch uses `match_artifacts`, `node_shape`, `match_tags`, and `match_actions`. |
 | **tags** | An open bag of semantic strings attached to diff nodes by comparators and transformers. |
 | **details** | Comparator-specific payload on a diff node. |
 | **annotations** | Transformer-added metadata on a diff node. |
