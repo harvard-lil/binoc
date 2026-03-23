@@ -42,7 +42,7 @@ resolver = "2"
 | Crate | Role |
 |---|---|
 | `binoc-core` | Controller, IR types, plugin traits. Zero domain knowledge. |
-| `binoc-stdlib` | Standard library plugins: directory, zip, CSV, text, binary comparators; move detector and column reorder transformers. Architecturally identical to any third-party plugin pack. |
+| `binoc-stdlib` | Standard library plugins: directory, zip, tar, CSV, text, binary comparators; move/copy detectors, tabular analyzer, and column reorder transformer. Architecturally identical to any third-party plugin pack. |
 | `binoc-cli` | CLI library + standalone Rust binary. The library exposes `binoc_cli::run(registry, args)` so both the Rust binary and the Python entry point share the same CLI logic. |
 | `binoc-python` | PyO3 bindings, Python plugin discovery via entry points, and the `binoc` console script (the primary user-facing CLI). |
 | `binoc-sqlite` | Demo plugin: SQLite schema and row-count diffing (`.sqlite`/`.db`). Reference for plugin authors; test vectors in `binoc-sqlite/test-vectors/`. |
@@ -540,36 +540,35 @@ Key design decisions:
 
 ### The Plugin Dispatch System
 
-Comparators are tried in pipeline order. The first to claim an item wins — URL-routing semantics. For each comparator in order, the controller checks three things:
-
-1. **Extension match** — does the item's file extension match `handles_extensions()`?
-2. **Media type match** — does the item's MIME type match `handles_media_types()`?
-3. **Imperative claim** — does `can_handle()` return true?
-
-First match wins. Directories skip steps 1 and 2 entirely — this prevents a directory named `archive.zip` (extracted zip contents) from being re-claimed by the zip comparator. The directory comparator claims it via `can_handle` instead.
+Comparators are tried in pipeline order. The first to claim an item wins — URL-routing semantics. Each comparator declares its dispatch criteria in a `ComparatorDescriptor`: file extensions, media types, and scope (files, containers, or both). For each comparator in order, the controller checks whether the item matches the descriptor. If extensions or media types are declared, the item must match at least one. Scope filtering ensures that file-only comparators don't see directories and vice versa. If the descriptor matches but the comparator discovers at compare-time that it can't handle the item, it returns `Skip` and the controller tries the next candidate.
 
 The default pipeline order (from `DatasetConfig::default_config()` in `binoc-core/src/config.rs`):
 
 | # | Comparator | Claims by |
 |---|---|---|
 | 1 | `binoc.zip` | `.zip` extension |
-| 2 | `binoc.directory` | `can_handle` (is a directory?) |
-| 3 | `binoc.csv` | `.csv` extension |
-| 4 | `binoc.text` | `.txt` and other text extensions |
-| 5 | `binoc.binary` | `can_handle` (catch-all fallback) |
+| 2 | `binoc.tar` | `.tar`, `.tar.gz`, `.tgz` extensions |
+| 3 | `binoc.directory` | `scope: Containers` |
+| 4 | `binoc.csv` | `.csv`, `.tsv` extensions |
+| 5 | `binoc.text` | `.txt`, `.md`, `.rs`, and other text extensions |
+| 6 | `binoc.binary` | catch-all (no extension/media type filter) |
 
-Order matters. Zip comes first because `.zip` extension match must happen before directory `can_handle`. CSV comes before text because `.csv` files should use the column-aware comparator, not line-level diff. Binary is the catch-all fallback.
+Order matters. Archive comparators come first because `.zip`/`.tar` extension match must happen before the directory comparator claims the extracted contents. CSV comes before text because `.csv` files should use the column-aware comparator, not line-level diff. Binary is the catch-all fallback.
 
-After comparators, transformers run in order: `binoc.move_detector` → `binoc.copy_detector` → `binoc.column_reorder_detector`.
+After comparators, transformers run in declared order. Each transformer declares matching criteria in a `TransformerDescriptor`: item types, tags, actions, artifact formats, and node shape (leaf vs. container). All non-empty fields must match (AND); within each field, any value suffices (OR). The default pipeline:
 
-**This is a config concern, not a plugin concern.** Plugins suggest ordering via `suggested_phase`, but config decides. A custom dataset config can reorder, add, or remove any plugin.
+`binoc.move_detector` → `binoc.copy_detector` → `binoc.tabular_analyzer` → `binoc.column_reorder_detector`
+
+The tabular analyzer matches any node with `tabular_v1` artifacts and adds tags, details, and summary text. The column reorder detector runs after it and reclassifies pure column reorders. This separation means any comparator that publishes `tabular_v1` artifacts (CSV today, Parquet or Excel in the future) gets the same analysis pipeline automatically.
+
+**This is a config concern, not a plugin concern.** A custom dataset config can reorder, add, or remove any plugin.
 
 ### Significance Classification
 
 Significance is an output concern, not a core IR concern. The mapping is layered:
 
-1. **Comparators** attach semantic tags (`binoc.column-reorder`, `binoc.row-addition`) — factual reporting.
-2. **Transformers** may add more tags or annotations.
+1. **Comparators** emit nodes with basic metadata (action, item type) and publish typed artifacts (e.g. `tabular_v1`).
+2. **Transformers** attach semantic tags (`binoc.column-reorder`, `binoc.row-addition`) and summary text — factual reporting. Later transformers may refine or replace earlier results.
 3. **The output config** maps tags to categories — different users and domains can define different mappings over the same tags.
 
 The default significance mapping lives in the markdown renderer (`binoc-stdlib/src/renderers/markdown.rs`) — since classification is a renderer concern, not a core concern:
@@ -583,37 +582,11 @@ Column reordering is clerical (housekeeping). Column addition is substantive (po
 
 ### The Transformer Pattern
 
-Transformers rewrite the completed diff tree. They run in declared order, matching nodes by type, tag, action, or imperative `can_handle`. Two scopes:
+Transformers rewrite the completed diff tree. They run in declared order, matching nodes via their `TransformerDescriptor` (item types, tags, actions, artifact formats, node shape). Two scopes:
 - **Node**: the controller recurses into children first, then the transformer sees each matched node individually.
 - **Subtree**: the transformer receives the entire subtree and can rewrite it freely.
 
-The trait interfaces (in `binoc-core/src/traits.rs`) — everything a plugin author needs to implement:
-
-**Comparator** — claims an item pair and either emits a leaf diff or expands into child items:
-
-| Method | Required? | Purpose |
-|---|---|---|
-| `name()` | yes | Unique identifier, e.g. `"binoc.csv"` |
-| `compare(pair, ctx)` | yes | Compare an item pair. Returns `Identical`, `Leaf(node)`, or `Expand(container, children)`. |
-| `handles_extensions()` | no | Declarative dispatch by file extension, e.g. `[".csv", ".tsv"]` |
-| `handles_media_types()` | no | Declarative dispatch by MIME type, e.g. `["application/zip"]` |
-| `can_handle(pair)` | no | Imperative dispatch — return true to claim |
-| `handles_identical()` | no | Override to true for containers that need expanding even when byte-identical (e.g. zip, directory) |
-| `reopen(pair, child_path, ctx)` | no | Container comparators implement this to reconstruct physical access during `binoc extract` |
-| `extract(data, node, aspect)` | no | Extract user-facing data (e.g. added rows, unified diff) from a node this comparator produced |
-
-**Transformer** — rewrites the completed diff tree, matching nodes by declarative filters or imperative `can_handle`:
-
-| Method | Required? | Purpose |
-|---|---|---|
-| `name()` | yes | Unique identifier, e.g. `"binoc.move_detector"` |
-| `transform(node, ctx)` | yes | Rewrite a matched node. Returns `Unchanged`, `Replace(node)`, `ReplaceMany(nodes)`, or `Remove`. |
-| `match_types()` | no | Match nodes by `item_type` |
-| `match_tags()` | no | Match nodes that have any of these tags |
-| `match_actions()` | no | Match nodes by `action` |
-| `scope()` | no | `Node` (bottom-up, default) or `Subtree` (receives entire subtree) |
-| `can_handle(node)` | no | Imperative filter |
-| `extract(data, node, aspect)` | no | Extract data from nodes this transformer modified |
+Both `Comparator` and `Transformer` are trait objects registered in a `PluginRegistry`. See [Writing Plugins](writing_plugins.md) for the full trait API and implementation guide.
 
 ### The Standard Library
 
