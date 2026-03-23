@@ -108,6 +108,9 @@ class Transformer:
     match_types: list[str] = []
     match_tags: list[str] = []
     match_actions: list[str] = []
+    node_shape: str = "any"
+    """Dispatch filter on node shape: ``"any"`` (default), ``"container"``
+    (only nodes with children), or ``"leaf"`` (only childless nodes)."""
 
     def can_handle(self, node: DiffNode) -> bool:
         """Return True if this transformer should process the given node.

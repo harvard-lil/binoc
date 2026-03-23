@@ -18,6 +18,26 @@ use binoc_sdk::*;
 
 use binoc_stdlib::renderers::markdown as md_renderer;
 
+fn restore_transform_transient_fields(
+    result: &mut TransformResult,
+    source_items: &Option<ItemPair>,
+    artifacts: &[ArtifactDescriptor],
+) {
+    match result {
+        TransformResult::Replace(ref mut node) => {
+            node.source_items = source_items.clone();
+            node.artifacts = artifacts.to_vec();
+        }
+        TransformResult::ReplaceMany(ref mut nodes) => {
+            for node in nodes.iter_mut() {
+                node.source_items = source_items.clone();
+                node.artifacts = artifacts.to_vec();
+            }
+        }
+        _ => {}
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Native plugin loader — loads Rust plugins via C ABI (libloading)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -160,7 +180,18 @@ impl Comparator for NativeComparator {
         let response: CompareResponse = serde_json::from_str(&json)
             .map_err(|e| BinocError::Other(format!("deserialize CompareResponse: {e}")))?;
         match response {
-            CompareResponse::Ok { result } => Ok(*result),
+            CompareResponse::Ok {
+                mut result,
+                artifacts,
+            } => {
+                match result.as_mut() {
+                    CompareResult::Leaf(n) | CompareResult::Expand(n, _) => {
+                        n.artifacts = artifacts;
+                    }
+                    _ => {}
+                }
+                Ok(*result)
+            }
             CompareResponse::Error { message } => Err(BinocError::Comparator {
                 comparator: self.desc.name.clone(),
                 message,
@@ -212,6 +243,7 @@ impl Comparator for NativeComparator {
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
             source_items: node.source_items.clone(),
+            artifacts: node.artifacts.clone(),
         };
         let request_json = serde_json::to_string(&request).ok()?;
         let json = self
@@ -249,10 +281,12 @@ impl Transformer for NativeTransformer {
             Err(_) => return TransformResult::Unchanged,
         };
         let source_items = node.source_items.clone();
+        let artifacts = node.artifacts.clone();
         let request = TransformRequest {
             node,
             data_root: data_root.to_string_lossy().to_string(),
-            source_items,
+            source_items: source_items.clone(),
+            artifacts: artifacts.clone(),
         };
         let request_json = match serde_json::to_string(&request) {
             Ok(j) => j,
@@ -269,10 +303,12 @@ impl Transformer for NativeTransformer {
             Ok(r) => r,
             Err(_) => return TransformResult::Unchanged,
         };
-        match response.into_result() {
+        let mut result = match response.into_result() {
             Ok(r) => r,
             Err(_) => TransformResult::Unchanged,
-        }
+        };
+        restore_transform_transient_fields(&mut result, &source_items, &artifacts);
+        result
     }
 
     fn extract(
@@ -288,6 +324,7 @@ impl Transformer for NativeTransformer {
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
             source_items: node.source_items.clone(),
+            artifacts: node.artifacts.clone(),
         };
         let request_json = serde_json::to_string(&request).ok()?;
         let json = self
@@ -1236,10 +1273,21 @@ fn create_transformer_bridge(
         .getattr("match_actions")
         .and_then(|v| v.extract())
         .unwrap_or_default();
+    let node_shape: NodeShapeFilter = obj
+        .getattr("node_shape")
+        .and_then(|v| v.extract::<String>())
+        .ok()
+        .and_then(|s| match s.as_str() {
+            "container" => Some(NodeShapeFilter::Container),
+            "leaf" => Some(NodeShapeFilter::Leaf),
+            _ => None,
+        })
+        .unwrap_or_default();
     let desc = TransformerDescriptor::new(name)
         .with_match_types(match_types)
         .with_match_tags(match_tags)
-        .with_match_actions(match_actions);
+        .with_match_actions(match_actions)
+        .with_node_shape(node_shape);
     Ok(PyTransformerBridge {
         py_obj: obj.clone().unbind(),
         desc,
