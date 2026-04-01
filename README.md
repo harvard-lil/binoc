@@ -4,6 +4,8 @@ Binoc generates changelogs for datasets that don't have them. Given a series of 
 
 The core workflow: an archivist, data scientist, or steward has five copies of a government dataset containing CSVs, downloaded over two years. Some are identical. Some have reordered columns. One has a new category relevant to their research. Binoc tells them exactly what changed, when, and whether (by their definition) it matters.
 
+To submit feedback on Binoc, please fill out [our form](https://forms.gle/MDZTZ1DvhuAanM8P9) or send us an email at publicdata@law.harvard.edu.
+
 ## Example
 
 A dataset ships as a zip of CSVs alongside a SQLite database. Between quarterly releases, the CSV columns were reordered and the database grew:
