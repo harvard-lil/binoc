@@ -5,7 +5,7 @@ tags = ["csv", "row-reorder"]
 
 [config]
 comparators = ["binoc.directory", "binoc.csv"]
-transformers = ["binoc.row_reorder_detector"]
+transformers = ["binoc.tabular_analyzer", "binoc.row_reorder_detector"]
 
 [expected]
 root_kind = "modify"

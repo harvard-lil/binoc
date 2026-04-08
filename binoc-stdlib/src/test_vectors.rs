@@ -131,6 +131,7 @@ pub fn abi_wrapped_default_registry() -> (
 
     wrap_transformer!(move_detector::MoveDetector);
     wrap_transformer!(copy_detector::CopyDetector);
+    wrap_transformer!(tabular_analyzer::TabularAnalyzer);
     wrap_transformer!(column_reorder::ColumnReorderDetector);
 
     registry

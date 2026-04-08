@@ -9,7 +9,7 @@ pub struct CopyDetector;
 impl Transformer for CopyDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.copy_detector")
-            .with_match_types(vec!["directory".into(), "zip_archive".into()])
+            .with_node_shape(NodeShapeFilter::Container)
             .with_scope(TransformScope::Subtree)
     }
 

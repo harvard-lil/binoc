@@ -33,7 +33,7 @@ Would require `PyDiffNode` to hold an `Arc<Changeset>` plus a path/index into th
 
 ## Decision
 
-**Do not pursue any of these three optimizations.** The DESIGN.md has been updated to describe the actual implementations:
+**Do not pursue any of these three optimizations.**
 
 - IR nodes are owned structs with `Vec<DiffNode>` children. Simple, serde-compatible, rayon-compatible, PyO3-compatible.
 - The CSV comparator uses the `csv` crate with string-based comparison. Arrow is noted as a potential future transport optimization at the `extract` boundary if needed.

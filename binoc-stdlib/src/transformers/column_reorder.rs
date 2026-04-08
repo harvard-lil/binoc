@@ -1,26 +1,24 @@
 use binoc_sdk::*;
 
-use crate::comparators::csv_compare::{tabular_extract, tabular_pair_from_source};
-
 /// Detects pure column reordering in tabular diffs.
+///
+/// Matches any node with [`tabular_v1`] artifacts and checks whether
+/// the columns are reordered with no other data changes. Source-format-
+/// agnostic — works with any comparator that publishes tabular artifacts.
 pub struct ColumnReorderDetector;
 
 impl Transformer for ColumnReorderDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.column_reorder_detector")
-            .with_match_types(vec!["tabular".into()])
+            .with_match_artifacts(vec![tabular_v1()])
+            .with_match_tags(vec!["binoc.column-reorder".into()])
     }
 
     fn transform(&self, mut node: DiffNode, data: &dyn DataAccess) -> TransformResult {
-        let has_reorder_tag = node.tags.contains("binoc.column-reorder");
-        if !has_reorder_tag {
-            return TransformResult::Unchanged;
-        }
-
-        let is_pure_reorder = if let Some(pair) = tabular_pair_from_source(&node, data) {
+        let is_pure_reorder = if let Some(pair) = TabularDataPair::from_artifacts(&node, data) {
             check_pure_reorder_from_data(&pair)
         } else {
-            check_pure_reorder_from_details(&node)
+            return TransformResult::Unchanged;
         };
 
         if is_pure_reorder {
@@ -40,7 +38,7 @@ impl Transformer for ColumnReorderDetector {
         aspect: &str,
         data: &dyn DataAccess,
     ) -> Option<ExtractResult> {
-        let pair = tabular_pair_from_source(node, data)?;
+        let pair = TabularDataPair::from_artifacts(node, data)?;
         match aspect {
             "column_order" => {
                 let mut out = String::new();
@@ -91,34 +89,4 @@ fn check_pure_reorder_from_data(pair: &TabularDataPair) -> bool {
     }
 
     true
-}
-
-fn check_pure_reorder_from_details(node: &DiffNode) -> bool {
-    let no_col_adds = node
-        .details
-        .get("columns_added")
-        .and_then(|v| v.as_array())
-        .is_none_or(|a| a.is_empty());
-    let no_col_removes = node
-        .details
-        .get("columns_removed")
-        .and_then(|v| v.as_array())
-        .is_none_or(|a| a.is_empty());
-    let no_row_adds = node
-        .details
-        .get("rows_added")
-        .and_then(|v| v.as_u64())
-        .is_none_or(|n| n == 0);
-    let no_row_removes = node
-        .details
-        .get("rows_removed")
-        .and_then(|v| v.as_u64())
-        .is_none_or(|n| n == 0);
-    let no_cell_changes = node
-        .details
-        .get("cells_changed")
-        .and_then(|v| v.as_u64())
-        .is_none_or(|n| n == 0);
-
-    no_col_adds && no_col_removes && no_row_adds && no_row_removes && no_cell_changes
 }

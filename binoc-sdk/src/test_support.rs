@@ -20,6 +20,31 @@ use crate::ir::DiffNode;
 use crate::plugin_abi::*;
 use crate::traits::*;
 use crate::types::*;
+use crate::types::{ArtifactDescriptor, ArtifactSubject};
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/// Re-attach transient fields (`source_items`, `artifacts`) to nodes in
+/// a `TransformResult` after ABI round-tripping strips them.
+fn restore_transient_fields(
+    result: &mut TransformResult,
+    source_items: &Option<ItemPair>,
+    artifacts: &[ArtifactDescriptor],
+) {
+    match result {
+        TransformResult::Replace(ref mut node) => {
+            node.source_items = source_items.clone();
+            node.artifacts = artifacts.to_vec();
+        }
+        TransformResult::ReplaceMany(ref mut nodes) => {
+            for node in nodes.iter_mut() {
+                node.source_items = source_items.clone();
+                node.artifacts = artifacts.to_vec();
+            }
+        }
+        _ => {}
+    }
+}
 
 // ── Recording DataAccess ──────────────────────────────────────────────
 
@@ -42,10 +67,15 @@ pub enum DataAccessOp {
     Workspace,
     #[serde(rename = "register_local")]
     RegisterLocal { logical: String },
-    #[serde(rename = "store")]
-    Store { key: String, size: usize },
-    #[serde(rename = "load")]
-    Load { key: String, found: bool },
+    #[serde(rename = "publish_artifact")]
+    PublishArtifact {
+        format: ArtifactFormat,
+        subject: String,
+        producer: String,
+        size: usize,
+    },
+    #[serde(rename = "get_artifact")]
+    GetArtifact { format: ArtifactFormat, found: bool },
     #[serde(rename = "data_root")]
     DataRoot,
 }
@@ -117,18 +147,29 @@ impl<D: DataAccess> DataAccess for RecordingDataAccess<D> {
         self.inner.register_local(physical, logical)
     }
 
-    fn store(&self, key: &str, data: &[u8]) -> BinocResult<()> {
-        self.push(DataAccessOp::Store {
-            key: key.to_string(),
+    fn publish_artifact(
+        &self,
+        format: &ArtifactFormat,
+        subject: ArtifactSubject,
+        producer: &str,
+        data: &[u8],
+    ) -> BinocResult<ArtifactDescriptor> {
+        let result = self
+            .inner
+            .publish_artifact(format, subject, producer, data)?;
+        self.push(DataAccessOp::PublishArtifact {
+            format: format.clone(),
+            subject: format!("{subject:?}"),
+            producer: producer.to_string(),
             size: data.len(),
         });
-        self.inner.store(key, data)
+        Ok(result)
     }
 
-    fn load(&self, key: &str) -> BinocResult<Option<Vec<u8>>> {
-        let result = self.inner.load(key)?;
-        self.push(DataAccessOp::Load {
-            key: key.to_string(),
+    fn get_artifact(&self, descriptor: &ArtifactDescriptor) -> BinocResult<Option<Vec<u8>>> {
+        let result = self.inner.get_artifact(descriptor)?;
+        self.push(DataAccessOp::GetArtifact {
+            format: descriptor.format.clone(),
             found: result.is_some(),
         });
         Ok(result)
@@ -234,9 +275,18 @@ impl<C: Comparator> Comparator for AbiComparator<C> {
         let data_ops = plugin_data.take_log();
 
         let response = match &result {
-            Ok(r) => CompareResponse::Ok {
-                result: Box::new(serde_json::from_value(serde_json::to_value(r).unwrap()).unwrap()),
-            },
+            Ok(r) => {
+                let artifacts = match r {
+                    CompareResult::Leaf(n) | CompareResult::Expand(n, _) => n.artifacts.clone(),
+                    _ => Vec::new(),
+                };
+                CompareResponse::Ok {
+                    result: Box::new(
+                        serde_json::from_value(serde_json::to_value(r).unwrap()).unwrap(),
+                    ),
+                    artifacts,
+                }
+            }
             Err(e) => CompareResponse::Error {
                 message: e.to_string(),
             },
@@ -254,7 +304,18 @@ impl<C: Comparator> Comparator for AbiComparator<C> {
         let resp2: CompareResponse = serde_json::from_str(&response_json)
             .map_err(|e| BinocError::Other(format!("ABI deserialize CompareResponse: {e}")))?;
         match resp2 {
-            CompareResponse::Ok { result } => Ok(*result),
+            CompareResponse::Ok {
+                mut result,
+                artifacts,
+            } => {
+                match result.as_mut() {
+                    CompareResult::Leaf(n) | CompareResult::Expand(n, _) => {
+                        n.artifacts = artifacts;
+                    }
+                    _ => {}
+                }
+                Ok(*result)
+            }
             CompareResponse::Error { message } => Err(BinocError::Comparator {
                 comparator: self.inner.descriptor().name.clone(),
                 message,
@@ -326,12 +387,14 @@ impl<C: Comparator> Comparator for AbiComparator<C> {
     ) -> Option<ExtractResult> {
         let data_root = data.data_root().ok()?;
         let source_items = node.source_items.clone();
+        let artifacts = node.artifacts.clone();
 
         let request = ExtractRequest {
             node: node.clone(),
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
             source_items,
+            artifacts,
         };
         let request_json = serde_json::to_string(&request).ok()?;
 
@@ -342,6 +405,7 @@ impl<C: Comparator> Comparator for AbiComparator<C> {
 
         let mut extract_node = req2.node;
         extract_node.source_items = req2.source_items;
+        extract_node.artifacts = req2.artifacts;
         let result = self
             .inner
             .extract(&extract_node, &req2.aspect, &plugin_data);
@@ -410,11 +474,13 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
             Err(_) => return TransformResult::Unchanged,
         };
         let source_items = node.source_items.clone();
+        let artifacts = node.artifacts.clone();
 
         let request = TransformRequest {
             node,
             data_root: data_root.to_string_lossy().to_string(),
-            source_items,
+            source_items: source_items.clone(),
+            artifacts: artifacts.clone(),
         };
         let request_json = match serde_json::to_string(&request) {
             Ok(j) => j,
@@ -432,6 +498,7 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
 
         let mut transform_node = req2.node;
         transform_node.source_items = req2.source_items;
+        transform_node.artifacts = req2.artifacts;
         let result = self.inner.transform(transform_node, &plugin_data);
 
         let data_ops = plugin_data.take_log();
@@ -464,10 +531,12 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
             Ok(r) => r,
             Err(_) => return result,
         };
-        match resp2.into_result() {
+        let mut result = match resp2.into_result() {
             Ok(r) => r,
             Err(_) => TransformResult::Unchanged,
-        }
+        };
+        restore_transient_fields(&mut result, &source_items, &artifacts);
+        result
     }
 
     fn extract(
@@ -478,12 +547,14 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
     ) -> Option<ExtractResult> {
         let data_root = data.data_root().ok()?;
         let source_items = node.source_items.clone();
+        let artifacts = node.artifacts.clone();
 
         let request = ExtractRequest {
             node: node.clone(),
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
             source_items,
+            artifacts,
         };
         let request_json = serde_json::to_string(&request).ok()?;
 
@@ -494,6 +565,7 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
 
         let mut extract_node = req2.node;
         extract_node.source_items = req2.source_items;
+        extract_node.artifacts = req2.artifacts;
         let result = self
             .inner
             .extract(&extract_node, &req2.aspect, &plugin_data);

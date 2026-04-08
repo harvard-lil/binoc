@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&stable_changeset"
 ---
 {
@@ -41,7 +41,10 @@ expression: "&stable_changeset"
           "rows_removed": 0,
           "rows_right": 2
         },
-        "comparator": "binoc.csv"
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
       }
     ],
     "comparator": "binoc.directory"

@@ -14,7 +14,7 @@ Rust workspace with five crates:
 | `binoc-python` | PyO3 bindings and Python plugin support |
 | `binoc-sqlite` | Demo plugin: SQLite schema and row count diffing (also a reference for plugin authors) |
 
-Shared test fixtures live in `test-vectors/`. Authoritative architecture spec is `docs/design.md`.
+Shared test fixtures live in `test-vectors/`. ADRs live in `docs/adr/`.
 
 ## Key Architectural Rules
 

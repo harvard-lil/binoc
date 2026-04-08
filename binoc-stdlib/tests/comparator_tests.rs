@@ -167,7 +167,7 @@ fn csv_identical() {
 }
 
 #[test]
-fn csv_detects_column_addition() {
+fn csv_different_data_produces_modify_with_artifacts() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("a.csv"), "name,age\nAlice,30\n").unwrap();
     std::fs::write(
@@ -186,63 +186,60 @@ fn csv_detects_column_addition() {
     let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert!(node.tags.contains("binoc.column-addition"));
-            assert!(node.tags.contains("binoc.schema-change"));
-            let cols_added = node.details["columns_added"].as_array().unwrap();
-            assert_eq!(cols_added.len(), 1);
+            assert_eq!(node.action, "modify");
+            assert_eq!(node.item_type, "tabular");
+            assert_eq!(node.artifacts.len(), 2);
+            assert!(node.tags.is_empty(), "thin comparator sets no tags");
+            assert!(node.details.is_empty(), "thin comparator sets no details");
         }
         _ => panic!("Expected Leaf"),
     }
 }
 
 #[test]
-fn csv_detects_row_addition() {
+fn csv_added_file_produces_add_with_artifact() {
     let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("a.csv"), "name,age\nAlice,30\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
 
     let da = data();
-    let pair = ItemPair::both(
-        da.register_local(&tmp.path().join("a.csv"), "data.csv")
-            .unwrap(),
+    let pair = ItemPair::added(
         da.register_local(&tmp.path().join("b.csv"), "data.csv")
             .unwrap(),
     );
     let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert!(node.tags.contains("binoc.row-addition"));
-            assert_eq!(node.details["rows_added"].as_u64().unwrap(), 1);
+            assert_eq!(node.action, "add");
+            assert_eq!(node.item_type, "tabular");
+            assert_eq!(node.artifacts.len(), 1);
         }
         _ => panic!("Expected Leaf"),
     }
 }
 
 #[test]
-fn csv_detects_cell_changes() {
+fn csv_removed_file_produces_remove_with_artifact() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("a.csv"), "name,score\nAlice,85\n").unwrap();
-    std::fs::write(tmp.path().join("b.csv"), "name,score\nAlice,92\n").unwrap();
 
     let da = data();
-    let pair = ItemPair::both(
+    let pair = ItemPair::removed(
         da.register_local(&tmp.path().join("a.csv"), "data.csv")
-            .unwrap(),
-        da.register_local(&tmp.path().join("b.csv"), "data.csv")
             .unwrap(),
     );
     let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert!(node.tags.contains("binoc.cell-change"));
-            assert!(node.details["cells_changed"].as_u64().unwrap() > 0);
+            assert_eq!(node.action, "remove");
+            assert_eq!(node.item_type, "tabular");
+            assert_eq!(node.artifacts.len(), 1);
         }
         _ => panic!("Expected Leaf"),
     }
 }
 
 #[test]
-fn csv_detects_column_reorder() {
+fn csv_reordered_columns_not_identical() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("a.csv"), "name,age,city\nAlice,30,NYC\n").unwrap();
     std::fs::write(tmp.path().join("b.csv"), "city,name,age\nNYC,Alice,30\n").unwrap();
@@ -257,9 +254,10 @@ fn csv_detects_column_reorder() {
     let result = CsvComparator.compare(&pair, &da).unwrap();
     match result {
         CompareResult::Leaf(node) => {
-            assert!(node.tags.contains("binoc.column-reorder"));
+            assert_eq!(node.action, "modify");
+            assert_eq!(node.artifacts.len(), 2);
         }
-        _ => panic!("Expected Leaf"),
+        _ => panic!("Expected Leaf (not Identical)"),
     }
 }
 

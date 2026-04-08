@@ -74,8 +74,8 @@ Generic diff tools don't understand data formats, while version control systems 
 ## Documentation
 
 - [tutorial.md](docs/tutorial.md): end-to-end contributor walkthrough.
-- Start with [docs/design.md](docs/design.md) for the current architectural contract.
 - [test-vectors/](test-vectors/): fixtures demonstrating major capabilities.
+- [docs/adr/](docs/adr/): records of architectural decisions.
 
 ## Quick Start
 
@@ -139,7 +139,7 @@ Or with `uvx`, no install needed:
 uvx binoc --with binoc-sqlite diff snapshots/v1 snapshots/v2
 ```
 
-Plugins can be Rust crates (compiled as native shared libraries via the `export_plugin!` macro) or pure Python. See [docs/design.md](docs/design.md) for architecture and [model-plugins/](model-plugins/) for reference implementations.
+Plugins can be Rust crates (compiled as native shared libraries via the `export_plugin!` macro) or pure Python. See [docs/adr/](docs/adr/) for architecture and [model-plugins/](model-plugins/) for reference implementations.
 
 ### Rust-only CLI
 

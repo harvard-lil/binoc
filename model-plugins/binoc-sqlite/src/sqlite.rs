@@ -7,13 +7,13 @@ use rusqlite::Connection;
 #[derive(Default)]
 pub struct SqliteComparator;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct TableInfo {
     columns: Vec<ColumnInfo>,
     row_count: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[allow(dead_code)]
 struct ColumnInfo {
     name: String,
@@ -256,11 +256,20 @@ impl Comparator for SqliteComparator {
                     if total_rows == 1 { "" } else { "s" },
                 );
 
+                let bytes = serde_json::to_vec(&schema).unwrap();
+                let art = data.publish_artifact(
+                    &ArtifactFormat::new("binoc-sqlite", "relational-schema", 1),
+                    ArtifactSubject::Right,
+                    "binoc-sqlite.sqlite",
+                    &bytes,
+                )?;
+
                 let node = DiffNode::new("add", "sqlite_database", &right.logical_path)
                     .with_summary(summary)
                     .with_tag("binoc-sqlite.content-changed")
                     .with_detail("tables", serde_json::json!(table_names))
-                    .with_detail("total_rows", serde_json::json!(total_rows));
+                    .with_detail("total_rows", serde_json::json!(total_rows))
+                    .with_artifact(art);
 
                 Ok(CompareResult::Leaf(node))
             }
@@ -279,11 +288,20 @@ impl Comparator for SqliteComparator {
                     if total_rows == 1 { "" } else { "s" },
                 );
 
+                let bytes = serde_json::to_vec(&schema).unwrap();
+                let art = data.publish_artifact(
+                    &ArtifactFormat::new("binoc-sqlite", "relational-schema", 1),
+                    ArtifactSubject::Left,
+                    "binoc-sqlite.sqlite",
+                    &bytes,
+                )?;
+
                 let node = DiffNode::new("remove", "sqlite_database", &left.logical_path)
                     .with_summary(summary)
                     .with_tag("binoc-sqlite.content-changed")
                     .with_detail("tables", serde_json::json!(table_names))
-                    .with_detail("total_rows", serde_json::json!(total_rows));
+                    .with_detail("total_rows", serde_json::json!(total_rows))
+                    .with_artifact(art);
 
                 Ok(CompareResult::Leaf(node))
             }
@@ -366,10 +384,28 @@ impl SqliteComparator {
         let tables_l: Vec<&str> = schema_l.keys().map(|s| s.as_str()).collect();
         let tables_r: Vec<&str> = schema_r.keys().map(|s| s.as_str()).collect();
 
+        let bytes_l = serde_json::to_vec(&schema_l).unwrap();
+        let bytes_r = serde_json::to_vec(&schema_r).unwrap();
+        let format = ArtifactFormat::new("binoc-sqlite", "relational-schema", 1);
+        let art_l = data.publish_artifact(
+            &format,
+            ArtifactSubject::Left,
+            "binoc-sqlite.sqlite",
+            &bytes_l,
+        )?;
+        let art_r = data.publish_artifact(
+            &format,
+            ArtifactSubject::Right,
+            "binoc-sqlite.sqlite",
+            &bytes_r,
+        )?;
+
         let node = DiffNode::new("modify", "sqlite_database", logical_path)
             .with_children(children)
             .with_detail("tables_left", serde_json::json!(tables_l))
-            .with_detail("tables_right", serde_json::json!(tables_r));
+            .with_detail("tables_right", serde_json::json!(tables_r))
+            .with_artifact(art_l)
+            .with_artifact(art_r);
 
         Ok(CompareResult::Leaf(node))
     }

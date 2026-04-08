@@ -177,7 +177,8 @@ comparators:
   - binoc.csv
   - binoc.text
   - binoc.binary
-transformers: []
+transformers:
+  - binoc.tabular_analyzer
 "#,
     )
     .unwrap();

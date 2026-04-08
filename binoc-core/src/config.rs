@@ -66,6 +66,7 @@ impl DatasetConfig {
             transformers: vec![
                 "binoc.move_detector".into(),
                 "binoc.copy_detector".into(),
+                "binoc.tabular_analyzer".into(),
                 "binoc.column_reorder_detector".into(),
             ],
             renderers: default_renderers(),

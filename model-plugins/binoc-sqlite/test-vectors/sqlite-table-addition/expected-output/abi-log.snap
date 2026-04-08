@@ -46,6 +46,28 @@ expression: "&abi_log"
       {
         "op": "local_path",
         "handle": "data.sqlite"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc-sqlite",
+          "name": "relational-schema",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc-sqlite.sqlite",
+        "size": 159
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc-sqlite",
+          "name": "relational-schema",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc-sqlite.sqlite",
+        "size": 385
       }
     ]
   },

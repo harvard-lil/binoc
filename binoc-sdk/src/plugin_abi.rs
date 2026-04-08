@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ir::DiffNode;
 use crate::traits::{ComparatorDescriptor, RendererDescriptor, TransformerDescriptor};
-use crate::types::{CompareResult, ItemPair, TransformResult};
+use crate::types::{ArtifactDescriptor, CompareResult, ItemPair, TransformResult};
 
 // ── Plugin description ─────────────────────────────────────────────
 
@@ -40,7 +40,11 @@ pub struct CompareRequest {
 #[serde(tag = "status")]
 pub enum CompareResponse {
     #[serde(rename = "ok")]
-    Ok { result: Box<CompareResult> },
+    Ok {
+        result: Box<CompareResult>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        artifacts: Vec<ArtifactDescriptor>,
+    },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -70,6 +74,8 @@ pub struct TransformRequest {
     pub data_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_items: Option<ItemPair>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<ArtifactDescriptor>,
 }
 
 /// Serializable version of TransformResult for the C ABI.
@@ -126,6 +132,8 @@ pub struct ExtractRequest {
     pub data_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_items: Option<ItemPair>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<ArtifactDescriptor>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -222,9 +230,16 @@ macro_rules! export_plugin {
                     vec![$(Box::new(<$comp as ::std::default::Default>::default())),+];
                 let comp = &comparators[index as usize];
                 match $crate::Comparator::compare(comp.as_ref(), &req.pair, &data) {
-                    Ok(result) => $crate::plugin_abi::CompareResponse::Ok {
-                        result: Box::new(result),
-                    },
+                    Ok(result) => {
+                        let artifacts = match &result {
+                            $crate::CompareResult::Leaf(n) | $crate::CompareResult::Expand(n, _) => n.artifacts.clone(),
+                            _ => Vec::new(),
+                        };
+                        $crate::plugin_abi::CompareResponse::Ok {
+                            result: Box::new(result),
+                            artifacts,
+                        }
+                    }
                     Err(e) => $crate::plugin_abi::CompareResponse::Error {
                         message: e.to_string(),
                     },
@@ -299,6 +314,7 @@ macro_rules! export_plugin {
                 );
                 let mut node = req.node;
                 node.source_items = req.source_items;
+                node.artifacts = req.artifacts;
                 let comparators: Vec<Box<dyn $crate::Comparator>> =
                     vec![$(Box::new(<$comp as ::std::default::Default>::default())),+];
                 let comp = &comparators[index as usize];
@@ -345,6 +361,7 @@ macro_rules! export_plugin {
                 );
                 let mut node = req.node;
                 node.source_items = req.source_items;
+                node.artifacts = req.artifacts;
                 let transformers: Vec<Box<dyn $crate::Transformer>> =
                     vec![$(Box::new(<$trans as ::std::default::Default>::default())),+];
                 let trans = &transformers[index as usize];
@@ -394,6 +411,7 @@ macro_rules! export_plugin {
                 );
                 let mut node = req.node;
                 node.source_items = req.source_items;
+                node.artifacts = req.artifacts;
                 let transformers: Vec<Box<dyn $crate::Transformer>> =
                     vec![$(Box::new(<$trans as ::std::default::Default>::default())),+];
                 let trans = &transformers[index as usize];
