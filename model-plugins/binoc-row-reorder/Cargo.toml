@@ -2,6 +2,12 @@
 name = "binoc-row-reorder"
 version = "0.1.0"
 edition = "2021"
+description = "Row reorder transformer plugin for Binoc"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder"
+publish = false
 
 [lib]
 name = "binoc_row_reorder"
@@ -14,7 +20,7 @@ python = ["dep:pyo3"]
 [dependencies]
 binoc-sdk = { path = "../../binoc-sdk" }
 serde_json = "1.0"
-pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"], optional = true }
 
 [dev-dependencies]
 binoc-core = { path = "../../binoc-core" }

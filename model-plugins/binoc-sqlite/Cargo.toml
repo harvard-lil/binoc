@@ -2,6 +2,12 @@
 name = "binoc-sqlite"
 version = "0.1.0"
 edition = "2021"
+description = "SQLite comparator plugin for Binoc"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite"
+publish = false
 
 [lib]
 name = "binoc_sqlite"
@@ -16,7 +22,7 @@ binoc-sdk = { path = "../../binoc-sdk" }
 rusqlite = { version = "0.35", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"], optional = true }
 
 [dev-dependencies]
 binoc-core = { path = "../../binoc-core" }

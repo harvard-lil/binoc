@@ -2,6 +2,12 @@
 name = "binoc-python"
 version = "0.1.0"
 edition = "2021"
+description = "PyO3 bindings and Python CLI host for Binoc"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
+publish = false
 
 [lib]
 name = "_binoc"
@@ -13,5 +19,5 @@ binoc-sdk = { path = "../binoc-sdk" }
 binoc-stdlib = { path = "../binoc-stdlib" }
 binoc-cli = { path = "../binoc-cli" }
 libloading = "0.8"
-pyo3 = { version = "0.27", features = ["extension-module"] }
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }
 serde_json = "1.0"

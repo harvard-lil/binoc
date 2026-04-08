@@ -1,0 +1,193 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-binoc-wheels:
+    name: Build binoc wheels (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            manylinux: auto
+          - os: windows-latest
+            artifact: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            manylinux: off
+          - os: macos-13
+            artifact: macos-x86_64
+            target: x86_64-apple-darwin
+            manylinux: off
+          - os: macos-14
+            artifact: macos-aarch64
+            target: aarch64-apple-darwin
+            manylinux: off
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          working-directory: binoc-python
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --interpreter python --out dist
+          sccache: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binoc-dist-${{ matrix.artifact }}
+          path: binoc-python/dist
+
+  build-binoc-sdist:
+    name: Build binoc sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          working-directory: binoc-python
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binoc-dist-sdist
+          path: binoc-python/dist
+
+  publish-binoc:
+    name: Publish binoc to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-binoc-wheels, build-binoc-sdist]
+    environment:
+      name: pypi-binoc
+      url: https://pypi.org/project/binoc/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binoc-dist-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  build-binoc-sqlite-wheels:
+    name: Build binoc-sqlite wheels (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            manylinux: auto
+          - os: windows-latest
+            artifact: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            manylinux: off
+          - os: macos-13
+            artifact: macos-x86_64
+            target: x86_64-apple-darwin
+            manylinux: off
+          - os: macos-14
+            artifact: macos-aarch64
+            target: aarch64-apple-darwin
+            manylinux: off
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          working-directory: model-plugins/binoc-sqlite
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --interpreter python --out dist
+          sccache: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binoc-sqlite-dist-${{ matrix.artifact }}
+          path: model-plugins/binoc-sqlite/dist
+
+  build-binoc-sqlite-sdist:
+    name: Build binoc-sqlite sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          working-directory: model-plugins/binoc-sqlite
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binoc-sqlite-dist-sdist
+          path: model-plugins/binoc-sqlite/dist
+
+  publish-binoc-sqlite:
+    name: Publish binoc-sqlite to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-binoc-sqlite-wheels, build-binoc-sqlite-sdist]
+    environment:
+      name: pypi-binoc-sqlite
+      url: https://pypi.org/project/binoc-sqlite/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binoc-sqlite-dist-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  publish-binoc-sdk:
+    name: Publish binoc-sdk to crates.io
+    runs-on: ubuntu-latest
+    environment:
+      name: crates-io-binoc-sdk
+      url: https://crates.io/crates/binoc-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish -p binoc-sdk --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

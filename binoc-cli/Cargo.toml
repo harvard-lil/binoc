@@ -2,6 +2,12 @@
 name = "binoc-cli"
 version = "0.1.0"
 edition = "2021"
+description = "Standalone Rust CLI for Binoc"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
+publish = false
 
 [lib]
 name = "binoc_cli"

@@ -2,6 +2,12 @@
 name = "binoc-sdk"
 version = "0.1.0"
 edition = "2021"
+description = "Plugin SDK and ABI for Binoc dataset-diff plugins"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://docs.rs/binoc-sdk"
 
 [features]
 default = []

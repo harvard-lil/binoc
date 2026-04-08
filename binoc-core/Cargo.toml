@@ -2,6 +2,12 @@
 name = "binoc-core"
 version = "0.1.0"
 edition = "2021"
+description = "Core controller and host runtime for Binoc"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
+publish = false
 
 [dependencies]
 binoc-sdk = { path = "../binoc-sdk" }
