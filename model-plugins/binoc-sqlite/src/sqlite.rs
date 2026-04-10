@@ -77,8 +77,11 @@ fn read_columns(conn: &Connection, table: &str) -> BinocResult<Vec<ColumnInfo>> 
 
 fn read_row_count(conn: &Connection, table: &str) -> BinocResult<u64> {
     let sql = format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""));
-    conn.query_row(&sql, [], |row| row.get(0))
-        .map_err(|e| BinocError::Other(format!("sqlite: {e}")))
+    let count: i64 = conn
+        .query_row(&sql, [], |row| row.get(0))
+        .map_err(|e| BinocError::Other(format!("sqlite: {e}")))?;
+
+    u64::try_from(count).map_err(|e| BinocError::Other(format!("sqlite: {e}")))
 }
 
 fn diff_table(

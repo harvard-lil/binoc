@@ -18,3 +18,5 @@
 * 2026-03-20: [Transformer dispatch refinement](transformer_dispatch_refinement.md)
 * 2026-03-20: [Transformer composition and artifact flow](transformer_composition_and_artifact_flow.md)
 * 2026-04-08: [Release surface and automated publishing](release_surface_and_automated_publishing.md)
+* 2026-04-10: [Rust MSRV and dependency update policy](rust_msrv_and_dependency_update_policy.md)
+* 2026-04-10: [Security posture and how to audit Binoc (core and plugins)](security_posture_and_auditing.md)

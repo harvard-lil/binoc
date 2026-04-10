@@ -2,6 +2,7 @@
 name = "binoc-sqlite"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -19,7 +20,7 @@ python = ["dep:pyo3"]
 
 [dependencies]
 binoc-sdk = { workspace = true }
-rusqlite = { version = "0.35", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 pyo3 = { workspace = true, optional = true }
