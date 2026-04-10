@@ -25,6 +25,8 @@ pub enum BinocError {
     Tar(String),
     #[error("extract error: {0}")]
     Extract(String),
+    #[error("path policy: {0}")]
+    PathPolicy(String),
     #[error(
         "SDK version mismatch: {plugin} (plugin '{name}') is not compatible with host SDK {host}"
     )]

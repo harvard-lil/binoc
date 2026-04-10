@@ -42,7 +42,10 @@ impl Controller {
 
     /// Diff two snapshots and produce a changeset.
     pub fn diff(&self, from_path: &str, to_path: &str) -> BinocResult<Changeset> {
-        let data = Arc::new(LocalDataAccess::new());
+        let data = Arc::new(LocalDataAccess::new_for_diff(
+            Path::new(from_path),
+            Path::new(to_path),
+        )?);
 
         let left = data.register_local(Path::new(from_path), "")?;
         let right = data.register_local(Path::new(to_path), "")?;
@@ -82,7 +85,10 @@ impl Controller {
         let ancestor_chain = Self::build_ancestor_chain(root, node_path)
             .ok_or_else(|| BinocError::Extract(format!("cannot build path to {node_path}")))?;
 
-        let data = Arc::new(LocalDataAccess::new());
+        let data = Arc::new(LocalDataAccess::new_for_diff(
+            Path::new(snapshot_a),
+            Path::new(snapshot_b),
+        )?);
         let left = data.register_local(Path::new(snapshot_a), "")?;
         let right = data.register_local(Path::new(snapshot_b), "")?;
         let mut current_pair = ItemPair::both(left, right);
