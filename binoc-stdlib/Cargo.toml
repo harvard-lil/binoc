@@ -27,7 +27,7 @@ similar = "2.7.0"
 tempfile = { workspace = true }
 walkdir = "2.5.0"
 zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
-tar = "0.4"
+tar = "0.4.45"
 flate2 = "1"
 insta = { version = "1.46.3", features = ["json"], optional = true }
 toml = { version = "1.0.4", optional = true }
