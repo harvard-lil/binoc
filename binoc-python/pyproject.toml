@@ -2,8 +2,31 @@
 name = "binoc"
 version = "0.1.0"
 description = "The missing changelog for datasets"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Harvard Library Innovation Lab" }]
+keywords = ["archive", "changelog", "csv", "data-diff", "datasets"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/harvard-lil/binoc"
+Repository = "https://github.com/harvard-lil/binoc"
+Issues = "https://github.com/harvard-lil/binoc/issues"
+Documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
 
 [project.scripts]
 binoc = "binoc.__main__:main"
@@ -18,4 +41,3 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "python"
 module-name = "binoc._binoc"
-features = ["pyo3/extension-module"]

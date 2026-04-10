@@ -141,14 +141,15 @@ uvx binoc --with binoc-sqlite diff snapshots/v1 snapshots/v2
 
 Plugins can be Rust crates (compiled as native shared libraries via the `export_plugin!` macro) or pure Python. See [docs/adr/](docs/adr/) for architecture and [model-plugins/](model-plugins/) for reference implementations.
 
-### Rust-only CLI
+### Rust SDK
 
-A standalone Rust binary with standard library plugins (no Python, no plugin discovery) is also available:
+Rust plugin authors should depend on the published SDK crate:
 
 ```bash
-cargo install binoc-cli
-binoc-cli diff path/to/snapshot-a path/to/snapshot-b
+cargo add binoc-sdk
 ```
+
+The workspace also includes a standalone `binoc-cli` crate for contributors and a future Rust-only distribution path, but the SDK is the only Rust package published on crates.io for now.
 
 ### Development
 

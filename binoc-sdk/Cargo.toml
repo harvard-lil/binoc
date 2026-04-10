@@ -1,14 +1,20 @@
 [package]
 name = "binoc-sdk"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Plugin SDK and ABI for Binoc dataset-diff plugins"
+readme = "README.md"
 
 [features]
 default = []
 test-support = []
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tempfile = "3.26"
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
 thiserror = "2.0"
