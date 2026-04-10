@@ -35,8 +35,8 @@ expression: "&stable_changeset"
           }
         ],
         "details": {
-          "hash_left": "5642b90b69b50b45075fabf9f4b990c42ac7c020cf84db343cdfa4f2aad485d2",
-          "hash_right": "27bf6d93918edb3891a590424e329485f3698408070dc63e1090ee8863ddbebc",
+          "hash_left": "0bb865f7f287a972d996d07f69dab0d625f02aa5825cc79a6ab79b5c2794355a",
+          "hash_right": "9b5daff3a1a53db53c7691490daa8d0c7653d681ac95bd1bb2a99baa93fd3c37",
           "tables_left": [
             "users"
           ],

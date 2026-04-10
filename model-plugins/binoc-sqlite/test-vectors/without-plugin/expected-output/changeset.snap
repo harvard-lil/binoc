@@ -19,8 +19,8 @@ expression: "&stable_changeset"
           "binoc.content-changed"
         ],
         "details": {
-          "hash_left": "5642b90b69b50b45075fabf9f4b990c42ac7c020cf84db343cdfa4f2aad485d2",
-          "hash_right": "21c6dfd96f7aca55c266d5af918149e63f806433065750b55114b6faad7e9b7b",
+          "hash_left": "0bb865f7f287a972d996d07f69dab0d625f02aa5825cc79a6ab79b5c2794355a",
+          "hash_right": "403f22fa3dbe2a501520c6b9bb9c2ecd8f8e431d957f2c050f112d546953bc72",
           "size_left": 0,
           "size_right": 0
         },

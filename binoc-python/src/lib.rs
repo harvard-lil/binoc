@@ -541,7 +541,7 @@ fn py_dict_to_json_map(dict: &Bound<'_, PyDict>) -> PyResult<BTreeMap<String, se
 // PyDiffNode
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "DiffNode")]
+#[pyclass(name = "DiffNode", from_py_object)]
 #[derive(Clone)]
 pub struct PyDiffNode {
     inner: DiffNode,
@@ -770,7 +770,7 @@ impl PyDiffNodeIter {
 // PyChangeset
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Changeset")]
+#[pyclass(name = "Changeset", from_py_object)]
 #[derive(Clone)]
 pub struct PyChangeset {
     inner: Changeset,
@@ -888,7 +888,7 @@ impl PyChangeset {
 // PyItemPair — Python-facing item pair (physical paths for Python plugins)
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "ItemPair")]
+#[pyclass(name = "ItemPair", from_py_object)]
 #[derive(Clone)]
 pub struct PyItemPair {
     left_physical: Option<String>,
@@ -1016,7 +1016,7 @@ impl PyItemPair {
 // Compare/Transform result types for Python plugins
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Identical")]
+#[pyclass(name = "Identical", from_py_object)]
 #[derive(Clone)]
 pub struct PyIdentical;
 #[pymethods]
@@ -1030,7 +1030,7 @@ impl PyIdentical {
     }
 }
 
-#[pyclass(name = "Leaf")]
+#[pyclass(name = "Leaf", from_py_object)]
 #[derive(Clone)]
 pub struct PyLeaf {
     #[pyo3(get)]
@@ -1047,7 +1047,7 @@ impl PyLeaf {
     }
 }
 
-#[pyclass(name = "Expand")]
+#[pyclass(name = "Expand", from_py_object)]
 #[derive(Clone)]
 pub struct PyExpand {
     #[pyo3(get)]
@@ -1070,7 +1070,7 @@ impl PyExpand {
     }
 }
 
-#[pyclass(name = "Unchanged")]
+#[pyclass(name = "Unchanged", from_py_object)]
 #[derive(Clone)]
 pub struct PyUnchanged;
 #[pymethods]
@@ -1084,7 +1084,7 @@ impl PyUnchanged {
     }
 }
 
-#[pyclass(name = "Replace")]
+#[pyclass(name = "Replace", from_py_object)]
 #[derive(Clone)]
 pub struct PyReplace {
     #[pyo3(get)]
@@ -1101,7 +1101,7 @@ impl PyReplace {
     }
 }
 
-#[pyclass(name = "ReplaceMany")]
+#[pyclass(name = "ReplaceMany", from_py_object)]
 #[derive(Clone)]
 pub struct PyReplaceMany {
     #[pyo3(get)]
@@ -1118,7 +1118,7 @@ impl PyReplaceMany {
     }
 }
 
-#[pyclass(name = "Remove")]
+#[pyclass(name = "Remove", from_py_object)]
 #[derive(Clone)]
 pub struct PyRemove;
 #[pymethods]

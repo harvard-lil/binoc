@@ -2,6 +2,7 @@
 name = "binoc-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -28,4 +29,4 @@ serde_json = { workspace = true }
 assert_cmd = "2.1.2"
 predicates = "3.1.4"
 tempfile = { workspace = true }
-zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
+zip = { version = "8.5.1", default-features = false, features = ["deflate"] }

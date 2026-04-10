@@ -7,10 +7,7 @@ import pytest
 def test_vectors_dir():
     """Path to the shared test-vectors directory at the workspace root."""
     here = Path(__file__).resolve().parent
-    vectors = here.parent.parent / "test-vectors"
-    if not vectors.is_dir():
-        pytest.skip(f"test-vectors directory not found at {vectors}")
-    return vectors
+    return here.parent.parent / "test-vectors"
 
 
 @pytest.fixture
