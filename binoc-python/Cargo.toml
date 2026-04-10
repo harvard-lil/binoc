@@ -1,12 +1,12 @@
 [package]
 name = "binoc-python"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "PyO3 bindings and Python CLI host for Binoc"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
 publish = false
 
 [lib]
@@ -14,10 +14,10 @@ name = "_binoc"
 crate-type = ["cdylib"]
 
 [dependencies]
-binoc-core = { path = "../binoc-core" }
-binoc-sdk = { path = "../binoc-sdk" }
-binoc-stdlib = { path = "../binoc-stdlib" }
-binoc-cli = { path = "../binoc-cli" }
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true }
+binoc-stdlib = { workspace = true }
+binoc-cli = { workspace = true }
 libloading = "0.8"
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"] }
-serde_json = "1.0"
+pyo3 = { workspace = true }
+serde_json = { workspace = true }

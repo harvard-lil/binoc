@@ -1,12 +1,12 @@
 [package]
 name = "binoc-row-reorder"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "Row reorder transformer plugin for Binoc"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder"
 publish = false
 
 [lib]
@@ -18,12 +18,12 @@ default = []
 python = ["dep:pyo3"]
 
 [dependencies]
-binoc-sdk = { path = "../../binoc-sdk" }
-serde_json = "1.0"
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"], optional = true }
+binoc-sdk = { workspace = true }
+serde_json = { workspace = true }
+pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
-binoc-core = { path = "../../binoc-core" }
-binoc-sdk = { path = "../../binoc-sdk", features = ["test-support"] }
-binoc-stdlib = { path = "../../binoc-stdlib", features = ["test-vectors"] }
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
 tempfile = "3"

@@ -1,12 +1,12 @@
 [package]
 name = "binoc-stdlib"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "Standard comparators, transformers, and renderers for Binoc"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
 publish = false
 
 [features]
@@ -15,16 +15,16 @@ default = ["test-vectors"]
 test-vectors = ["insta", "toml", "rayon", "binoc-sdk/test-support"]
 
 [dependencies]
-binoc-sdk = { path = "../binoc-sdk" }
-binoc-core = { path = "../binoc-core" }
+binoc-sdk = { workspace = true }
+binoc-core = { workspace = true }
 blake3 = "1.8.3"
 csv = "1.4.0"
 infer = "0.19"
 mime_guess = "2.0.5"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { workspace = true }
+serde_json = { workspace = true }
 similar = "2.7.0"
-tempfile = "3.26.0"
+tempfile = { workspace = true }
 walkdir = "2.5.0"
 zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
 tar = "0.4"

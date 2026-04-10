@@ -1,21 +1,21 @@
 [package]
 name = "binoc-core"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "Core controller and host runtime for Binoc"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
 publish = false
 
 [dependencies]
-binoc-sdk = { path = "../binoc-sdk" }
+binoc-sdk = { workspace = true }
 rayon = "1.11.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { workspace = true }
+serde_json = { workspace = true }
 serde_yaml = "0.9.34"
-tempfile = "3.26.0"
+tempfile = { workspace = true }
 
 [dev-dependencies]
 insta = "1.46.3"

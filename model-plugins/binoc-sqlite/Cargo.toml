@@ -1,12 +1,12 @@
 [package]
 name = "binoc-sqlite"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "SQLite comparator plugin for Binoc"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite"
 publish = false
 
 [lib]
@@ -18,14 +18,14 @@ default = []
 python = ["dep:pyo3"]
 
 [dependencies]
-binoc-sdk = { path = "../../binoc-sdk" }
+binoc-sdk = { workspace = true }
 rusqlite = { version = "0.35", features = ["bundled"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py310"], optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
-binoc-core = { path = "../../binoc-core" }
-binoc-sdk = { path = "../../binoc-sdk", features = ["test-support"] }
-binoc-stdlib = { path = "../../binoc-stdlib", features = ["test-vectors"] }
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
 tempfile = "3"
