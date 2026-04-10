@@ -48,27 +48,32 @@ If you restrict deployment refs, allow tag pattern `v*` for each environment.
 
 ## Versioning
 
-The release tag version must match all published package versions:
+The release tag version must match:
 
+- the workspace Cargo version in `Cargo.toml`
 - `binoc-python/pyproject.toml`
-- `binoc-python/Cargo.toml`
 - `model-plugins/binoc-sqlite/pyproject.toml`
-- `model-plugins/binoc-sqlite/Cargo.toml`
-- `binoc-sdk/Cargo.toml`
 
-`just release` verifies that these stay in lockstep before it pushes a tag.
+`just release` verifies that these stay in lockstep on `origin/main` before it pushes a tag.
 
 ## Cutting a release
 
-1. Update the versions in the published manifests.
-2. Commit the release changes and make sure the working tree is clean.
+1. Update the versions in the published manifests:
+
+```bash
+just set-version 0.1.1
+```
+
+This updates the manifests plus the tracked lockfiles that the test suite would otherwise rewrite.
+
+2. Open a PR, let CI pass, and merge the version bump to `main`.
 3. Run:
 
 ```bash
 just release
 ```
 
-This runs the full test suite, verifies the published versions match, pushes the current branch, creates an annotated `vX.Y.Z` tag, and pushes the tag.
+This fetches `origin/main`, verifies the published versions on `origin/main` match, creates an annotated `vX.Y.Z` tag pointing at the current `origin/main` commit, and pushes only the tag.
 
 The publish workflow then:
 

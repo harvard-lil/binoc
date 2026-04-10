@@ -53,69 +53,80 @@ snapshot-review:
 snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-stdlib --test test_vectors
 
-# Tag v{version} from published package metadata, push branch + tag (triggers release workflow).
+# Set the shared published package version across Cargo + Python manifests.
+set-version version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION="{{version}}"
+
+    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+      echo "Version must look like semver (for example: 0.1.1 or 0.2.0-rc.1)." >&2
+      exit 1
+    fi
+
+    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' Cargo.toml
+    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' binoc-python/pyproject.toml
+    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' model-plugins/binoc-sqlite/pyproject.toml
+
+    # update the lock files
+    cargo update -w
+    cd binoc-python && uv lock
+    cd ../model-plugins/binoc-sqlite && uv lock
+    cd ../binoc-html && uv lock
+
+    echo "Set published package version to ${VERSION}."
+
+# Tag the current origin/main commit using published package metadata from origin/main.
 release:
     #!/usr/bin/env bash
     set -euo pipefail
-    just test
 
-    version_from() {
-      sed -n 's/^version = "\(.*\)"/\1/p' "$1" | head -n 1
+    toml_string_from_origin_main() {
+      local path="$1"
+      local contents
+      if ! contents="$(git show "origin/main:${path}" 2>/dev/null)"; then
+        echo "Failed to read ${path} from origin/main." >&2
+        exit 1
+      fi
+      printf '%s\n' "$contents" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n 1
     }
 
-    BINOC_PY_VERSION="$(version_from binoc-python/pyproject.toml)"
-    BINOC_CARGO_VERSION="$(version_from binoc-python/Cargo.toml)"
-    SQLITE_PY_VERSION="$(version_from model-plugins/binoc-sqlite/pyproject.toml)"
-    SQLITE_CARGO_VERSION="$(version_from model-plugins/binoc-sqlite/Cargo.toml)"
-    SDK_VERSION="$(version_from binoc-sdk/Cargo.toml)"
+    git fetch origin main --tags
+    REMOTE_MAIN="$(git rev-parse origin/main)"
 
-    if [ -z "$BINOC_PY_VERSION" ] || [ -z "$BINOC_CARGO_VERSION" ] || [ -z "$SQLITE_PY_VERSION" ] || [ -z "$SQLITE_CARGO_VERSION" ] || [ -z "$SDK_VERSION" ]; then
-      echo "Failed to read one or more package versions." >&2
+    WORKSPACE_VERSION="$(toml_string_from_origin_main Cargo.toml)"
+    BINOC_PY_VERSION="$(toml_string_from_origin_main binoc-python/pyproject.toml)"
+    SQLITE_PY_VERSION="$(toml_string_from_origin_main model-plugins/binoc-sqlite/pyproject.toml)"
+
+    if [ -z "$WORKSPACE_VERSION" ] || [ -z "$BINOC_PY_VERSION" ] || [ -z "$SQLITE_PY_VERSION" ]; then
+      echo "Failed to read one or more package versions from origin/main." >&2
       exit 1
     fi
 
-    if [ "$BINOC_PY_VERSION" != "$BINOC_CARGO_VERSION" ]; then
-      echo "binoc Python/Cargo versions differ: $BINOC_PY_VERSION vs $BINOC_CARGO_VERSION" >&2
-      exit 1
-    fi
-    if [ "$SQLITE_PY_VERSION" != "$SQLITE_CARGO_VERSION" ]; then
-      echo "binoc-sqlite Python/Cargo versions differ: $SQLITE_PY_VERSION vs $SQLITE_CARGO_VERSION" >&2
-      exit 1
-    fi
-    if [ "$BINOC_PY_VERSION" != "$SQLITE_PY_VERSION" ] || [ "$BINOC_PY_VERSION" != "$SDK_VERSION" ]; then
-      echo "Published package versions must match:" >&2
+    if [ "$BINOC_PY_VERSION" != "$SQLITE_PY_VERSION" ] || [ "$BINOC_PY_VERSION" != "$WORKSPACE_VERSION" ]; then
+      echo "Published package versions on origin/main must match:" >&2
+      echo "  workspace=$WORKSPACE_VERSION" >&2
       echo "  binoc=$BINOC_PY_VERSION" >&2
       echo "  binoc-sqlite=$SQLITE_PY_VERSION" >&2
-      echo "  binoc-sdk=$SDK_VERSION" >&2
+      echo "Merge a version-bump commit before releasing." >&2
       exit 1
     fi
 
-    VERSION="$BINOC_PY_VERSION"
-    TAG="v${VERSION}"
+    TAG="v${WORKSPACE_VERSION}"
 
-    if ! git rev-parse --git-dir >/dev/null 2>&1; then
-      echo "Not a git repository." >&2
-      exit 1
-    fi
-    if ! git remote get-url origin >/dev/null 2>&1; then
-      echo "No git remote named 'origin'. Add it before releasing." >&2
-      exit 1
-    fi
     if git show-ref --verify --quiet "refs/tags/${TAG}"; then
-      echo "Tag ${TAG} already exists locally." >&2
+      echo "Tag ${TAG} already exists." >&2
       exit 1
     fi
     if git ls-remote origin "refs/tags/${TAG}" 2>/dev/null | grep -q .; then
       echo "Tag ${TAG} already exists on origin." >&2
       exit 1
     fi
-    if [ -n "$(git status --porcelain)" ]; then
-      echo "Working tree is not clean. Commit or stash before releasing." >&2
-      exit 1
-    fi
 
-    echo "Pushing current branch, then tagging ${TAG} (version ${VERSION})..."
-    git push
-    git tag -a "${TAG}" -m "Release ${VERSION}"
-    git push origin "${TAG}"
+    # push the tag
+    echo "Tagging origin/main at ${REMOTE_MAIN} as ${TAG} ..."
+    git tag -a "${TAG}" "${REMOTE_MAIN}" -m "Release ${WORKSPACE_VERSION}"
+    git push origin "refs/tags/${TAG}"
     echo "Pushed ${TAG}. GitHub Actions should publish binoc, binoc-sqlite, and binoc-sdk."
+    echo "Visit https://github.com/harvard-lil/binoc/actions/workflows/publish.yml to monitor the release."
