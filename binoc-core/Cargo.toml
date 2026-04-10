@@ -18,5 +18,5 @@ serde_yaml = "0.9.34"
 tempfile = { workspace = true }
 
 [dev-dependencies]
-insta = "1.46.3"
-toml = "1.0.4"
+insta = "1.47.2"
+toml = "1.1.2"

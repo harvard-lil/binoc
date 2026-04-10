@@ -21,11 +21,11 @@ path = "src/main.rs"
 binoc-sdk = { workspace = true }
 binoc-core = { workspace = true }
 binoc-stdlib = { workspace = true }
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { version = "4.6.0", features = ["derive"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.0"
 predicates = "3.1.4"
 tempfile = { workspace = true }
 zip = { version = "7.2.0", default-features = false, features = ["deflate"] }

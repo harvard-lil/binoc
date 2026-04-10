@@ -17,7 +17,7 @@ test-vectors = ["insta", "toml", "rayon", "binoc-sdk/test-support"]
 [dependencies]
 binoc-sdk = { workspace = true }
 binoc-core = { workspace = true }
-blake3 = "1.8.3"
+blake3 = "1.8.4"
 csv = "1.4.0"
 infer = "0.19"
 mime_guess = "2.0.5"
@@ -29,6 +29,6 @@ walkdir = "2.5.0"
 zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
 tar = "0.4.45"
 flate2 = "1"
-insta = { version = "1.46.3", features = ["json"], optional = true }
-toml = { version = "1.0.4", optional = true }
+insta = { version = "1.47.2", features = ["json"], optional = true }
+toml = { version = "1.1.2", optional = true }
 rayon = { version = "1", optional = true }
