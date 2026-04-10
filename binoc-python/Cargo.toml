@@ -18,6 +18,6 @@ binoc-core = { workspace = true }
 binoc-sdk = { workspace = true }
 binoc-stdlib = { workspace = true }
 binoc-cli = { workspace = true }
-libloading = "0.8"
+libloading = "0.9"
 pyo3 = { workspace = true }
 serde_json = { workspace = true }
