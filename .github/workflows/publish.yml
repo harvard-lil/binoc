@@ -55,7 +55,7 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           args: --release --interpreter python --out dist
           sccache: "true"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: binoc-dist-${{ matrix.artifact }}
           path: binoc-python/dist
@@ -72,7 +72,7 @@ jobs:
           command: sdist
           working-directory: binoc-python
           args: --out dist
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: binoc-dist-sdist
           path: binoc-python/dist
@@ -135,7 +135,7 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           args: --release --interpreter python --out dist
           sccache: "true"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: binoc-sqlite-dist-${{ matrix.artifact }}
           path: model-plugins/binoc-sqlite/dist
@@ -152,7 +152,7 @@ jobs:
           command: sdist
           working-directory: model-plugins/binoc-sqlite
           args: --out dist
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: binoc-sqlite-dist-sdist
           path: model-plugins/binoc-sqlite/dist
