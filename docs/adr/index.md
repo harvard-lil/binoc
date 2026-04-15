@@ -20,3 +20,4 @@
 * 2026-04-08: [Release surface and automated publishing](release_surface_and_automated_publishing.md)
 * 2026-04-10: [Rust MSRV and dependency update policy](rust_msrv_and_dependency_update_policy.md)
 * 2026-04-10: [Security posture and how to audit Binoc (core and plugins)](security_posture_and_auditing.md)
+* 2026-04-10: [Independent release tags and published version policy](independent_release_tags_and_published_version_policy.md)

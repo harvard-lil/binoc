@@ -6,9 +6,7 @@ Binoc publishes three public artifacts today:
 - PyPI: `binoc-sqlite`
 - crates.io: `binoc-sdk`
 
-Releases are published from GitHub Actions when a `v*` tag is pushed. The publish workflow builds platform wheels for the Python packages and uses trusted publishing for both PyPI and crates.io.
-
-(The single `v*` tag is a short term solution. Under active development, we'll use separate tags for each package, or split out repositories.)
+Releases are published from GitHub Actions when a package-specific tag is pushed. The publish workflow builds platform wheels for the Python packages and uses trusted publishing for both PyPI and crates.io.
 
 ## One-time setup
 
@@ -44,43 +42,69 @@ Create these GitHub environments:
 - `pypi-binoc-sqlite`
 - `crates-io-binoc-sdk`
 
-If you restrict deployment refs, allow tag pattern `v*` for each environment.
+If you restrict deployment refs, allow these tag patterns:
+
+- `binoc-v*`
+- `binoc-sqlite-v*`
+- `binoc-sdk-v*`
 
 ## Versioning
 
-The release tag version must match:
+Each published artifact has its own version and its own tag namespace:
 
-- the workspace Cargo version in `Cargo.toml`
-- `binoc-python/pyproject.toml`
-- `model-plugins/binoc-sqlite/pyproject.toml`
+- `binoc-vX.Y.Z` publishes the version in `binoc-python/pyproject.toml`
+- `binoc-sqlite-vX.Y.Z` publishes the version in `model-plugins/binoc-sqlite/pyproject.toml`
+- `binoc-sdk-vX.Y.Z` publishes the workspace version in `Cargo.toml`
 
-`just release` verifies that these stay in lockstep on `origin/main` before it pushes a tag.
+These versions no longer need to stay in lockstep.
+
+Versioning rules:
+
+- Bump `binoc` when the user-facing Python package changes.
+- Bump `binoc-sqlite` when the SQLite plugin package changes.
+- Bump `binoc-sdk` when the Rust plugin SDK or compatibility floor changes.
+- A `binoc-sdk` release often implies a follow-on `binoc` release, because `binoc` is the host package that embeds the runtime loader and compatibility checks for native plugins.
+- A `binoc-sdk` release only implies a `binoc-sqlite` release when the plugin itself changed or needs rebuilding against the new SDK for a fresh published wheel.
 
 ## Cutting a release
 
-1. Update the versions in the published manifests:
+1. Update the version for the package you are releasing:
 
 ```bash
-just set-version 0.1.1
+just set-version binoc 0.1.1
 ```
 
-This updates the manifests plus the tracked lockfiles that the test suite would otherwise rewrite.
+Examples:
+
+```bash
+just set-version binoc-sqlite 0.1.1
+just set-version binoc-sdk 0.2.0
+just set-version all 0.3.0
+```
+
+`just set-version` updates only the selected published manifest(s) plus any tracked lockfiles that would otherwise be rewritten by the test suite.
 
 2. Open a PR, let CI pass, and merge the version bump to `main`.
 3. Run:
 
 ```bash
-just release
+just release binoc
 ```
 
-This fetches `origin/main`, verifies the published versions on `origin/main` match, creates an annotated `vX.Y.Z` tag pointing at the current `origin/main` commit, and pushes only the tag.
+Examples:
+
+```bash
+just release binoc-sqlite
+just release binoc-sdk
+just release all
+```
+
+This fetches `origin/main`, reads the selected package version(s) from `origin/main`, creates annotated package-specific tag(s) pointing at the current `origin/main` commit, and pushes only those tag(s).
 
 The publish workflow then:
 
-- builds abi3 wheels plus sdists for `binoc`
-- builds abi3 wheels plus sdists for `binoc-sqlite`
-- publishes both Python packages to PyPI via trusted publishing
-- publishes `binoc-sdk` to crates.io via trusted publishing
+- builds and publishes only the package(s) named by the tag(s) you pushed
+- leaves unrelated packages untouched
 
 ## Manual fallbacks
 

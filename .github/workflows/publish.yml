@@ -3,7 +3,9 @@ name: Publish
 on:
   push:
     tags:
-      - "v*"
+      - "binoc-v*"
+      - "binoc-sqlite-v*"
+      - "binoc-sdk-v*"
   workflow_dispatch:
 
 permissions:
@@ -19,6 +21,7 @@ env:
 jobs:
   build-binoc-wheels:
     name: Build binoc wheels (${{ matrix.artifact }})
+    if: startsWith(github.ref_name, 'binoc-v')
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -66,6 +69,7 @@ jobs:
 
   build-binoc-sdist:
     name: Build binoc sdist
+    if: startsWith(github.ref_name, 'binoc-v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -83,6 +87,7 @@ jobs:
 
   publish-binoc:
     name: Publish binoc to PyPI
+    if: startsWith(github.ref_name, 'binoc-v')
     runs-on: ubuntu-latest
     needs: [build-binoc-wheels, build-binoc-sdist]
     environment:
@@ -103,6 +108,7 @@ jobs:
 
   build-binoc-sqlite-wheels:
     name: Build binoc-sqlite wheels (${{ matrix.artifact }})
+    if: startsWith(github.ref_name, 'binoc-sqlite-v')
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -150,6 +156,7 @@ jobs:
 
   build-binoc-sqlite-sdist:
     name: Build binoc-sqlite sdist
+    if: startsWith(github.ref_name, 'binoc-sqlite-v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -167,6 +174,7 @@ jobs:
 
   publish-binoc-sqlite:
     name: Publish binoc-sqlite to PyPI
+    if: startsWith(github.ref_name, 'binoc-sqlite-v')
     runs-on: ubuntu-latest
     needs: [build-binoc-sqlite-wheels, build-binoc-sqlite-sdist]
     environment:
@@ -187,6 +195,7 @@ jobs:
 
   publish-binoc-sdk:
     name: Publish binoc-sdk to crates.io
+    if: startsWith(github.ref_name, 'binoc-sdk-v')
     runs-on: ubuntu-latest
     environment:
       name: crates-io-binoc-sdk

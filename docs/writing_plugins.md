@@ -143,7 +143,7 @@ To make a plugin available via `uv pip install` (or `pip install`), declare an e
 [project]
 name = "biobinoc"
 version = "0.1.0"
-dependencies = ["binoc"]
+dependencies = ["binoc>=0.1"]
 
 [project.entry-points."binoc.plugins"]
 biobinoc = "biobinoc:register"
@@ -175,6 +175,11 @@ transformers:
   - biobinoc.sequence_normalizer
   - binoc.move_detector
 ```
+
+Versioning note:
+
+- For Python plugins, `binoc` is a real Python API dependency. Set a minimum host version for the Python APIs you use.
+- Do not add an upper bound unless you know your plugin depends on a host-side Python API or behavior that may break across Binoc releases.
 
 ## Rust Plugins
 
@@ -303,7 +308,7 @@ binoc_sdk::export_plugin! {
 [project]
 name = "biobinoc"
 version = "0.1.0"
-dependencies = ["binoc"]
+dependencies = ["binoc>=0.1"]
 
 [project.entry-points."binoc.plugins"]
 biobinoc = "biobinoc"
@@ -317,6 +322,13 @@ features = ["python"]
 ```
 
 Note the entry point value is just the module name (`"biobinoc"`), not a `module:function` callable. The discovery code detects that it's a native module and loads it via the C ABI automatically.
+
+Versioning note:
+
+- The Rust compatibility boundary is `binoc-sdk`, not the `binoc` package version.
+- Depend on the `binoc-sdk` minor line you build against in `Cargo.toml`.
+- In `pyproject.toml`, use `binoc` as a host-package dependency with a minimum version floor for the loader/runtime features you need.
+- Do not add a `binoc<next-minor` cap just to mirror the SDK minor. Native plugin compatibility is checked at runtime through the plugin `sdk_version`.
 
 ### Runtime flow
 
