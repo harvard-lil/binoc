@@ -54,10 +54,11 @@ snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-stdlib --test test_vectors
 
 # Set the shared published package version across Cargo + Python manifests.
-set-version version:
+set-version package version:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    PACKAGE="{{package}}"
     VERSION="{{version}}"
 
     if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
@@ -65,22 +66,57 @@ set-version version:
       exit 1
     fi
 
-    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' Cargo.toml
-    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' binoc-python/pyproject.toml
-    perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' model-plugins/binoc-sqlite/pyproject.toml
+    set_manifest_version() {
+      local path="$1"
+      perl -0pi -e 's/^version = "[^"]*"/version = "'"$VERSION"'"/m' "$path"
+    }
 
-    # update the lock files
-    cargo update -w
-    cd binoc-python && uv lock
-    cd ../model-plugins/binoc-sqlite && uv lock
-    cd ../binoc-html && uv lock
+    relock_uv() {
+      local path="$1"
+      (
+        cd "$path"
+        uv lock
+      )
+    }
 
-    echo "Set published package version to ${VERSION}."
+    case "$PACKAGE" in
+      binoc)
+        set_manifest_version binoc-python/pyproject.toml
+        relock_uv binoc-python
+        relock_uv model-plugins/binoc-sqlite
+        relock_uv model-plugins/binoc-html
+        ;;
+      binoc-sqlite)
+        set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
+        relock_uv model-plugins/binoc-sqlite
+        ;;
+      binoc-sdk)
+        set_manifest_version Cargo.toml
+        cargo update -w
+        ;;
+      all)
+        set_manifest_version Cargo.toml
+        set_manifest_version binoc-python/pyproject.toml
+        set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
+        cargo update -w
+        relock_uv binoc-python
+        relock_uv model-plugins/binoc-sqlite
+        relock_uv model-plugins/binoc-html
+        ;;
+      *)
+        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-sdk|all] <version>" >&2
+        exit 1
+        ;;
+    esac
 
-# Tag the current origin/main commit using published package metadata from origin/main.
-release:
+    echo "Set ${PACKAGE} version to ${VERSION}."
+
+# Tag the current origin/main commit for one published package, or `all`.
+release package:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    PACKAGE="{{package}}"
 
     toml_string_from_origin_main() {
       local path="$1"
@@ -92,41 +128,82 @@ release:
       printf '%s\n' "$contents" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n 1
     }
 
+    package_version_from_origin_main() {
+      local package="$1"
+      case "$package" in
+        binoc)
+          toml_string_from_origin_main binoc-python/pyproject.toml
+          ;;
+        binoc-sqlite)
+          toml_string_from_origin_main model-plugins/binoc-sqlite/pyproject.toml
+          ;;
+        binoc-sdk)
+          toml_string_from_origin_main Cargo.toml
+          ;;
+        *)
+          echo "Unknown package: ${package}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    package_tag() {
+      local package="$1"
+      local version="$2"
+      echo "${package}-v${version}"
+    }
+
     git fetch origin main --tags
     REMOTE_MAIN="$(git rev-parse origin/main)"
 
-    WORKSPACE_VERSION="$(toml_string_from_origin_main Cargo.toml)"
-    BINOC_PY_VERSION="$(toml_string_from_origin_main binoc-python/pyproject.toml)"
-    SQLITE_PY_VERSION="$(toml_string_from_origin_main model-plugins/binoc-sqlite/pyproject.toml)"
+    case "$PACKAGE" in
+      binoc|binoc-sqlite|binoc-sdk)
+        packages=("$PACKAGE")
+        ;;
+      all)
+        packages=("binoc" "binoc-sqlite" "binoc-sdk")
+        ;;
+      *)
+        echo "Usage: just release [binoc|binoc-sqlite|binoc-sdk|all]" >&2
+        exit 1
+        ;;
+    esac
 
-    if [ -z "$WORKSPACE_VERSION" ] || [ -z "$BINOC_PY_VERSION" ] || [ -z "$SQLITE_PY_VERSION" ]; then
-      echo "Failed to read one or more package versions from origin/main." >&2
-      exit 1
-    fi
+    tags=()
+    versions=()
 
-    if [ "$BINOC_PY_VERSION" != "$SQLITE_PY_VERSION" ] || [ "$BINOC_PY_VERSION" != "$WORKSPACE_VERSION" ]; then
-      echo "Published package versions on origin/main must match:" >&2
-      echo "  workspace=$WORKSPACE_VERSION" >&2
-      echo "  binoc=$BINOC_PY_VERSION" >&2
-      echo "  binoc-sqlite=$SQLITE_PY_VERSION" >&2
-      echo "Merge a version-bump commit before releasing." >&2
-      exit 1
-    fi
+    for package in "${packages[@]}"; do
+      version="$(package_version_from_origin_main "$package")"
+      if [ -z "$version" ]; then
+        echo "Failed to read ${package} version from origin/main." >&2
+        exit 1
+      fi
 
-    TAG="v${WORKSPACE_VERSION}"
+      tag="$(package_tag "$package" "$version")"
 
-    if git show-ref --verify --quiet "refs/tags/${TAG}"; then
-      echo "Tag ${TAG} already exists." >&2
-      exit 1
-    fi
-    if git ls-remote origin "refs/tags/${TAG}" 2>/dev/null | grep -q .; then
-      echo "Tag ${TAG} already exists on origin." >&2
-      exit 1
-    fi
+      if git show-ref --verify --quiet "refs/tags/${tag}"; then
+        echo "Tag ${tag} already exists." >&2
+        exit 1
+      fi
+      if git ls-remote origin "refs/tags/${tag}" 2>/dev/null | grep -q .; then
+        echo "Tag ${tag} already exists on origin." >&2
+        exit 1
+      fi
 
-    # push the tag
-    echo "Tagging origin/main at ${REMOTE_MAIN} as ${TAG} ..."
-    git tag -a "${TAG}" "${REMOTE_MAIN}" -m "Release ${WORKSPACE_VERSION}"
-    git push origin "refs/tags/${TAG}"
-    echo "Pushed ${TAG}. GitHub Actions should publish binoc, binoc-sqlite, and binoc-sdk."
+      versions+=("$version")
+      tags+=("$tag")
+    done
+
+    for i in "${!packages[@]}"; do
+      echo "Tagging origin/main at ${REMOTE_MAIN} as ${tags[$i]} ..."
+      git tag -a "${tags[$i]}" "${REMOTE_MAIN}" -m "Release ${packages[$i]} ${versions[$i]}"
+    done
+
+    push_refs=()
+    for tag in "${tags[@]}"; do
+      push_refs+=("refs/tags/${tag}")
+    done
+
+    git push origin "${push_refs[@]}"
+    echo "Pushed ${tags[*]}. GitHub Actions should publish the selected package(s)."
     echo "Visit https://github.com/harvard-lil/binoc/actions/workflows/publish.yml to monitor the release."
