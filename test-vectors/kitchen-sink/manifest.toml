@@ -1,0 +1,14 @@
+[vector]
+name = "kitchen-sink"
+description = "Exercises every comparator and transformer in combination"
+tags = ["csv", "text", "binary", "tar", "zip", "directory", "move", "copy", "column-reorder", "integration"]
+
+[expected]
+root_kind = "modify"
+has_tags = [
+    "binoc.content-changed",
+    "binoc.lines-added",
+    "binoc.lines-removed",
+    "binoc.move",
+    "binoc.copy",
+]

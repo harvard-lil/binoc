@@ -1,8 +1,0 @@
-[vector]
-name = "directory-file-move"
-description = "File with same content under different names detected as a move"
-tags = ["move", "directory"]
-
-[expected]
-root_kind = "modify"
-has_tags = ["binoc.move"]

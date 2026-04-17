@@ -1,15 +1,32 @@
 """Test vector helpers for binoc plugins.
 
-Provides utilities to discover, prepare, and run test vectors against
-the binoc Python API. Plugin authors use this to validate their
-comparators end-to-end through the Python stack.
+Provides utilities to discover test vectors and run them against the binoc
+Python API. Plugin authors use this to validate their comparators end-to-end
+through the Python stack.
+
+Snapshots are assumed to be **already materialized** — that is, any ``.zip.d``
+/ ``.tar.gz.d`` / plugin-specific staging dirs in ``test-vectors/`` have been
+built into real artifacts by ``just materialize`` (or the equivalent
+``cargo run -p <crate> --bin materialize-test-vectors`` invocations). See
+``docs/adr/test_vector_materialization.md`` for the design; pytest sessions
+typically materialize once in a session-scoped fixture::
+
+    @pytest.fixture(scope="session")
+    def vectors_dir(tmp_path_factory):
+        import subprocess
+        dest = tmp_path_factory.mktemp("vectors")
+        subprocess.check_call([
+            "cargo", "run", "-q", "-p", "my_plugin",
+            "--features", "test-support",
+            "--bin", "materialize-test-vectors", "--",
+            str(dest), "my-plugin/test-vectors",
+        ])
+        return dest
 
 Typical usage in a plugin's pytest suite::
 
     import binoc
     from binoc.testing import discover_vectors, run_vector
-
-    VECTORS = discover_vectors("test-vectors")
 
     @pytest.fixture
     def registry():
@@ -17,19 +34,19 @@ Typical usage in a plugin's pytest suite::
         r.register_comparator("my-plugin.foo", MyComparator())
         return r
 
-    @pytest.mark.parametrize("vector_dir", VECTORS, ids=[v.name for v in VECTORS])
+    @pytest.mark.parametrize(
+        "vector_dir",
+        discover_vectors(vectors_dir()),
+        ids=lambda v: v.name,
+    )
     def test_vector(vector_dir, registry):
         run_vector(vector_dir, registry=registry)
 """
 
 from __future__ import annotations
 
-import shutil
-import tarfile
-import tempfile
-import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import binoc
 
@@ -89,19 +106,20 @@ def run_vector(
     *,
     vectors_root: str | Path | None = None,
     registry: binoc.PluginRegistry | None = None,
-    prepare: Callable[[Path, Path], None] | None = None,
 ) -> binoc.Changeset:
     """Run a single test vector and check its manifest assertions.
+
+    *vector_dir* must be a **materialized** vector — any ``.zip.d`` /
+    ``.tar.gz.d`` / plugin-specific staging directories should already have
+    been built into real artifacts. See module docstring for how to run
+    materialization once per session.
 
     Steps:
       1. Parse the manifest (with root-manifest defaults).
       2. Build a ``binoc.Config`` from the manifest's ``[config]`` section.
-      3. Copy snapshots to a temp directory.
-      4. Build ``.zip`` from ``.zip.d`` and ``.tar`` from ``.tar.d`` dirs.
-      5. Call *prepare(snap_a, snap_b)* if provided (for plugin-specific
-         artifact building, e.g. ``.sqlite`` from ``.sqlite.d``).
-      6. Run ``binoc.diff()`` with the config and optional *registry*.
-      7. Check ``[expected]`` assertions from the manifest.
+      3. Run ``binoc.diff()`` against the snapshots with the config and
+         optional *registry*.
+      4. Check ``[expected]`` assertions from the manifest.
 
     Returns the resulting :class:`binoc.Changeset`.
     """
@@ -112,24 +130,10 @@ def run_vector(
     config = _build_config(manifest)
     name = manifest["vector"]["name"]
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        snap_a = tmp_path / "snapshot-a"
-        snap_b = tmp_path / "snapshot-b"
-        shutil.copytree(vector_dir / "snapshot-a", snap_a)
-        shutil.copytree(vector_dir / "snapshot-b", snap_b)
+    snap_a = vector_dir / "snapshot-a"
+    snap_b = vector_dir / "snapshot-b"
 
-        _build_zips_in_dir(snap_a)
-        _build_zips_in_dir(snap_b)
-        _build_tars_in_dir(snap_a)
-        _build_tars_in_dir(snap_b)
-
-        if prepare:
-            prepare(snap_a, snap_b)
-
-        changeset = binoc.diff(
-            str(snap_a), str(snap_b), config=config, registry=registry
-        )
+    changeset = binoc.diff(str(snap_a), str(snap_b), config=config, registry=registry)
 
     expected = manifest.get("expected", {})
     if expected:
@@ -178,9 +182,6 @@ def check_assertions(
             )
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────
-
-
 def _load_toml(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -192,46 +193,3 @@ def _build_config(manifest: dict) -> binoc.Config:
     comparators = mc.get("comparators")
     transformers = mc.get("transformers")
     return binoc.Config(comparators=comparators, transformers=transformers)
-
-
-def _build_zips_in_dir(dir_path: Path) -> None:
-    """Recursively build .zip files from .zip.d directories, then remove the .d dirs."""
-    for entry in sorted(dir_path.rglob("*")):
-        if entry.is_dir() and entry.name.endswith(".zip.d"):
-            zip_path = entry.parent / entry.name.removesuffix(".d")
-            _create_zip(entry, zip_path)
-            shutil.rmtree(entry)
-
-
-def _create_zip(source_dir: Path, zip_path: Path) -> None:
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        for file in sorted(source_dir.rglob("*")):
-            if file.is_file():
-                zf.write(file, file.relative_to(source_dir))
-
-
-def _build_tars_in_dir(dir_path: Path) -> None:
-    """Recursively build .tar/.tar.gz files from .tar.d/.tar.gz.d dirs."""
-    for entry in sorted(dir_path.rglob("*")):
-        if not entry.is_dir():
-            continue
-        name = entry.name
-        if (
-            name.endswith(".tar.d")
-            or name.endswith(".tar.gz.d")
-            or name.endswith(".tgz.d")
-        ):
-            tar_name = name.removesuffix(".d")
-            tar_path = entry.parent / tar_name
-            _create_tar(entry, tar_path)
-            shutil.rmtree(entry)
-
-
-def _create_tar(source_dir: Path, tar_path: Path) -> None:
-    tar_name = tar_path.name
-    is_gz = tar_name.endswith(".tar.gz") or tar_name.endswith(".tgz")
-    mode = "w:gz" if is_gz else "w"
-    with tarfile.open(tar_path, mode) as tf:
-        for file in sorted(source_dir.rglob("*")):
-            if file.is_file():
-                tf.add(file, arcname=file.relative_to(source_dir))

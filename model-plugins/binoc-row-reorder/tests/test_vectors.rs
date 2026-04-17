@@ -11,7 +11,8 @@ use std::sync::Arc;
 use binoc_row_reorder::RowReorderDetector;
 use binoc_sdk::test_support::{AbiLogCollector, AbiTransformer};
 use binoc_stdlib::test_vectors::{
-    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log,
+    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
+    VectorMaterializer,
 };
 
 fn vectors_dir() -> PathBuf {
@@ -26,6 +27,9 @@ fn test_all_vectors() {
         "No test vectors found at {}",
         vectors_dir().display()
     );
+    let materializers = stdlib_materializers();
+    let materializer_refs: Vec<&dyn VectorMaterializer> =
+        materializers.iter().map(|m| &**m).collect();
     for vector in &vectors {
         let (mut registry, mut collectors, counter) = abi_wrapped_default_registry();
 
@@ -40,8 +44,15 @@ fn test_all_vectors() {
         run_vector_with_abi_log(
             vector,
             &vectors_dir(),
+            || {
+                let mut direct = binoc_stdlib::default_registry();
+                direct
+                    .register_transformer(Arc::new(RowReorderDetector))
+                    .expect("same-build plugin");
+                direct
+            },
             move || registry,
-            None::<fn(&std::path::Path, &std::path::Path)>,
+            &materializer_refs,
             &collector_refs,
         );
     }

@@ -205,7 +205,8 @@ pub fn run(
 
             let resolved = registry.resolve(&dataset_config)?;
             let controller =
-                Controller::new(resolved.comparators.clone(), resolved.transformers.clone());
+                Controller::new(resolved.comparators.clone(), resolved.transformers.clone())
+                    .with_transformer_configs(dataset_config.transformer_config.as_map());
 
             let snap_a = snapshot_a.to_string_lossy().to_string();
             let snap_b = snapshot_b.to_string_lossy().to_string();
@@ -287,7 +288,8 @@ pub fn run(
             };
 
             let resolved = registry.resolve(&dataset_config)?;
-            let controller = Controller::new(resolved.comparators, resolved.transformers);
+            let controller = Controller::new(resolved.comparators, resolved.transformers)
+                .with_transformer_configs(dataset_config.transformer_config.as_map());
 
             match controller.extract(&changeset, &node, &aspect, &snap_a, &snap_b) {
                 Ok(result) => match result {

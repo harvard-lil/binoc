@@ -17,7 +17,12 @@ impl Transformer for TabularAnalyzer {
             .with_match_artifacts(vec![tabular_v1()])
     }
 
-    fn transform(&self, node: DiffNode, data: &dyn DataAccess) -> TransformResult {
+    fn transform(
+        &self,
+        node: DiffNode,
+        data: &dyn DataAccess,
+        _config: &serde_json::Value,
+    ) -> TransformResult {
         let Some(pair) = TabularDataPair::from_artifacts(&node, data) else {
             return TransformResult::Unchanged;
         };

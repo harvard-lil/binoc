@@ -33,7 +33,13 @@ fn relative_name(entry: &std::path::Path, base: &std::path::Path) -> String {
         })
 }
 
-fn identify(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, Option<String>)> {
+struct Identified {
+    hash: String,
+    size: u64,
+    media_type: Option<String>,
+}
+
+fn identify(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Identified> {
     let bytes = data.read_bytes(item)?;
     let hash = blake3::hash(&bytes).to_hex().to_string();
     let media_type = infer::get(&bytes)
@@ -43,7 +49,11 @@ fn identify(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, Optio
                 .first()
                 .map(|m| m.essence_str().to_string())
         });
-    Ok((hash, media_type))
+    Ok(Identified {
+        hash,
+        size: bytes.len() as u64,
+        media_type,
+    })
 }
 
 fn make_item_ref(
@@ -53,9 +63,10 @@ fn make_item_ref(
 ) -> BinocResult<ItemRef> {
     let mut item = data.register_local(path, &logical)?;
     if !item.is_dir {
-        if let Ok((hash, media_type)) = identify(&item, data) {
-            item.content_hash = Some(hash);
-            item.media_type = media_type;
+        if let Ok(identified) = identify(&item, data) {
+            item.content_hash = Some(identified.hash);
+            item.size = Some(identified.size);
+            item.media_type = identified.media_type;
         }
     }
     Ok(item)

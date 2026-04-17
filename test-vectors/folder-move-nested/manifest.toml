@@ -1,0 +1,17 @@
+[vector]
+name = "folder-move-nested"
+description = """
+Strict folder-move rollup exercise: the entire `docs/` subtree (readme plus a
+nested `docs/reports/` containing `annual.txt` and a further-nested
+`docs/reports/quarterly/` with two files) is renamed to `documentation/` in
+snapshot-b. Every leaf is byte-identical.
+
+`CorrelationDetector` rewrites each leaf as `binoc.move`. The default-strict
+`FolderMoveDetector` then rolls the whole tree up into a single
+`binoc.folder-move` node at `documentation` whose `source_path` is `docs`.
+"""
+tags = ["folder-move", "rollup", "nested", "directory"]
+
+[expected]
+root_kind = "modify"
+has_tags = ["binoc.move", "binoc.folder-move"]

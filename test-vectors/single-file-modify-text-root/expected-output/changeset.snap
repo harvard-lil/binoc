@@ -1,0 +1,25 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "text",
+    "path": "story.txt",
+    "summary": "2 lines added, 1 removed",
+    "tags": [
+      "binoc.content-changed",
+      "binoc.lines-added",
+      "binoc.lines-removed"
+    ],
+    "details": {
+      "lines_added": 2,
+      "lines_removed": 1,
+      "lines_unchanged": 4
+    },
+    "comparator": "binoc.text"
+  }
+}

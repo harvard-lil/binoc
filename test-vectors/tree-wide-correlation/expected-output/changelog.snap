@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Other Changes
+
+- **gamma-renamed.txt**: Moved from gamma.txt
+- **kept-copy.txt**: Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt
+- **merged.bin**: Moved from dup.bin and dup-b.bin
+- **outer.zip/alpha-renamed.txt**: Moved from alpha.txt
+- **outer.zip/inner.zip/beta-renamed.txt**: Moved from beta.txt

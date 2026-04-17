@@ -5,7 +5,7 @@
 [config]
 # Uncomment to set default pipeline (else binoc-stdlib default is used):
 # comparators = ["binoc.zip", "binoc.directory", "binoc.csv", "binoc.text", "binoc.binary"]
-# transformers = ["binoc.move_detector", "binoc.copy_detector", "binoc.column_reorder_detector"]
+# transformers = ["binoc.correlation_detector", "binoc.folder_move_detector", "binoc.column_reorder_detector"]
 
 [expected]
 # Optional default assertions (vectors can override)

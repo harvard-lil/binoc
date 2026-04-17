@@ -7,10 +7,11 @@
 //! Auto-discovers all vectors — add a new directory with manifest.toml + snapshots
 //! and it will be tested automatically.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use binoc_stdlib::test_vectors::{
-    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log,
+    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
+    VectorMaterializer,
 };
 
 fn vectors_dir() -> PathBuf {
@@ -28,6 +29,9 @@ fn test_all_vectors() {
         "No test vectors found at {}",
         vectors_dir().display()
     );
+    let materializers = stdlib_materializers();
+    let materializer_refs: Vec<&dyn VectorMaterializer> =
+        materializers.iter().map(|m| &**m).collect();
     for vector in &vectors {
         let (registry, collectors, _counter) = abi_wrapped_default_registry();
         let collector_refs: Vec<&dyn binoc_sdk::test_support::AbiLogCollector> =
@@ -35,8 +39,9 @@ fn test_all_vectors() {
         run_vector_with_abi_log(
             vector,
             &vectors_dir(),
+            binoc_stdlib::default_registry,
             move || registry,
-            None::<fn(&Path, &Path)>,
+            &materializer_refs,
             &collector_refs,
         );
     }

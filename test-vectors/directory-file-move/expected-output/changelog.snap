@@ -1,9 +1,0 @@
----
-source: binoc-stdlib/tests/test_vectors.rs
-expression: "&md"
----
-# Changelog: snapshot-a → snapshot-b
-
-## Other Changes
-
-- **new_name.bin**: Moved from old_name.bin

@@ -1,0 +1,3 @@
+Version 2 notes.
+Initial release.
+Bug fixes applied.

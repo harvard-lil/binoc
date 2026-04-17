@@ -152,8 +152,6 @@ pub struct TransformerDescriptor {
     pub match_tags: Vec<String>,
     #[serde(default)]
     pub match_actions: Vec<String>,
-    #[serde(default)]
-    pub scope: TransformScope,
     #[serde(default = "default_phase")]
     pub suggested_phase: String,
     /// Artifact formats the node must have (any one suffices).
@@ -179,7 +177,6 @@ impl TransformerDescriptor {
             match_types: Vec::new(),
             match_tags: Vec::new(),
             match_actions: Vec::new(),
-            scope: TransformScope::Node,
             suggested_phase: "default".into(),
             match_artifacts: Vec::new(),
             node_shape: NodeShapeFilter::Any,
@@ -198,11 +195,6 @@ impl TransformerDescriptor {
 
     pub fn with_match_actions(mut self, actions: Vec<String>) -> Self {
         self.match_actions = actions;
-        self
-    }
-
-    pub fn with_scope(mut self, scope: TransformScope) -> Self {
-        self.scope = scope;
         self
     }
 
@@ -344,10 +336,20 @@ pub trait Comparator: Send + Sync {
 ///
 /// Matching is declarative via [`TransformerDescriptor`]. If a matched
 /// node should not be transformed, return [`TransformResult::Unchanged`].
+///
+/// `config` is the per-transformer JSON value resolved from the host's
+/// `DatasetConfig.transformer_config` map (keyed by transformer name).
+/// Plugins that don't need configuration can ignore it; the default
+/// value for unconfigured transformers is [`serde_json::Value::Null`].
 pub trait Transformer: Send + Sync {
     fn descriptor(&self) -> TransformerDescriptor;
 
-    fn transform(&self, node: DiffNode, data: &dyn DataAccess) -> TransformResult;
+    fn transform(
+        &self,
+        node: DiffNode,
+        data: &dyn DataAccess,
+        config: &serde_json::Value,
+    ) -> TransformResult;
 
     /// Extract user-facing data from a node this transformer modified.
     fn extract(

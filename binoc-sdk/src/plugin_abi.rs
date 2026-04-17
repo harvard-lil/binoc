@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ir::DiffNode;
 use crate::traits::{ComparatorDescriptor, RendererDescriptor, TransformerDescriptor};
-use crate::types::{ArtifactDescriptor, CompareResult, ItemPair, TransformResult};
+use crate::types::{CompareResult, ItemPair, TransformResult};
 
 // ── Plugin description ─────────────────────────────────────────────
 
@@ -40,11 +40,7 @@ pub struct CompareRequest {
 #[serde(tag = "status")]
 pub enum CompareResponse {
     #[serde(rename = "ok")]
-    Ok {
-        result: Box<CompareResult>,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        artifacts: Vec<ArtifactDescriptor>,
-    },
+    Ok { result: Box<CompareResult> },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -61,7 +57,7 @@ pub struct ReopenRequest {
 #[serde(tag = "status")]
 pub enum ReopenResponse {
     #[serde(rename = "ok")]
-    Ok { pair: ItemPair },
+    Ok { pair: Box<ItemPair> },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -72,10 +68,8 @@ pub enum ReopenResponse {
 pub struct TransformRequest {
     pub node: DiffNode,
     pub data_root: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_items: Option<ItemPair>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub artifacts: Vec<ArtifactDescriptor>,
+    #[serde(default)]
+    pub config: serde_json::Value,
 }
 
 /// Serializable version of TransformResult for the C ABI.
@@ -130,10 +124,6 @@ pub struct ExtractRequest {
     pub node: DiffNode,
     pub aspect: String,
     pub data_root: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_items: Option<ItemPair>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub artifacts: Vec<ArtifactDescriptor>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -230,16 +220,9 @@ macro_rules! export_plugin {
                     vec![$(Box::new(<$comp as ::std::default::Default>::default())),+];
                 let comp = &comparators[index as usize];
                 match $crate::Comparator::compare(comp.as_ref(), &req.pair, &data) {
-                    Ok(result) => {
-                        let artifacts = match &result {
-                            $crate::CompareResult::Leaf(n) | $crate::CompareResult::Expand(n, _) => n.artifacts.clone(),
-                            _ => Vec::new(),
-                        };
-                        $crate::plugin_abi::CompareResponse::Ok {
-                            result: Box::new(result),
-                            artifacts,
-                        }
-                    }
+                    Ok(result) => $crate::plugin_abi::CompareResponse::Ok {
+                        result: Box::new(result),
+                    },
                     Err(e) => $crate::plugin_abi::CompareResponse::Error {
                         message: e.to_string(),
                     },
@@ -278,7 +261,9 @@ macro_rules! export_plugin {
                     vec![$(Box::new(<$comp as ::std::default::Default>::default())),+];
                 let comp = &comparators[index as usize];
                 match $crate::Comparator::reopen(comp.as_ref(), &req.pair, &req.child_path, &data) {
-                    Ok(pair) => $crate::plugin_abi::ReopenResponse::Ok { pair },
+                    Ok(pair) => $crate::plugin_abi::ReopenResponse::Ok {
+                        pair: ::std::boxed::Box::new(pair),
+                    },
                     Err(e) => $crate::plugin_abi::ReopenResponse::Error {
                         message: e.to_string(),
                     },
@@ -312,13 +297,10 @@ macro_rules! export_plugin {
                 let data = $crate::LocalDataAccess::with_data_root(
                     ::std::path::PathBuf::from(&req.data_root),
                 );
-                let mut node = req.node;
-                node.source_items = req.source_items;
-                node.artifacts = req.artifacts;
                 let comparators: Vec<Box<dyn $crate::Comparator>> =
                     vec![$(Box::new(<$comp as ::std::default::Default>::default())),+];
                 let comp = &comparators[index as usize];
-                match $crate::Comparator::extract(comp.as_ref(), &node, &req.aspect, &data) {
+                match $crate::Comparator::extract(comp.as_ref(), &req.node, &req.aspect, &data) {
                     Some($crate::ExtractResult::Text(t)) => {
                         $crate::plugin_abi::ExtractResponse::Text { content: t }
                     }
@@ -359,13 +341,10 @@ macro_rules! export_plugin {
                 let data = $crate::LocalDataAccess::with_data_root(
                     ::std::path::PathBuf::from(&req.data_root),
                 );
-                let mut node = req.node;
-                node.source_items = req.source_items;
-                node.artifacts = req.artifacts;
                 let transformers: Vec<Box<dyn $crate::Transformer>> =
                     vec![$(Box::new(<$trans as ::std::default::Default>::default())),+];
                 let trans = &transformers[index as usize];
-                match $crate::Transformer::transform(trans.as_ref(), node, &data) {
+                match $crate::Transformer::transform(trans.as_ref(), req.node, &data, &req.config) {
                     $crate::TransformResult::Unchanged => {
                         $crate::plugin_abi::TransformResponse::Unchanged
                     }
@@ -409,13 +388,10 @@ macro_rules! export_plugin {
                 let data = $crate::LocalDataAccess::with_data_root(
                     ::std::path::PathBuf::from(&req.data_root),
                 );
-                let mut node = req.node;
-                node.source_items = req.source_items;
-                node.artifacts = req.artifacts;
                 let transformers: Vec<Box<dyn $crate::Transformer>> =
                     vec![$(Box::new(<$trans as ::std::default::Default>::default())),+];
                 let trans = &transformers[index as usize];
-                match $crate::Transformer::extract(trans.as_ref(), &node, &req.aspect, &data) {
+                match $crate::Transformer::extract(trans.as_ref(), &req.node, &req.aspect, &data) {
                     Some($crate::ExtractResult::Text(t)) => {
                         $crate::plugin_abi::ExtractResponse::Text { content: t }
                     }

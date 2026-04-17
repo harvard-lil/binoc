@@ -17,8 +17,12 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
     r(registry.register_comparator(Arc::new(comparators::text::TextComparator)));
     r(registry.register_comparator(Arc::new(comparators::binary::BinaryComparator)));
 
-    r(registry.register_transformer(Arc::new(transformers::move_detector::MoveDetector)));
-    r(registry.register_transformer(Arc::new(transformers::copy_detector::CopyDetector)));
+    r(registry.register_transformer(Arc::new(
+        transformers::correlation_detector::CorrelationDetector,
+    )));
+    r(registry.register_transformer(Arc::new(
+        transformers::folder_move_detector::FolderMoveDetector,
+    )));
     r(registry.register_transformer(Arc::new(transformers::tabular_analyzer::TabularAnalyzer)));
     r(registry.register_transformer(Arc::new(
         transformers::column_reorder::ColumnReorderDetector,

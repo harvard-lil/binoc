@@ -16,7 +16,12 @@ impl Transformer for RowReorderDetector {
             .with_match_tags(vec!["binoc.cell-change".into()])
     }
 
-    fn transform(&self, node: DiffNode, data: &dyn DataAccess) -> TransformResult {
+    fn transform(
+        &self,
+        node: DiffNode,
+        data: &dyn DataAccess,
+        _config: &serde_json::Value,
+    ) -> TransformResult {
         let Some(pair) = TabularDataPair::from_artifacts(&node, data) else {
             return TransformResult::Unchanged;
         };

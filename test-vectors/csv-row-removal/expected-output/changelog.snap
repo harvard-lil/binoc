@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **data.csv**: 2 rows removed

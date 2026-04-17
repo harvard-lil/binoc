@@ -1,0 +1,9 @@
+[vector]
+name = "single-file-modify-csv"
+description = "CSV file compared directly (file-to-file, not via directory)"
+tags = ["csv", "single-file", "modify"]
+root_file = "data.csv"
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-addition"]

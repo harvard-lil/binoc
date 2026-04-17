@@ -1,0 +1,370 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "kept.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "kept.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "kept.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "kept.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip",
+        "result_size": 464
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip",
+        "result_size": 498
+      },
+      {
+        "op": "register_local",
+        "logical": "gamma-renamed.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "gamma-renamed.txt",
+        "result_size": 14
+      },
+      {
+        "op": "register_local",
+        "logical": "kept-copy.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "kept-copy.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "merged.bin"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "merged.bin",
+        "result_size": 19
+      },
+      {
+        "op": "register_local",
+        "logical": "alpha.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "alpha.txt",
+        "result_size": 14
+      },
+      {
+        "op": "register_local",
+        "logical": "dup.bin"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "dup.bin",
+        "result_size": 19
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.zip",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.zip"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip",
+        "result_size": 130
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip",
+        "result_size": 143
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/alpha-renamed.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/alpha-renamed.txt",
+        "result_size": 14
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/kept-copy.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/kept-copy.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/beta.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/beta.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/dup-b.bin"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/dup-b.bin",
+        "result_size": 19
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.zip",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.zip/inner.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.zip/inner.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "outer.zip/inner.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "outer.zip/inner.zip"
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip/beta-renamed.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip/beta-renamed.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "outer.zip/inner.zip/gamma.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip/gamma.txt",
+        "result_size": 14
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip/beta-renamed.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/inner.zip/gamma.txt",
+        "result_size": 14
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/alpha-renamed.txt",
+        "result_size": 14
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/kept-copy.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "outer.zip/beta.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.binary",
+    "data_ops": []
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "gamma-renamed.txt",
+        "result_size": 14
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "kept-copy.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.binary",
+    "data_ops": []
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "alpha.txt",
+        "result_size": 14
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.binary",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  }
+]

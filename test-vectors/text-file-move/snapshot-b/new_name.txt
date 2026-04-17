@@ -1,3 +1,0 @@
-Hello, this is a text file used to verify move detection.
-It has multiple lines so it gets claimed by the text comparator.
-The content is identical on both sides — only the filename changes.

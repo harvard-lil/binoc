@@ -1,0 +1,270 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tar_archive",
+        "path": "archive.tar.gz",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "directory",
+            "path": "archive.tar.gz",
+            "children": [
+              {
+                "action": "modify",
+                "item_type": "tabular",
+                "path": "archive.tar.gz/inventory.csv",
+                "summary": "1 row added",
+                "tags": [
+                  "binoc.row-addition"
+                ],
+                "details": {
+                  "cells_changed": 0,
+                  "columns_added": [],
+                  "columns_left": [
+                    "item",
+                    "quantity"
+                  ],
+                  "columns_removed": [],
+                  "columns_right": [
+                    "item",
+                    "quantity"
+                  ],
+                  "hash_left": "19fd8f850952d8acb9f70f7ed64fddfb71e8fba6c05890cc613980aae37fb098",
+                  "hash_right": "0a5b549fdd0e79dbee80b0e25ec78299fe9be0214af129959c7a052dd764a187",
+                  "rows_added": 1,
+                  "rows_left": 2,
+                  "rows_removed": 0,
+                  "rows_right": 3
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "details": {
+          "hash_left": "e6810b2fe0b7adabb6bde8d8b0c106f59cdf37478d4fa6f9c2020ac7b1eafd27",
+          "hash_right": "207bc7553d4d954842aa1fa2259bb2d2dc53e0cfd0a5c071cb3fbc0eb8bd4ed8"
+        },
+        "comparator": "binoc.tar"
+      },
+      {
+        "action": "modify",
+        "item_type": "zip_archive",
+        "path": "bundle.zip",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "directory",
+            "path": "bundle.zip",
+            "children": [
+              {
+                "action": "modify",
+                "item_type": "text",
+                "path": "bundle.zip/notes.txt",
+                "summary": "2 lines added, 1 removed",
+                "tags": [
+                  "binoc.content-changed",
+                  "binoc.lines-added",
+                  "binoc.lines-removed"
+                ],
+                "details": {
+                  "hash_left": "14f7528de68fe078513939f44779188c5970916e42838e839a7db64babcb5f93",
+                  "hash_right": "28b08460be03b117e411da77d2de03b440aab9b08f58ef1d2af70c1515558a50",
+                  "lines_added": 2,
+                  "lines_removed": 1,
+                  "lines_unchanged": 1
+                },
+                "comparator": "binoc.text"
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "details": {
+          "hash_left": "f3a1f7a1cac7d09f477523437301ff80d1ce0829770eb350c74772e9cd9026ea",
+          "hash_right": "2ccb50838f5ec9434fc0c69cd5d1a2cd9114bb7192ca550d474ac48ad908b506"
+        },
+        "comparator": "binoc.zip"
+      },
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "2 cells changed",
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "cells_changed": 2,
+          "columns_added": [],
+          "columns_left": [
+            "name",
+            "age",
+            "city"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "name",
+            "age",
+            "city"
+          ],
+          "hash_left": "b65c4ace3c5bb334a8a209d4707ff6fed77e0d5613f791f5d5d2b8ee89fd8f99",
+          "hash_right": "eed09da56297e2d764220dca8dbe5af3453a23184e46df81403eba2cb9bc8ac6",
+          "rows_added": 0,
+          "rows_left": 3,
+          "rows_removed": 0,
+          "rows_right": 3
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      },
+      {
+        "action": "modify",
+        "item_type": "directory",
+        "path": "docs",
+        "children": [
+          {
+            "action": "add",
+            "item_type": "text",
+            "path": "docs/new-file.txt",
+            "summary": "New file (1 line)",
+            "tags": [
+              "binoc.content-changed"
+            ],
+            "details": {
+              "hash_right": "d527d29b9be89a155cbf8fccd61c36059875c957b7a36b9c5cf9fabbff22b380",
+              "lines": 1
+            },
+            "comparator": "binoc.text"
+          },
+          {
+            "action": "remove",
+            "item_type": "text",
+            "path": "docs/old-notes.txt",
+            "summary": "File removed (1 line)",
+            "tags": [
+              "binoc.content-changed"
+            ],
+            "details": {
+              "hash_left": "e55ba9cbb14897865c4b9c29cc4446aa18f21074b85b7d84d90755db0073ffa8",
+              "lines": 1
+            },
+            "comparator": "binoc.text"
+          },
+          {
+            "action": "modify",
+            "item_type": "text",
+            "path": "docs/readme.txt",
+            "summary": "2 lines added, 2 removed",
+            "tags": [
+              "binoc.content-changed",
+              "binoc.lines-added",
+              "binoc.lines-removed"
+            ],
+            "details": {
+              "hash_left": "c78de18cfaaa4caa37f350252898c5cde9be630073267fee0a0e63e1f7a38fd4",
+              "hash_right": "6b66ae6067b0cbb07e4604987ab264f132f2ebb787ea86497df01e1508227275",
+              "lines_added": 2,
+              "lines_removed": 2,
+              "lines_unchanged": 2
+            },
+            "comparator": "binoc.text"
+          }
+        ],
+        "comparator": "binoc.directory"
+      },
+      {
+        "action": "modify",
+        "item_type": "file",
+        "path": "icon.bin",
+        "summary": "Content changed (19 bytes → 19 bytes)",
+        "tags": [
+          "binoc.content-changed"
+        ],
+        "details": {
+          "hash_left": "6f6f0e0c0f472c17782638f2a743e4328897d5aea4ad37baafeec206b92cc7fe",
+          "hash_right": "b47362c5703ad954f94341f1e51e9e8c2965c27b15f5ecb5dab69c635c37a885",
+          "size_left": 19,
+          "size_right": 19
+        },
+        "comparator": "binoc.binary"
+      },
+      {
+        "action": "copy",
+        "item_type": "text",
+        "path": "license-copy.txt",
+        "source_path": "license.txt",
+        "summary": "Copied from license.txt",
+        "tags": [
+          "binoc.copy"
+        ]
+      },
+      {
+        "action": "reorder",
+        "item_type": "tabular",
+        "path": "metrics.csv",
+        "summary": "Columns reordered (content unchanged)",
+        "tags": [
+          "binoc.column-reorder"
+        ],
+        "details": {
+          "cells_changed": 0,
+          "columns_added": [],
+          "columns_left": [
+            "year",
+            "value",
+            "category"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "category",
+            "year",
+            "value"
+          ],
+          "hash_left": "0f27612def2af6c9c883b06775e43174bf41f7c7046e6e42b65adfb71a182124",
+          "hash_right": "7f1ff976d6ee1798d4eaff612f7966a174ec760838345404114d696c06ebf07f",
+          "rows_added": 0,
+          "rows_left": 2,
+          "rows_removed": 0,
+          "rows_right": 2
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer",
+          "binoc.column_reorder_detector"
+        ]
+      },
+      {
+        "action": "move",
+        "item_type": "text",
+        "path": "summary.txt",
+        "source_path": "report.txt",
+        "summary": "Moved from report.txt",
+        "tags": [
+          "binoc.move"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.correlation_detector"
+    ]
+  }
+}

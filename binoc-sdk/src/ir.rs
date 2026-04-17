@@ -54,15 +54,21 @@ pub struct DiffNode {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transformed_by: Vec<String>,
 
-    /// The original item pair that produced this node. Transient — available
-    /// during the live diff/transform session for transformers and extractors
-    /// that need to re-read source data. Not serialized into changeset JSON.
-    #[serde(skip)]
+    /// The original item pair that produced this node. Session-scoped working
+    /// data: available during a live diff/transform session for transformers
+    /// and extractors that need to re-read source data, and carried across the
+    /// plugin ABI wire so separately-compiled plugins can access it. Callers
+    /// writing changeset output must strip this via
+    /// [`DiffNode::strip_transient`] before serializing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_items: Option<ItemPair>,
 
-    /// Published artifacts for this node. Transient session data — not
-    /// serialized into changeset JSON. Keyed by `(subject, format_id)`.
-    #[serde(skip)]
+    /// Published artifacts for this node. Session-scoped working data: carried
+    /// across the plugin ABI wire as descriptors (the bytes live in the shared
+    /// `data_root` cache), but not meaningful outside a session. Callers
+    /// writing changeset output must strip this via
+    /// [`DiffNode::strip_transient`] before serializing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<ArtifactDescriptor>,
 }
 
@@ -135,6 +141,21 @@ impl DiffNode {
         }
         tags
     }
+
+    /// Recursively clear session-scoped transient fields (`source_items`,
+    /// `artifacts`) on this node and all descendants.
+    ///
+    /// These fields are wire-visible so the plugin ABI can move them across
+    /// process-ready boundaries, but they are not meaningful outside a live
+    /// session and must be stripped before writing changeset output intended
+    /// for users (JSON files, renderer output, Python return values).
+    pub fn strip_transient(&mut self) {
+        self.source_items = None;
+        self.artifacts.clear();
+        for child in &mut self.children {
+            child.strip_transient();
+        }
+    }
 }
 
 /// A structured description of how to get from one snapshot to the next.
@@ -159,6 +180,14 @@ impl Changeset {
 
     pub fn node_count(&self) -> usize {
         self.root.as_ref().map_or(0, |r| r.node_count())
+    }
+
+    /// Recursively clear session-scoped transient fields on the root and all
+    /// descendants. See [`DiffNode::strip_transient`].
+    pub fn strip_transient(&mut self) {
+        if let Some(root) = self.root.as_mut() {
+            root.strip_transient();
+        }
     }
 }
 
@@ -264,6 +293,78 @@ mod tests {
         assert_eq!(changeset.from_snapshot, "v1");
         assert_eq!(changeset.to_snapshot, "v2");
         assert_eq!(changeset.node_count(), 3);
+    }
+
+    #[test]
+    fn transient_fields_round_trip_through_serde() {
+        // Session-scoped transient fields (`source_items`, `artifacts`) are
+        // wire-visible so the plugin ABI can carry them across a (potentially
+        // process-isolated) boundary. This test pins that behavior: serializing
+        // and deserializing a node with transient fields populated preserves
+        // them on every descendant, not just the root.
+        use crate::types::{
+            ArtifactDescriptor, ArtifactFormat, ArtifactSubject, ItemPair, ItemRef,
+        };
+
+        let artifact = ArtifactDescriptor {
+            format: ArtifactFormat::new("binoc", "tabular", 1),
+            subject: ArtifactSubject::Pair,
+            producer: "binoc.csv".into(),
+            handle: "cache/tabular-abc123".into(),
+        };
+        let source_items = ItemPair::both(
+            ItemRef {
+                logical_path: "data.csv".into(),
+                is_dir: false,
+                content_hash: None,
+                size: None,
+                media_type: None,
+                handle: "/tmp/a/data.csv".into(),
+            },
+            ItemRef {
+                logical_path: "data.csv".into(),
+                is_dir: false,
+                content_hash: None,
+                size: None,
+                media_type: None,
+                handle: "/tmp/b/data.csv".into(),
+            },
+        );
+        let child = DiffNode::new("modify", "tabular", "dir/data.csv")
+            .with_artifact(artifact.clone())
+            .with_source_items(source_items.clone());
+        let root = DiffNode::new("modify", "directory", "dir").with_children(vec![child]);
+
+        let json = serde_json::to_string(&root).unwrap();
+        let restored: DiffNode = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.children.len(), 1);
+        let restored_child = &restored.children[0];
+        assert_eq!(restored_child.artifacts.len(), 1, "child artifact missing");
+        assert_eq!(restored_child.artifacts[0].handle, artifact.handle);
+        assert!(
+            restored_child.source_items.is_some(),
+            "child source_items missing"
+        );
+    }
+
+    #[test]
+    fn strip_transient_clears_every_descendant() {
+        use crate::types::{ArtifactDescriptor, ArtifactFormat, ArtifactSubject};
+        let artifact = ArtifactDescriptor {
+            format: ArtifactFormat::new("binoc", "tabular", 1),
+            subject: ArtifactSubject::Pair,
+            producer: "binoc.csv".into(),
+            handle: "h".into(),
+        };
+        let grandchild = DiffNode::new("modify", "tabular", "a/b/c.csv").with_artifact(artifact);
+        let child = DiffNode::new("modify", "directory", "a/b").with_children(vec![grandchild]);
+        let mut root = DiffNode::new("modify", "directory", "a").with_children(vec![child]);
+        root.strip_transient();
+        fn all_empty(n: &DiffNode) -> bool {
+            n.artifacts.is_empty() && n.source_items.is_none() && n.children.iter().all(all_empty)
+        }
+        assert!(all_empty(&root));
     }
 
     #[test]

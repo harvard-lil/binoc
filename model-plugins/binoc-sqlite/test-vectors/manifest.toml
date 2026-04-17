@@ -10,4 +10,8 @@ comparators = [
     "binoc.text",
     "binoc.binary",
 ]
-transformers = ["binoc.move_detector", "binoc.copy_detector", "binoc.column_reorder_detector"]
+transformers = [
+    "binoc.correlation_detector",
+    "binoc.folder_move_detector",
+    "binoc.column_reorder_detector",
+]

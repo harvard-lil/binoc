@@ -18,26 +18,6 @@ use binoc_sdk::*;
 
 use binoc_stdlib::renderers::markdown as md_renderer;
 
-fn restore_transform_transient_fields(
-    result: &mut TransformResult,
-    source_items: &Option<ItemPair>,
-    artifacts: &[ArtifactDescriptor],
-) {
-    match result {
-        TransformResult::Replace(ref mut node) => {
-            node.source_items = source_items.clone();
-            node.artifacts = artifacts.to_vec();
-        }
-        TransformResult::ReplaceMany(ref mut nodes) => {
-            for node in nodes.iter_mut() {
-                node.source_items = source_items.clone();
-                node.artifacts = artifacts.to_vec();
-            }
-        }
-        _ => {}
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Native plugin loader — loads Rust plugins via C ABI (libloading)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -180,18 +160,7 @@ impl Comparator for NativeComparator {
         let response: CompareResponse = serde_json::from_str(&json)
             .map_err(|e| BinocError::Other(format!("deserialize CompareResponse: {e}")))?;
         match response {
-            CompareResponse::Ok {
-                mut result,
-                artifacts,
-            } => {
-                match result.as_mut() {
-                    CompareResult::Leaf(n) | CompareResult::Expand(n, _) => {
-                        n.artifacts = artifacts;
-                    }
-                    _ => {}
-                }
-                Ok(*result)
-            }
+            CompareResponse::Ok { result } => Ok(*result),
             CompareResponse::Error { message } => Err(BinocError::Comparator {
                 comparator: self.desc.name.clone(),
                 message,
@@ -225,7 +194,7 @@ impl Comparator for NativeComparator {
         let response: ReopenResponse = serde_json::from_str(&json)
             .map_err(|e| BinocError::Other(format!("deserialize ReopenResponse: {e}")))?;
         match response {
-            ReopenResponse::Ok { pair } => Ok(pair),
+            ReopenResponse::Ok { pair } => Ok(*pair),
             ReopenResponse::Error { message } => Err(BinocError::Extract(message)),
         }
     }
@@ -242,8 +211,6 @@ impl Comparator for NativeComparator {
             node: node.clone(),
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
-            source_items: node.source_items.clone(),
-            artifacts: node.artifacts.clone(),
         };
         let request_json = serde_json::to_string(&request).ok()?;
         let json = self
@@ -272,7 +239,12 @@ impl Transformer for NativeTransformer {
         self.desc.clone()
     }
 
-    fn transform(&self, node: DiffNode, data: &dyn DataAccess) -> TransformResult {
+    fn transform(
+        &self,
+        node: DiffNode,
+        data: &dyn DataAccess,
+        config: &serde_json::Value,
+    ) -> TransformResult {
         let Some(transform_fn) = self.plugin.transform_fn else {
             return TransformResult::Unchanged;
         };
@@ -280,13 +252,10 @@ impl Transformer for NativeTransformer {
             Ok(p) => p,
             Err(_) => return TransformResult::Unchanged,
         };
-        let source_items = node.source_items.clone();
-        let artifacts = node.artifacts.clone();
         let request = TransformRequest {
             node,
             data_root: data_root.to_string_lossy().to_string(),
-            source_items: source_items.clone(),
-            artifacts: artifacts.clone(),
+            config: config.clone(),
         };
         let request_json = match serde_json::to_string(&request) {
             Ok(j) => j,
@@ -303,12 +272,10 @@ impl Transformer for NativeTransformer {
             Ok(r) => r,
             Err(_) => return TransformResult::Unchanged,
         };
-        let mut result = match response.into_result() {
+        match response.into_result() {
             Ok(r) => r,
             Err(_) => TransformResult::Unchanged,
-        };
-        restore_transform_transient_fields(&mut result, &source_items, &artifacts);
-        result
+        }
     }
 
     fn extract(
@@ -323,8 +290,6 @@ impl Transformer for NativeTransformer {
             node: node.clone(),
             aspect: aspect.to_string(),
             data_root: data_root.to_string_lossy().to_string(),
-            source_items: node.source_items.clone(),
-            artifacts: node.artifacts.clone(),
         };
         let request_json = serde_json::to_string(&request).ok()?;
         let json = self
@@ -913,6 +878,7 @@ impl PyItemPair {
                 logical_path: logical.to_string(),
                 is_dir: std::path::Path::new(phys).is_dir(),
                 content_hash: None,
+                size: None,
                 media_type: None,
                 handle: phys.to_string(),
             }
@@ -1200,7 +1166,12 @@ impl Transformer for PyTransformerBridge {
         self.desc.clone()
     }
 
-    fn transform(&self, node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+    fn transform(
+        &self,
+        node: DiffNode,
+        _data: &dyn DataAccess,
+        _config: &serde_json::Value,
+    ) -> TransformResult {
         Python::attach(|py| {
             let py_node = PyDiffNode {
                 inner: node.clone(),
