@@ -107,6 +107,10 @@ set-version package version:
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
         relock_uv model-plugins/binoc-sqlite
         ;;
+      binoc-html)
+        set_manifest_version model-plugins/binoc-html/pyproject.toml
+        relock_uv model-plugins/binoc-html
+        ;;
       binoc-sdk)
         set_manifest_version Cargo.toml
         cargo update -w
@@ -115,13 +119,14 @@ set-version package version:
         set_manifest_version Cargo.toml
         set_manifest_version binoc-python/pyproject.toml
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
+        set_manifest_version model-plugins/binoc-html/pyproject.toml
         cargo update -w
         relock_uv binoc-python
         relock_uv model-plugins/binoc-sqlite
         relock_uv model-plugins/binoc-html
         ;;
       *)
-        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-sdk|all] <version>" >&2
+        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-html|binoc-sdk|all] <version>" >&2
         exit 1
         ;;
     esac
