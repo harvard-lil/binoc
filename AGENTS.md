@@ -9,7 +9,7 @@ Rust workspace with five crates:
 | Crate | Role |
 |---|---|
 | `binoc-core` | Controller loop, IR types, plugin traits, config, output |
-| `binoc-stdlib` | Standard comparators and transformers (directory, zip, CSV, text, binary, move/copy detection) |
+| `binoc-stdlib` | Standard comparators and transformers (directory, zip, tar, CSV, text, binary, move/copy detection) |
 | `binoc-cli` | CLI porcelain over the core library |
 | `binoc-python` | PyO3 bindings and Python plugin support |
 | `binoc-sqlite` | Demo plugin: SQLite schema and row count diffing (also a reference for plugin authors) |
@@ -52,7 +52,7 @@ For Rust-only iteration: `cargo build`, `cargo test`, or by crate: `cargo test -
 
 ## Test Vectors
 
-Each vector in `test-vectors/` has a `manifest.toml` declaring what it tests and structural assertions. Vectors are named for what they test (`csv-column-reorder`), not how (`test-comparator-csv-3`). Structural assertions in manifests are the primary check; gold files are secondary. Zip vectors use `.zip.d/` directories built into `.zip` files by the test harness to avoid binary files in version control.
+Each vector in `test-vectors/` has a `manifest.toml` declaring what it tests and structural assertions. Vectors are named for what they test (`csv-column-reorder`), not how (`test-comparator-csv-3`). Structural assertions in manifests are the primary check; gold files are secondary. Zip and tar vectors use `.zip.d`/`tar.gz.d` directories built into `.zip`/`.tar.gz` files by the test harness to avoid binary files in version control.
 
 Plugins (including those in a separate repo) can run test vectors without duplicating harness code: depend on `binoc-stdlib` with the default `test-vectors` feature and call `binoc_stdlib::test_vectors::{discover_vectors, run_vector}` with a registry that includes the plugin. See `binoc-sqlite/tests/test_vectors.rs`. `just test` runs all workspace crates’ tests, including the demo plugin binoc-sqlite; no auto-discovery is required.
 
