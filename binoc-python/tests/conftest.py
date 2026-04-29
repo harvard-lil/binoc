@@ -7,7 +7,7 @@ import pytest
 def test_vectors_dir():
     """Path to the shared test-vectors directory at the workspace root."""
     here = Path(__file__).resolve().parent
-    return here.parent.parent / "test-vectors"
+    return here.parent.parent / 'test-vectors'
 
 
 @pytest.fixture
@@ -16,8 +16,8 @@ def snapshot_pair(test_vectors_dir):
 
     def _get(vector_name: str) -> tuple[str, str]:
         vector_dir = test_vectors_dir / vector_name
-        a = str(vector_dir / "snapshot-a")
-        b = str(vector_dir / "snapshot-b")
+        a = str(vector_dir / 'snapshot-a')
+        b = str(vector_dir / 'snapshot-b')
         return a, b
 
     return _get

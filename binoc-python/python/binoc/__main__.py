@@ -13,7 +13,7 @@ from binoc._discovery import discover_plugins
 def main():
     registry = PluginRegistry.default()
     discover_plugins(registry)
-    args = ["binoc"] + sys.argv[1:]
+    args = ['binoc'] + sys.argv[1:]
     try:
         run_cli(registry, args)
     except RuntimeError as e:
@@ -21,5 +21,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

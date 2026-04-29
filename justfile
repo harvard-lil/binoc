@@ -17,6 +17,7 @@ binoc *ARGS:
 fmt:
     cargo fmt
     uvx ruff format binoc-python/ model-plugins/
+    uvx ruff check --fix-only binoc-python/ model-plugins/
 
 # Run formatting and lint checks (mirrors CI).
 check:
