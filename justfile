@@ -31,7 +31,7 @@ check:
 # which builds a PyO3 cdylib that can only link via maturin (not bare cargo).
 test:
     cargo test
-    cd binoc-python && uv run --extra dev pytest
+    cd binoc-python && uv run --extra dev maturin develop && uv run --extra dev pytest
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 

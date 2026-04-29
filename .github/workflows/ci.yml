@@ -83,6 +83,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - run: cd binoc-python && uv run --extra dev pytest
+      - run: cd binoc-python && uv run --extra dev maturin develop && uv run --extra dev pytest
       - run: cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
       - run: cd model-plugins/binoc-html && uv run --extra dev python -m pytest
