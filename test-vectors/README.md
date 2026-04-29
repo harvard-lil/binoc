@@ -92,7 +92,7 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 2. Add `manifest.toml` with `[vector]`, optional `[config]`, and `[expected]`
 3. Create `snapshot-a/` and `snapshot-b/` with the required files
 4. For binary files, use `printf '\x00\x01...' > path` to write exact bytes
-5. For zip vectors, use `.zip.d` directories; the harness builds them into zips
+5. For zip/tar vectors, use `.zip.d`/`.tar.gz.d` directories; the harness builds them into the appropriate files
 
 ## Available Vectors
 
