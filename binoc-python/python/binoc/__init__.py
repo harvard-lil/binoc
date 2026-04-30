@@ -21,13 +21,13 @@ Quick start::
 """
 
 from binoc._binoc import (
+    Changeset,
     Config,
     DiffNode,
     Expand,
     Identical,
     ItemPair,
     Leaf,
-    Changeset,
     PluginRegistry,
     Remove,
     Replace,
@@ -64,7 +64,7 @@ class Comparator:
         changeset = binoc.diff("a", "b", config=config)
     """
 
-    name: str = ""
+    name: str = ''
     extensions: list[str] = []
 
     def can_handle(self, pair: ItemPair) -> bool:
@@ -75,7 +75,7 @@ class Comparator:
         """
         return False
 
-    def compare(self, pair: ItemPair) -> "Identical | Leaf | Expand":
+    def compare(self, pair: ItemPair) -> 'Identical | Leaf | Expand':
         """Compare an item pair and return a result.
 
         Must return one of:
@@ -104,11 +104,11 @@ class Transformer:
         config.add_transformer(Normalizer())
     """
 
-    name: str = ""
+    name: str = ''
     match_types: list[str] = []
     match_tags: list[str] = []
     match_actions: list[str] = []
-    node_shape: str = "any"
+    node_shape: str = 'any'
     """Dispatch filter on node shape: ``"any"`` (default), ``"container"``
     (only nodes with children), or ``"leaf"`` (only childless nodes)."""
 
@@ -120,7 +120,7 @@ class Transformer:
         """
         return False
 
-    def transform(self, node: DiffNode) -> "Unchanged | Replace | ReplaceMany | Remove":
+    def transform(self, node: DiffNode) -> 'Unchanged | Replace | ReplaceMany | Remove':
         """Rewrite a matched node.
 
         Must return one of:
@@ -133,21 +133,21 @@ class Transformer:
 
 
 __all__ = [
-    "diff",
-    "to_json",
-    "to_markdown",
-    "DiffNode",
-    "Changeset",
-    "Config",
-    "PluginRegistry",
-    "ItemPair",
-    "Identical",
-    "Leaf",
-    "Expand",
-    "Unchanged",
-    "Replace",
-    "ReplaceMany",
-    "Remove",
-    "Comparator",
-    "Transformer",
+    'diff',
+    'to_json',
+    'to_markdown',
+    'DiffNode',
+    'Changeset',
+    'Config',
+    'PluginRegistry',
+    'ItemPair',
+    'Identical',
+    'Leaf',
+    'Expand',
+    'Unchanged',
+    'Replace',
+    'ReplaceMany',
+    'Remove',
+    'Comparator',
+    'Transformer',
 ]

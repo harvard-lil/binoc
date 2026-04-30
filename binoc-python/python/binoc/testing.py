@@ -72,9 +72,9 @@ def discover_vectors(vectors_dir: str | Path) -> list[Path]:
         p
         for p in vectors_dir.iterdir()
         if p.is_dir()
-        and (p / "manifest.toml").exists()
-        and (p / "snapshot-a").exists()
-        and (p / "snapshot-b").exists()
+        and (p / 'manifest.toml').exists()
+        and (p / 'snapshot-a').exists()
+        and (p / 'snapshot-b').exists()
     )
 
 
@@ -90,13 +90,13 @@ def load_manifest(
     vector_dir = Path(vector_dir)
     vectors_root = Path(vectors_root) if vectors_root else vector_dir.parent
 
-    root_manifest = _load_toml(vectors_root / "manifest.toml")
-    manifest = _load_toml(vector_dir / "manifest.toml")
+    root_manifest = _load_toml(vectors_root / 'manifest.toml')
+    manifest = _load_toml(vector_dir / 'manifest.toml')
 
-    if "config" not in manifest and "config" in root_manifest:
-        manifest["config"] = root_manifest["config"]
-    if "expected" not in manifest and "expected" in root_manifest:
-        manifest["expected"] = root_manifest["expected"]
+    if 'config' not in manifest and 'config' in root_manifest:
+        manifest['config'] = root_manifest['config']
+    if 'expected' not in manifest and 'expected' in root_manifest:
+        manifest['expected'] = root_manifest['expected']
 
     return manifest
 
@@ -128,14 +128,14 @@ def run_vector(
 
     manifest = load_manifest(vector_dir, vectors_root)
     config = _build_config(manifest)
-    name = manifest["vector"]["name"]
+    name = manifest['vector']['name']
 
-    snap_a = vector_dir / "snapshot-a"
-    snap_b = vector_dir / "snapshot-b"
+    snap_a = vector_dir / 'snapshot-a'
+    snap_b = vector_dir / 'snapshot-b'
 
     changeset = binoc.diff(str(snap_a), str(snap_b), config=config, registry=registry)
 
-    expected = manifest.get("expected", {})
+    expected = manifest.get('expected', {})
     if expected:
         check_assertions(name, changeset, expected)
 
@@ -148,35 +148,31 @@ def check_assertions(
     expected: dict,
 ) -> None:
     """Verify a changeset against ``[expected]`` assertions from a manifest."""
-    if "root_action" in expected:
-        root_action = expected["root_action"]
+    if 'root_action' in expected:
+        root_action = expected['root_action']
         assert changeset.root is not None, (
             f"[{name}] Expected root with action '{root_action}' but changeset has no root"
         )
         root = changeset.root
-        if root.item_type == "directory" and root.action != root_action:
+        if root.item_type == 'directory' and root.action != root_action:
             child_actions = [c.action for c in root]
             assert root.action == root_action or root_action in child_actions, (
                 f"[{name}] Expected root_action '{root_action}', got root.action='{root.action}'"
-                f" with child actions: {child_actions}"
+                f' with child actions: {child_actions}'
             )
 
-    if "child_count" in expected:
-        child_count = expected["child_count"]
+    if 'child_count' in expected:
+        child_count = expected['child_count']
         assert changeset.root is not None, (
-            f"[{name}] Expected child_count={child_count} but changeset has no root"
+            f'[{name}] Expected child_count={child_count} but changeset has no root'
         )
         actual = len(list(changeset.root))
-        assert actual == child_count, (
-            f"[{name}] Expected child_count={child_count}, got {actual}"
-        )
+        assert actual == child_count, f'[{name}] Expected child_count={child_count}, got {actual}'
 
-    if "has_tags" in expected:
-        assert changeset.root is not None, (
-            f"[{name}] Expected tags but changeset has no root"
-        )
+    if 'has_tags' in expected:
+        assert changeset.root is not None, f'[{name}] Expected tags but changeset has no root'
         all_tags = changeset.root.all_tags()
-        for tag in expected["has_tags"]:
+        for tag in expected['has_tags']:
             assert tag in all_tags, (
                 f"[{name}] Expected tag '{tag}' not found. All tags: {sorted(all_tags)}"
             )
@@ -189,7 +185,7 @@ def _load_toml(path: Path) -> dict:
 
 
 def _build_config(manifest: dict) -> binoc.Config:
-    mc = manifest.get("config", {})
-    comparators = mc.get("comparators")
-    transformers = mc.get("transformers")
+    mc = manifest.get('config', {})
+    comparators = mc.get('comparators')
+    transformers = mc.get('transformers')
     return binoc.Config(comparators=comparators, transformers=transformers)

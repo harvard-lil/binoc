@@ -17,6 +17,7 @@ binoc *ARGS:
 fmt:
     cargo fmt
     uvx ruff format binoc-python/ model-plugins/
+    uvx ruff check --fix-only binoc-python/ model-plugins/
 
 # Run formatting and lint checks (mirrors CI).
 check:
@@ -31,7 +32,7 @@ check:
 # which builds a PyO3 cdylib that can only link via maturin (not bare cargo).
 test:
     cargo test
-    cd binoc-python && uv run --extra dev pytest
+    cd binoc-python && uv run --extra dev maturin develop && uv run --extra dev pytest
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 
@@ -106,6 +107,10 @@ set-version package version:
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
         relock_uv model-plugins/binoc-sqlite
         ;;
+      binoc-html)
+        set_manifest_version model-plugins/binoc-html/pyproject.toml
+        relock_uv model-plugins/binoc-html
+        ;;
       binoc-sdk)
         set_manifest_version Cargo.toml
         cargo update -w
@@ -114,13 +119,14 @@ set-version package version:
         set_manifest_version Cargo.toml
         set_manifest_version binoc-python/pyproject.toml
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
+        set_manifest_version model-plugins/binoc-html/pyproject.toml
         cargo update -w
         relock_uv binoc-python
         relock_uv model-plugins/binoc-sqlite
         relock_uv model-plugins/binoc-html
         ;;
       *)
-        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-sdk|all] <version>" >&2
+        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-html|binoc-sdk|all] <version>" >&2
         exit 1
         ;;
     esac

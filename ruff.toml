@@ -1,0 +1,10 @@
+line-length = 100
+
+[format]
+quote-style = "single"
+
+[lint]
+extend-select = ["I"]
+
+[lint.isort]
+force-sort-within-sections = true

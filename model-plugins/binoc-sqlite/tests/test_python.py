@@ -10,5 +10,5 @@ import binoc
 
 def test_native_plugin_loads():
     r = binoc.PluginRegistry.default()
-    r.load_native_plugin("binoc_sqlite")
-    assert "binoc-sqlite.sqlite" in r.list_comparators()
+    r.load_native_plugin('binoc_sqlite')
+    assert 'binoc-sqlite.sqlite' in r.list_comparators()

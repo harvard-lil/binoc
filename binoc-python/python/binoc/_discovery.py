@@ -20,7 +20,7 @@ automatically::
 import importlib.metadata
 import logging
 
-logger = logging.getLogger("binoc")
+logger = logging.getLogger('binoc')
 
 
 def discover_plugins(registry):
@@ -30,9 +30,9 @@ def discover_plugins(registry):
     ``module:callable`` (Python plugin) or a bare module path (native
     Rust plugin).
     """
-    eps = importlib.metadata.entry_points(group="binoc.plugins")
+    eps = importlib.metadata.entry_points(group='binoc.plugins')
     for ep in eps:
-        logger.debug("Loading plugin entry point: %s (from %s)", ep.name, ep.value)
+        logger.debug('Loading plugin entry point: %s (from %s)', ep.name, ep.value)
         try:
             loaded = ep.load()
             if callable(loaded):
@@ -40,4 +40,4 @@ def discover_plugins(registry):
             else:
                 registry.load_native_plugin(ep.value)
         except Exception:
-            logger.exception("Failed to load binoc plugin %r", ep.name)
+            logger.exception('Failed to load binoc plugin %r', ep.name)
