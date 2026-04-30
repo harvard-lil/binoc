@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&stable_changeset"
 ---
 {
@@ -23,7 +23,7 @@ expression: "&stable_changeset"
     ],
     "comparator": "binoc.directory",
     "transformed_by": [
-      "binoc.copy_detector"
+      "binoc.correlation_detector"
     ]
   }
 }

@@ -193,12 +193,12 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
-    "plugin": "binoc.move_detector",
+    "plugin": "binoc.correlation_detector",
     "data_ops": []
   },
   {
     "method": "transform",
-    "plugin": "binoc.copy_detector",
+    "plugin": "binoc.folder_move_detector",
     "data_ops": []
   },
   {

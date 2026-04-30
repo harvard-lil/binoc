@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&stable_changeset"
 ---
 {
@@ -48,7 +48,7 @@ expression: "&stable_changeset"
                   "binoc.content-changed"
                 ],
                 "details": {
-                  "hash_right": "bcdb9a6d7ac8185c68f76e92f60adebd637cba7bdac389f1dc029fb814546b6f",
+                  "hash_right": "813e851f4cd79904f9eba7b985cc0bad26dc7abdda98afbc2729d9000601cf75",
                   "lines": 1
                 },
                 "comparator": "binoc.text"
@@ -59,7 +59,7 @@ expression: "&stable_changeset"
         ],
         "details": {
           "hash_left": "c5b903718934b42a5e5543353a7c3194a949207166e2e446c8b1775a39c63545",
-          "hash_right": "51dbd9da82bf80c5df39ba13fc51d65a262ad213abdcf4b6ee839cf48d00112a"
+          "hash_right": "e45fbd744960d5be4ff0012946aa1bcf703b399f6489fc8dfef1fbfd95a1ba5c"
         },
         "comparator": "binoc.zip"
       }

@@ -1,0 +1,48 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "2 rows removed",
+        "tags": [
+          "binoc.row-removal"
+        ],
+        "details": {
+          "cells_changed": 0,
+          "columns_added": [],
+          "columns_left": [
+            "name",
+            "age"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "name",
+            "age"
+          ],
+          "hash_left": "9d3084af09a1a8977f5664439bbc23cc0734ffa5eeb3f68e6f1afc635ab48ee3",
+          "hash_right": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
+          "rows_added": 0,
+          "rows_left": 3,
+          "rows_removed": 2,
+          "rows_right": 1
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

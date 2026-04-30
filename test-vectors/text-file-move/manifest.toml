@@ -1,8 +1,0 @@
-[vector]
-name = "text-file-move"
-description = "Text file renamed — move detection works across all file types via content hash"
-tags = ["move", "text", "content-hash"]
-
-[expected]
-root_kind = "modify"
-has_tags = ["binoc.move"]

@@ -21,3 +21,7 @@
 * 2026-04-10: [Rust MSRV and dependency update policy](rust_msrv_and_dependency_update_policy.md)
 * 2026-04-10: [Security posture and how to audit Binoc (core and plugins)](security_posture_and_auditing.md)
 * 2026-04-10: [Independent release tags and published version policy](independent_release_tags_and_published_version_policy.md)
+* 2026-04-16: [Transient fields are wire-visible; output stripping is a boundary concern](transient_fields_on_wire.md)
+* 2026-04-16: [Test vector materialization is a plugin trait, not a runtime plugin point](test_vector_materialization.md)
+* 2026-04-16: [Opportunistic ItemRef metadata, transformer-hydrated for correlation](opportunistic_itemref_metadata.md)
+* 2026-04-16: [Transformer dispatch: bottom-up by default, Root for tree-wide walkers](transformer_scope_yagni.md)

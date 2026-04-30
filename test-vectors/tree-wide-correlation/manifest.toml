@@ -1,0 +1,20 @@
+[vector]
+name = "tree-wide-correlation"
+description = """
+Single kitchen-sink vector for the tree-wide CorrelationDetector. Exercises:
+
+- Cross-container rotation: three files rotate one level in/out across nested zip boundaries
+  (root ↔ outer.zip ↔ outer.zip/inner.zip) and are detected as `binoc.move`.
+- 1:N copy aggregation: an unchanged `kept.txt` serves as source for two new copies in
+  different containers (`kept-copy.txt` at root and `outer.zip/kept-copy.txt`). Emitted as
+  one aggregated `copy` node with `details.destinations`.
+- N:1 move aggregation: two independent files with identical content in snapshot-a
+  (`dup.bin` at root, `outer.zip/dup-b.bin` inside the zip) collapse into a single
+  `merged.bin` at the root in snapshot-b. Emitted as one aggregated `move` node with
+  `details.sources`.
+"""
+tags = ["move", "copy", "aggregation", "zip", "nested", "archive", "tree-wide"]
+
+[expected]
+root_kind = "modify"
+has_tags = ["binoc.move", "binoc.copy"]

@@ -78,12 +78,21 @@ class TestDiffWithTestVectors:
         assert changeset.root is not None
         assert changeset.node_count > 1
 
-    def test_directory_file_move(self, snapshot_pair):
-        a, b = snapshot_pair("directory-file-move")
+    def test_tree_wide_correlation(self, snapshot_pair):
+        a, b = snapshot_pair("tree-wide-correlation")
         changeset = binoc.diff(a, b)
         assert changeset.root is not None
         actions = _collect_actions(changeset.root)
-        assert "move" in actions or ("add" in actions and "remove" in actions)
+        # Vector exercises cross-container moves + aggregated copy + aggregated N:1 move.
+        assert "move" in actions
+        assert "copy" in actions
+
+    def test_folder_move_nested(self, snapshot_pair):
+        a, b = snapshot_pair("folder-move-nested")
+        changeset = binoc.diff(a, b)
+        assert changeset.root is not None
+        all_tags = changeset.root.all_tags()
+        assert "binoc.folder-move" in all_tags
 
     def test_directory_nested(self, snapshot_pair):
         a, b = snapshot_pair("directory-nested")

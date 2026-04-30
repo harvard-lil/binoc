@@ -1,4 +1,5 @@
 pub mod column_reorder;
-pub mod copy_detector;
-pub mod move_detector;
+pub(crate) mod correlation;
+pub mod correlation_detector;
+pub mod folder_move_detector;
 pub mod tabular_analyzer;

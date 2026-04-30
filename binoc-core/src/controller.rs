@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -12,6 +13,7 @@ use crate::data_access::LocalDataAccess;
 pub struct Controller {
     comparators: Vec<(Arc<dyn Comparator>, ComparatorDescriptor)>,
     transformers: Vec<(Arc<dyn Transformer>, TransformerDescriptor)>,
+    transformer_configs: BTreeMap<String, serde_json::Value>,
 }
 
 impl Controller {
@@ -37,7 +39,26 @@ impl Controller {
         Self {
             comparators,
             transformers,
+            transformer_configs: BTreeMap::new(),
         }
+    }
+
+    /// Attach per-transformer configuration. Keyed by transformer name
+    /// (e.g. `"binoc.folder_move_detector"`); unset entries pass
+    /// [`serde_json::Value::Null`] to the transformer.
+    pub fn with_transformer_configs(
+        mut self,
+        configs: BTreeMap<String, serde_json::Value>,
+    ) -> Self {
+        self.transformer_configs = configs;
+        self
+    }
+
+    fn config_for(&self, name: &str) -> serde_json::Value {
+        self.transformer_configs
+            .get(name)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null)
     }
 
     /// Diff two snapshots and produce a changeset.
@@ -47,17 +68,56 @@ impl Controller {
             Path::new(to_path),
         )?);
 
-        let left = data.register_local(Path::new(from_path), "")?;
-        let right = data.register_local(Path::new(to_path), "")?;
-        let root_pair = ItemPair::both(left, right);
-
+        let root_pair = Self::make_root_pair(from_path, to_path, &data)?;
         let root_node = self.process_pair(root_pair, &data)?;
 
         let root_node = self
             .run_transformers(root_node, &data)
             .and_then(Self::prune_identical);
 
-        Ok(Changeset::new(from_path, to_path, root_node))
+        // Transient session fields (`source_items`, `artifacts`) are live on the
+        // wire for plugin ABI use during diffing, but they are not meaningful
+        // outside this session: handles reference temp paths and the artifact
+        // cache under `data_root`, which will not survive beyond this call.
+        // Strip them before handing the changeset back to any caller so that
+        // JSON output, renderers, snapshots, and Python/CLI code never see
+        // session-local state. Extract rebuilds them on demand by replaying
+        // the comparator chain.
+        let mut changeset = Changeset::new(from_path, to_path, root_node);
+        changeset.strip_transient();
+        Ok(changeset)
+    }
+
+    /// Build the root `ItemPair` for a diff.
+    ///
+    /// Directories get `logical_path = ""` (their children build relative
+    /// paths). Files get the filename from `to_path` (or `from_path` as
+    /// fallback) so that extension-based comparator dispatch works.
+    fn make_root_pair(
+        from_path: &str,
+        to_path: &str,
+        data: &Arc<LocalDataAccess>,
+    ) -> BinocResult<ItemPair> {
+        let from = Path::new(from_path);
+        let to = Path::new(to_path);
+
+        let logical = if to.is_dir() && from.is_dir() {
+            ""
+        } else {
+            Self::filename_or_empty(to)
+                .or_else(|| Self::filename_or_empty(from))
+                .unwrap_or("")
+        };
+
+        let left = data.register_local(from, logical)?;
+        let right = data.register_local(to, logical)?;
+        Ok(ItemPair::both(left, right))
+    }
+
+    fn filename_or_empty(path: &Path) -> Option<&str> {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .filter(|s| !s.is_empty())
     }
 
     /// Extract data from a specific node in a changeset.
@@ -89,9 +149,7 @@ impl Controller {
             Path::new(snapshot_a),
             Path::new(snapshot_b),
         )?);
-        let left = data.register_local(Path::new(snapshot_a), "")?;
-        let right = data.register_local(Path::new(snapshot_b), "")?;
-        let mut current_pair = ItemPair::both(left, right);
+        let mut current_pair = Self::make_root_pair(snapshot_a, snapshot_b, &data)?;
 
         for ancestor in &ancestor_chain {
             if ancestor.path == node_path {
@@ -356,7 +414,7 @@ impl Controller {
     fn run_transformers(&self, root: DiffNode, data: &Arc<LocalDataAccess>) -> Option<DiffNode> {
         let mut current = root;
         for (transformer, desc) in &self.transformers {
-            let results = self.apply_transformer(current, transformer, desc, data);
+            let results = self.apply_transformer(current, transformer, desc, data, true);
             match results.len() {
                 0 => return None,
                 1 => current = results.into_iter().next().unwrap(),
@@ -391,71 +449,56 @@ impl Controller {
         Some(DiffNode { children, ..node })
     }
 
+    /// Bottom-up traversal: recurse into children first, then apply the
+    /// transformer to the current node. A transformer sees each matching
+    /// node in the tree with its children already transformed.
+    ///
+    /// `is_root` is true only at the outermost invocation; it's used to
+    /// enable `NodeShapeFilter::Root` dispatch for tree-wide transformers
+    /// (correlation, folder-move roll-up).
+    ///
+    /// See `docs/adr/transformer_scope_yagni.md` for the traversal and
+    /// dispatch design.
     fn apply_transformer(
         &self,
         mut node: DiffNode,
         transformer: &Arc<dyn Transformer>,
         desc: &TransformerDescriptor,
         data: &Arc<LocalDataAccess>,
+        is_root: bool,
     ) -> Vec<DiffNode> {
         let trans_name = desc.name.clone();
 
-        match desc.scope {
-            TransformScope::Node => {
-                node.children = node
-                    .children
-                    .into_iter()
-                    .flat_map(|child| self.apply_transformer(child, transformer, desc, data))
-                    .collect();
+        // Tree-wide (Root-scope) transformers walk the tree themselves —
+        // don't pre-descend into children.
+        if !matches!(desc.node_shape, NodeShapeFilter::Root) {
+            node.children = node
+                .children
+                .into_iter()
+                .flat_map(|child| self.apply_transformer(child, transformer, desc, data, false))
+                .collect();
+        }
 
-                if Self::transformer_matches(desc, &node) {
-                    match transformer.transform(node.clone(), data.as_ref()) {
-                        TransformResult::Unchanged => vec![node],
-                        TransformResult::Replace(mut new_node) => {
-                            new_node.transformed_by.push(trans_name);
-                            vec![*new_node]
-                        }
-                        TransformResult::ReplaceMany(nodes) => nodes
-                            .into_iter()
-                            .map(|mut n| {
-                                n.transformed_by.push(trans_name.clone());
-                                n
-                            })
-                            .collect(),
-                        TransformResult::Remove => vec![],
-                        _ => vec![node],
-                    }
-                } else {
-                    vec![node]
-                }
+        if !Self::transformer_matches(desc, &node, is_root) {
+            return vec![node];
+        }
+
+        let config = self.config_for(&trans_name);
+        match transformer.transform(node.clone(), data.as_ref(), &config) {
+            TransformResult::Unchanged => vec![node],
+            TransformResult::Replace(mut new_node) => {
+                new_node.transformed_by.push(trans_name);
+                vec![*new_node]
             }
-            TransformScope::Subtree => {
-                if Self::transformer_matches(desc, &node) {
-                    match transformer.transform(node.clone(), data.as_ref()) {
-                        TransformResult::Unchanged => vec![node],
-                        TransformResult::Replace(mut new_node) => {
-                            new_node.transformed_by.push(trans_name);
-                            vec![*new_node]
-                        }
-                        TransformResult::ReplaceMany(nodes) => nodes
-                            .into_iter()
-                            .map(|mut n| {
-                                n.transformed_by.push(trans_name.clone());
-                                n
-                            })
-                            .collect(),
-                        TransformResult::Remove => vec![],
-                        _ => vec![node],
-                    }
-                } else {
-                    node.children = node
-                        .children
-                        .into_iter()
-                        .flat_map(|child| self.apply_transformer(child, transformer, desc, data))
-                        .collect();
-                    vec![node]
-                }
-            }
+            TransformResult::ReplaceMany(nodes) => nodes
+                .into_iter()
+                .map(|mut n| {
+                    n.transformed_by.push(trans_name.clone());
+                    n
+                })
+                .collect(),
+            TransformResult::Remove => vec![],
+            _ => vec![node],
         }
     }
 
@@ -463,10 +506,11 @@ impl Controller {
     /// Within each field, values are OR (any value satisfies that field).
     /// Empty/default fields are unconstrained (always pass).
     /// A descriptor with all fields empty/default matches nothing.
-    fn transformer_matches(desc: &TransformerDescriptor, node: &DiffNode) -> bool {
+    fn transformer_matches(desc: &TransformerDescriptor, node: &DiffNode, is_root: bool) -> bool {
         let dominated = match desc.node_shape {
             NodeShapeFilter::Container => !node.children.is_empty(),
             NodeShapeFilter::Leaf => node.children.is_empty(),
+            NodeShapeFilter::Root => is_root,
             NodeShapeFilter::Any => true,
         };
         if !dominated {
@@ -575,7 +619,6 @@ mod tests {
         match_types: Vec<String>,
         match_tags: Vec<String>,
         match_actions: Vec<String>,
-        scope: TransformScope,
     }
     impl Transformer for ReplaceTransformerMock {
         fn descriptor(&self) -> TransformerDescriptor {
@@ -583,9 +626,13 @@ mod tests {
                 .with_match_types(self.match_types.clone())
                 .with_match_tags(self.match_tags.clone())
                 .with_match_actions(self.match_actions.clone())
-                .with_scope(self.scope)
         }
-        fn transform(&self, node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+        fn transform(
+            &self,
+            node: DiffNode,
+            _data: &dyn DataAccess,
+            _config: &serde_json::Value,
+        ) -> TransformResult {
             TransformResult::Replace(Box::new(
                 node.with_tag("transformed")
                     .with_detail("by", serde_json::json!("replace-transformer")),
@@ -666,6 +713,7 @@ mod tests {
             logical_path: "data.csv".into(),
             is_dir: false,
             content_hash: None,
+            size: None,
             media_type: None,
             handle: "/tmp/a.csv".into(),
         };
@@ -673,6 +721,7 @@ mod tests {
             logical_path: "data.csv".into(),
             is_dir: false,
             content_hash: None,
+            size: None,
             media_type: None,
             handle: "/tmp/b.csv".into(),
         };
@@ -698,6 +747,7 @@ mod tests {
             logical_path: "data.txt".into(),
             is_dir: false,
             content_hash: None,
+            size: None,
             media_type: None,
             handle: "/tmp/a.txt".into(),
         };
@@ -705,6 +755,7 @@ mod tests {
             logical_path: "data.txt".into(),
             is_dir: false,
             content_hash: None,
+            size: None,
             media_type: None,
             handle: "/tmp/b.txt".into(),
         };
@@ -746,7 +797,6 @@ mod tests {
                 match_types: vec!["csv".into()],
                 match_tags: vec![],
                 match_actions: vec![],
-                scope: TransformScope::Node,
             })],
         );
         let dir = tempfile::tempdir().unwrap();
@@ -768,7 +818,6 @@ mod tests {
                 match_types: vec![],
                 match_tags: vec![],
                 match_actions: vec!["modify".into()],
-                scope: TransformScope::Node,
             })],
         );
         let dir = tempfile::tempdir().unwrap();
@@ -787,7 +836,12 @@ mod tests {
         fn descriptor(&self) -> TransformerDescriptor {
             TransformerDescriptor::new("remove-test").with_match_actions(vec!["modify".into()])
         }
-        fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+        fn transform(
+            &self,
+            _node: DiffNode,
+            _data: &dyn DataAccess,
+            _config: &serde_json::Value,
+        ) -> TransformResult {
             TransformResult::Remove
         }
     }
@@ -838,5 +892,144 @@ mod tests {
             .unwrap();
         let root = changeset.root.as_ref().unwrap();
         assert_eq!(root.comparator.as_deref(), Some("catch-all"));
+    }
+
+    // ── NodeShapeFilter::Root dispatch ─────────────────────────────────
+
+    struct RootCountingTransformer {
+        count: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl Transformer for RootCountingTransformer {
+        fn descriptor(&self) -> TransformerDescriptor {
+            TransformerDescriptor::new("root-counter").with_node_shape(NodeShapeFilter::Root)
+        }
+        fn transform(
+            &self,
+            node: DiffNode,
+            _data: &dyn DataAccess,
+            _config: &serde_json::Value,
+        ) -> TransformResult {
+            self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            TransformResult::Replace(Box::new(node.with_tag("root-visited")))
+        }
+    }
+
+    #[test]
+    fn root_shape_filter_fires_once_even_on_nested_tree() {
+        let from_dir = tempfile::tempdir().unwrap();
+        let to_dir = tempfile::tempdir().unwrap();
+        std::fs::write(from_dir.path().join("a.txt"), b"a").unwrap();
+        std::fs::write(from_dir.path().join("b.txt"), b"b").unwrap();
+        std::fs::write(to_dir.path().join("a.txt"), b"a").unwrap();
+        std::fs::write(to_dir.path().join("b.txt"), b"b modified").unwrap();
+
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let controller = Controller::new(
+            vec![Arc::new(DirExpandComparator), leaf_comparator()],
+            vec![Arc::new(RootCountingTransformer {
+                count: count.clone(),
+            })],
+        );
+        let changeset = controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
+        assert_eq!(
+            count.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "Root transformer must fire exactly once"
+        );
+        let root = changeset.root.as_ref().unwrap();
+        assert!(root.tags.contains("root-visited"));
+    }
+
+    #[test]
+    fn root_shape_filter_does_not_match_descendants() {
+        // When the root matcher is tag-gated, children with the same tag
+        // must NOT fire the transformer — only the root does.
+        struct Mixer {
+            seen: Arc<std::sync::atomic::AtomicUsize>,
+        }
+        impl Transformer for Mixer {
+            fn descriptor(&self) -> TransformerDescriptor {
+                TransformerDescriptor::new("root-only")
+                    .with_node_shape(NodeShapeFilter::Root)
+                    .with_match_actions(vec!["modify".into()])
+            }
+            fn transform(
+                &self,
+                node: DiffNode,
+                _data: &dyn DataAccess,
+                _config: &serde_json::Value,
+            ) -> TransformResult {
+                self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                TransformResult::Replace(Box::new(node))
+            }
+        }
+
+        let from_dir = tempfile::tempdir().unwrap();
+        let to_dir = tempfile::tempdir().unwrap();
+        std::fs::write(from_dir.path().join("a.txt"), b"a").unwrap();
+        std::fs::write(from_dir.path().join("b.txt"), b"b").unwrap();
+        std::fs::write(to_dir.path().join("a.txt"), b"a").unwrap();
+        std::fs::write(to_dir.path().join("b.txt"), b"b2").unwrap();
+
+        let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let controller = Controller::new(
+            vec![Arc::new(DirExpandComparator), leaf_comparator()],
+            vec![Arc::new(Mixer { seen: seen.clone() })],
+        );
+        controller
+            .diff(
+                from_dir.path().to_string_lossy().as_ref(),
+                to_dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
+        assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn transformer_config_is_passed_through() {
+        struct ConfigReader {
+            out: Arc<Mutex<serde_json::Value>>,
+        }
+        impl Transformer for ConfigReader {
+            fn descriptor(&self) -> TransformerDescriptor {
+                TransformerDescriptor::new("cfg-reader").with_match_actions(vec!["modify".into()])
+            }
+            fn transform(
+                &self,
+                node: DiffNode,
+                _data: &dyn DataAccess,
+                config: &serde_json::Value,
+            ) -> TransformResult {
+                *self.out.lock().unwrap() = config.clone();
+                TransformResult::Replace(Box::new(node))
+            }
+        }
+
+        use std::sync::Mutex;
+        let out = Arc::new(Mutex::new(serde_json::Value::Null));
+        let reader = Arc::new(ConfigReader { out: out.clone() });
+
+        let mut configs = BTreeMap::new();
+        configs.insert(
+            "cfg-reader".to_string(),
+            serde_json::json!({ "threshold": 0.42 }),
+        );
+
+        let controller = Controller::new(vec![leaf_comparator()], vec![reader])
+            .with_transformer_configs(configs);
+        let dir = tempfile::tempdir().unwrap();
+        controller
+            .diff(
+                dir.path().to_string_lossy().as_ref(),
+                dir.path().to_string_lossy().as_ref(),
+            )
+            .unwrap();
+        let got = out.lock().unwrap().clone();
+        assert_eq!(got, serde_json::json!({ "threshold": 0.42 }));
     }
 }

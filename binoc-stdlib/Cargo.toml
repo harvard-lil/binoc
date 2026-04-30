@@ -15,6 +15,11 @@ default = ["test-vectors"]
 # test-vectors: expose run_vector/discover_vectors so plugins can run test vectors without duplicating harness code.
 test-vectors = ["insta", "toml", "rayon", "binoc-sdk/test-support"]
 
+[[bin]]
+name = "materialize-test-vectors"
+path = "src/bin/materialize_test_vectors.rs"
+required-features = ["test-vectors"]
+
 [dependencies]
 binoc-sdk = { workspace = true }
 binoc-core = { workspace = true }

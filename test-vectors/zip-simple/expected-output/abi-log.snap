@@ -31,7 +31,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "archive.zip",
-        "result_size": 241
+        "result_size": 242
       }
     ]
   },
@@ -100,7 +100,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "archive.zip/extra.txt",
-        "result_size": 16
+        "result_size": 17
       }
     ]
   },
@@ -127,18 +127,18 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "archive.zip/extra.txt",
-        "result_size": 16
+        "result_size": 17
       }
     ]
   },
   {
     "method": "transform",
-    "plugin": "binoc.move_detector",
+    "plugin": "binoc.correlation_detector",
     "data_ops": []
   },
   {
     "method": "transform",
-    "plugin": "binoc.copy_detector",
+    "plugin": "binoc.folder_move_detector",
     "data_ops": []
   }
 ]

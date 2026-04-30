@@ -1,0 +1,8 @@
+[vector]
+name = "csv-row-removal"
+description = "Rows removed from CSV"
+tags = ["csv", "row-removal"]
+
+[expected]
+root_kind = "modify"
+has_tags = ["binoc.row-removal"]

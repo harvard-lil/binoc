@@ -293,12 +293,29 @@ fn tabular_columns_in_common(left: &TabularData, right: &TabularData) -> Vec<Str
 /// Metadata-only view of one side of a comparison. Carries logical identity
 /// and content metadata but NOT a filesystem path — data access goes through
 /// [`DataAccess`].
+///
+/// # Metadata invariants
+///
+/// `content_hash`, `size`, and `media_type` are **opportunistic hints**.
+/// Producers (expanding comparators like directory/zip, or data backends)
+/// populate them when doing so is cheap — typically as a byproduct of work
+/// they were already performing. Consumers **must not assume presence**, but
+/// **may trust presence**: when a field is set, the value accurately reflects
+/// the current bytes. Use [`ItemRef::resolve_hash`] / [`ItemRef::resolve_size`]
+/// to obtain a value with a transparent fall-back read.
+///
+/// This keeps fast paths (directory-only listings, short-circuit identical
+/// detection) cheap while letting consumers that need a value — most notably
+/// the move detector, which correlates leaves across container boundaries —
+/// hydrate on demand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemRef {
     pub logical_path: String,
     pub is_dir: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     /// Opaque identifier used by DataAccess implementations to locate data.
@@ -312,6 +329,26 @@ impl ItemRef {
         std::path::Path::new(&self.logical_path)
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy().to_lowercase()))
+    }
+
+    /// Return the item's BLAKE3 content hash, computing it from bytes if
+    /// not already cached on this `ItemRef`. Never valid for directories.
+    pub fn resolve_hash(&self, data: &dyn crate::DataAccess) -> crate::BinocResult<String> {
+        if let Some(hash) = &self.content_hash {
+            return Ok(hash.clone());
+        }
+        let bytes = data.read_bytes(self)?;
+        Ok(blake3::hash(&bytes).to_hex().to_string())
+    }
+
+    /// Return the item's byte length, reading from the backend if not already
+    /// cached on this `ItemRef`. Never valid for directories.
+    pub fn resolve_size(&self, data: &dyn crate::DataAccess) -> crate::BinocResult<u64> {
+        if let Some(size) = self.size {
+            return Ok(size);
+        }
+        let bytes = data.read_bytes(self)?;
+        Ok(bytes.len() as u64)
     }
 }
 
@@ -411,16 +448,6 @@ pub enum TransformResult {
     Remove,
 }
 
-/// Scope at which a transformer operates.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TransformScope {
-    /// Transformer receives individual matched nodes; controller recurses into children.
-    #[default]
-    Node,
-    /// Transformer receives the whole subtree; controller does NOT recurse.
-    Subtree,
-}
-
 /// Dispatch filter on node shape for transformer matching.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeShapeFilter {
@@ -431,6 +458,11 @@ pub enum NodeShapeFilter {
     Container,
     /// Match only leaf nodes (those without children).
     Leaf,
+    /// Match only the tree root. Intended for tree-wide walkers
+    /// (correlation detectors, roll-ups) that need to see the entire
+    /// changeset at once and do their own traversal. Called exactly
+    /// once per diff.
+    Root,
 }
 
 /// Whether a comparator handles files, containers (directories), or both.
@@ -455,92 +487,57 @@ pub enum ExtractResult {
 mod tests {
     use super::*;
 
-    #[test]
-    fn item_ref_extension() {
-        let item = ItemRef {
-            logical_path: "data.csv".into(),
-            is_dir: false,
+    fn bare_item(logical: &str, is_dir: bool) -> ItemRef {
+        ItemRef {
+            logical_path: logical.into(),
+            is_dir,
             content_hash: None,
+            size: None,
             media_type: None,
             handle: String::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn item_ref_extension() {
+        let item = bare_item("data.csv", false);
         assert_eq!(item.extension(), Some(".csv".into()));
     }
 
     #[test]
     fn item_ref_extension_none() {
-        let item = ItemRef {
-            logical_path: "Makefile".into(),
-            is_dir: false,
-            content_hash: None,
-            media_type: None,
-            handle: String::new(),
-        };
+        let item = bare_item("Makefile", false);
         assert_eq!(item.extension(), None);
     }
 
     #[test]
     fn item_pair_logical_path_prefers_right() {
-        let left = ItemRef {
-            logical_path: "left.txt".into(),
-            is_dir: false,
-            content_hash: None,
-            media_type: None,
-            handle: String::new(),
-        };
-        let right = ItemRef {
-            logical_path: "right.txt".into(),
-            is_dir: false,
-            content_hash: None,
-            media_type: None,
-            handle: String::new(),
-        };
+        let left = bare_item("left.txt", false);
+        let right = bare_item("right.txt", false);
         let pair = ItemPair::both(left, right);
         assert_eq!(pair.logical_path(), "right.txt");
     }
 
     #[test]
     fn item_pair_logical_path_falls_back_to_left() {
-        let left = ItemRef {
-            logical_path: "only.txt".into(),
-            is_dir: false,
-            content_hash: None,
-            media_type: None,
-            handle: String::new(),
-        };
+        let left = bare_item("only.txt", false);
         let pair = ItemPair::removed(left);
         assert_eq!(pair.logical_path(), "only.txt");
     }
 
     #[test]
     fn item_pair_is_dir() {
-        let dir = ItemRef {
-            logical_path: "sub".into(),
-            is_dir: true,
-            content_hash: None,
-            media_type: None,
-            handle: String::new(),
-        };
+        let dir = bare_item("sub", true);
         let pair = ItemPair::added(dir);
         assert!(pair.is_dir());
     }
 
     #[test]
     fn item_pair_matching_hash() {
-        let left = ItemRef {
-            logical_path: "f".into(),
-            is_dir: false,
-            content_hash: Some("abc".into()),
-            media_type: None,
-            handle: String::new(),
-        };
-        let right = ItemRef {
-            logical_path: "f".into(),
-            is_dir: false,
-            content_hash: Some("abc".into()),
-            media_type: None,
-            handle: String::new(),
-        };
+        let mut left = bare_item("f", false);
+        left.content_hash = Some("abc".into());
+        let mut right = bare_item("f", false);
+        right.content_hash = Some("abc".into());
         let pair = ItemPair::both(left, right);
         assert_eq!(pair.matching_content_hash(), Some("abc"));
     }

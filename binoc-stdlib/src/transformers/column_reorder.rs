@@ -14,7 +14,12 @@ impl Transformer for ColumnReorderDetector {
             .with_match_tags(vec!["binoc.column-reorder".into()])
     }
 
-    fn transform(&self, mut node: DiffNode, data: &dyn DataAccess) -> TransformResult {
+    fn transform(
+        &self,
+        mut node: DiffNode,
+        data: &dyn DataAccess,
+        _config: &serde_json::Value,
+    ) -> TransformResult {
         let is_pure_reorder = if let Some(pair) = TabularDataPair::from_artifacts(&node, data) {
             check_pure_reorder_from_data(&pair)
         } else {

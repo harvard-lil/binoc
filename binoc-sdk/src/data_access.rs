@@ -70,6 +70,7 @@ fn item_ref_from_physical(physical: &Path, logical: &str) -> ItemRef {
         logical_path: logical.to_string(),
         is_dir: physical.is_dir(),
         content_hash: None,
+        size: None,
         media_type: None,
         handle: physical.to_string_lossy().to_string(),
     }
@@ -289,13 +290,15 @@ impl DataAccess for LocalDataAccess {
         producer: &str,
         data: &[u8],
     ) -> BinocResult<ArtifactDescriptor> {
+        let id: u64 = rand::random();
         let dir = artifacts_dir(&self.data_root)
             .join(safe_name(&format.package))
             .join(safe_name(&format.name))
             .join(format!("v{}", format.version))
             .join(subject_dir_name(subject));
         std::fs::create_dir_all(&dir).map_err(BinocError::Io)?;
-        let handle = dir.join(safe_name(producer)).to_string_lossy().to_string();
+        let filename = format!("{}-{id:016x}", safe_name(producer));
+        let handle = dir.join(filename).to_string_lossy().to_string();
         std::fs::write(&handle, data).map_err(BinocError::Io)?;
         Ok(ArtifactDescriptor {
             format: format.clone(),

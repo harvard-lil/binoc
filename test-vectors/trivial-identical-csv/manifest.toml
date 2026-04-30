@@ -1,0 +1,6 @@
+[vector]
+name = "trivial-identical-csv"
+description = "Two identical CSV files → no changes reported"
+tags = ["csv", "identical", "baseline"]
+
+[expected]

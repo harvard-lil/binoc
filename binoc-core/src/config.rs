@@ -16,6 +16,42 @@ pub struct DatasetConfig {
     pub renderers: Vec<String>,
     #[serde(default)]
     pub output: OutputConfig,
+    /// Per-transformer configuration, keyed by transformer name
+    /// (e.g. `"binoc.folder_move_detector"`). Unset entries pass
+    /// [`serde_json::Value::Null`] to the transformer.
+    #[serde(default)]
+    pub transformer_config: TransformerConfig,
+}
+
+/// Per-transformer configuration. Flattened into a map by transformer name.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TransformerConfig {
+    #[serde(flatten)]
+    pub sections: BTreeMap<String, serde_json::Value>,
+}
+
+impl TransformerConfig {
+    pub fn get_for_transformer(&self, name: &str) -> serde_json::Value {
+        if let Some(v) = self.sections.get(name) {
+            return v.clone();
+        }
+        if let Some(short) = name.strip_prefix("binoc.") {
+            if let Some(v) = self.sections.get(short) {
+                return v.clone();
+            }
+        }
+        let qualified = format!("binoc.{name}");
+        if let Some(v) = self.sections.get(&qualified) {
+            return v.clone();
+        }
+        serde_json::Value::Null
+    }
+
+    /// Returns the full map keyed by transformer name, with any short-name
+    /// aliases normalized to their `binoc.*` form.
+    pub fn as_map(&self) -> BTreeMap<String, serde_json::Value> {
+        self.sections.clone()
+    }
 }
 
 fn default_renderers() -> Vec<String> {
@@ -64,13 +100,14 @@ impl DatasetConfig {
                 "binoc.binary".into(),
             ],
             transformers: vec![
-                "binoc.move_detector".into(),
-                "binoc.copy_detector".into(),
+                "binoc.correlation_detector".into(),
+                "binoc.folder_move_detector".into(),
                 "binoc.tabular_analyzer".into(),
                 "binoc.column_reorder_detector".into(),
             ],
             renderers: default_renderers(),
             output: OutputConfig::default(),
+            transformer_config: TransformerConfig::default(),
         }
     }
 }
@@ -289,7 +326,12 @@ mod tests {
         fn descriptor(&self) -> TransformerDescriptor {
             TransformerDescriptor::new(self.0)
         }
-        fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+        fn transform(
+            &self,
+            _node: DiffNode,
+            _data: &dyn DataAccess,
+            _config: &serde_json::Value,
+        ) -> TransformResult {
             TransformResult::Unchanged
         }
     }
@@ -331,6 +373,7 @@ mod tests {
             transformers: vec![],
             renderers: vec![],
             output: OutputConfig::default(),
+            transformer_config: TransformerConfig::default(),
         };
         let result = registry.resolve(&config);
         assert!(result.is_err());
@@ -354,6 +397,7 @@ mod tests {
             transformers: vec![],
             renderers: vec![],
             output: OutputConfig::default(),
+            transformer_config: TransformerConfig::default(),
         };
         let resolved = registry.resolve(&config).unwrap();
         assert_eq!(resolved.comparators[0].descriptor().name, "third");
@@ -402,7 +446,12 @@ mod tests {
                 desc.sdk_version = "99.0.0".into();
                 desc
             }
-            fn transform(&self, _node: DiffNode, _data: &dyn DataAccess) -> TransformResult {
+            fn transform(
+                &self,
+                _node: DiffNode,
+                _data: &dyn DataAccess,
+                _config: &serde_json::Value,
+            ) -> TransformResult {
                 TransformResult::Unchanged
             }
         }

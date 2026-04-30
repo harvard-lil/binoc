@@ -40,35 +40,28 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data/records.csv",
-            "summary": "Column added: 'value'; column removed: 'name'; 1 row removed",
+            "summary": "1 row added",
             "tags": [
-              "binoc.column-addition",
-              "binoc.column-removal",
-              "binoc.row-removal",
-              "binoc.schema-change"
+              "binoc.row-addition"
             ],
             "details": {
               "cells_changed": 0,
-              "columns_added": [
-                "value"
-              ],
+              "columns_added": [],
               "columns_left": [
                 "id",
                 "name"
               ],
-              "columns_removed": [
-                "name"
-              ],
+              "columns_removed": [],
               "columns_right": [
                 "id",
-                "value"
+                "name"
               ],
               "hash_left": "cdd7d4de8f6297472ddf5dcf982eaec86337f445392c33635ef0d8e562817a7f",
               "hash_right": "cc53a354625fafc744e96856a6f732822bd6920f3852b5b565270e684783aebe",
-              "rows_added": 0,
+              "rows_added": 1,
               "rows_left": 2,
-              "rows_removed": 1,
-              "rows_right": 1
+              "rows_removed": 0,
+              "rows_right": 3
             },
             "comparator": "binoc.csv",
             "transformed_by": [

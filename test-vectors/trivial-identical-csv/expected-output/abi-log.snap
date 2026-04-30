@@ -1,0 +1,48 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data.csv",
+        "result_size": 25
+      },
+      {
+        "op": "register_local",
+        "logical": "data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data.csv",
+        "result_size": 25
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  }
+]

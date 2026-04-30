@@ -1,0 +1,639 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "archive.tar.gz",
+        "result_size": 151
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "archive.tar.gz",
+        "result_size": 162
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip",
+        "result_size": 150
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip",
+        "result_size": 169
+      },
+      {
+        "op": "register_local",
+        "logical": "data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data.csv",
+        "result_size": 63
+      },
+      {
+        "op": "register_local",
+        "logical": "data.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "data.csv",
+        "result_size": 64
+      },
+      {
+        "op": "register_local",
+        "logical": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "icon.bin"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "icon.bin",
+        "result_size": 19
+      },
+      {
+        "op": "register_local",
+        "logical": "icon.bin"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "icon.bin",
+        "result_size": 19
+      },
+      {
+        "op": "register_local",
+        "logical": "license.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "license.txt",
+        "result_size": 29
+      },
+      {
+        "op": "register_local",
+        "logical": "license.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "license.txt",
+        "result_size": 29
+      },
+      {
+        "op": "register_local",
+        "logical": "metrics.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "metrics.csv",
+        "result_size": 42
+      },
+      {
+        "op": "register_local",
+        "logical": "metrics.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "metrics.csv",
+        "result_size": 42
+      },
+      {
+        "op": "register_local",
+        "logical": "license-copy.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "license-copy.txt",
+        "result_size": 29
+      },
+      {
+        "op": "register_local",
+        "logical": "summary.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "summary.txt",
+        "result_size": 46
+      },
+      {
+        "op": "register_local",
+        "logical": "report.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "report.txt",
+        "result_size": 46
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.tar",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz"
+      },
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz"
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz/inventory.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "archive.tar.gz/inventory.csv",
+        "result_size": 35
+      },
+      {
+        "op": "register_local",
+        "logical": "archive.tar.gz/inventory.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "archive.tar.gz/inventory.csv",
+        "result_size": 48
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz/inventory.csv"
+      },
+      {
+        "op": "local_path",
+        "handle": "archive.tar.gz/inventory.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 73
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 92
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.zip",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "bundle.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "bundle.zip"
+      },
+      {
+        "op": "workspace"
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "bundle.zip"
+      },
+      {
+        "op": "local_path",
+        "handle": "bundle.zip"
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip/notes.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip/notes.txt",
+        "result_size": 34
+      },
+      {
+        "op": "register_local",
+        "logical": "bundle.zip/notes.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip/notes.txt",
+        "result_size": 53
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip/notes.txt",
+        "result_size": 34
+      },
+      {
+        "op": "read_bytes",
+        "handle": "bundle.zip/notes.txt",
+        "result_size": 53
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "data.csv"
+      },
+      {
+        "op": "local_path",
+        "handle": "data.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 115
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 116
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "docs"
+      },
+      {
+        "op": "local_path",
+        "handle": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 93
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 98
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/new-file.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/new-file.txt",
+        "result_size": 35
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/old-notes.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/old-notes.txt",
+        "result_size": 34
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 93
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 98
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/new-file.txt",
+        "result_size": 35
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/old-notes.txt",
+        "result_size": 34
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.binary",
+    "data_ops": []
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "metrics.csv"
+      },
+      {
+        "op": "local_path",
+        "handle": "metrics.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 86
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 86
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "license-copy.txt",
+        "result_size": 29
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "summary.txt",
+        "result_size": 46
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "report.txt",
+        "result_size": 46
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_analyzer",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_analyzer",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_analyzer",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.column_reorder_detector",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  }
+]

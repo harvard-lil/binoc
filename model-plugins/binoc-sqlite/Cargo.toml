@@ -17,6 +17,15 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3"]
+# test-support: expose SqliteMaterializer so the plugin's own tests and its
+# materialize-test-vectors binary can share a single builder. Not enabled for
+# the shipped cdylib / Python wheel.
+test-support = ["dep:binoc-stdlib"]
+
+[[bin]]
+name = "materialize-test-vectors"
+path = "src/bin/materialize_test_vectors.rs"
+required-features = ["test-support"]
 
 [dependencies]
 binoc-sdk = { workspace = true }
@@ -24,9 +33,11 @@ rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 pyo3 = { workspace = true, optional = true }
+binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
 
 [dev-dependencies]
 binoc-core = { workspace = true }
 binoc-sdk = { workspace = true, features = ["test-support"] }
 binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-sqlite = { path = ".", features = ["test-support"] }
 tempfile = "3"

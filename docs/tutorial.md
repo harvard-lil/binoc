@@ -34,9 +34,44 @@ cat Cargo.toml
 
 ```output
 [workspace]
-members = ["binoc-core", "binoc-stdlib", "binoc-cli", "binoc-python", "binoc-sqlite"]
-default-members = ["binoc-core", "binoc-stdlib", "binoc-cli", "binoc-sqlite"]
+members = [
+    "binoc-sdk",
+    "binoc-core",
+    "binoc-stdlib",
+    "binoc-cli",
+    "binoc-python",
+    "model-plugins/binoc-sqlite",
+    "model-plugins/binoc-row-reorder",
+]
+default-members = [
+    "binoc-sdk",
+    "binoc-core",
+    "binoc-stdlib",
+    "binoc-cli",
+    "model-plugins/binoc-sqlite",
+    "model-plugins/binoc-row-reorder",
+]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.1"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/harvard-lil/binoc"
+homepage = "https://github.com/harvard-lil/binoc"
+documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
+
+[workspace.dependencies]
+binoc-sdk = { path = "binoc-sdk" }
+binoc-core = { path = "binoc-core" }
+binoc-stdlib = { path = "binoc-stdlib" }
+binoc-cli = { path = "binoc-cli" }
+
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+tempfile = "3.26.0"
+pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py310"] }
 ```
 
 | Crate | Role |
@@ -45,7 +80,7 @@ resolver = "2"
 | `binoc-stdlib` | Standard library plugins: directory, zip, tar, CSV, text, binary comparators; move/copy detectors, tabular analyzer, and column reorder transformer. Architecturally identical to any third-party plugin pack. |
 | `binoc-cli` | CLI library + standalone Rust binary. The library exposes `binoc_cli::run(registry, args)` so both the Rust binary and the Python entry point share the same CLI logic. |
 | `binoc-python` | PyO3 bindings, Python plugin discovery via entry points, and the `binoc` console script (the primary user-facing CLI). |
-| `binoc-sqlite` | Demo plugin: SQLite schema and row-count diffing (`.sqlite`/`.db`). Reference for plugin authors; test vectors in `binoc-sqlite/test-vectors/`. |
+| `binoc-sqlite` | Demo plugin: SQLite schema and row-count diffing (`.sqlite`/`.db`). Reference for plugin authors; test vectors in `model-plugins/binoc-sqlite/test-vectors/`. |
 | `test-vectors/` | Shared test data consumed by all crates. Each vector is a pair of snapshots plus a TOML manifest. |
 
 ### Prerequisites
@@ -74,6 +109,48 @@ uv pip install -e ./binoc-python
 source .venv/bin/activate
 ```
 
+### Materialize Test Vectors
+
+Test vectors under `test-vectors/` commit *source* trees (e.g. `archive.zip.d/` holding the text files that go into a zip) instead of opaque binaries. Run the materializer once so the walkthrough below has real `.zip` / `.tar.gz` / `.sqlite` files to diff:
+
+```bash
+just materialize
+```
+
+```output
+test-vectors-materialized/csv-cell-changes
+test-vectors-materialized/csv-column-addition
+test-vectors-materialized/csv-column-removal
+test-vectors-materialized/csv-column-reorder
+test-vectors-materialized/csv-mixed-changes
+test-vectors-materialized/csv-row-addition
+test-vectors-materialized/csv-row-removal
+test-vectors-materialized/directory-file-copy
+test-vectors-materialized/directory-nested
+test-vectors-materialized/directory-nested-with-tar
+test-vectors-materialized/folder-move-nested
+test-vectors-materialized/kitchen-sink
+test-vectors-materialized/single-file-add
+test-vectors-materialized/single-file-modify-binary
+test-vectors-materialized/single-file-modify-csv
+test-vectors-materialized/single-file-modify-text
+test-vectors-materialized/single-file-modify-text-root
+test-vectors-materialized/single-file-remove
+test-vectors-materialized/tar-nested
+test-vectors-materialized/tar-simple
+test-vectors-materialized/tree-wide-correlation
+test-vectors-materialized/trivial-identical
+test-vectors-materialized/trivial-identical-csv
+test-vectors-materialized/zip-nested
+test-vectors-materialized/zip-simple
+model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition
+model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-table-addition
+model-plugins/binoc-sqlite/test-vectors-materialized/without-plugin
+Materialized vectors under test-vectors-materialized/ and model-plugins/binoc-sqlite/test-vectors-materialized/
+```
+
+This produces `test-vectors-materialized/` at the workspace root and one per plugin (e.g. `model-plugins/binoc-sqlite/test-vectors-materialized/`). Both trees are gitignored. The same `VectorMaterializer` plugin trait drives `just test`, so the materialized tree is byte-for-byte what the tests diff. See [`docs/adr/test_vector_materialization.md`](adr/test_vector_materialization.md) for the design and [Writing Plugins](writing_plugins.md#testing) for how plugin authors contribute their own builders.
+
 ## Usage Walkthrough
 
 ### Your First Diff: Identical Snapshots
@@ -81,11 +158,11 @@ source .venv/bin/activate
 The simplest case: two identical directories. The `trivial-identical` test vector has the same file in both snapshots:
 
 ```bash
-binoc diff test-vectors/trivial-identical/snapshot-a test-vectors/trivial-identical/snapshot-b
+binoc diff test-vectors-materialized/trivial-identical/snapshot-a test-vectors-materialized/trivial-identical/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/trivial-identical/snapshot-a → test-vectors/trivial-identical/snapshot-b
+# Changelog: test-vectors-materialized/trivial-identical/snapshot-a → test-vectors-materialized/trivial-identical/snapshot-b
 
 No changes detected.
 
@@ -98,7 +175,7 @@ No changes detected — `root` is `null`. The directory comparator expanded the 
 When a text file changes between snapshots, the text comparator detects line-level differences:
 
 ```bash
-cat test-vectors/single-file-modify-text/snapshot-a/story.txt
+cat test-vectors-materialized/single-file-modify-text/snapshot-a/story.txt
 ```
 
 ```output
@@ -110,7 +187,7 @@ Line 5
 ```
 
 ```bash
-cat test-vectors/single-file-modify-text/snapshot-b/story.txt
+cat test-vectors-materialized/single-file-modify-text/snapshot-b/story.txt
 ```
 
 ```output
@@ -123,11 +200,11 @@ Line 6
 ```
 
 ```bash
-binoc diff test-vectors/single-file-modify-text/snapshot-a test-vectors/single-file-modify-text/snapshot-b
+binoc diff test-vectors-materialized/single-file-modify-text/snapshot-a test-vectors-materialized/single-file-modify-text/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/single-file-modify-text/snapshot-a → test-vectors/single-file-modify-text/snapshot-b
+# Changelog: test-vectors-materialized/single-file-modify-text/snapshot-a → test-vectors-materialized/single-file-modify-text/snapshot-b
 
 ## Substantive Changes
 
@@ -145,11 +222,11 @@ Key observations:
 Binoc handles files that exist in only one snapshot:
 
 ```bash
-binoc diff test-vectors/single-file-add/snapshot-a test-vectors/single-file-add/snapshot-b
+binoc diff test-vectors-materialized/single-file-add/snapshot-a test-vectors-materialized/single-file-add/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/single-file-add/snapshot-a → test-vectors/single-file-add/snapshot-b
+# Changelog: test-vectors-materialized/single-file-add/snapshot-a → test-vectors-materialized/single-file-add/snapshot-b
 
 ## Substantive Changes
 
@@ -158,11 +235,11 @@ binoc diff test-vectors/single-file-add/snapshot-a test-vectors/single-file-add/
 ```
 
 ```bash
-binoc diff test-vectors/single-file-remove/snapshot-a test-vectors/single-file-remove/snapshot-b
+binoc diff test-vectors-materialized/single-file-remove/snapshot-a test-vectors-materialized/single-file-remove/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/single-file-remove/snapshot-a → test-vectors/single-file-remove/snapshot-b
+# Changelog: test-vectors-materialized/single-file-remove/snapshot-a → test-vectors-materialized/single-file-remove/snapshot-b
 
 ## Substantive Changes
 
@@ -181,7 +258,7 @@ CSV is the most common format in data archiving, and an example of Binoc's value
 Columns shuffled but content identical — a clerical change that generic diff would flag as a total rewrite:
 
 ```bash
-cat test-vectors/csv-column-reorder/snapshot-a/data.csv
+cat test-vectors-materialized/csv-column-reorder/snapshot-a/data.csv
 ```
 
 ```output
@@ -191,7 +268,7 @@ Bob,25,LA
 ```
 
 ```bash
-cat test-vectors/csv-column-reorder/snapshot-b/data.csv
+cat test-vectors-materialized/csv-column-reorder/snapshot-b/data.csv
 ```
 
 ```output
@@ -201,11 +278,11 @@ LA,Bob,25
 ```
 
 ```bash
-binoc diff test-vectors/csv-column-reorder/snapshot-a test-vectors/csv-column-reorder/snapshot-b
+binoc diff test-vectors-materialized/csv-column-reorder/snapshot-a test-vectors-materialized/csv-column-reorder/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/csv-column-reorder/snapshot-a → test-vectors/csv-column-reorder/snapshot-b
+# Changelog: test-vectors-materialized/csv-column-reorder/snapshot-a → test-vectors-materialized/csv-column-reorder/snapshot-b
 
 ## Clerical Changes
 
@@ -223,7 +300,7 @@ Notice:
 Real-world dataset updates often combine multiple kinds of changes. Here, columns are reordered AND a new column and row are added:
 
 ```bash
-cat test-vectors/csv-mixed-changes/snapshot-a/data.csv
+cat test-vectors-materialized/csv-mixed-changes/snapshot-a/data.csv
 ```
 
 ```output
@@ -233,7 +310,7 @@ Bob,25,LA
 ```
 
 ```bash
-cat test-vectors/csv-mixed-changes/snapshot-b/data.csv
+cat test-vectors-materialized/csv-mixed-changes/snapshot-b/data.csv
 ```
 
 ```output
@@ -244,11 +321,11 @@ SF,Charlie,35,c@test.com
 ```
 
 ```bash
-binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-changes/snapshot-b
+binoc diff test-vectors-materialized/csv-mixed-changes/snapshot-a test-vectors-materialized/csv-mixed-changes/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/csv-mixed-changes/snapshot-a → test-vectors/csv-mixed-changes/snapshot-b
+# Changelog: test-vectors-materialized/csv-mixed-changes/snapshot-a → test-vectors-materialized/csv-mixed-changes/snapshot-b
 
 ## Substantive Changes
 
@@ -265,11 +342,11 @@ Because the tags include `binoc.column-addition` (substantive), not just `binoc.
 By default, `binoc diff` prints Markdown to stdout. You can also save specific output formats to files with `-o`. Here we save the raw changeset JSON and separately save a Markdown changelog:
 
 ```bash
-binoc diff test-vectors/csv-mixed-changes/snapshot-a test-vectors/csv-mixed-changes/snapshot-b -o /tmp/changeset.json -o /tmp/changeset.md -q && cat /tmp/changeset.md
+binoc diff test-vectors-materialized/csv-mixed-changes/snapshot-a test-vectors-materialized/csv-mixed-changes/snapshot-b -o /tmp/changeset.json -o /tmp/changeset.md -q && cat /tmp/changeset.md
 ```
 
 ```output
-# Changelog: test-vectors/csv-mixed-changes/snapshot-a → test-vectors/csv-mixed-changes/snapshot-b
+# Changelog: test-vectors-materialized/csv-mixed-changes/snapshot-a → test-vectors-materialized/csv-mixed-changes/snapshot-b
 
 ## Substantive Changes
 
@@ -290,7 +367,7 @@ A changeset tells you *what* changed — "2 rows were added to data.csv." But so
 The `csv-row-addition` test vector adds two rows to a CSV. First, generate the changeset:
 
 ```bash
-binoc diff test-vectors/csv-row-addition/snapshot-a test-vectors/csv-row-addition/snapshot-b -o /tmp/tut-csv.json -q
+binoc diff test-vectors-materialized/csv-row-addition/snapshot-a test-vectors-materialized/csv-row-addition/snapshot-b -o /tmp/tut-csv.json -q
 ```
 
 Now extract the added rows:
@@ -314,7 +391,7 @@ The extract command works by walking the provenance chain recorded in the change
 For text files, `extract` can produce a unified diff. First generate and save the changeset:
 
 ```bash
-binoc diff test-vectors/single-file-modify-text/snapshot-a test-vectors/single-file-modify-text/snapshot-b -o /tmp/tut-text.json -q
+binoc diff test-vectors-materialized/single-file-modify-text/snapshot-a test-vectors-materialized/single-file-modify-text/snapshot-b -o /tmp/tut-text.json -q
 ```
 
 Then extract:
@@ -324,13 +401,7 @@ binoc extract /tmp/tut-text.json story.txt diff
 ```
 
 ```output
- Line 1
--Line 2
-+Line 2 revised
- Line 3
- Line 4
- Line 5
-+Line 6
+Extract error: extract error: comparator 'binoc.text' cannot extract aspect 'diff' from node 'story.txt'
 ```
 
 This works through nested containers too. A text file inside a zip inside a directory — the extract chain reopens each layer to reach the source data.
@@ -342,30 +413,30 @@ Available aspects depend on the node type. For tabular nodes: `rows_added`, `row
 Binoc handles arbitrary nesting naturally. The controller's work loop processes independent subtrees in parallel:
 
 ```bash
-find test-vectors/directory-nested/snapshot-a -type f | sort
+find test-vectors-materialized/directory-nested/snapshot-a -type f | sort
 ```
 
 ```output
-test-vectors/directory-nested/snapshot-a/data/records.csv
-test-vectors/directory-nested/snapshot-a/docs/readme.txt
+test-vectors-materialized/directory-nested/snapshot-a/data/records.csv
+test-vectors-materialized/directory-nested/snapshot-a/docs/readme.txt
 ```
 
 ```bash
-find test-vectors/directory-nested/snapshot-b -type f | sort
+find test-vectors-materialized/directory-nested/snapshot-b -type f | sort
 ```
 
 ```output
-test-vectors/directory-nested/snapshot-b/data/extra.csv
-test-vectors/directory-nested/snapshot-b/data/records.csv
-test-vectors/directory-nested/snapshot-b/docs/readme.txt
+test-vectors-materialized/directory-nested/snapshot-b/data/extra.csv
+test-vectors-materialized/directory-nested/snapshot-b/data/records.csv
+test-vectors-materialized/directory-nested/snapshot-b/docs/readme.txt
 ```
 
 ```bash
-binoc diff test-vectors/directory-nested/snapshot-a test-vectors/directory-nested/snapshot-b
+binoc diff test-vectors-materialized/directory-nested/snapshot-a test-vectors-materialized/directory-nested/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/directory-nested/snapshot-a → test-vectors/directory-nested/snapshot-b
+# Changelog: test-vectors-materialized/directory-nested/snapshot-a → test-vectors-materialized/directory-nested/snapshot-b
 
 ## Substantive Changes
 
@@ -377,51 +448,57 @@ binoc diff test-vectors/directory-nested/snapshot-a test-vectors/directory-neste
 
 The diff tree mirrors the directory structure. The `data/` subtree and `docs/` subtree are processed in parallel by rayon. Each file is dispatched to the appropriate comparator by extension: `.csv` files go to the CSV comparator, `.txt` files go to the text comparator. The controller doesn't know about any of this — it just processes item pairs.
 
-### File Moves (The Move Detector Transformer)
+### File Moves (The Correlation and Folder-Move Transformers)
 
-When a file appears with a different name but identical content, the move detector transformer correlates adds and removes by content hash:
+When files appear at different paths but with identical content, two transformers collaborate to recover the move. `CorrelationDetector` correlates adds and removes by content hash and rewrites each pair as a single `binoc.move` leaf. `FolderMoveDetector` then walks the tree and rolls a subtree of leaf moves back up into one `binoc.folder-move` node — so a directory rename collapses to one entry instead of N. The `folder-move-nested` vector renames the entire `docs/` subtree (a readme plus nested `docs/reports/` and `docs/reports/quarterly/` files) to `documentation/`, with every leaf byte-identical:
 
 ```bash
-find test-vectors/directory-file-move/snapshot-a -type f | sort
+find test-vectors-materialized/folder-move-nested/snapshot-a -type f | sort
 ```
 
 ```output
-test-vectors/directory-file-move/snapshot-a/old_name.bin
+test-vectors-materialized/folder-move-nested/snapshot-a/docs/readme.txt
+test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/annual.txt
+test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/quarterly/q1.txt
+test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/quarterly/q2.txt
 ```
 
 ```bash
-find test-vectors/directory-file-move/snapshot-b -type f | sort
+find test-vectors-materialized/folder-move-nested/snapshot-b -type f | sort
 ```
 
 ```output
-test-vectors/directory-file-move/snapshot-b/new_name.bin
+test-vectors-materialized/folder-move-nested/snapshot-b/documentation/readme.txt
+test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/annual.txt
+test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/quarterly/q1.txt
+test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/quarterly/q2.txt
 ```
 
 ```bash
-binoc diff test-vectors/directory-file-move/snapshot-a test-vectors/directory-file-move/snapshot-b
+binoc diff test-vectors-materialized/folder-move-nested/snapshot-a test-vectors-materialized/folder-move-nested/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/directory-file-move/snapshot-a → test-vectors/directory-file-move/snapshot-b
+# Changelog: test-vectors-materialized/folder-move-nested/snapshot-a → test-vectors-materialized/folder-move-nested/snapshot-b
 
 ## Other Changes
 
-- **new_name.bin**: Moved from old_name.bin
+- **documentation**: Folder moved from docs
 
 ```
 
-Without the move detector, this would appear as an `add` of `new_name.bin` and a `remove` of `old_name.bin`. The transformer collapsed them into a single `move` node with `source_path` showing where it came from. This is the transformer pattern: comparators report raw facts (add + remove), transformers detect higher-level patterns (move).
+Without these transformers the same change would appear as four adds plus four removes. `CorrelationDetector` collapses each pair into a `binoc.move` leaf; `FolderMoveDetector` then sees that an entire subtree was moved coherently and emits a single `binoc.folder-move` node whose `source_path` is `docs` and whose `path` is `documentation`. This is the transformer pattern at two levels: comparators report raw facts (add + remove), and successive transformers detect higher-level patterns (per-file move, then folder-wide move).
 
 ### Zip Archives
 
-Binoc looks inside zip files. The zip comparator extracts both sides to temp directories and re-enters the controller queue, so any comparator that works on regular files also works on files inside zips:
+Binoc looks inside zip files. The zip comparator extracts both sides to temp directories and re-enters the controller queue, so any comparator that works on regular files also works on files inside zips. The `zip-simple` vector commits an `archive.zip.d/` source tree that `just materialize` built into a real `archive.zip`:
 
 ```bash
-binoc diff test-vectors/zip-simple/snapshot-a test-vectors/zip-simple/snapshot-b
+binoc diff test-vectors-materialized/zip-simple/snapshot-a test-vectors-materialized/zip-simple/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors/zip-simple/snapshot-a → test-vectors/zip-simple/snapshot-b
+# Changelog: test-vectors-materialized/zip-simple/snapshot-a → test-vectors-materialized/zip-simple/snapshot-b
 
 ## Substantive Changes
 
@@ -436,28 +513,14 @@ The zip comparator extracted both archives, then the controller processed the ex
 
 The **binoc-sqlite** plugin is an example of a third-party plugin. It compares schema (tables, columns, types) and row counts — not row-by-row content — so you see "1 table modified", "1 row added (1 → 2 rows)", or "Table added (2 columns, 5 rows)" instead of a raw binary change.
 
-To try it from the repo (requires `sqlite3` on PATH): build two SQLite DBs from the test-vector SQL sources, then run the Python CLI with the plugin:
+`just materialize` already built the demo databases from the plugin's `.sqlite.d/*.sql` sources via the plugin's own [`SqliteMaterializer`](../model-plugins/binoc-sqlite/src/test_support.rs). Install the plugin into the active environment and diff the materialized snapshots:
 
 ```bash
-# sqlite file setup
-if [ -d /tmp/binoc-sqlite-demo ]; then rm -rf /tmp/binoc-sqlite-demo; fi
-mkdir -p /tmp/binoc-sqlite-demo/snapshot-a /tmp/binoc-sqlite-demo/snapshot-b
-for f in binoc-sqlite/test-vectors/sqlite-row-addition/snapshot-a/data.sqlite.d/*.sql; do sqlite3 /tmp/binoc-sqlite-demo/snapshot-a/data.sqlite < "$f"; done
-for f in binoc-sqlite/test-vectors/sqlite-row-addition/snapshot-b/data.sqlite.d/*.sql; do sqlite3 /tmp/binoc-sqlite-demo/snapshot-b/data.sqlite < "$f"; done
-
-# run the CLI with the plugin
-uv pip install -e ./binoc-sqlite/
-binoc diff /tmp/binoc-sqlite-demo/snapshot-a /tmp/binoc-sqlite-demo/snapshot-b
+uv pip install -q -e ./model-plugins/binoc-sqlite && binoc diff model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-a model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-b
 ```
 
 ```output
-Resolved 2 packages in 1.13s
-   Building binoc-sqlite @ file:///Users/jcushman/Documents/binoc/binoc-sqlite
-      Built binoc-sqlite @ file:///Users/jcushman/Documents/binoc/binoc-sqlite
-Prepared 1 package in 5.21s
-Installed 1 package in 1ms
- + binoc-sqlite==0.1.0 (from file:///Users/jcushman/Documents/binoc/binoc-sqlite)
-# Changelog: /tmp/binoc-sqlite-demo/snapshot-a → /tmp/binoc-sqlite-demo/snapshot-b
+# Changelog: model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-a → model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-b
 
 ## Substantive Changes
 
@@ -465,7 +528,7 @@ Installed 1 package in 1ms
 
 ```
 
-Snapshot-a has one row in `users`, snapshot-b has two. Without the plugin, the same files would be compared as binary and reported as "Content changed". See [binoc-sqlite’s README](../binoc-sqlite/README.md) and [Writing Binoc Plugins](writing_plugins.md).
+Snapshot-a has one row in `users`, snapshot-b has two. Without the plugin, the same files would be compared as binary and reported as "Content changed". See [binoc-sqlite’s README](../model-plugins/binoc-sqlite/README.md) and [Writing Binoc Plugins](writing_plugins.md).
 
 ## Architecture
 
@@ -557,7 +620,7 @@ Order matters. Archive comparators come first because `.zip`/`.tar` extension ma
 
 After comparators, transformers run in declared order. Each transformer declares matching criteria in a `TransformerDescriptor`: item types, tags, actions, artifact formats, and node shape (leaf vs. container). All non-empty fields must match (AND); within each field, any value suffices (OR). The default pipeline:
 
-`binoc.move_detector` → `binoc.copy_detector` → `binoc.tabular_analyzer` → `binoc.column_reorder_detector`
+`binoc.correlation_detector` → `binoc.folder_move_detector` → `binoc.tabular_analyzer` → `binoc.column_reorder_detector`
 
 The tabular analyzer matches any node with `tabular_v1` artifacts and adds tags, details, and summary text. The column reorder detector runs after it and reclassifies pure column reorders. This separation means any comparator that publishes `tabular_v1` artifacts (CSV today, Parquet or Excel in the future) gets the same analysis pipeline automatically.
 
@@ -582,9 +645,7 @@ Column reordering is clerical (housekeeping). Column addition is substantive (po
 
 ### The Transformer Pattern
 
-Transformers rewrite the completed diff tree. They run in declared order, matching nodes via their `TransformerDescriptor` (item types, tags, actions, artifact formats, node shape). Two scopes:
-- **Node**: the controller recurses into children first, then the transformer sees each matched node individually.
-- **Subtree**: the transformer receives the entire subtree and can rewrite it freely.
+Transformers rewrite the completed diff tree. They run in declared order, matching nodes via their `TransformerDescriptor` (item types, tags, actions, artifact formats, node shape). The controller walks the tree bottom-up: children are transformed first, then the transformer sees each matched node with its children already in final form. This means a transformer that operates on a container observes the transformed children, which is what you want for correlation passes like move and copy detection.
 
 Both `Comparator` and `Transformer` are trait objects registered in a `PluginRegistry`. See [Writing Plugins](writing_plugins.md) for the full trait API and implementation guide.
 
@@ -608,10 +669,10 @@ tags = ["csv", "column-reorder", "clerical"]
 
 [config]
 comparators = ["binoc.directory", "binoc.csv"]
-transformers = ["binoc.column_reorder_detector"]
+transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]
 
 [expected]
-root_action = "modify"
+root_kind = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
 significance = "clerical"
@@ -626,7 +687,7 @@ ls -1d test-vectors/*/manifest.toml | wc -l && echo 'test vectors:' && ls -1d te
 ```
 
 ```output
-      17
+      25
 test vectors:
 csv-cell-changes
 csv-column-addition
@@ -634,14 +695,22 @@ csv-column-removal
 csv-column-reorder
 csv-mixed-changes
 csv-row-addition
+csv-row-removal
 directory-file-copy
-directory-file-move
+directory-nested-with-tar
 directory-nested
+folder-move-nested
+kitchen-sink
 single-file-add
 single-file-modify-binary
+single-file-modify-csv
+single-file-modify-text-root
 single-file-modify-text
 single-file-remove
-text-file-move
+tar-nested
+tar-simple
+tree-wide-correlation
+trivial-identical-csv
 trivial-identical
 zip-nested
 zip-simple

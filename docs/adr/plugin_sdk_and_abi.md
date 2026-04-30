@@ -42,7 +42,7 @@ If a comparator is dispatched by descriptor match but discovers at compare-time 
 
 The closed `ReopenedData { Tabular, Text, Binary }` enum was an extensibility bottleneck — third-party plugins couldn't add variants. Replaced by two mechanisms:
 
-**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. The field is `#[serde(skip)]` — present at runtime, absent from changeset JSON (handles are ephemeral temp paths). For the C ABI, `source_items` is carried explicitly in `TransformRequest` and `ExtractRequest`, and the `export_plugin!` macro reconstructs it on the plugin side.
+**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. (Superseded by [Transient fields on the wire](transient_fields_on_wire.md): the field is wire-visible on `DiffNode` itself and the controller strips it from the changeset at output time, so `TransformRequest`/`ExtractRequest` no longer carry it as a separate sidecar.)
 
 This is the preferred pattern for tabular transformers. The CSV comparator no longer caches its parsed data — the row-reorder transformer and column-reorder detector re-parse the source CSVs directly. This avoids writing a JSON-serialized copy of the CSV to disk (which was strictly larger and slower to parse than the original).
 

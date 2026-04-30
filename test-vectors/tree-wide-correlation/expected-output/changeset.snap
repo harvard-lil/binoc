@@ -1,0 +1,121 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "text",
+        "path": "gamma-renamed.txt",
+        "source_path": "outer.zip/inner.zip/gamma.txt",
+        "summary": "Moved from gamma.txt",
+        "tags": [
+          "binoc.move"
+        ]
+      },
+      {
+        "action": "copy",
+        "item_type": "text",
+        "path": "kept-copy.txt",
+        "source_path": "kept.txt",
+        "summary": "Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt",
+        "tags": [
+          "binoc.copy"
+        ],
+        "details": {
+          "destinations": [
+            "kept-copy.txt",
+            "outer.zip/kept-copy.txt"
+          ]
+        }
+      },
+      {
+        "action": "move",
+        "item_type": "file",
+        "path": "merged.bin",
+        "source_path": "dup.bin",
+        "summary": "Moved from dup.bin and dup-b.bin",
+        "tags": [
+          "binoc.move"
+        ],
+        "details": {
+          "sources": [
+            "dup.bin",
+            "outer.zip/dup-b.bin"
+          ]
+        }
+      },
+      {
+        "action": "modify",
+        "item_type": "zip_archive",
+        "path": "outer.zip",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "directory",
+            "path": "outer.zip",
+            "children": [
+              {
+                "action": "move",
+                "item_type": "text",
+                "path": "outer.zip/alpha-renamed.txt",
+                "source_path": "alpha.txt",
+                "summary": "Moved from alpha.txt",
+                "tags": [
+                  "binoc.move"
+                ]
+              },
+              {
+                "action": "modify",
+                "item_type": "zip_archive",
+                "path": "outer.zip/inner.zip",
+                "children": [
+                  {
+                    "action": "modify",
+                    "item_type": "directory",
+                    "path": "outer.zip/inner.zip",
+                    "children": [
+                      {
+                        "action": "move",
+                        "item_type": "text",
+                        "path": "outer.zip/inner.zip/beta-renamed.txt",
+                        "source_path": "outer.zip/beta.txt",
+                        "summary": "Moved from beta.txt",
+                        "tags": [
+                          "binoc.move"
+                        ]
+                      }
+                    ],
+                    "comparator": "binoc.directory"
+                  }
+                ],
+                "details": {
+                  "hash_left": "bcf9bf2f23794266b939108385231cc990ded6c3692e0ad79e9b11e0fb454fff",
+                  "hash_right": "850e2e9990ecddf2963fb9a4b6fea6365aa08655f1ce9b7e2f0f92be261e3498"
+                },
+                "comparator": "binoc.zip"
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "details": {
+          "hash_left": "f7234757da333df63f0810a7eda2187f01b4012e5ea6d81a11cb5dbf25efb39b",
+          "hash_right": "55088f5d69c8c981ec16931a9fcdfd6f0d765ee063d170f345a261cc1cdac3b5"
+        },
+        "comparator": "binoc.zip"
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.correlation_detector"
+    ]
+  }
+}

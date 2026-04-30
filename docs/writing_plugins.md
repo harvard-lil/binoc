@@ -173,7 +173,7 @@ comparators:
 
 transformers:
   - biobinoc.sequence_normalizer
-  - binoc.move_detector
+  - binoc.correlation_detector
 ```
 
 Versioning note:
@@ -341,7 +341,7 @@ Versioning note:
 
 ### Testing
 
-Rust plugins can use the shared test-vector harness. Depend on `binoc-stdlib` with the `test-vectors` feature in `[dev-dependencies]`:
+Rust plugins use the shared test-vector harness. Depend on `binoc-stdlib` with the `test-vectors` feature in `[dev-dependencies]`:
 
 ```toml
 [dev-dependencies]
@@ -350,23 +350,80 @@ binoc-sdk = { path = "../../binoc-sdk", features = ["test-support"] }
 binoc-stdlib = { path = "../../binoc-stdlib", features = ["test-vectors"] }
 ```
 
-Then write a test that discovers and runs your vectors:
+Then write a test that discovers and runs your vectors, passing a list of `VectorMaterializer`s so `.zip.d` / `.tar.gz.d` / plugin-specific staging directories get built into real artifacts before the diff runs:
 
 ```rust
-use binoc_stdlib::test_vectors::{discover_vectors, run_vector};
+use binoc_stdlib::test_vectors::{
+    discover_vectors, run_vector, stdlib_materializers, VectorMaterializer,
+};
 
 #[test]
 fn test_vectors() {
-    let vectors = discover_vectors("path/to/your/test-vectors");
-    for vector in vectors {
-        run_vector(&vector, |registry| {
-            // register your plugin into the registry
-        });
+    let stdlib = stdlib_materializers();
+    let materializers: Vec<&dyn VectorMaterializer> =
+        stdlib.iter().map(|m| &**m).collect();
+    for vector in discover_vectors("path/to/your/test-vectors") {
+        run_vector(
+            &vector,
+            "path/to/your/test-vectors".as_ref(),
+            || {
+                let mut r = binoc_stdlib::default_registry();
+                // register your plugin into r
+                r
+            },
+            &materializers,
+        );
     }
 }
 ```
 
-See `model-plugins/binoc-sqlite/tests/test_vectors.rs` for a complete example.
+#### Custom staging directories (`VectorMaterializer`)
+
+If your plugin's test vectors commit source trees instead of opaque binaries — `.sqlite.d/*.sql` scripts instead of a `.sqlite` file, say — implement `VectorMaterializer` once and reuse it for both tests and `just materialize`. The trait is test-harness-only (never shipped through the plugin ABI):
+
+```rust
+use std::path::Path;
+use binoc_stdlib::test_vectors::VectorMaterializer;
+
+pub struct FastaBundleMaterializer;
+
+impl VectorMaterializer for FastaBundleMaterializer {
+    // Dirs this builder claims, each including the leading dot.
+    fn suffixes(&self) -> &[&'static str] { &[".fabundle.d"] }
+
+    // Build `out_path` (a single .fabundle file) from the sources in `staging_dir`.
+    // `all_staging_suffixes` is the union across all registered materializers — use it
+    // to skip any nested staging directories that will be built separately.
+    fn build(&self, staging_dir: &Path, out_path: &Path, _all: &[&str]) {
+        // ... walk staging_dir, write out_path ...
+    }
+}
+```
+
+Put the type behind a `test-support` feature on your crate so it doesn't ship in the cdylib / Python wheel, and add a tiny `src/bin/materialize_test_vectors.rs` that composes it with `stdlib_materializers()`:
+
+```rust
+use binoc_stdlib::test_vectors::{
+    discover_vectors, materialize_snapshots, stdlib_materializers, VectorMaterializer,
+};
+use my_plugin::test_support::FastaBundleMaterializer;
+
+fn main() {
+    let stdlib = stdlib_materializers();
+    let mine = FastaBundleMaterializer;
+    let mut materializers: Vec<&dyn VectorMaterializer> =
+        stdlib.iter().map(|m| &**m as &dyn VectorMaterializer).collect();
+    materializers.push(&mine);
+
+    for vector in discover_vectors("path/to/your/test-vectors".as_ref()) {
+        let dest = /* output_root */ Path::new("test-vectors-materialized")
+            .join(vector.file_name().unwrap());
+        materialize_snapshots(&vector, &dest, &materializers);
+    }
+}
+```
+
+Users then run `just materialize` (or `cargo run -p my-plugin --features test-support --bin materialize-test-vectors`) to get a browsable `test-vectors-materialized/` tree that the tutorial, debugging sessions, and CI can reference directly. See `model-plugins/binoc-sqlite/src/test_support.rs` and `model-plugins/binoc-sqlite/src/bin/materialize_test_vectors.rs` for a complete example, and [`docs/adr/test_vector_materialization.md`](adr/test_vector_materialization.md) for the design.
 
 ## Cross-phase data access
 
@@ -504,7 +561,7 @@ For integration testing, use `binoc.diff()` with a config that includes your plu
 ```python
 config = binoc.Config(
     comparators=["biobinoc.fasta", "binoc.text", "binoc.binary"],
-    transformers=["binoc.move_detector"],
+    transformers=["binoc.correlation_detector"],
 )
 config.add_comparator(FastaComparator())
 changeset = binoc.diff("test-data/snapshot-a", "test-data/snapshot-b", config=config)

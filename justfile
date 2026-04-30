@@ -35,8 +35,10 @@ test:
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 
-# Regenerate docs/tutorial.md by re-running all embedded code blocks.
-docs:
+# Regenerate docs/tutorial.md by re-running all embedded code blocks. Depends on
+# `just materialize` so the tutorial's `test-vectors-materialized/...` commands
+# resolve.
+docs: materialize
     #!/usr/bin/env bash
     set -euo pipefail
     if uvx showboat verify docs/tutorial.md --output docs/tutorial.md > /dev/null 2>&1; then
@@ -52,6 +54,20 @@ snapshot-review:
 # Regenerate all expected-output snapshots (run after intentional IR/output changes).
 snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-stdlib --test test_vectors
+
+# Materialize test-vectors/ into test-vectors-materialized/ for every workspace
+# crate that ships vectors (same builders the test harness uses). Each plugin
+# contributes its own VectorMaterializers; see docs/adr/test_vector_materialization.md.
+# Output: test-vectors-materialized/<vector-name>/ (gitignored) next to each vectors dir.
+materialize:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf test-vectors-materialized model-plugins/binoc-sqlite/test-vectors-materialized
+    cargo run -q -p binoc-stdlib --features test-vectors --bin materialize-test-vectors -- \
+        test-vectors-materialized test-vectors
+    cargo run -q -p binoc-sqlite --features test-support --bin materialize-test-vectors -- \
+        model-plugins/binoc-sqlite/test-vectors-materialized model-plugins/binoc-sqlite/test-vectors
+    echo "Materialized vectors under test-vectors-materialized/ and model-plugins/binoc-sqlite/test-vectors-materialized/"
 
 # Set the shared published package version across Cargo + Python manifests.
 set-version package version:

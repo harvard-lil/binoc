@@ -1,0 +1,274 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "documentation"
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "documentation/readme.txt",
+        "result_size": 15
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/reports"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "documentation/readme.txt",
+        "result_size": 15
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "documentation/reports"
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/reports/annual.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/annual.txt",
+        "result_size": 20
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/reports/quarterly"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/annual.txt",
+        "result_size": 20
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "documentation/reports/quarterly"
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/reports/quarterly/q1.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/quarterly/q1.txt",
+        "result_size": 11
+      },
+      {
+        "op": "register_local",
+        "logical": "documentation/reports/quarterly/q2.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/quarterly/q2.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/quarterly/q1.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "documentation/reports/quarterly/q2.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/readme.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 15
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/reports"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/readme.txt",
+        "result_size": 15
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "docs/reports"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/reports/annual.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/annual.txt",
+        "result_size": 20
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/reports/quarterly"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/annual.txt",
+        "result_size": 20
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "docs/reports/quarterly"
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/reports/quarterly/q1.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/quarterly/q1.txt",
+        "result_size": 11
+      },
+      {
+        "op": "register_local",
+        "logical": "docs/reports/quarterly/q2.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/quarterly/q2.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/quarterly/q1.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/reports/quarterly/q2.txt",
+        "result_size": 11
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  }
+]
