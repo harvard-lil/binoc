@@ -15,7 +15,7 @@ default = []
 test-support = []
 
 [dependencies]
-blake3 = "1.8.3"
+blake3 = "1.8.5"
 rand = "0.10.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
