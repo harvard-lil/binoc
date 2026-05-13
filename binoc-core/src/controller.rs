@@ -484,21 +484,80 @@ impl Controller {
         }
 
         let config = self.config_for(&trans_name);
-        match transformer.transform(node.clone(), data.as_ref(), &config) {
-            TransformResult::Unchanged => vec![node],
-            TransformResult::Replace(mut new_node) => {
-                new_node.transformed_by.push(trans_name);
-                vec![*new_node]
+        let mut results: Vec<DiffNode> =
+            match transformer.transform(node.clone(), data.as_ref(), &config) {
+                TransformResult::Unchanged => vec![node],
+                TransformResult::Replace(mut new_node) => {
+                    new_node.transformed_by.push(trans_name);
+                    vec![*new_node]
+                }
+                TransformResult::ReplaceMany(nodes) => nodes
+                    .into_iter()
+                    .map(|mut n| {
+                        n.transformed_by.push(trans_name.clone());
+                        n
+                    })
+                    .collect(),
+                TransformResult::Remove => vec![],
+                _ => vec![node],
+            };
+
+        // Inflate any `pending_recompare` requests the transformer set on
+        // its result nodes. Each flagged pair is re-dispatched through the
+        // comparator pipeline and merged into its host node before the next
+        // transformer in the pipeline sees the tree.
+        for result_node in &mut results {
+            self.inflate_pending_recompares(result_node, transformer, desc, data);
+        }
+
+        results
+    }
+
+    /// Walk `node` and inflate any descendant with `pending_recompare` set:
+    /// re-dispatch the pair through the comparator pipeline, then merge the
+    /// resulting `item_type`, `comparator`, `source_items`, `artifacts`,
+    /// `details`, and `children` into the host node. The current transformer
+    /// is then re-applied to any inflated children so nested correlation
+    /// keeps working.
+    ///
+    /// `pending_recompare` is `take()`n (cleared) on every visited node,
+    /// regardless of whether `process_pair` succeeds, so the field never
+    /// escapes a session.
+    fn inflate_pending_recompares(
+        &self,
+        node: &mut DiffNode,
+        transformer: &Arc<dyn Transformer>,
+        desc: &TransformerDescriptor,
+        data: &Arc<LocalDataAccess>,
+    ) {
+        if let Some(pair) = node.pending_recompare.take() {
+            if let Ok(result) = self.process_pair(pair, data) {
+                if result.action != "identical" {
+                    node.item_type.clone_from(&result.item_type);
+                    if result.comparator.is_some() {
+                        node.comparator.clone_from(&result.comparator);
+                    }
+                    if result.source_items.is_some() {
+                        node.source_items = result.source_items;
+                    }
+                    node.artifacts.extend(result.artifacts);
+                    // Union content-derived tags (e.g. binoc.content-changed,
+                    // binoc.lines-added) into the host so the move node
+                    // reflects both the rename and the content change.
+                    node.tags.extend(result.tags);
+                    for (k, v) in result.details {
+                        node.details.entry(k).or_insert(v);
+                    }
+                    node.children = result
+                        .children
+                        .into_iter()
+                        .flat_map(|c| self.apply_transformer(c, transformer, desc, data, false))
+                        .collect();
+                }
             }
-            TransformResult::ReplaceMany(nodes) => nodes
-                .into_iter()
-                .map(|mut n| {
-                    n.transformed_by.push(trans_name.clone());
-                    n
-                })
-                .collect(),
-            TransformResult::Remove => vec![],
-            _ => vec![node],
+        }
+        for child in &mut node.children {
+            self.inflate_pending_recompares(child, transformer, desc, data);
         }
     }
 

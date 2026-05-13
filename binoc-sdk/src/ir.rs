@@ -70,6 +70,18 @@ pub struct DiffNode {
     /// [`DiffNode::strip_transient`] before serializing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<ArtifactDescriptor>,
+
+    /// Request that the controller re-dispatch the given `ItemPair` through
+    /// the comparator pipeline and merge the result into this node before
+    /// the next transformer runs. Set by transformers (e.g. fuzzy
+    /// correlation) that have decided two leaves represent the same logical
+    /// item but need a content diff under the new (move) node. Session-
+    /// scoped working data: wire-visible so plugins can set it across the
+    /// ABI boundary, but cleared by [`DiffNode::strip_transient`] before
+    /// changeset output. The controller takes (clears) this field as it
+    /// processes it; nodes in a finalized changeset never carry it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_recompare: Option<ItemPair>,
 }
 
 impl DiffNode {
@@ -92,6 +104,7 @@ impl DiffNode {
             transformed_by: Vec::new(),
             source_items: None,
             artifacts: Vec::new(),
+            pending_recompare: None,
         }
     }
 
@@ -143,7 +156,7 @@ impl DiffNode {
     }
 
     /// Recursively clear session-scoped transient fields (`source_items`,
-    /// `artifacts`) on this node and all descendants.
+    /// `artifacts`, `pending_recompare`) on this node and all descendants.
     ///
     /// These fields are wire-visible so the plugin ABI can move them across
     /// process-ready boundaries, but they are not meaningful outside a live
@@ -152,6 +165,7 @@ impl DiffNode {
     pub fn strip_transient(&mut self) {
         self.source_items = None;
         self.artifacts.clear();
+        self.pending_recompare = None;
         for child in &mut self.children {
             child.strip_transient();
         }
@@ -350,19 +364,44 @@ mod tests {
 
     #[test]
     fn strip_transient_clears_every_descendant() {
-        use crate::types::{ArtifactDescriptor, ArtifactFormat, ArtifactSubject};
+        use crate::types::{
+            ArtifactDescriptor, ArtifactFormat, ArtifactSubject, ItemPair, ItemRef,
+        };
         let artifact = ArtifactDescriptor {
             format: ArtifactFormat::new("binoc", "tabular", 1),
             subject: ArtifactSubject::Pair,
             producer: "binoc.csv".into(),
             handle: "h".into(),
         };
-        let grandchild = DiffNode::new("modify", "tabular", "a/b/c.csv").with_artifact(artifact);
+        let pair = ItemPair::both(
+            ItemRef {
+                logical_path: "x".into(),
+                is_dir: false,
+                content_hash: None,
+                size: None,
+                media_type: None,
+                handle: "/tmp/a".into(),
+            },
+            ItemRef {
+                logical_path: "x".into(),
+                is_dir: false,
+                content_hash: None,
+                size: None,
+                media_type: None,
+                handle: "/tmp/b".into(),
+            },
+        );
+        let mut grandchild =
+            DiffNode::new("modify", "tabular", "a/b/c.csv").with_artifact(artifact);
+        grandchild.pending_recompare = Some(pair);
         let child = DiffNode::new("modify", "directory", "a/b").with_children(vec![grandchild]);
         let mut root = DiffNode::new("modify", "directory", "a").with_children(vec![child]);
         root.strip_transient();
         fn all_empty(n: &DiffNode) -> bool {
-            n.artifacts.is_empty() && n.source_items.is_none() && n.children.iter().all(all_empty)
+            n.artifacts.is_empty()
+                && n.source_items.is_none()
+                && n.pending_recompare.is_none()
+                && n.children.iter().all(all_empty)
         }
         assert!(all_empty(&root));
     }
