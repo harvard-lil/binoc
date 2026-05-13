@@ -25,3 +25,4 @@
 * 2026-04-16: [Test vector materialization is a plugin trait, not a runtime plugin point](test_vector_materialization.md)
 * 2026-04-16: [Opportunistic ItemRef metadata, transformer-hydrated for correlation](opportunistic_itemref_metadata.md)
 * 2026-04-16: [Transformer dispatch: bottom-up by default, Root for tree-wide walkers](transformer_scope_yagni.md)
+* 2026-05-13: [Rename+modify detection: fuzzy correlation + transformer-initiated re-dispatch](rename_modify_detection.md)
