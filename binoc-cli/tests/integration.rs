@@ -522,3 +522,62 @@ fn create_test_zip(path: &PathBuf, entries: &[(&str, &str)]) {
 
     zip.finish().unwrap();
 }
+
+#[test]
+fn test_csv_rename_modify_detected_as_move() {
+    // A CSV that is both renamed and gets a column added must surface
+    // as a single move node carrying the tabular content diff —
+    // exercising fuzzy correlation + pending_recompare inflation +
+    // TabularAnalyzer on a move action.
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    fs::write(
+        dir_a.join("data.csv"),
+        "name,age,city\nAlice,30,Portland\nBob,25,Seattle\n",
+    )
+    .unwrap();
+    fs::write(
+        dir_b.join("data_v2.csv"),
+        "name,age,city,email\n\
+         Alice,30,Portland,alice@test.com\n\
+         Bob,25,Seattle,bob@test.com\n",
+    )
+    .unwrap();
+
+    let controller = create_controller();
+    let changeset = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let root = changeset.root.as_ref().expect("expected a root");
+    let all_tags = root.all_tags();
+
+    assert!(
+        all_tags.contains("binoc.move"),
+        "expected binoc.move; got {all_tags:?} on children {:?}",
+        root.children
+            .iter()
+            .map(|c| (&c.action, &c.path))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        all_tags.contains("binoc.move.modified"),
+        "expected binoc.move.modified"
+    );
+    assert!(
+        all_tags.contains("binoc.column-addition"),
+        "expected binoc.column-addition from tabular analysis on the move"
+    );
+
+    let move_node = root
+        .children
+        .iter()
+        .find(|c| c.action == "move")
+        .expect("expected a move child");
+    assert_eq!(move_node.source_path.as_deref(), Some("data.csv"));
+    assert_eq!(move_node.path, "data_v2.csv");
+}
