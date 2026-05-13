@@ -30,7 +30,10 @@ impl Transformer for TabularAnalyzer {
         match node.action.as_str() {
             "add" => transform_add(node, &pair),
             "remove" => transform_remove(node, &pair),
-            "modify" => transform_modify(node, &pair),
+            // `move` nodes from fuzzy correlation carry tabular artifacts
+            // from the re-dispatched content diff; analyze them the same
+            // way as a `modify`, but preserve the move summary.
+            "modify" | "move" => transform_modify(node, &pair),
             _ => TransformResult::Unchanged,
         }
     }
@@ -183,14 +186,24 @@ fn transform_modify(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
         node.tags.insert("binoc.schema-change".into());
     }
 
-    node.summary = Some(tabular_summary(
+    let tabular_desc = tabular_summary(
         &columns_added,
         &columns_removed,
         order_changed,
         rows_added,
         rows_removed,
         cells_changed,
-    ));
+    );
+
+    // For `move` nodes, the move summary already describes the rename;
+    // stash the tabular description as an annotation so renderers can
+    // surface it if they want without overwriting "Moved from ...".
+    if node.action == "move" {
+        node.annotations
+            .insert("tabular_summary".into(), serde_json::json!(tabular_desc));
+    } else {
+        node.summary = Some(tabular_desc);
+    }
 
     TransformResult::Replace(Box::new(node))
 }

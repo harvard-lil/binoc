@@ -125,13 +125,35 @@ fn collect_reportable_nodes<'a>(
         || !node.tags.is_empty()
         || (node.children.is_empty() && node.action != "identical");
 
+    // A `move` node with its own children (rename+modify from fuzzy
+    // correlation) is reported as one unit: the move headline plus an
+    // inline summary of each child change. Without this, the move and
+    // its content children would land in different significance sections,
+    // hiding the relationship.
+    let group_as_move = node.action == "move" && !node.children.is_empty();
+
     if is_reportable {
-        let category = node.tags.iter().find_map(|tag| tag_map.get(tag)).cloned();
+        let category = if group_as_move {
+            // Promote to the highest-significance category among the move
+            // node's own tags and any descendant tags.
+            node.all_tags()
+                .iter()
+                .find_map(|tag| tag_map.get(tag))
+                .cloned()
+        } else {
+            node.tags.iter().find_map(|tag| tag_map.get(tag)).cloned()
+        };
 
         match category {
             Some(cat) => by_significance.entry(cat).or_default().push(node),
             None => uncategorized.push(node),
         }
+    }
+
+    // Don't descend into a move-with-children's content children — they're
+    // surfaced inline by format_node.
+    if group_as_move {
+        return;
     }
 
     for child in &node.children {
@@ -152,6 +174,21 @@ fn format_node(out: &mut String, node: &DiffNode) {
         out.push_str(summary);
     } else {
         out.push_str(&fallback_description(node));
+    }
+
+    // For move-with-children, fold each child's summary in on the same
+    // bullet so the rename and the content changes read as one event.
+    if node.action == "move" && !node.children.is_empty() {
+        let parts: Vec<String> = node
+            .children
+            .iter()
+            .filter(|c| c.action != "identical")
+            .map(|c| c.summary.clone().unwrap_or_else(|| fallback_description(c)))
+            .collect();
+        if !parts.is_empty() {
+            out.push_str(" — ");
+            out.push_str(&parts.join("; "));
+        }
     }
 
     out.push('\n');
@@ -234,5 +271,37 @@ mod tests {
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("New file"));
+    }
+
+    #[test]
+    fn move_with_children_renders_as_one_unit() {
+        // A `move` node carrying its own content-change children should
+        // be reported as a single bullet (rename headline + inline child
+        // summaries), classified by the highest-significance descendant
+        // tag. Children must NOT also appear as separate entries.
+        let child = DiffNode::new("modify", "column", "email")
+            .with_summary("Column added: 'email'")
+            .with_tag("binoc.column-addition");
+        let move_node = DiffNode::new("move", "tabular", "data_v2.csv")
+            .with_source_path("data.csv")
+            .with_summary("Moved from data.csv (modified)")
+            .with_tag("binoc.move")
+            .with_tag("binoc.move.modified")
+            .with_children(vec![child]);
+        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
+
+        let md = render_markdown(
+            &[Changeset::new("v1", "v2", Some(root))],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(
+            md.contains("## Substantive Changes"),
+            "should land in substantive section (promoted from child tag)"
+        );
+        assert!(md.contains("Moved from data.csv (modified)"));
+        assert!(md.contains("Column added: 'email'"));
+        // The child should appear exactly once, inline under the move.
+        assert_eq!(md.matches("Column added: 'email'").count(), 1);
     }
 }
