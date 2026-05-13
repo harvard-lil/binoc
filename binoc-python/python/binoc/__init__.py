@@ -45,6 +45,7 @@ from binoc._binoc import (
     Remove,
     Replace,
     ReplaceMany,
+    Skip,
     Unchanged,
     diff,
     to_json,
@@ -61,8 +62,9 @@ class Comparator:
     the controller should recursively diff next.
 
     Subclass this and set the class attributes listed below, then implement
-    :meth:`compare`. Override :meth:`can_handle` only if declarative
-    dispatch by ``extensions`` is not enough.
+    :meth:`compare`. If neither ``extensions`` nor ``media_types`` is set, the
+    comparator is treated as an imperative fallback and :meth:`can_handle`
+    decides whether it should run for each item.
 
     Attributes:
         name: Dispatch name / registry key for this comparator, e.g.
@@ -70,6 +72,7 @@ class Comparator:
         extensions: File extensions (with leading ``.``) this comparator
             claims. Declarative dispatch: first comparator to claim an
             item wins. Ordering is a :class:`Config` concern.
+        media_types: MIME media types this comparator claims.
 
     Example::
 
@@ -89,25 +92,28 @@ class Comparator:
         changeset = binoc.diff("a", "b", config=config)
     """
 
-    name: str = ""
+    name: str = ''
     extensions: list[str] = []
+    media_types: list[str] = []
 
     def can_handle(self, pair: ItemPair) -> bool:
         """Return ``True`` if this comparator can handle *pair*.
 
-        Declarative dispatch by ``extensions`` is the normal path; this is
-        the imperative escape hatch. For most comparators, setting
-        :attr:`extensions` is sufficient and this method can be left alone.
+        Declarative dispatch by ``extensions`` / ``media_types`` is the normal
+        path. This method is only consulted for Python comparators that do not
+        declare either list.
         """
         return False
 
-    def compare(self, pair: ItemPair) -> "Identical | Leaf | Expand":
+    def compare(self, pair: ItemPair) -> 'Identical | Skip | Leaf | Expand':
         """Compare an :class:`ItemPair` and return a result variant.
 
         Must return one of:
 
         - :class:`Identical` — items are semantically the same; produce no
           diff node.
+        - :class:`Skip` — this comparator cannot handle the item after all;
+          the controller should try the next matching comparator.
         - :class:`Leaf` — terminal diff node; the controller will not
           recurse into it.
         - :class:`Expand` — container diff node plus the child
@@ -154,11 +160,11 @@ class Transformer:
         config.add_transformer(Normalizer())
     """
 
-    name: str = ""
+    name: str = ''
     match_types: list[str] = []
     match_tags: list[str] = []
     match_actions: list[str] = []
-    node_shape: str = "any"
+    node_shape: str = 'any'
 
     def can_handle(self, node: DiffNode) -> bool:
         """Return ``True`` if this transformer should process *node*.
@@ -169,7 +175,7 @@ class Transformer:
         """
         return False
 
-    def transform(self, node: DiffNode) -> "Unchanged | Replace | ReplaceMany | Remove":
+    def transform(self, node: DiffNode) -> 'Unchanged | Replace | ReplaceMany | Remove':
         """Rewrite a matched :class:`DiffNode` and return a result variant.
 
         Must return one of:
@@ -183,21 +189,22 @@ class Transformer:
 
 
 __all__ = [
-    "Changeset",
-    "Comparator",
-    "Config",
-    "DiffNode",
-    "Expand",
-    "Identical",
-    "ItemPair",
-    "Leaf",
-    "PluginRegistry",
-    "Remove",
-    "Replace",
-    "ReplaceMany",
-    "Transformer",
-    "Unchanged",
-    "diff",
-    "to_json",
-    "to_markdown",
+    'Changeset',
+    'Comparator',
+    'Config',
+    'DiffNode',
+    'Expand',
+    'Identical',
+    'ItemPair',
+    'Leaf',
+    'PluginRegistry',
+    'Remove',
+    'Replace',
+    'ReplaceMany',
+    'Skip',
+    'Transformer',
+    'Unchanged',
+    'diff',
+    'to_json',
+    'to_markdown',
 ]

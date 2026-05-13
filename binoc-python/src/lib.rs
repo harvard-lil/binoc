@@ -1071,6 +1071,23 @@ impl PyIdentical {
     }
 }
 
+/// Comparator result: this comparator cannot handle the item after all; the
+/// controller should continue to the next matching comparator.
+#[pyclass(name = "Skip", module = "binoc._binoc", from_py_object)]
+#[derive(Clone)]
+pub struct PySkip;
+
+#[pymethods]
+impl PySkip {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+    fn __repr__(&self) -> &str {
+        "Skip()"
+    }
+}
+
 /// Comparator result: produce this :class:`DiffNode` as a terminal leaf —
 /// the controller will not recurse into its children.
 #[pyclass(name = "Leaf", module = "binoc._binoc", from_py_object)]
@@ -1207,6 +1224,20 @@ impl Comparator for PyComparatorBridge {
     fn compare(&self, pair: &ItemPair, _data: &dyn DataAccess) -> BinocResult<CompareResult> {
         Python::attach(|py| {
             let py_pair = PyItemPair::from_rust(pair);
+            if self.desc.extensions.is_empty() && self.desc.media_types.is_empty() {
+                let can_handle = self
+                    .py_obj
+                    .call_method1(py, "can_handle", (py_pair.clone(),))
+                    .and_then(|v| v.extract::<bool>(py))
+                    .map_err(|e| BinocError::Comparator {
+                        comparator: self.desc.name.clone(),
+                        message: e.to_string(),
+                    })?;
+                if !can_handle {
+                    return Ok(CompareResult::Skip);
+                }
+            }
+
             let result = self
                 .py_obj
                 .call_method1(py, "compare", (py_pair,))
@@ -1224,6 +1255,8 @@ fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<Com
     let bound = obj.bind(py);
     if bound.is_instance_of::<PyIdentical>() {
         Ok(CompareResult::Identical)
+    } else if bound.is_instance_of::<PySkip>() {
+        Ok(CompareResult::Skip)
     } else if let Ok(leaf) = bound.extract::<PyLeaf>() {
         Ok(CompareResult::Leaf(leaf.node.inner))
     } else if let Ok(expand) = bound.extract::<PyExpand>() {
@@ -1237,7 +1270,9 @@ fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<Com
             .unwrap_or_else(|_| "<unknown>".to_string());
         Err(BinocError::Comparator {
             comparator: "python".into(),
-            message: format!("compare() must return Identical, Leaf, or Expand, got {type_name}"),
+            message: format!(
+                "compare() must return Identical, Skip, Leaf, or Expand, got {type_name}"
+            ),
         })
     }
 }
@@ -1306,7 +1341,13 @@ fn create_comparator_bridge(
         .getattr("extensions")
         .and_then(|e| e.extract())
         .unwrap_or_default();
-    let desc = ComparatorDescriptor::new(name).with_extensions(extensions);
+    let media_types: Vec<String> = obj
+        .getattr("media_types")
+        .and_then(|m| m.extract())
+        .unwrap_or_default();
+    let desc = ComparatorDescriptor::new(name)
+        .with_extensions(extensions)
+        .with_media_types(media_types);
     Ok(PyComparatorBridge {
         py_obj: obj.clone().unbind(),
         desc,
@@ -1445,7 +1486,7 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         }
     }
-    /// Load a dataset config from a TOML file on disk.
+    /// Load a dataset config from a YAML file on disk.
     #[staticmethod]
     fn from_file(path: &str) -> PyResult<Self> {
         let config = DatasetConfig::from_file(std::path::Path::new(path))
@@ -1482,7 +1523,7 @@ impl PyConfig {
     ///
     /// Useful for quick scripts and tests where packaging the comparator as
     /// a distribution entry point would be overkill. The comparator is
-    /// appended after any comparators resolved from the registry.
+    /// inserted before the stdlib binary fallback when that fallback is present.
     fn add_comparator(&mut self, comparator: Bound<'_, PyAny>) -> PyResult<()> {
         self.extra_comparators.push(comparator.unbind());
         Ok(())
@@ -1537,9 +1578,13 @@ fn build_controller(
     let mut comparators = resolved.comparators;
     let mut transformers = resolved.transformers;
 
-    for py_comp in &config.extra_comparators {
+    let insert_at = comparators
+        .iter()
+        .position(|c| c.descriptor().name == "binoc.binary")
+        .unwrap_or(comparators.len());
+    for (offset, py_comp) in config.extra_comparators.iter().enumerate() {
         let bridge = create_comparator_bridge(py, py_comp.bind(py))?;
-        comparators.push(Arc::new(bridge));
+        comparators.insert(insert_at + offset, Arc::new(bridge));
     }
     for py_trans in &config.extra_transformers {
         let bridge = create_transformer_bridge(py, py_trans.bind(py))?;
@@ -1773,6 +1818,7 @@ fn _binoc(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConfig>()?;
     m.add_class::<PyPluginRegistry>()?;
     m.add_class::<PyIdentical>()?;
+    m.add_class::<PySkip>()?;
     m.add_class::<PyLeaf>()?;
     m.add_class::<PyExpand>()?;
     m.add_class::<PyUnchanged>()?;
