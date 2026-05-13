@@ -52,7 +52,7 @@ For Rust-only iteration: `cargo build`, `cargo test`, or by crate: `cargo test -
 
 ## Test Vectors
 
-Each vector in `test-vectors/` has a `manifest.toml` declaring what it tests and structural assertions. Vectors are named for what they test (`csv-column-reorder`), not how (`test-comparator-csv-3`). Structural assertions in manifests are the primary check; gold files are secondary. To keep binaries out of version control, vectors commit *source* trees (`archive.zip.d/`, `data.sqlite.d/*.sql`, …) that are built into real artifacts by [`VectorMaterializer`](docs/adr/test_vector_materialization.md) implementations. The stdlib ships `ZipMaterializer` and `TarMaterializer`; plugins contribute their own (e.g. `binoc_sqlite::test_support::SqliteMaterializer`). Both `just test` (via the test harness) and `just materialize` (which produces a gitignored `test-vectors-materialized/` tree) go through the same builders.
+Each vector in `test-vectors/` has a `manifest.toml` declaring what it tests and structural assertions. Vectors are named for what they test (`csv-column-reorder`), not how (`test-comparator-csv-3`). Structural assertions in manifests are the primary check; gold files are secondary. To keep binaries out of version control, vectors commit *source* trees (`archive.zip.d/`, `data.sqlite.d/*.sql`, …) that are built into real artifacts by [`VectorMaterializer`](docs/adr/2026-04-16-test_vector_materialization.md) implementations. The stdlib ships `ZipMaterializer` and `TarMaterializer`; plugins contribute their own (e.g. `binoc_sqlite::test_support::SqliteMaterializer`). Both `just test` (via the test harness) and `just materialize` (which produces a gitignored `test-vectors-materialized/` tree) go through the same builders.
 
 Plugins (including those in a separate repo) can run test vectors without duplicating harness code: depend on `binoc-stdlib` with the default `test-vectors` feature and call `binoc_stdlib::test_vectors::{discover_vectors, run_vector}` with a registry that includes the plugin and a `&[&dyn VectorMaterializer]` slice. See `model-plugins/binoc-sqlite/tests/test_vectors.rs` and its sibling `src/bin/materialize_test_vectors.rs`. `just test` runs all workspace crates’ tests, including the demo plugin binoc-sqlite; no auto-discovery is required.
 
@@ -75,4 +75,8 @@ If you make a design decision worth recording separately from the code (the alte
 
     ## Alternatives Considered
 
-Add a short summary with date to `docs/adr/index.md`.
+Add a short summary with date to `docs/adr/README.md`.
+
+## Writing docs
+
+See [2026-04-17-documentation_platform_and_info_design.md](docs/adr/2026-04-17-documentation_platform_and_info_design.md) for the documentation platform and information design decisions.

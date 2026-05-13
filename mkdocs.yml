@@ -1,0 +1,192 @@
+site_name: Binoc
+site_description: The missing changelog for datasets — detect, classify, and render changes between dataset snapshots.
+site_url: https://harvard-lil.github.io/binoc/
+repo_url: https://github.com/harvard-lil/binoc
+repo_name: harvard-lil/binoc
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.instant
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra:
+  status:
+    in-design: in active design
+  generator: false
+
+# Site-level "in active design" banner. See ADR
+# 2026-04-17-documentation_platform_and_info_design.md §7.
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+  - include-markdown
+  # Renders `::: binoc` (and submodules) in authored pages from the
+  # installed `binoc` package's docstrings. See ADR
+  # 2026-04-17-documentation_platform_and_info_design.md §4 ("Python API" generator).
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: sphinx
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: false
+            show_submodules: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: false
+            merge_init_into_class: true
+            docstring_section_style: list
+            # Hide anything whose name starts with an underscore,
+            # including __dunder__ methods. The acceptance criterion
+            # is "private symbols (_foo) are not rendered".
+            filters:
+              - "!^_"
+
+# Don't render the ADR template as a page; it's read raw by `just adr`.
+exclude_docs: |
+  adr/TEMPLATE.md
+
+# Enforce no broken links / no orphan files at build time. See ADR §6.
+strict: true
+
+nav:
+  - Home: index.md
+  - Start here: start-here.md
+  - Tutorial: tutorial.md
+  - Examples: explanation/test-vectors-gallery.md
+  - For Binoc Users:
+      - How-to:
+          - Diff two snapshots: howto/diff-two-snapshots.md
+          - Save and render changesets: howto/save-and-render-changesets.md
+          - Extract changed data: howto/extract-changed-data.md
+          - Install and use plugins: howto/install-and-use-plugins.md
+      - Reference:
+          - reference/index.md
+          - CLI: reference/cli.md
+          - Dataset config: reference/dataset-config.md
+          - Third-party plugins: reference/third-party-plugins.md
+      - Explanation:
+          - Why Binoc exists: explanation/why-binoc-exists.md
+          - Vocabulary: explanation/vocabulary.md
+          - Significance classification: explanation/significance-classification.md
+          - Security and trust: explanation/security-and-trust.md
+  - For Plugin Developers:
+      - How-to:
+          - Write a Python comparator: howto/write-a-python-comparator.md
+          - Write a Python transformer: howto/write-a-python-transformer.md
+          - Write a Python renderer: howto/write-a-python-renderer.md
+          - Write a Rust comparator: howto/write-a-rust-comparator.md
+          - Write a Rust transformer: howto/write-a-rust-transformer.md
+          - Publish a plugin: howto/publish-a-plugin.md
+          - Test a plugin with vectors: howto/test-a-plugin-with-vectors.md
+      - Reference:
+          - Python API: reference/python.md
+          - Rust SDK: reference/sdk.md
+          - Changeset JSON schema: reference/changeset-schema.md
+          - Plugin discovery: reference/plugin-discovery.md
+      - Explanation:
+          - Architecture overview: explanation/architecture.md
+          - Plugin model: explanation/plugin-model.md
+          - IR and changesets: explanation/ir-and-changesets.md
+          - Artifacts and composition: explanation/artifacts-and-composition.md
+          - Dispatch model: explanation/dispatch-model.md
+          - Extract and provenance: explanation/extract-and-provenance.md
+          - Test vectors: explanation/test-vectors.md
+  - For Core Developers:
+      - How-to:
+          - Cut a release: howto/cut-a-release.md
+          - Contribute to binoc: howto/contribute-to-binoc.md
+          - Write and maintain docs: howto/write-docs.md
+      # The block below is regenerated by `just docs-adr-index` from each
+      # ADR's H1 + filename. Don't hand-edit between the sentinels; add new
+      # ADRs with `just adr <title>`.
+      - Architectural decisions:
+          # BEGIN-ADR-NAV
+          - adr/README.md
+          - 'Documentation Platform and Information Design': adr/2026-04-17-documentation_platform_and_info_design.md
+          - 'Transient Fields Are Wire-Visible; Output Stripping Is a Boundary Concern': adr/2026-04-16-transient_fields_on_wire.md
+          - 'Transformer dispatch: bottom-up by default, Root for tree-wide walkers': adr/2026-04-16-transformer_scope_yagni.md
+          - 'Test vector materialization: plugin trait, not a runtime plugin point': adr/2026-04-16-test_vector_materialization.md
+          - 'Opportunistic ItemRef Metadata, Transformer-Hydrated for Correlation': adr/2026-04-16-opportunistic_itemref_metadata.md
+          - 'Security posture and how to audit Binoc (core and plugins)': adr/2026-04-10-security_posture_and_auditing.md
+          - 'Rust MSRV and dependency update policy': adr/2026-04-10-rust_msrv_and_dependency_update_policy.md
+          - 'Independent release tags and published version policy': adr/2026-04-10-independent_release_tags_and_published_version_policy.md
+          - 'Release Surface And Automated Publishing': adr/2026-04-08-release_surface_and_automated_publishing.md
+          - 'Transformer Dispatch Refinement': adr/2026-03-20-transformer_dispatch_refinement.md
+          - 'Transformer Composition and Artifact Flow': adr/2026-03-20-transformer_composition_and_artifact_flow.md
+          - 'Published artifacts for cross-plugin composition': adr/2026-03-19-published_artifacts_for_cross_plugin_composition.md
+          - 'Terminology': adr/2026-03-18-terminology.md
+          - 'Plugin SDK, ABI Safety, and Native Plugin Loading': adr/2026-03-12-plugin_sdk_and_abi.md
+          - 'Test Vector Root Defaults and Plugin Test Vectors': adr/2026-03-09-test_vector_defaults_and_plugin_vectors.md
+          - 'Standard Library Boundary Policy': adr/2026-03-09-stdlib_boundary.md
+          - 'Shared Test-Vector Harness for Plugins': adr/2026-03-09-plugin_test_vector_harness.md
+          - 'Per-Renderer Config and Significance as a Renderer Concern': adr/2026-03-09-renderer_config.md
+          - 'Output Routing and CLI UX': adr/2026-03-09-output_routing_and_cli_ux.md
+          - 'Deferred Performance Optimizations': adr/2026-03-09-deferred_optimizations.md
+          - '`just` as the Canonical Task Runner': adr/2026-03-06-just_as_task_runner.md
+          - 'Tutorial Regeneration Is a Build Step, Not a Test': adr/2026-03-06-tutorial_regeneration_lifecycle.md
+          - 'Plugin Discovery and the Rust/Python Boundary': adr/2026-03-06-plugin_discovery.md
+          - 'Snapshot Testing for Test Vectors': adr/2026-03-05-snapshot_testing_for_test_vectors.md
+          - 'Provenance Tracking and the Extract Chain': adr/2026-03-05-provenance_and_extract.md
+          - 'Media Type Detection and Content-Aware Dispatch': adr/2026-03-05-media_type_detection.md
+          - 'Full Comparison Tree and Content Hash Propagation': adr/2026-03-05-full_comparison_tree_and_content_hashes.md
+          - 'Cross-Phase Data Cache in CompareContext': adr/2026-03-05-cross_phase_data_cache.md
+          # END-ADR-NAV

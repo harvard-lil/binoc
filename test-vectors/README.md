@@ -33,6 +33,11 @@ name = "vector-name"
 description = "What this tests"
 tags = ["tag1", "tag2"]
 
+[docs]
+# Optional: user-facing gallery metadata
+# summary = "Short description for the examples gallery"
+# setup = "Optional setup note shown above the run command"
+
 [config]
 # Optional: override default pipeline
 # comparators = ["binoc.csv"]
@@ -49,6 +54,9 @@ tags = ["tag1", "tag2"]
 ### Sections
 
 - **`[vector]`** — Metadata: `name`, `description`, `tags`
+- **`[docs]`** — Optional user-facing gallery metadata:
+  - `summary` — short, user-facing description used in the examples gallery
+  - `setup` — optional setup note that overrides the generator's default text
 - **`[config]`** — Optional pipeline overrides: `comparators`, `transformers`
 - **`[expected]`** — Assertions on the changeset output:
   - `root_kind` — Kind of the root diff node (e.g. `modify`, `add`, `remove`)

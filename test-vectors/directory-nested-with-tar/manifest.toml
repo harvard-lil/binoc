@@ -3,6 +3,9 @@ name = "directory-nested-with-tar"
 description = "Tar archive and uncompressed directory with overlapping internal paths"
 tags = ["directory", "tar", "overlap", "artifact-collision"]
 
+[docs]
+summary = "Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths."
+
 [expected]
 root_kind = "modify"
 child_count = 2

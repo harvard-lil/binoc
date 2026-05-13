@@ -4,7 +4,7 @@
 //! functions. The host loads them via `libloading` and calls them with JSON-serialized
 //! requests/responses, avoiding any Rust ABI compatibility requirements.
 //!
-//! Plugin authors never use this module directly — the [`export_plugin!`] macro
+//! Plugin authors never use this module directly — the [`crate::export_plugin!`] macro
 //! generates the entry points, and the host's native plugin loader consumes them.
 
 use serde::{Deserialize, Serialize};

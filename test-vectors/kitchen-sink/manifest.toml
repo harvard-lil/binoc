@@ -3,6 +3,9 @@ name = "kitchen-sink"
 description = "Exercises every comparator and transformer in combination"
 tags = ["csv", "text", "binary", "tar", "zip", "directory", "move", "copy", "column-reorder", "integration"]
 
+[docs]
+summary = "Runs text, CSV, archive, move, and copy detection together in one end-to-end example."
+
 [expected]
 root_kind = "modify"
 has_tags = [

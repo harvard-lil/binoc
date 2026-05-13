@@ -15,6 +15,9 @@ Single kitchen-sink vector for the tree-wide CorrelationDetector. Exercises:
 """
 tags = ["move", "copy", "aggregation", "zip", "nested", "archive", "tree-wide"]
 
+[docs]
+summary = "Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves."
+
 [expected]
 root_kind = "modify"
 has_tags = ["binoc.move", "binoc.copy"]

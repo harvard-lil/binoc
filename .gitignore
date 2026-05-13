@@ -1,4 +1,6 @@
 /target
+/site
+/docs/sdk/
 test-vectors-materialized/
 *.snap.new
 *.swp
