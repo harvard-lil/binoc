@@ -23,7 +23,7 @@ required-features = ["test-vectors"]
 [dependencies]
 binoc-sdk = { workspace = true }
 binoc-core = { workspace = true }
-blake3 = "1.8.3"
+blake3 = "1.8.5"
 csv = "1.4.0"
 infer = "0.19"
 mime_guess = "2.0.5"
@@ -32,7 +32,7 @@ serde_json = { workspace = true }
 similar = "3.1.0"
 tempfile = { workspace = true }
 walkdir = "2.5.0"
-zip = { version = "8.5.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tar = "0.4.45"
 flate2 = "1"
 insta = { version = "1.46.3", features = ["json"], optional = true }
