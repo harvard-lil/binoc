@@ -18,11 +18,16 @@ path = "src/lib.rs"
 name = "binoc-cli"
 path = "src/main.rs"
 
+[[bin]]
+name = "emit-cli-markdown"
+path = "src/bin/emit_cli_markdown.rs"
+
 [dependencies]
 binoc-sdk = { workspace = true }
 binoc-core = { workspace = true }
 binoc-stdlib = { workspace = true }
 clap = { version = "4.6.1", features = ["derive"] }
+clap-markdown = "0.1.5"
 serde_json = { workspace = true }
 
 [dev-dependencies]

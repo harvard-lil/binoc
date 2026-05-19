@@ -5,7 +5,7 @@
 
 ## Context
 
-With [versioned artifacts](published_artifacts_for_cross_plugin_composition.md) and [artifact-aware transformer dispatch](transformer_dispatch_refinement.md) in place, the remaining question was how to structure the analysis pipeline between comparators and transformers.
+With [versioned artifacts](2026-03-19-published_artifacts_for_cross_plugin_composition.md) and [artifact-aware transformer dispatch](2026-03-20-transformer_dispatch_refinement.md) in place, the remaining question was how to structure the analysis pipeline between comparators and transformers.
 
 The CSV comparator previously did all analysis itself: it parsed both files, detected column changes, counted rows, computed cell diffs, and packed everything into details and tags on a single `DiffNode`. Transformers like `ColumnReorderDetector` and `RowReorderDetector` ran afterward as refinements — upgrading "modify" to "reorder" when the change was pure — but the baseline analysis was format-specific. Every new tabular comparator (Parquet, Excel, TSV) would need to replicate the same detection logic.
 

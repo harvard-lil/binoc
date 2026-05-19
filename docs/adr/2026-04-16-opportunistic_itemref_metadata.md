@@ -9,7 +9,7 @@
 `media_type` — alongside the logical path and backend handle. Before this ADR
 two questions about these fields were underspecified:
 
-1. **Are they required or optional?** The [full-tree content-hash ADR](full_comparison_tree_and_content_hashes.md)
+1. **Are they required or optional?** The [full-tree content-hash ADR](2026-03-05-full_comparison_tree_and_content_hashes.md)
    established that expanding comparators (directory, zip) populate
    `content_hash` "as an optimization." In practice the move detector, move
    propagation to `DiffNode.details`, and the binary comparator's short-circuit

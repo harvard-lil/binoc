@@ -6,6 +6,7 @@ use crate::ir::DiffNode;
 
 /// Which side of a comparison an artifact describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ArtifactSubject {
     #[serde(rename = "left")]
     Left,
@@ -28,6 +29,7 @@ pub enum ArtifactSubject {
 ///   and does not require a bump (JSON/serde naturally ignore unknown
 ///   fields and default missing ones).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ArtifactFormat {
     pub package: String,
     pub name: String,
@@ -56,6 +58,7 @@ impl std::fmt::Display for ArtifactFormat {
 /// cross-plugin composition. A comparator or transformer publishes
 /// zero or more artifacts; downstream plugins consume them by format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ArtifactDescriptor {
     pub format: ArtifactFormat,
     pub subject: ArtifactSubject,
@@ -82,7 +85,7 @@ pub fn tabular_v1() -> ArtifactFormat {
 /// Format-neutral tabular data. Produced by CSV, Excel, Parquet comparators;
 /// consumed by tabular transformers and extractors.
 ///
-/// This is the codec type for the [`TABULAR_V1`] artifact format.
+/// This is the codec type for the [`tabular_v1`] artifact format.
 /// Serialize with `serde_json::to_vec`, deserialize with `serde_json::from_slice`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabularData {
@@ -292,7 +295,7 @@ fn tabular_columns_in_common(left: &TabularData, right: &TabularData) -> Vec<Str
 
 /// Metadata-only view of one side of a comparison. Carries logical identity
 /// and content metadata but NOT a filesystem path — data access goes through
-/// [`DataAccess`].
+/// `DataAccess`.
 ///
 /// # Metadata invariants
 ///
@@ -309,6 +312,7 @@ fn tabular_columns_in_common(left: &TabularData, right: &TabularData) -> Vec<Str
 /// the move detector, which correlates leaves across container boundaries —
 /// hydrate on demand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ItemRef {
     pub logical_path: String,
     pub is_dir: bool,
@@ -354,6 +358,7 @@ impl ItemRef {
 
 /// A pair of items to compare. Either side may be None (add/remove).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ItemPair {
     pub left: Option<ItemRef>,
     pub right: Option<ItemRef>,

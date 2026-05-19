@@ -54,7 +54,7 @@ The chain is walked from root to target: directory → zip → directory → csv
 
 ## Cross-phase data sharing
 
-The primary mechanism is `DiffNode.source_items`: the controller sets it on every node during the diff, and again during the extract chain after reconstructing physical access via the reopen walk. Transformers and extractors that need the original data re-parse it from these source references. The field is session-scoped working data: wire-visible on `DiffNode` so the plugin ABI carries it naturally, and stripped from the changeset at the output boundary by `Controller::diff()` (see [Transient fields on the wire](transient_fields_on_wire.md)).
+The primary mechanism is `DiffNode.source_items`: the controller sets it on every node during the diff, and again during the extract chain after reconstructing physical access via the reopen walk. Transformers and extractors that need the original data re-parse it from these source references. The field is session-scoped working data: wire-visible on `DiffNode` so the plugin ABI carries it naturally, and stripped from the changeset at the output boundary by `Controller::diff()` (see [Transient fields on the wire](2026-04-16-transient_fields_on_wire.md)).
 
 For plugins where re-parsing is expensive (e.g., SQLite schema introspection) or where the cached format is genuinely more efficient than the source (e.g., Arrow IPC for large columnar data), `DataAccess::store(key, bytes)` / `load(key)` provides a filesystem-backed cache under `<data_root>/.cache/`. The cache survives across plugin boundaries — the host and a separately-compiled native plugin share the same `data_root`. This replaced the old `ReopenedData` closed enum, which couldn't be extended by third-party plugins.
 
