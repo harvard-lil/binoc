@@ -46,7 +46,7 @@ plugin authors, and contributors.
 
 - File issues or suggestions:
   <https://github.com/harvard-lil/binoc/issues>
-- Email: <lil@law.harvard.edu>
+- Email: <publicdata@law.harvard.edu>
 - Feedback form: <https://forms.gle/MDZTZ1DvhuAanM8P9>
 
 ## Architectural ground rules

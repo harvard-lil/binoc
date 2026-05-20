@@ -104,4 +104,4 @@ Binoc is in active development. The CLI is ready to use; internals are unstable
 and expected to change. We welcome feedback, plugin authors, and contributors.
 
 - File issues or suggestions: [github.com/harvard-lil/binoc/issues](https://github.com/harvard-lil/binoc/issues)
-- Email the team: [lil@law.harvard.edu](mailto:lil@law.harvard.edu)
+- Email the team: [publicdata@law.harvard.edu](mailto:publicdata@law.harvard.edu)
