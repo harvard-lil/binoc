@@ -1,5 +1,6 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 477
 expression: "&stable_changeset"
 ---
 {
@@ -28,6 +29,9 @@ expression: "&stable_changeset"
           "lines_added": 2,
           "lines_removed": 0,
           "lines_unchanged": 13
+        },
+        "annotations": {
+          "content_summary": "2 lines added"
         },
         "comparator": "binoc.text"
       }

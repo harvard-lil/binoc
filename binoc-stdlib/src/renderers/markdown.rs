@@ -125,12 +125,15 @@ fn collect_reportable_nodes<'a>(
         || !node.tags.is_empty()
         || (node.children.is_empty() && node.action != "identical");
 
-    // A `move` node with its own children (rename+modify from fuzzy
-    // correlation) is reported as one unit: the move headline plus an
-    // inline summary of each child change. Without this, the move and
-    // its content children would land in different significance sections,
-    // hiding the relationship.
-    let group_as_move = node.action == "move" && !node.children.is_empty();
+    // A `move` node with content detail (from fuzzy correlation +
+    // re-dispatch) is reported as one unit: the move headline plus a
+    // trailing content summary. Detail can live in children, in
+    // `annotations.tabular_summary` (TabularAnalyzer), or in
+    // `annotations.content_summary` (comparator leaf summary captured
+    // during inflate). Without this grouping, the move and its content
+    // detail would land in different significance sections, hiding the
+    // relationship.
+    let group_as_move = node.action == "move" && move_trailer(node).is_some();
 
     if is_reportable {
         let category = if group_as_move {
@@ -175,10 +178,35 @@ fn format_node(out: &mut String, node: &DiffNode) {
     } else {
         out.push_str(&fallback_description(node));
     }
+    out.push('\n');
 
-    // For move-with-children, fold each child's summary in on the same
-    // bullet so the rename and the content changes read as one event.
-    if node.action == "move" && !node.children.is_empty() {
+    // For a move with content detail, emit the detail as a second
+    // top-level bullet under the same path. The two-bullet layout keeps
+    // the rename and the content change visually grouped (they share a
+    // path and stay in the same significance section) without needing
+    // inline punctuation or capitalization fixups.
+    if node.action == "move" {
+        if let Some(detail) = move_trailer(node) {
+            out.push_str(&format!("- **{path}**: {detail}\n"));
+        }
+    }
+}
+
+/// Build the trailing description for a move bullet, if any.
+///
+/// Priority (first match wins):
+/// 1. `annotations.tabular_summary` — rich, from TabularAnalyzer.
+/// 2. `annotations.content_summary` — generic, captured during the
+///    controller's re-dispatch merge.
+/// 3. A join of non-identical child summaries.
+fn move_trailer(node: &DiffNode) -> Option<String> {
+    if let Some(s) = annotation_str(node, "tabular_summary") {
+        return Some(s);
+    }
+    if let Some(s) = annotation_str(node, "content_summary") {
+        return Some(s);
+    }
+    if !node.children.is_empty() {
         let parts: Vec<String> = node
             .children
             .iter()
@@ -186,12 +214,18 @@ fn format_node(out: &mut String, node: &DiffNode) {
             .map(|c| c.summary.clone().unwrap_or_else(|| fallback_description(c)))
             .collect();
         if !parts.is_empty() {
-            out.push_str(" — ");
-            out.push_str(&parts.join("; "));
+            return Some(parts.join("; "));
         }
     }
+    None
+}
 
-    out.push('\n');
+fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
+    node.annotations
+        .get(key)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
 }
 
 fn fallback_description(node: &DiffNode) -> String {
@@ -274,11 +308,12 @@ mod tests {
     }
 
     #[test]
-    fn move_with_children_renders_as_one_unit() {
+    fn move_with_children_renders_as_paired_bullets() {
         // A `move` node carrying its own content-change children should
-        // be reported as a single bullet (rename headline + inline child
-        // summaries), classified by the highest-significance descendant
-        // tag. Children must NOT also appear as separate entries.
+        // be reported as two stacked top-level bullets under the same
+        // path (move headline + content detail), classified together by
+        // the highest-significance descendant tag. Children must NOT
+        // also appear as separate enumerated entries elsewhere.
         let child = DiffNode::new("modify", "column", "email")
             .with_summary("Column added: 'email'")
             .with_tag("binoc.column-addition");
@@ -299,9 +334,102 @@ mod tests {
             md.contains("## Substantive Changes"),
             "should land in substantive section (promoted from child tag)"
         );
-        assert!(md.contains("Moved from data.csv (modified)"));
-        assert!(md.contains("Column added: 'email'"));
-        // The child should appear exactly once, inline under the move.
+        assert!(md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"));
+        assert!(md.contains("- **data_v2.csv**: Column added: 'email'\n"));
+        // The child detail should appear exactly once, never as its own
+        // separately-categorized entry.
         assert_eq!(md.matches("Column added: 'email'").count(), 1);
+    }
+
+    #[test]
+    fn move_with_tabular_summary_annotation_renders_as_paired_bullets() {
+        // A CSV rename+modify produces a move node with no children but
+        // `annotations.tabular_summary` set by TabularAnalyzer.
+        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
+            .with_source_path("data.csv")
+            .with_summary("Moved from data.csv (modified)")
+            .with_tag("binoc.move")
+            .with_tag("binoc.move.modified")
+            .with_tag("binoc.column-addition")
+            .with_tag("binoc.schema-change");
+        move_node.annotations.insert(
+            "tabular_summary".into(),
+            serde_json::json!("Column added: 'email'"),
+        );
+        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
+
+        let md = render_markdown(
+            &[Changeset::new("v1", "v2", Some(root))],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(md.contains("## Substantive Changes"));
+        assert!(
+            md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"),
+            "move headline bullet missing; got:\n{md}"
+        );
+        assert!(
+            md.contains("- **data_v2.csv**: Column added: 'email'\n"),
+            "tabular_summary must render as its own bullet under the same path; got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn move_with_content_summary_annotation_renders_as_paired_bullets() {
+        // A text rename+modify produces a move node with no children,
+        // no tabular_summary, but `annotations.content_summary` from
+        // the controller's re-dispatch merge.
+        let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
+            .with_source_path("notes.txt")
+            .with_summary("Moved from notes.txt (modified)")
+            .with_tag("binoc.move")
+            .with_tag("binoc.move.modified")
+            .with_tag("binoc.content-changed")
+            .with_tag("binoc.lines-added");
+        move_node
+            .annotations
+            .insert("content_summary".into(), serde_json::json!("2 lines added"));
+        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
+
+        let md = render_markdown(
+            &[Changeset::new("v1", "v2", Some(root))],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(
+            md.contains("- **meeting-notes-v2.txt**: Moved from notes.txt (modified)\n"),
+            "move headline bullet missing; got:\n{md}"
+        );
+        assert!(
+            md.contains("- **meeting-notes-v2.txt**: 2 lines added\n"),
+            "content_summary must render as its own bullet under the same path; got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn move_trailer_prefers_tabular_over_content_summary() {
+        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
+            .with_source_path("data.csv")
+            .with_summary("Moved from data.csv (modified)")
+            .with_tag("binoc.move");
+        move_node.annotations.insert(
+            "tabular_summary".into(),
+            serde_json::json!("Column added: 'email'"),
+        );
+        move_node
+            .annotations
+            .insert("content_summary".into(), serde_json::json!("CSV modified"));
+        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
+
+        let md = render_markdown(
+            &[Changeset::new("v1", "v2", Some(root))],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(md.contains("- **data_v2.csv**: Column added: 'email'\n"));
+        assert!(
+            !md.contains("CSV modified"),
+            "content_summary should be shadowed by tabular_summary"
+        );
     }
 }

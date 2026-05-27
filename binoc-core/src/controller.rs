@@ -507,7 +507,7 @@ impl Controller {
         // comparator pipeline and merged into its host node before the next
         // transformer in the pipeline sees the tree.
         for result_node in &mut results {
-            self.inflate_pending_recompares(result_node, transformer, desc, data);
+            self.inflate_pending_recompares(result_node, data);
         }
 
         results
@@ -516,20 +516,15 @@ impl Controller {
     /// Walk `node` and inflate any descendant with `pending_recompare` set:
     /// re-dispatch the pair through the comparator pipeline, then merge the
     /// resulting `item_type`, `comparator`, `source_items`, `artifacts`,
-    /// `details`, and `children` into the host node. The current transformer
-    /// is then re-applied to any inflated children so nested correlation
-    /// keeps working.
+    /// `details`, and `children` into the host node. The comparator's own
+    /// summary (e.g. "2 lines added") is stashed in
+    /// `annotations.content_summary` so renderers can surface it without
+    /// overwriting the host's move headline.
     ///
     /// `pending_recompare` is `take()`n (cleared) on every visited node,
     /// regardless of whether `process_pair` succeeds, so the field never
     /// escapes a session.
-    fn inflate_pending_recompares(
-        &self,
-        node: &mut DiffNode,
-        transformer: &Arc<dyn Transformer>,
-        desc: &TransformerDescriptor,
-        data: &Arc<LocalDataAccess>,
-    ) {
+    fn inflate_pending_recompares(&self, node: &mut DiffNode, data: &Arc<LocalDataAccess>) {
         if let Some(pair) = node.pending_recompare.take() {
             if let Ok(result) = self.process_pair(pair, data) {
                 if result.action != "identical" {
@@ -548,16 +543,26 @@ impl Controller {
                     for (k, v) in result.details {
                         node.details.entry(k).or_insert(v);
                     }
-                    node.children = result
-                        .children
-                        .into_iter()
-                        .flat_map(|c| self.apply_transformer(c, transformer, desc, data, false))
-                        .collect();
+                    if let Some(summary) = &result.summary {
+                        if !summary.is_empty() {
+                            node.annotations
+                                .entry("content_summary".into())
+                                .or_insert_with(|| serde_json::json!(summary));
+                        }
+                    }
+                    // Splice point: a future non-Root transformer that
+                    // wants to recurse through the inflated subtree in a
+                    // single pass would re-apply itself here. Today's only
+                    // caller is Root-shaped (FuzzyCorrelationDetector), so
+                    // recursing would be a no-op — and subsequent
+                    // transformers in the outer pipeline loop already pick
+                    // up the inflated subtree on later iterations.
+                    node.children = result.children;
                 }
             }
         }
         for child in &mut node.children {
-            self.inflate_pending_recompares(child, transformer, desc, data);
+            self.inflate_pending_recompares(child, data);
         }
     }
 
