@@ -35,7 +35,8 @@ To bridge the gap, `DiffNode` gains a transient field [`pending_recompare: Optio
 - `item_type`, `comparator`, `source_items`, `artifacts` — replace/extend on the host.
 - `details` — merge with `entry().or_insert()` (host wins, so move-level fields like `source_path` aren't trampled).
 - `tags` — union, so content-derived tags (`binoc.content-changed`, `binoc.lines-added`) appear alongside `binoc.move`/`binoc.move.modified`.
-- `children` — replace, then re-apply the current transformer to each child so nested correlation still composes.
+- `summary` — captured into `annotations.content_summary` (with `entry().or_insert()` so a later transformer like TabularAnalyzer can supply a richer phrasing without being overridden). The host's `summary` ("Moved from … (modified)") is preserved; renderers surface the annotation as a trailing clause.
+- `children` — replaced wholesale. The merge does **not** recursively re-apply the current transformer to inflated children; today's only caller (`FuzzyCorrelationDetector`) is `NodeShapeFilter::Root`, so recursion would be a no-op. Subsequent transformers in the pipeline pick up the inflated subtree on later iterations either way. A splice-point comment in the controller marks where a non-Root transformer could opt into single-pass nested correlation if a future use case warrants it.
 
 The result is a single `move` node that records both the rename (its `action` + `source_path`) and the content change (the merged tabular/text/whatever diff the comparator produced), feeding the rest of the pipeline (TabularAnalyzer, ColumnReorderDetector, …) the same shape they expect for an in-place modification.
 
@@ -45,7 +46,13 @@ The result is a single `move` node that records both the rename (its `action` + 
 
 `TabularAnalyzer` ([binoc-stdlib/src/transformers/tabular_analyzer.rs](../../binoc-stdlib/src/transformers/tabular_analyzer.rs)) treats `action == "move"` the same as `"modify"` when tabular artifacts are present, so a renamed CSV with new columns still gets `binoc.column-addition` / `binoc.schema-change` and friends. The rename summary is preserved; the column/row description is stashed in `annotations.tabular_summary` instead of overwriting "Moved from …".
 
-The Markdown renderer ([binoc-stdlib/src/renderers/markdown.rs](../../binoc-stdlib/src/renderers/markdown.rs)) treats a `move` node with content children as a single reportable unit: classified by the highest-significance descendant tag, rendered as one bullet with the move headline followed by an inline list of child summaries. Without this, the move and its content diff would land in different significance sections and the rename-edit relationship would be invisible to the reader.
+The Markdown renderer ([binoc-stdlib/src/renderers/markdown.rs](../../binoc-stdlib/src/renderers/markdown.rs)) treats a `move` node with content detail — children, `annotations.tabular_summary`, or `annotations.content_summary` — as a single reportable unit: classified by the highest-significance tag, rendered as two stacked top-level bullets under the same path. The first carries the move headline ("Moved from data.csv (modified)"); the second carries the content detail ("Column added: 'email'"). Without this grouping, the move and its content diff would land in different significance sections and the rename-edit relationship would be invisible to the reader. Two flat bullets were chosen over an inline trailing clause to avoid sentence-fragment capitalization fixups, and over a nested sub-bullet to keep the renderer's output structurally flat.
+
+## Non-goals
+
+**M:N matching.** If a single source file is copied and both copies are then edited, fuzzy correlation reports exactly one of them as a `move` and the other as a fresh `add` — never two `move`s sharing one source. `greedy_assign` enforces this via `used_removes` / `used_adds` sets ([fuzzy_correlation_detector.rs](../../binoc-stdlib/src/transformers/fuzzy_correlation_detector.rs)). The 1:1 framing reads more naturally for the user ("renamed and modified" + "new file") than reporting the same source as the origin of two different destinations would, and avoids combinatorial assignment complexity for a case Binoc is not optimizing for.
+
+**Binary fuzzy matching.** Deferred (see Alternatives below).
 
 ## Alternatives Considered
 
