@@ -311,6 +311,10 @@ fn file_basename(path: &str) -> &str {
     path.rsplit_once('/').map(|(_, n)| n).unwrap_or(path)
 }
 
+/// Both files must share the same (lowercased) extension. If neither has
+/// an extension (e.g. `Makefile` vs `Dockerfile`, `LICENSE` vs `NOTICE`),
+/// the pair is allowed through to the similarity check — the Jaccard
+/// threshold is responsible for rejecting unrelated content.
 fn extensions_match(a: &str, b: &str) -> bool {
     fn ext(s: &str) -> Option<String> {
         s.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase())
