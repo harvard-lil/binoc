@@ -196,27 +196,45 @@ fn score_pairs(
     cfg: &Config,
     data: &dyn DataAccess,
 ) -> Vec<ScoredPair> {
+    // Memoize byte reads per leaf so a single remove paired against many
+    // adds (worst case up to `rename_limit`) reads each leaf's content at
+    // most once. Outer `Option` is "tried to read yet"; inner is the read
+    // result — failed reads are cached too so we don't retry.
+    let mut left_cache: Vec<Option<Option<Vec<u8>>>> = vec![None; removes.len()];
+    let mut right_cache: Vec<Option<Option<Vec<u8>>>> = vec![None; adds.len()];
+
     let mut out: Vec<ScoredPair> = Vec::new();
     for (ri, rm) in removes.iter().enumerate() {
         for (ai, add) in adds.iter().enumerate() {
             if !extensions_match(&rm.path, &add.path) {
                 continue;
             }
-            let left_size = rm.item.resolve_size(data).ok();
-            let right_size = add.item.resolve_size(data).ok();
-            if !sizes_within_ratio(left_size, right_size, cfg.size_ratio) {
-                continue;
+            // Cheap pre-filter using cached sizes from `ItemRef` when
+            // available; skips byte reads for obviously-mismatched pairs.
+            if let (Some(l), Some(r)) = (rm.item.size, add.item.size) {
+                if !sizes_within_ratio(Some(l), Some(r), cfg.size_ratio) {
+                    continue;
+                }
             }
-            let Ok(left_bytes) = data.read_bytes(&rm.item) else {
+            let Some(left_bytes) = read_cached(&mut left_cache, ri, &rm.item, data) else {
                 continue;
             };
-            let Ok(right_bytes) = data.read_bytes(&add.item) else {
+            let Some(right_bytes) = read_cached(&mut right_cache, ai, &add.item, data) else {
                 continue;
             };
-            if is_binary(&left_bytes) || is_binary(&right_bytes) {
+            // Definitive size check using actual lengths (covers the case
+            // where one side's `ItemRef.size` wasn't pre-populated).
+            if !sizes_within_ratio(
+                Some(left_bytes.len() as u64),
+                Some(right_bytes.len() as u64),
+                cfg.size_ratio,
+            ) {
                 continue;
             }
-            let score = token_set_similarity(&left_bytes, &right_bytes);
+            if is_binary(left_bytes) || is_binary(right_bytes) {
+                continue;
+            }
+            let score = token_set_similarity(left_bytes, right_bytes);
             out.push(ScoredPair {
                 remove_idx: ri,
                 add_idx: ai,
@@ -227,12 +245,34 @@ fn score_pairs(
     out
 }
 
+/// Lazy-load bytes for the leaf at `idx` into `cache`, returning a slice
+/// into the cached bytes (or `None` if the read failed). Each leaf is
+/// read at most once across all calls.
+fn read_cached<'a>(
+    cache: &'a mut [Option<Option<Vec<u8>>>],
+    idx: usize,
+    item: &ItemRef,
+    data: &dyn DataAccess,
+) -> Option<&'a [u8]> {
+    if cache[idx].is_none() {
+        cache[idx] = Some(data.read_bytes(item).ok());
+    }
+    cache[idx].as_ref().and_then(|o| o.as_deref())
+}
+
 struct ScoredPair {
     remove_idx: usize,
     add_idx: usize,
     score: f64,
 }
 
+/// Greedy 1:1 assignment: sort pairs by descending score, then take each
+/// in turn skipping any whose remove or add was already consumed. This
+/// deliberately does not handle M:N matches — if a file is copied and
+/// both copies are then edited, the result is one `move` + one new `add`,
+/// not two `move`s. A 1:1 framing reads more naturally for the user
+/// ("renamed and modified" + "new file") than reporting the same source
+/// as the origin of two different destinations would.
 fn greedy_assign(mut pairs: Vec<ScoredPair>, threshold: f64) -> Vec<(usize, usize)> {
     pairs.sort_by(|a, b| {
         b.score
@@ -476,5 +516,144 @@ mod tests {
             score: 0.4,
         }];
         assert!(greedy_assign(pairs, 0.5).is_empty());
+    }
+
+    // ── score_pairs byte-read memoization ──────────────────────────────
+
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    /// Minimal `DataAccess` stub: serves bytes for a fixed in-memory
+    /// table and counts every `read_bytes` call per logical path. Other
+    /// methods panic so test failures point at unexpected behavior.
+    struct CountingDataAccess {
+        bytes: HashMap<String, Vec<u8>>,
+        reads: Mutex<HashMap<String, usize>>,
+    }
+
+    impl CountingDataAccess {
+        fn new(entries: Vec<(String, Vec<u8>)>) -> Self {
+            Self {
+                bytes: entries.into_iter().collect(),
+                reads: Mutex::new(HashMap::new()),
+            }
+        }
+        fn read_count(&self, key: &str) -> usize {
+            *self.reads.lock().unwrap().get(key).unwrap_or(&0)
+        }
+    }
+
+    impl DataAccess for CountingDataAccess {
+        fn read_bytes(&self, item: &ItemRef) -> BinocResult<Vec<u8>> {
+            *self
+                .reads
+                .lock()
+                .unwrap()
+                .entry(item.logical_path.clone())
+                .or_insert(0) += 1;
+            self.bytes
+                .get(&item.logical_path)
+                .cloned()
+                .ok_or_else(|| BinocError::Other(format!("no bytes for {}", item.logical_path)))
+        }
+        fn open_read(&self, _: &ItemRef) -> BinocResult<Box<dyn std::io::Read + Send>> {
+            unimplemented!()
+        }
+        fn local_path(&self, _: &ItemRef) -> BinocResult<PathBuf> {
+            unimplemented!()
+        }
+        fn provide(&self, _: &str, _: &[u8]) -> BinocResult<ItemRef> {
+            unimplemented!()
+        }
+        fn workspace(&self) -> BinocResult<PathBuf> {
+            unimplemented!()
+        }
+        fn register_local(&self, _: &Path, _: &str) -> BinocResult<ItemRef> {
+            unimplemented!()
+        }
+        fn publish_artifact(
+            &self,
+            _: &ArtifactFormat,
+            _: ArtifactSubject,
+            _: &str,
+            _: &[u8],
+        ) -> BinocResult<ArtifactDescriptor> {
+            unimplemented!()
+        }
+        fn get_artifact(&self, _: &ArtifactDescriptor) -> BinocResult<Option<Vec<u8>>> {
+            unimplemented!()
+        }
+        fn data_root(&self) -> BinocResult<PathBuf> {
+            unimplemented!()
+        }
+    }
+
+    fn leaf(path: &str, item_type: &str, size: Option<u64>) -> FuzzyLeaf {
+        FuzzyLeaf {
+            path: path.to_string(),
+            item_type: item_type.to_string(),
+            item: ItemRef {
+                logical_path: path.to_string(),
+                is_dir: false,
+                content_hash: None,
+                size,
+                media_type: None,
+                handle: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn score_pairs_reads_each_leaf_at_most_once() {
+        // One remove paired against many adds. Without memoization the
+        // remove's bytes would be re-read for every add candidate (N
+        // reads); with memoization it should be exactly one.
+        let removes = vec![leaf("old.csv", "tabular", None)];
+        let adds: Vec<FuzzyLeaf> = (0..5)
+            .map(|i| leaf(&format!("new_{i}.csv"), "tabular", None))
+            .collect();
+
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+        entries.push(("old.csv".into(), b"name,age\nalice,30\nbob,25\n".to_vec()));
+        for i in 0..5 {
+            entries.push((
+                format!("new_{i}.csv"),
+                format!("name,age\nalice,30\nbob,2{i}\n").into_bytes(),
+            ));
+        }
+        let data = CountingDataAccess::new(entries);
+        let cfg = Config::default();
+        let _ = score_pairs(&removes, &adds, &cfg, &data);
+
+        assert_eq!(
+            data.read_count("old.csv"),
+            1,
+            "remove side should be read at most once across all candidate pairs"
+        );
+        for i in 0..5 {
+            assert_eq!(
+                data.read_count(&format!("new_{i}.csv")),
+                1,
+                "each add candidate should be read at most once"
+            );
+        }
+    }
+
+    #[test]
+    fn score_pairs_cached_size_skips_byte_read() {
+        // When `ItemRef.size` is pre-populated and the ratio fails, we
+        // shouldn't read either side's bytes at all.
+        let removes = vec![leaf("tiny.csv", "tabular", Some(10))];
+        let adds = vec![leaf("huge.csv", "tabular", Some(10_000_000))];
+        let data = CountingDataAccess::new(vec![
+            ("tiny.csv".into(), b"a,b,c\n".to_vec()),
+            ("huge.csv".into(), b"a,b,c,d,e\n".to_vec()),
+        ]);
+        let cfg = Config::default();
+        let _ = score_pairs(&removes, &adds, &cfg, &data);
+
+        assert_eq!(data.read_count("tiny.csv"), 0);
+        assert_eq!(data.read_count("huge.csv"), 0);
     }
 }
