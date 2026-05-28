@@ -1,0 +1,3 @@
+.hide-command > .highlight:first-child {
+  display: none;
+}

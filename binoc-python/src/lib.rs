@@ -506,7 +506,21 @@ fn py_dict_to_json_map(dict: &Bound<'_, PyDict>) -> PyResult<BTreeMap<String, se
 // PyDiffNode
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "DiffNode", from_py_object)]
+/// A node in the diff tree — the primary IR type.
+///
+/// A ``DiffNode`` records one change (or unchanged item) at one logical path.
+/// Every comparator emits nodes; every transformer rewrites them. ``action``,
+/// ``item_type``, and ``tags`` are open strings so plugins can introduce new
+/// vocabulary without a core release.
+///
+/// Nodes are iterable and indexable over their children::
+///
+///     for child in node:
+///         print(child.path, child.action)
+///
+///     first_child = node[0]
+///     count = len(node)
+#[pyclass(name = "DiffNode", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyDiffNode {
     inner: DiffNode,
@@ -514,6 +528,20 @@ pub struct PyDiffNode {
 
 #[pymethods]
 impl PyDiffNode {
+    /// Construct a ``DiffNode``.
+    ///
+    /// :param action: Open-string verb such as ``"add"``, ``"remove"``,
+    ///     ``"modify"``, or a plugin-specific action.
+    /// :param item_type: Open-string noun describing what kind of item this
+    ///     is (``"file"``, ``"directory"``, ``"csv.row"``, ...).
+    /// :param path: Logical path of the item within the snapshot.
+    /// :param source_path: Optional prior logical path, for moves/renames.
+    /// :param summary: Optional human-readable one-line summary.
+    /// :param tags: Optional list or set of open-string tags (used for
+    ///     renderer significance classification and transformer dispatch).
+    /// :param details: Optional dict of structured JSON-serializable data.
+    /// :param annotations: Optional dict of transient/presentation data.
+    /// :param children: Optional list of child ``DiffNode`` s.
     #[new]
     #[pyo3(signature = (action, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
     #[allow(clippy::too_many_arguments)]
@@ -556,30 +584,38 @@ impl PyDiffNode {
         Ok(Self { inner: node })
     }
 
+    /// Open-string verb describing what changed (``"add"``, ``"modify"``, ...).
     #[getter]
     fn action(&self) -> &str {
         &self.inner.action
     }
+    /// Open-string noun describing the kind of item (``"file"``, ``"csv.row"``, ...).
     #[getter]
     fn item_type(&self) -> &str {
         &self.inner.item_type
     }
+    /// Logical path of this item within its snapshot.
     #[getter]
     fn path(&self) -> &str {
         &self.inner.path
     }
+    /// Prior logical path if this item was moved or renamed; ``None`` otherwise.
     #[getter]
     fn source_path(&self) -> Option<&str> {
         self.inner.source_path.as_deref()
     }
+    /// Optional one-line human summary of the change.
     #[getter]
     fn summary(&self) -> Option<&str> {
         self.inner.summary.as_deref()
     }
+    /// Open-string tags attached to this node (used for renderer significance
+    /// classification and transformer dispatch).
     #[getter]
     fn tags(&self) -> Vec<String> {
         self.inner.tags.iter().cloned().collect()
     }
+    /// Direct children of this node.
     #[getter]
     fn children(&self) -> Vec<PyDiffNode> {
         self.inner
@@ -588,22 +624,27 @@ impl PyDiffNode {
             .map(|c| PyDiffNode { inner: c.clone() })
             .collect()
     }
+    /// Structured JSON-serializable details describing the change.
     #[getter]
     fn details<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         json_map_to_py(py, &self.inner.details)
     }
+    /// Transient/presentation annotations not part of the persisted IR.
     #[getter]
     fn annotations<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         json_map_to_py(py, &self.inner.annotations)
     }
 
+    /// Total number of nodes in the subtree rooted at this node.
     fn node_count(&self) -> usize {
         self.inner.node_count()
     }
+    /// Union of all tags on this node and its descendants.
     fn all_tags(&self) -> Vec<String> {
         self.inner.all_tags().into_iter().collect()
     }
 
+    /// Serialize this node (recursively) to a plain Python ``dict``.
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("action", &self.inner.action)?;
@@ -624,37 +665,47 @@ impl PyDiffNode {
         Ok(dict)
     }
 
+    /// Serialize this node (recursively) to pretty-printed JSON.
     fn to_json(&self) -> PyResult<String> {
         serde_json::to_string_pretty(&self.inner)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    /// Return a clone of this node with ``summary`` replaced.
     fn with_summary(&self, summary: String) -> Self {
         Self {
             inner: self.inner.clone().with_summary(summary),
         }
     }
+    /// Return a clone of this node with ``tag`` added to ``tags``.
     fn with_tag(&self, tag: String) -> Self {
         Self {
             inner: self.inner.clone().with_tag(tag),
         }
     }
+    /// Return a clone of this node with ``source_path`` replaced (used to
+    /// record moves/renames).
     fn with_source_path(&self, source: String) -> Self {
         Self {
             inner: self.inner.clone().with_source_path(source),
         }
     }
+    /// Return a clone of this node with its ``children`` replaced.
     fn with_children(&self, children: Vec<PyDiffNode>) -> Self {
         let children: Vec<DiffNode> = children.into_iter().map(|c| c.inner).collect();
         Self {
             inner: self.inner.clone().with_children(children),
         }
     }
+    /// Return a clone of this node with ``details[key] = value`` set. ``value``
+    /// must be JSON-serializable.
     fn with_detail(&self, key: String, value: Bound<'_, PyAny>) -> PyResult<Self> {
         let json_val = py_to_json(&value)?;
         Ok(Self {
             inner: self.inner.clone().with_detail(key, json_val),
         })
     }
+    /// Recursively search this subtree for a node whose ``path`` matches
+    /// ``selector``. Returns ``None`` if no match is found.
     fn find_node(&self, selector: &str) -> Option<PyDiffNode> {
         find_node_recursive(&self.inner, selector).map(|n| PyDiffNode { inner: n.clone() })
     }
@@ -735,7 +786,14 @@ impl PyDiffNodeIter {
 // PyChangeset
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Changeset", from_py_object)]
+/// The result of :func:`diff` — a rooted diff tree plus metadata.
+///
+/// A ``Changeset`` records the two snapshot names it was computed from, the
+/// root of the diff tree (``None`` if the snapshots are identical), and a
+/// free-form ``metadata`` dict for plugin use. Serialize with
+/// :meth:`to_json` / :meth:`to_dict`, or via the module-level :func:`to_json`
+/// and :func:`to_markdown`.
+#[pyclass(name = "Changeset", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyChangeset {
     inner: Changeset,
@@ -743,6 +801,12 @@ pub struct PyChangeset {
 
 #[pymethods]
 impl PyChangeset {
+    /// Construct a ``Changeset``.
+    ///
+    /// :param from_snapshot: Name/identifier of the earlier snapshot.
+    /// :param to_snapshot: Name/identifier of the later snapshot.
+    /// :param root: Root of the diff tree, or ``None`` if the two snapshots
+    ///     compare identical.
     #[new]
     #[pyo3(signature = (from_snapshot, to_snapshot, root=None))]
     fn new(from_snapshot: String, to_snapshot: String, root: Option<PyDiffNode>) -> Self {
@@ -751,15 +815,18 @@ impl PyChangeset {
         }
     }
 
+    /// Name/identifier of the earlier snapshot this changeset was computed from.
     #[getter]
     #[allow(clippy::wrong_self_convention)]
     fn from_snapshot(&self) -> &str {
         &self.inner.from_snapshot
     }
+    /// Name/identifier of the later snapshot this changeset was computed from.
     #[getter]
     fn to_snapshot(&self) -> &str {
         &self.inner.to_snapshot
     }
+    /// Root of the diff tree, or ``None`` if the snapshots compare identical.
     #[getter]
     fn root(&self) -> Option<PyDiffNode> {
         self.inner
@@ -767,6 +834,7 @@ impl PyChangeset {
             .as_ref()
             .map(|r| PyDiffNode { inner: r.clone() })
     }
+    /// Free-form metadata dict (plugin-populated).
     #[getter]
     fn metadata<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
@@ -775,19 +843,24 @@ impl PyChangeset {
         }
         Ok(dict)
     }
+    /// Total number of nodes in the diff tree (0 if :attr:`root` is ``None``).
     #[getter]
     fn node_count(&self) -> usize {
         self.inner.node_count()
     }
 
+    /// Recursively search the diff tree for a node whose ``path`` matches
+    /// ``selector``. Returns ``None`` if there is no root or no match.
     fn find_node(&self, selector: &str) -> Option<PyDiffNode> {
         self.inner.root.as_ref().and_then(|root| {
             find_node_recursive(root, selector).map(|n| PyDiffNode { inner: n.clone() })
         })
     }
+    /// Serialize this changeset to canonical binoc changeset JSON.
     fn to_json(&self) -> PyResult<String> {
         output::to_json(&self.inner).map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    /// Serialize this changeset to a plain Python ``dict``.
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("from_snapshot", &self.inner.from_snapshot)?;
@@ -853,7 +926,7 @@ impl PyChangeset {
 // PyItemPair — Python-facing item pair (physical paths for Python plugins)
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "ItemPair", from_py_object)]
+#[pyclass(name = "ItemPair", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyItemPair {
     left_physical: Option<String>,
@@ -982,7 +1055,9 @@ impl PyItemPair {
 // Compare/Transform result types for Python plugins
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Identical", from_py_object)]
+/// Comparator result: the two items are semantically identical; no diff
+/// node is produced.
+#[pyclass(name = "Identical", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyIdentical;
 #[pymethods]
@@ -996,9 +1071,29 @@ impl PyIdentical {
     }
 }
 
-#[pyclass(name = "Leaf", from_py_object)]
+/// Comparator result: this comparator cannot handle the item after all; the
+/// controller should continue to the next matching comparator.
+#[pyclass(name = "Skip", module = "binoc._binoc", from_py_object)]
+#[derive(Clone)]
+pub struct PySkip;
+
+#[pymethods]
+impl PySkip {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+    fn __repr__(&self) -> &str {
+        "Skip()"
+    }
+}
+
+/// Comparator result: produce this :class:`DiffNode` as a terminal leaf —
+/// the controller will not recurse into its children.
+#[pyclass(name = "Leaf", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyLeaf {
+    /// The terminal diff node.
     #[pyo3(get)]
     node: PyDiffNode,
 }
@@ -1013,11 +1108,16 @@ impl PyLeaf {
     }
 }
 
-#[pyclass(name = "Expand", from_py_object)]
+/// Comparator result: produce this :class:`DiffNode` as a container, and
+/// schedule the given children as additional item pairs for the controller
+/// to dispatch.
+#[pyclass(name = "Expand", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyExpand {
+    /// The container diff node.
     #[pyo3(get)]
     node: PyDiffNode,
+    /// Child item pairs to recurse into.
     #[pyo3(get)]
     children: Vec<PyItemPair>,
 }
@@ -1036,7 +1136,8 @@ impl PyExpand {
     }
 }
 
-#[pyclass(name = "Unchanged", from_py_object)]
+/// Transformer result: do not rewrite this node.
+#[pyclass(name = "Unchanged", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyUnchanged;
 #[pymethods]
@@ -1050,9 +1151,11 @@ impl PyUnchanged {
     }
 }
 
-#[pyclass(name = "Replace", from_py_object)]
+/// Transformer result: replace the matched node with this single new node.
+#[pyclass(name = "Replace", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyReplace {
+    /// The replacement diff node.
     #[pyo3(get)]
     node: PyDiffNode,
 }
@@ -1067,9 +1170,11 @@ impl PyReplace {
     }
 }
 
-#[pyclass(name = "ReplaceMany", from_py_object)]
+/// Transformer result: replace the matched node with zero or more new nodes.
+#[pyclass(name = "ReplaceMany", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyReplaceMany {
+    /// The replacement diff nodes.
     #[pyo3(get)]
     nodes: Vec<PyDiffNode>,
 }
@@ -1084,7 +1189,8 @@ impl PyReplaceMany {
     }
 }
 
-#[pyclass(name = "Remove", from_py_object)]
+/// Transformer result: drop the matched node from the tree entirely.
+#[pyclass(name = "Remove", module = "binoc._binoc", from_py_object)]
 #[derive(Clone)]
 pub struct PyRemove;
 #[pymethods]
@@ -1118,6 +1224,20 @@ impl Comparator for PyComparatorBridge {
     fn compare(&self, pair: &ItemPair, _data: &dyn DataAccess) -> BinocResult<CompareResult> {
         Python::attach(|py| {
             let py_pair = PyItemPair::from_rust(pair);
+            if self.desc.extensions.is_empty() && self.desc.media_types.is_empty() {
+                let can_handle = self
+                    .py_obj
+                    .call_method1(py, "can_handle", (py_pair.clone(),))
+                    .and_then(|v| v.extract::<bool>(py))
+                    .map_err(|e| BinocError::Comparator {
+                        comparator: self.desc.name.clone(),
+                        message: e.to_string(),
+                    })?;
+                if !can_handle {
+                    return Ok(CompareResult::Skip);
+                }
+            }
+
             let result = self
                 .py_obj
                 .call_method1(py, "compare", (py_pair,))
@@ -1135,6 +1255,8 @@ fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<Com
     let bound = obj.bind(py);
     if bound.is_instance_of::<PyIdentical>() {
         Ok(CompareResult::Identical)
+    } else if bound.is_instance_of::<PySkip>() {
+        Ok(CompareResult::Skip)
     } else if let Ok(leaf) = bound.extract::<PyLeaf>() {
         Ok(CompareResult::Leaf(leaf.node.inner))
     } else if let Ok(expand) = bound.extract::<PyExpand>() {
@@ -1148,7 +1270,9 @@ fn convert_py_compare_result(py: Python<'_>, obj: &Py<PyAny>) -> BinocResult<Com
             .unwrap_or_else(|_| "<unknown>".to_string());
         Err(BinocError::Comparator {
             comparator: "python".into(),
-            message: format!("compare() must return Identical, Leaf, or Expand, got {type_name}"),
+            message: format!(
+                "compare() must return Identical, Skip, Leaf, or Expand, got {type_name}"
+            ),
         })
     }
 }
@@ -1217,7 +1341,13 @@ fn create_comparator_bridge(
         .getattr("extensions")
         .and_then(|e| e.extract())
         .unwrap_or_default();
-    let desc = ComparatorDescriptor::new(name).with_extensions(extensions);
+    let media_types: Vec<String> = obj
+        .getattr("media_types")
+        .and_then(|m| m.extract())
+        .unwrap_or_default();
+    let desc = ComparatorDescriptor::new(name)
+        .with_extensions(extensions)
+        .with_media_types(media_types);
     Ok(PyComparatorBridge {
         py_obj: obj.clone().unbind(),
         desc,
@@ -1330,7 +1460,13 @@ fn create_renderer_bridge(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<P
 // PyConfig
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "Config")]
+/// Dataset-level diff configuration.
+///
+/// A ``Config`` selects which registered comparators and transformers run for
+/// a given dataset, and holds references to ad-hoc Python plugin instances
+/// registered via :meth:`add_comparator` / :meth:`add_transformer` (i.e.
+/// without packaging them as entry points).
+#[pyclass(name = "Config", module = "binoc._binoc")]
 pub struct PyConfig {
     dataset_config: DatasetConfig,
     extra_comparators: Vec<Py<PyAny>>,
@@ -1339,6 +1475,9 @@ pub struct PyConfig {
 
 #[pymethods]
 impl PyConfig {
+    /// Return a fresh ``Config`` populated with the standard-library
+    /// defaults (stdlib comparators and transformers, in their default
+    /// order).
     #[staticmethod]
     fn default() -> Self {
         Self {
@@ -1347,6 +1486,7 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         }
     }
+    /// Load a dataset config from a YAML file on disk.
     #[staticmethod]
     fn from_file(path: &str) -> PyResult<Self> {
         let config = DatasetConfig::from_file(std::path::Path::new(path))
@@ -1357,6 +1497,12 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         })
     }
+    /// Construct a ``Config`` directly from explicit plugin-name lists.
+    ///
+    /// :param comparators: Names of registered comparators to run, in order.
+    ///     If ``None``, the stdlib defaults are used.
+    /// :param transformers: Names of registered transformers to run, in
+    ///     order. If ``None``, the stdlib defaults are used.
     #[new]
     #[pyo3(signature = (*, comparators=None, transformers=None))]
     fn new(comparators: Option<Vec<String>>, transformers: Option<Vec<String>>) -> Self {
@@ -1373,18 +1519,26 @@ impl PyConfig {
             extra_transformers: Vec::new(),
         }
     }
+    /// Register an ad-hoc :class:`Comparator` instance with this config.
+    ///
+    /// Useful for quick scripts and tests where packaging the comparator as
+    /// a distribution entry point would be overkill. The comparator is
+    /// inserted before the stdlib binary fallback when that fallback is present.
     fn add_comparator(&mut self, comparator: Bound<'_, PyAny>) -> PyResult<()> {
         self.extra_comparators.push(comparator.unbind());
         Ok(())
     }
+    /// Register an ad-hoc :class:`Transformer` instance with this config.
     fn add_transformer(&mut self, transformer: Bound<'_, PyAny>) -> PyResult<()> {
         self.extra_transformers.push(transformer.unbind());
         Ok(())
     }
+    /// Names of the comparators this config will run, in order.
     #[getter]
     fn comparators(&self) -> Vec<String> {
         self.dataset_config.comparators.clone()
     }
+    /// Names of the transformers this config will run, in order.
     #[getter]
     fn transformers(&self) -> Vec<String> {
         self.dataset_config.transformers.clone()
@@ -1424,9 +1578,13 @@ fn build_controller(
     let mut comparators = resolved.comparators;
     let mut transformers = resolved.transformers;
 
-    for py_comp in &config.extra_comparators {
+    let insert_at = comparators
+        .iter()
+        .position(|c| c.descriptor().name == "binoc.binary")
+        .unwrap_or(comparators.len());
+    for (offset, py_comp) in config.extra_comparators.iter().enumerate() {
         let bridge = create_comparator_bridge(py, py_comp.bind(py))?;
-        comparators.push(Arc::new(bridge));
+        comparators.insert(insert_at + offset, Arc::new(bridge));
     }
     for py_trans in &config.extra_transformers {
         let bridge = create_transformer_bridge(py, py_trans.bind(py))?;
@@ -1436,6 +1594,16 @@ fn build_controller(
     Ok(Controller::new(comparators, transformers))
 }
 
+/// Diff two snapshots and return the resulting :class:`Changeset`.
+///
+/// :param snapshot_a: Path to the earlier snapshot (file or directory).
+/// :param snapshot_b: Path to the later snapshot (file or directory).
+/// :param config: Optional :class:`Config` controlling which comparators and
+///     transformers run. If ``None``, the stdlib defaults are used.
+/// :param registry: Optional :class:`PluginRegistry` providing the set of
+///     plugins available to resolve from ``config``. If ``None``, the
+///     stdlib registry is used.
+/// :returns: The resulting :class:`Changeset`.
 #[pyfunction]
 #[pyo3(signature = (snapshot_a, snapshot_b, *, config=None, registry=None))]
 fn diff(
@@ -1467,11 +1635,18 @@ fn diff(
     Ok(PyChangeset { inner: changeset })
 }
 
+/// Render a :class:`Changeset` as canonical binoc changeset JSON.
 #[pyfunction]
 fn to_json(changeset: &PyChangeset) -> PyResult<String> {
     changeset.to_json()
 }
 
+/// Extract the raw data for a single changed node, by logical path.
+///
+/// Given a :class:`Changeset` and a ``node_path`` selector, return the
+/// requested ``aspect`` (by default ``"content"``) of that node's data as a
+/// string. Snapshot paths default to the names recorded on the changeset
+/// but can be overridden for relocated snapshots.
 #[pyfunction]
 #[pyo3(signature = (changeset, node_path, aspect="content", *, snapshot_a=None, snapshot_b=None, config=None))]
 fn extract(
@@ -1515,6 +1690,13 @@ fn extract(
     }
 }
 
+/// Render one or more changesets to Markdown using the stdlib renderer.
+///
+/// :param changesets: List of :class:`Changeset` s to render.
+/// :param config: Optional :class:`Config`. The ``binoc.markdown`` section of
+///     its output config controls per-renderer options (significance rules,
+///     section layout, etc.).
+/// :returns: The rendered Markdown string.
 #[pyfunction]
 #[pyo3(signature = (changesets, *, config=None))]
 fn to_markdown(changesets: Vec<PyChangeset>, config: Option<&PyConfig>) -> String {
@@ -1533,19 +1715,30 @@ fn to_markdown(changesets: Vec<PyChangeset>, config: Option<&PyConfig>) -> Strin
 // Plugin registry
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[pyclass(name = "PluginRegistry")]
+/// A mutable registry of comparator, transformer, and renderer plugins.
+///
+/// Test harnesses and plugin authors build a ``PluginRegistry``,
+/// register plugin instances or load native ``.so`` plugins into it, and
+/// pass it to :func:`diff` to control which plugins are available for
+/// config resolution.
+#[pyclass(name = "PluginRegistry", module = "binoc._binoc")]
 pub struct PyPluginRegistry {
     pub inner: PluginRegistry,
 }
 
 #[pymethods]
 impl PyPluginRegistry {
+    /// Return a fresh registry preloaded with the standard-library plugins.
     #[staticmethod]
     fn default() -> Self {
         Self {
             inner: binoc_stdlib::default_registry(),
         }
     }
+    /// Register a Python :class:`Comparator` instance with this registry.
+    ///
+    /// The comparator's own ``name`` attribute is used for dispatch; the
+    /// ``_name`` argument is accepted for API symmetry and ignored.
     fn register_comparator(
         &mut self,
         py: Python<'_>,
@@ -1557,6 +1750,7 @@ impl PyPluginRegistry {
             .register_comparator(Arc::new(bridge))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    /// Register a Python :class:`Transformer` instance with this registry.
     fn register_transformer(
         &mut self,
         py: Python<'_>,
@@ -1568,22 +1762,35 @@ impl PyPluginRegistry {
             .register_transformer(Arc::new(bridge))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    /// Register a Python renderer instance with this registry.
+    ///
+    /// A Python renderer is any object with a ``name`` attribute, a
+    /// ``file_extension`` attribute (defaults to ``"txt"``) and a
+    /// ``render(changesets, config) -> str`` method.
     fn register_renderer(&mut self, py: Python<'_>, _name: String, obj: Py<PyAny>) -> PyResult<()> {
         let bridge = create_renderer_bridge(py, obj.bind(py))?;
         self.inner
             .register_renderer(Arc::new(bridge))
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    /// Load a native Rust plugin from a shared library path.
+    ///
+    /// The library must expose the binoc plugin C ABI (``_binoc_plugin_describe``
+    /// and related entry points). This is the same mechanism used by the
+    /// entry-point-based plugin discovery in :mod:`binoc`.
     fn load_native_plugin(&mut self, module_path: String) -> PyResult<()> {
         load_native_plugin_into_registry(&module_path, &mut self.inner)
             .map_err(PyRuntimeError::new_err)
     }
+    /// Return the names of all registered comparators.
     fn list_comparators(&self) -> Vec<String> {
         self.inner.comparator_names()
     }
+    /// Return the names of all registered transformers.
     fn list_transformers(&self) -> Vec<String> {
         self.inner.transformer_names()
     }
+    /// Return the names of all registered renderers.
     fn list_renderers(&self) -> Vec<String> {
         self.inner.renderer_names()
     }
@@ -1611,6 +1818,7 @@ fn _binoc(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConfig>()?;
     m.add_class::<PyPluginRegistry>()?;
     m.add_class::<PyIdentical>()?;
+    m.add_class::<PySkip>()?;
     m.add_class::<PyLeaf>()?;
     m.add_class::<PyExpand>()?;
     m.add_class::<PyUnchanged>()?;

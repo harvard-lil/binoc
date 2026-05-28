@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
@@ -9,7 +9,15 @@ use binoc_core::output;
 use binoc_sdk::{BinocError, Changeset, ExtractResult, Renderer};
 
 #[derive(Parser)]
-#[command(name = "binoc", about = "The missing changelog for datasets")]
+#[command(
+    name = "binoc",
+    about = "The missing changelog for datasets",
+    long_about = "Binoc produces the missing changelog for datasets. It \
+                  detects, classifies, and renders changes between two \
+                  snapshots. The CLI is porcelain over the embeddable \
+                  library; see the Python API and Rust SDK reference pages \
+                  for programmatic use."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -18,40 +26,84 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Diff two snapshots and produce a changelog.
+    ///
+    /// Runs the comparator chain over snapshot_a and snapshot_b and emits the
+    /// resulting changeset. Defaults to human-readable Markdown on stdout;
+    /// use --format json or -o for machine-readable or multi-output rendering.
     Diff {
+        /// Path to the "before" snapshot (file, directory, or archive, depending
+        /// on which comparators are registered).
         snapshot_a: PathBuf,
+        /// Path to the "after" snapshot.
         snapshot_b: PathBuf,
+        /// Path to a dataset config YAML file. If omitted, the registry's
+        /// default config is used.
         #[arg(long)]
         config: Option<PathBuf>,
+        /// Write an additional rendered output to a file. Repeatable. Accepts
+        /// `format:path` (e.g. `markdown:out.md`) or a bare path whose format
+        /// is inferred from the extension.
         #[arg(long, short)]
         output: Vec<String>,
+        /// Renderer used for stdout. Accepts `json`, `markdown`, or any
+        /// registered renderer name (the `binoc.` prefix is optional).
         #[arg(long, default_value = "markdown")]
         format: String,
+        /// Suppress stdout. Useful when every rendered output is directed to
+        /// a file via -o.
         #[arg(long, short)]
         quiet: bool,
     },
-    /// Generate a human-readable changelog from one or more changesets.
+    /// Generate a human-readable changelog from one or more saved changesets.
+    ///
+    /// Reads each changeset JSON file and renders the combined result.
+    /// Supports the same -o / --format / -q flags as `binoc diff`.
     Changelog {
+        /// One or more changeset JSON files, typically produced by earlier
+        /// runs of `binoc diff -o changeset.json`.
         changesets: Vec<PathBuf>,
+        /// Path to a dataset config YAML file. If omitted, the registry's
+        /// default config is used.
         #[arg(long)]
         config: Option<PathBuf>,
+        /// Write an additional rendered output to a file. Repeatable. Accepts
+        /// `format:path` or a bare path whose format is inferred from the
+        /// extension.
         #[arg(long, short)]
         output: Vec<String>,
+        /// Renderer used for stdout. Accepts `json`, `markdown`, or any
+        /// registered renderer name (the `binoc.` prefix is optional).
         #[arg(long, default_value = "markdown")]
         format: String,
+        /// Suppress stdout.
         #[arg(long, short)]
         quiet: bool,
     },
     /// Extract actual changed data from a changeset node.
+    ///
+    /// Reopens both snapshots through the comparator chain and returns the
+    /// real bytes or text for a given node and aspect (e.g. `rows_added`,
+    /// `diff`, `content`). Use this to recover data that changesets only
+    /// summarize.
     Extract {
+        /// Path to a changeset JSON file.
         changeset: PathBuf,
+        /// Node path within the changeset (e.g. `/path/to/file.csv`).
         node: String,
+        /// Named aspect of the node to extract. Which aspects are available
+        /// depends on the comparator that produced the node.
         #[arg(default_value = "content")]
         aspect: String,
+        /// Override the "before" snapshot path. Defaults to the one recorded
+        /// in the changeset.
         #[arg(long)]
         snapshot_a: Option<PathBuf>,
+        /// Override the "after" snapshot path. Defaults to the one recorded
+        /// in the changeset.
         #[arg(long)]
         snapshot_b: Option<PathBuf>,
+        /// Path to a dataset config YAML file. If omitted, the registry's
+        /// default config is used.
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -171,6 +223,13 @@ fn write_outputs(
     }
 
     Ok(())
+}
+
+/// Return the underlying `clap::Command` tree so external tooling (e.g. the
+/// `emit-cli-markdown` binary that regenerates `docs/reference/cli.md`) can
+/// walk it without depending on private types.
+pub fn command() -> clap::Command {
+    Cli::command()
 }
 
 pub fn run(

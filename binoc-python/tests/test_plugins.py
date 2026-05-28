@@ -4,6 +4,35 @@ import binoc
 
 
 class TestPythonComparator:
+    def test_ad_hoc_comparator_runs_before_binary_fallback(self, tmp_path):
+        """Config.add_comparator should work with the default pipeline."""
+
+        class FastaComparator(binoc.Comparator):
+            name = 'test.fasta'
+            extensions = ['.fasta']
+
+            def compare(self, pair):
+                return binoc.Leaf(
+                    binoc.DiffNode(
+                        'modify',
+                        'fasta',
+                        pair.logical_path,
+                        tags=['test.fasta-handled'],
+                    )
+                )
+
+        left = tmp_path / 'a.fasta'
+        right = tmp_path / 'b.fasta'
+        left.write_text('>seq\nAAAA\n')
+        right.write_text('>seq\nAAAT\n')
+
+        config = binoc.Config.default()
+        config.add_comparator(FastaComparator())
+        changeset = binoc.diff(str(left), str(right), config=config)
+
+        assert changeset.root is not None
+        assert 'test.fasta-handled' in changeset.root.all_tags()
+
     def test_leaf_comparator(self, snapshot_pair):
         """A Python comparator that returns a Leaf result."""
 
@@ -83,6 +112,27 @@ class TestPythonComparator:
         assert changeset.root is not None
         all_tags = changeset.root.all_tags()
         assert 'test.special-handled' in all_tags
+
+    def test_skip_comparator_falls_through(self, snapshot_pair):
+        """A Python comparator can decline an item after descriptor match."""
+
+        class DeclinesTxt(binoc.Comparator):
+            name = 'test.declines_txt'
+            extensions = ['.txt']
+
+            def compare(self, pair):
+                return binoc.Skip()
+
+        a, b = snapshot_pair('single-file-modify-text')
+        config = binoc.Config(
+            comparators=['binoc.directory', 'binoc.binary'],
+            transformers=[],
+        )
+        config.add_comparator(DeclinesTxt())
+        changeset = binoc.diff(a, b, config=config)
+
+        assert changeset.root is not None
+        assert 'binoc.content-changed' in changeset.root.all_tags()
 
 
 class TestPythonTransformer:

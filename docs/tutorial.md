@@ -1,181 +1,71 @@
-# Binoc: Contributor Onboarding Tutorial
+---
+audience: new user
+---
 
-*2026-03-05T18:42:00Z by Showboat 0.6.1*
-<!-- showboat-id: ed87b449-228b-4460-9c83-ae0417fc327a -->
+# Tutorial
 
-<!-- ### Regenerating This Tutorial
+Binoc is most useful when a plain filesystem diff would be noisy. In
+this tutorial you will use the sample snapshots in this repository,
+run a few increasingly useful diffs, and finish by teaching binoc one
+new format.
 
-This tutorial is executable — every code block is verified against the current code by [Showboat](https://github.com/simonw/showboat). After making changes that affect tutorial output, regenerate it:
+Clone the repository so you have the tutorial fixtures:
 
-    just docs
+    git clone https://github.com/harvard-lil/binoc
+    cd binoc
 
-This runs `uvx showboat verify` to re-execute each block and update the expected output in place. -->
+Install binoc so the plain `binoc` command is available:
 
-Binoc generates changelogs for datasets that don't have them. Given a series of snapshots of a dataset downloaded at different times, it detects what changed, expresses those changes as a minimal structured diff, and produces human-readable summaries.
+    pip install binoc
 
-This tutorial walks through the project from daily usage to internal architecture. By the end, you should be ready to contribute code, write plugins, and extend the test suite.
+Or run it without installing:
 
-## Who This Is For
+    uvx binoc diff path/to/snapshot-a path/to/snapshot-b
 
-You are (or aspire to be) someone who:
-- Wants to understand the details of how Binoc works
-- Wants to extend Binoc with format-specific plugins for your domain
-- Wants to contribute to Binoc
+The examples below show the plain commands a user would run after
+installing `binoc`.
 
-## Dev Setup
+<!--
+`just docs-tutorial` runs Showboat in a uv environment that includes
+`./binoc-python`, so the visible `binoc` commands below execute against
+the local source tree while still reading like normal user commands.
+-->
 
-### Project Layout
+## Build the example snapshots
 
-Binoc is a Rust workspace with four crates, plus shared test vectors:
-
-```bash
-cat Cargo.toml
-```
-
-```output
-[workspace]
-members = [
-    "binoc-sdk",
-    "binoc-core",
-    "binoc-stdlib",
-    "binoc-cli",
-    "binoc-python",
-    "model-plugins/binoc-sqlite",
-    "model-plugins/binoc-row-reorder",
-]
-default-members = [
-    "binoc-sdk",
-    "binoc-core",
-    "binoc-stdlib",
-    "binoc-cli",
-    "model-plugins/binoc-sqlite",
-    "model-plugins/binoc-row-reorder",
-]
-resolver = "2"
-
-[workspace.package]
-version = "0.1.1"
-edition = "2021"
-rust-version = "1.88"
-license = "MIT"
-repository = "https://github.com/harvard-lil/binoc"
-homepage = "https://github.com/harvard-lil/binoc"
-documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
-
-[workspace.dependencies]
-binoc-sdk = { path = "binoc-sdk" }
-binoc-core = { path = "binoc-core" }
-binoc-stdlib = { path = "binoc-stdlib" }
-binoc-cli = { path = "binoc-cli" }
-
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-tempfile = "3.26.0"
-pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py310"] }
-```
-
-| Crate | Role |
-|---|---|
-| `binoc-core` | Controller, IR types, plugin traits. Zero domain knowledge. |
-| `binoc-stdlib` | Standard library plugins: directory, zip, tar, CSV, text, binary comparators; move/copy detectors, tabular analyzer, and column reorder transformer. Architecturally identical to any third-party plugin pack. |
-| `binoc-cli` | CLI library + standalone Rust binary. The library exposes `binoc_cli::run(registry, args)` so both the Rust binary and the Python entry point share the same CLI logic. |
-| `binoc-python` | PyO3 bindings, Python plugin discovery via entry points, and the `binoc` console script (the primary user-facing CLI). |
-| `binoc-sqlite` | Demo plugin: SQLite schema and row-count diffing (`.sqlite`/`.db`). Reference for plugin authors; test vectors in `model-plugins/binoc-sqlite/test-vectors/`. |
-| `test-vectors/` | Shared test data consumed by all crates. Each vector is a pair of snapshots plus a TOML manifest. |
-
-### Prerequisites
-
-You'll need [Rust](https://rustup.rs/), [just](https://github.com/casey/just) (`brew install just` on macOS), and [uv](https://docs.astral.sh/uv/) (for Python bindings and tests).
-
-### Building and Testing
-
-Build everything (Rust workspace + Python bindings):
-
-    just build
-
-Run the full test suite (Rust + Python):
-
-    just test
-
-For fast Rust-only iteration you can also use `cargo build` and `cargo test` directly, which skip the Python crate.
-
-### Local Dev Install
-
-To put the local Python CLI in your path, create a virtual environment and install the package in editable mode:
-
-```bash
-uv venv
-uv pip install -e ./binoc-python
-source .venv/bin/activate
-```
-
-### Materialize Test Vectors
-
-Test vectors under `test-vectors/` commit *source* trees (e.g. `archive.zip.d/` holding the text files that go into a zip) instead of opaque binaries. Run the materializer once so the walkthrough below has real `.zip` / `.tar.gz` / `.sqlite` files to diff:
+The repository keeps some fixtures as source trees and materializes the
+real archives on demand. Run this once from the repository root:
 
 ```bash
 just materialize
 ```
 
-```output
-test-vectors-materialized/csv-cell-changes
-test-vectors-materialized/csv-column-addition
-test-vectors-materialized/csv-column-removal
-test-vectors-materialized/csv-column-reorder
-test-vectors-materialized/csv-mixed-changes
-test-vectors-materialized/csv-row-addition
-test-vectors-materialized/csv-row-removal
-test-vectors-materialized/directory-file-copy
-test-vectors-materialized/directory-nested
-test-vectors-materialized/directory-nested-with-tar
-test-vectors-materialized/folder-move-nested
-test-vectors-materialized/kitchen-sink
-test-vectors-materialized/single-file-add
-test-vectors-materialized/single-file-modify-binary
-test-vectors-materialized/single-file-modify-csv
-test-vectors-materialized/single-file-modify-text
-test-vectors-materialized/single-file-modify-text-root
-test-vectors-materialized/single-file-remove
-test-vectors-materialized/tar-nested
-test-vectors-materialized/tar-simple
-test-vectors-materialized/tree-wide-correlation
-test-vectors-materialized/trivial-identical
-test-vectors-materialized/trivial-identical-csv
-test-vectors-materialized/zip-nested
-test-vectors-materialized/zip-simple
-model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition
-model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-table-addition
-model-plugins/binoc-sqlite/test-vectors-materialized/without-plugin
-Materialized vectors under test-vectors-materialized/ and model-plugins/binoc-sqlite/test-vectors-materialized/
-```
+You now have a `test-vectors-materialized/` folder full of ready-to-diff
+snapshots.
 
-This produces `test-vectors-materialized/` at the workspace root and one per plugin (e.g. `model-plugins/binoc-sqlite/test-vectors-materialized/`). Both trees are gitignored. The same `VectorMaterializer` plugin trait drives `just test`, so the materialized tree is byte-for-byte what the tests diff. See [`docs/adr/test_vector_materialization.md`](adr/test_vector_materialization.md) for the design and [Writing Plugins](writing_plugins.md#testing) for how plugin authors contribute their own builders.
+## Run your first diff
 
-## Usage Walkthrough
-
-### Your First Diff: Identical Snapshots
-
-The simplest case: two identical directories. The `trivial-identical` test vector has the same file in both snapshots:
+Start with the simplest possible case: two identical snapshots.
 
 ```bash
-binoc diff test-vectors-materialized/trivial-identical/snapshot-a test-vectors-materialized/trivial-identical/snapshot-b
+binoc diff ./test-vectors-materialized/trivial-identical/snapshot-a ./test-vectors-materialized/trivial-identical/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors-materialized/trivial-identical/snapshot-a → test-vectors-materialized/trivial-identical/snapshot-b
+# Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a → ./test-vectors-materialized/trivial-identical/snapshot-b
 
 No changes detected.
 
 ```
 
-No changes detected — `root` is `null`. The directory comparator expanded the root pair into child file pairs and pre-computed BLAKE3 hashes. The controller saw matching content hashes and short-circuited each pair to `identical` without invoking any leaf comparator. After transformers ran, pruning removed all identical nodes and the now-empty directory container, leaving nothing.
+## See a text-file change
 
-### Text File Changes
-
-When a text file changes between snapshots, the text comparator detects line-level differences:
+Now compare two snapshots where one text file changed:
 
 ```bash
-cat test-vectors-materialized/single-file-modify-text/snapshot-a/story.txt
+cat ./test-vectors-materialized/single-file-modify-text/snapshot-a/story.txt
+printf '\n---\n'
+cat ./test-vectors-materialized/single-file-modify-text/snapshot-b/story.txt
 ```
 
 ```output
@@ -184,13 +74,8 @@ Line 2
 Line 3
 Line 4
 Line 5
-```
 
-```bash
-cat test-vectors-materialized/single-file-modify-text/snapshot-b/story.txt
-```
-
-```output
+---
 Line 1
 Line 2 revised
 Line 3
@@ -200,11 +85,11 @@ Line 6
 ```
 
 ```bash
-binoc diff test-vectors-materialized/single-file-modify-text/snapshot-a test-vectors-materialized/single-file-modify-text/snapshot-b
+binoc diff ./test-vectors-materialized/single-file-modify-text/snapshot-a ./test-vectors-materialized/single-file-modify-text/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors-materialized/single-file-modify-text/snapshot-a → test-vectors-materialized/single-file-modify-text/snapshot-b
+# Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a → ./test-vectors-materialized/single-file-modify-text/snapshot-b
 
 ## Substantive Changes
 
@@ -212,77 +97,38 @@ binoc diff test-vectors-materialized/single-file-modify-text/snapshot-a test-vec
 
 ```
 
-Key observations:
-- The **directory comparator** expanded the root pair into child file pairs.
-- The **text comparator** claimed `story.txt` (by `.txt` extension) and produced a leaf diff with the summary you see above.
-- Under the hood, the diff node carries **semantic tags** like `binoc.content-changed` and `binoc.lines-added` (factual observations, not judgments) and **details** with exact line counts. The markdown renderer renders these into the human-readable summary; the JSON changeset artifact preserves the full structured data.
+So far this is just a changelog-style summary of what you would get
+with a textual diff.
 
-### File Addition and Removal
+## CSV-aware diffing
 
-Binoc handles files that exist in only one snapshot:
-
-```bash
-binoc diff test-vectors-materialized/single-file-add/snapshot-a test-vectors-materialized/single-file-add/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/single-file-add/snapshot-a → test-vectors-materialized/single-file-add/snapshot-b
-
-## Substantive Changes
-
-- **new_file.txt**: New file (1 line)
-
-```
+Binoc gets more interesting when the format itself matters. Here the
+same rows are present in both snapshots, but the CSV columns were
+reordered:
 
 ```bash
-binoc diff test-vectors-materialized/single-file-remove/snapshot-a test-vectors-materialized/single-file-remove/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/single-file-remove/snapshot-a → test-vectors-materialized/single-file-remove/snapshot-b
-
-## Substantive Changes
-
-- **removed_file.txt**: File removed (1 line)
-
-```
-
-Files present only in snapshot B get `action: "add"`. Files only in snapshot A get `action: "remove"`. The directory comparator creates `ItemPair::added()` or `ItemPair::removed()` entries, and downstream comparators handle the one-sided case.
-
-### CSV Comparisons
-
-CSV is the most common format in data archiving, and an example of Binoc's value over generic diff tools. The CSV comparator understands columns and rows.
-
-#### Column Reordering
-
-Columns shuffled but content identical — a clerical change that generic diff would flag as a total rewrite:
-
-```bash
-cat test-vectors-materialized/csv-column-reorder/snapshot-a/data.csv
+cat ./test-vectors-materialized/csv-column-reorder/snapshot-a/data.csv
+printf '\n---\n'
+cat ./test-vectors-materialized/csv-column-reorder/snapshot-b/data.csv
 ```
 
 ```output
 name,age,city
 Alice,30,NYC
 Bob,25,LA
-```
 
-```bash
-cat test-vectors-materialized/csv-column-reorder/snapshot-b/data.csv
-```
-
-```output
+---
 city,name,age
 NYC,Alice,30
 LA,Bob,25
 ```
 
 ```bash
-binoc diff test-vectors-materialized/csv-column-reorder/snapshot-a test-vectors-materialized/csv-column-reorder/snapshot-b
+binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vectors-materialized/csv-column-reorder/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors-materialized/csv-column-reorder/snapshot-a → test-vectors-materialized/csv-column-reorder/snapshot-b
+# Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
 ## Clerical Changes
 
@@ -290,42 +136,19 @@ binoc diff test-vectors-materialized/csv-column-reorder/snapshot-a test-vectors-
 
 ```
 
-Notice:
-- The output says "Columns reordered (content unchanged)" — the **column reorder transformer** detected that the only change was column ordering and collapsed it from a `modify` to a `reorder`.
-- This appears under **Clerical Changes**, not Substantive. The tag `binoc.column-reorder` maps to the "clerical" significance category — housekeeping, not a policy change.
-- Under the hood, the diff tree records exactly which columns were in which order, with zero cells changed and zero rows added/removed. That structured detail is available in the JSON changeset artifact and via the `extract` command.
+That is the first genuinely useful binoc result. A line-oriented diff
+would treat this like a rewrite. Binoc understands the header row and
+recognizes that the data itself did not change.
 
-#### Mixed CSV Changes
-
-Real-world dataset updates often combine multiple kinds of changes. Here, columns are reordered AND a new column and row are added:
+Now look at a more realistic update: one new column, a reorder, and a
+new row in the same file.
 
 ```bash
-cat test-vectors-materialized/csv-mixed-changes/snapshot-a/data.csv
+binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vectors-materialized/csv-mixed-changes/snapshot-b
 ```
 
 ```output
-name,age,city
-Alice,30,NYC
-Bob,25,LA
-```
-
-```bash
-cat test-vectors-materialized/csv-mixed-changes/snapshot-b/data.csv
-```
-
-```output
-city,name,age,email
-NYC,Alice,30,a@test.com
-LA,Bob,25,b@test.com
-SF,Charlie,35,c@test.com
-```
-
-```bash
-binoc diff test-vectors-materialized/csv-mixed-changes/snapshot-a test-vectors-materialized/csv-mixed-changes/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/csv-mixed-changes/snapshot-a → test-vectors-materialized/csv-mixed-changes/snapshot-b
+# Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a → ./test-vectors-materialized/csv-mixed-changes/snapshot-b
 
 ## Substantive Changes
 
@@ -333,172 +156,19 @@ binoc diff test-vectors-materialized/csv-mixed-changes/snapshot-a test-vectors-m
 
 ```
 
-The summary line packs three distinct changes into one sentence. Under the hood, these map to separate semantic tags: `binoc.column-addition`, `binoc.column-reorder`, `binoc.row-addition`, and `binoc.schema-change`. The column reorder transformer only collapses a diff to `reorder` when reordering is the *only* change — here there's also an added column and row, so it stays as `modify` with the full detail preserved.
+The changelog expresses a complex change in terms a dataset maintainer can
+act on.
 
-Because the tags include `binoc.column-addition` (substantive), not just `binoc.column-reorder` (clerical), this appears under **Substantive Changes**. The significance classification maps tags to categories independently — a single node with both clerical and substantive tags gets classified by the highest-priority match.
+## Look inside a zip
 
-### Markdown Changelog Output
-
-By default, `binoc diff` prints Markdown to stdout. You can also save specific output formats to files with `-o`. Here we save the raw changeset JSON and separately save a Markdown changelog:
+The same `diff` command works on nested content too:
 
 ```bash
-binoc diff test-vectors-materialized/csv-mixed-changes/snapshot-a test-vectors-materialized/csv-mixed-changes/snapshot-b -o /tmp/changeset.json -o /tmp/changeset.md -q && cat /tmp/changeset.md
+binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-materialized/zip-simple/snapshot-b
 ```
 
 ```output
-# Changelog: test-vectors-materialized/csv-mixed-changes/snapshot-a → test-vectors-materialized/csv-mixed-changes/snapshot-b
-
-## Substantive Changes
-
-- **data.csv**: Column added: 'email'; columns reordered; 1 row added
-
-```
-
-The changeset JSON is the canonical machine-readable artifact. The Markdown is a derived view produced by the output formatter. You can also generate changelogs from saved changesets using `binoc changelog`.
-
-The markdown output groups changes by significance category. Here, `binoc.column-addition` and `binoc.schema-change` match the default `substantive` significance rules, so the change appears under "Substantive Changes." The column reorder alone (as in the earlier example) would appear under "Clerical Changes."
-
-### Extracting Changed Data
-
-A changeset tells you *what* changed — "2 rows were added to data.csv." But sometimes you want the actual data: which rows? `binoc extract` reopens the original snapshots and pulls out the changed content. Extract requires *both* snapshots to be present, as well as the json changeset file, so it can reopen the data through the correct comparator layers.
-
-#### New CSV Rows
-
-The `csv-row-addition` test vector adds two rows to a CSV. First, generate the changeset:
-
-```bash
-binoc diff test-vectors-materialized/csv-row-addition/snapshot-a test-vectors-materialized/csv-row-addition/snapshot-b -o /tmp/tut-csv.json -q
-```
-
-Now extract the added rows:
-
-```bash
-binoc extract /tmp/tut-csv.json data.csv rows_added
-```
-
-```output
-name,age
-Bob,25
-Charlie,35
-```
-
-The output is valid CSV — the added rows with their headers. You could pipe this into another tool, load it into a database, or just eyeball what changed.
-
-The extract command works by walking the provenance chain recorded in the changeset. Each node knows which comparator produced it (`comparator` field) and which transformers modified it (`transformed_by` field). During extract, the controller reopens the snapshot files through each layer (directory → file), then asks the responsible plugin to format the result.
-
-#### Text File Diff
-
-For text files, `extract` can produce a unified diff. First generate and save the changeset:
-
-```bash
-binoc diff test-vectors-materialized/single-file-modify-text/snapshot-a test-vectors-materialized/single-file-modify-text/snapshot-b -o /tmp/tut-text.json -q
-```
-
-Then extract:
-
-```bash
-binoc extract /tmp/tut-text.json story.txt diff
-```
-
-```output
-Extract error: extract error: comparator 'binoc.text' cannot extract aspect 'diff' from node 'story.txt'
-```
-
-This works through nested containers too. A text file inside a zip inside a directory — the extract chain reopens each layer to reach the source data.
-
-Available aspects depend on the node type. For tabular nodes: `rows_added`, `rows_removed`, `cells_changed`, `columns_added`, `columns_removed`, `content`. For text: `diff`, `content_left`, `content_right`, `content`. For column reorder nodes: `column_order`.
-
-## Nested Structures: Directories Within Directories
-
-Binoc handles arbitrary nesting naturally. The controller's work loop processes independent subtrees in parallel:
-
-```bash
-find test-vectors-materialized/directory-nested/snapshot-a -type f | sort
-```
-
-```output
-test-vectors-materialized/directory-nested/snapshot-a/data/records.csv
-test-vectors-materialized/directory-nested/snapshot-a/docs/readme.txt
-```
-
-```bash
-find test-vectors-materialized/directory-nested/snapshot-b -type f | sort
-```
-
-```output
-test-vectors-materialized/directory-nested/snapshot-b/data/extra.csv
-test-vectors-materialized/directory-nested/snapshot-b/data/records.csv
-test-vectors-materialized/directory-nested/snapshot-b/docs/readme.txt
-```
-
-```bash
-binoc diff test-vectors-materialized/directory-nested/snapshot-a test-vectors-materialized/directory-nested/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/directory-nested/snapshot-a → test-vectors-materialized/directory-nested/snapshot-b
-
-## Substantive Changes
-
-- **data/extra.csv**: New table (2 columns, 1 rows)
-- **data/records.csv**: 1 row added
-- **docs/readme.txt**: 2 lines added, 1 removed
-
-```
-
-The diff tree mirrors the directory structure. The `data/` subtree and `docs/` subtree are processed in parallel by rayon. Each file is dispatched to the appropriate comparator by extension: `.csv` files go to the CSV comparator, `.txt` files go to the text comparator. The controller doesn't know about any of this — it just processes item pairs.
-
-### File Moves (The Correlation and Folder-Move Transformers)
-
-When files appear at different paths but with identical content, two transformers collaborate to recover the move. `CorrelationDetector` correlates adds and removes by content hash and rewrites each pair as a single `binoc.move` leaf. `FolderMoveDetector` then walks the tree and rolls a subtree of leaf moves back up into one `binoc.folder-move` node — so a directory rename collapses to one entry instead of N. The `folder-move-nested` vector renames the entire `docs/` subtree (a readme plus nested `docs/reports/` and `docs/reports/quarterly/` files) to `documentation/`, with every leaf byte-identical:
-
-```bash
-find test-vectors-materialized/folder-move-nested/snapshot-a -type f | sort
-```
-
-```output
-test-vectors-materialized/folder-move-nested/snapshot-a/docs/readme.txt
-test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/annual.txt
-test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/quarterly/q1.txt
-test-vectors-materialized/folder-move-nested/snapshot-a/docs/reports/quarterly/q2.txt
-```
-
-```bash
-find test-vectors-materialized/folder-move-nested/snapshot-b -type f | sort
-```
-
-```output
-test-vectors-materialized/folder-move-nested/snapshot-b/documentation/readme.txt
-test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/annual.txt
-test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/quarterly/q1.txt
-test-vectors-materialized/folder-move-nested/snapshot-b/documentation/reports/quarterly/q2.txt
-```
-
-```bash
-binoc diff test-vectors-materialized/folder-move-nested/snapshot-a test-vectors-materialized/folder-move-nested/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/folder-move-nested/snapshot-a → test-vectors-materialized/folder-move-nested/snapshot-b
-
-## Other Changes
-
-- **documentation**: Folder moved from docs
-
-```
-
-Without these transformers the same change would appear as four adds plus four removes. `CorrelationDetector` collapses each pair into a `binoc.move` leaf; `FolderMoveDetector` then sees that an entire subtree was moved coherently and emits a single `binoc.folder-move` node whose `source_path` is `docs` and whose `path` is `documentation`. This is the transformer pattern at two levels: comparators report raw facts (add + remove), and successive transformers detect higher-level patterns (per-file move, then folder-wide move).
-
-### Zip Archives
-
-Binoc looks inside zip files. The zip comparator extracts both sides to temp directories and re-enters the controller queue, so any comparator that works on regular files also works on files inside zips. The `zip-simple` vector commits an `archive.zip.d/` source tree that `just materialize` built into a real `archive.zip`:
-
-```bash
-binoc diff test-vectors-materialized/zip-simple/snapshot-a test-vectors-materialized/zip-simple/snapshot-b
-```
-
-```output
-# Changelog: test-vectors-materialized/zip-simple/snapshot-a → test-vectors-materialized/zip-simple/snapshot-b
+# Changelog: ./test-vectors-materialized/zip-simple/snapshot-a → ./test-vectors-materialized/zip-simple/snapshot-b
 
 ## Substantive Changes
 
@@ -507,260 +177,20 @@ binoc diff test-vectors-materialized/zip-simple/snapshot-a test-vectors-material
 
 ```
 
-The zip comparator extracted both archives, then the controller processed the extracted directories with the same pipeline. The path `archive.zip/data.txt` shows the logical path through the archive. This nesting is recursive — the `zip-nested` test vector has a zip inside a zip inside a CSV, and it all works.
+Binoc expands container formats like zip before dispatching their contents.
+Paths such as `archive.zip/data.txt` point inside the archive.
 
-### The SQLite Plugin
+## Teaching binoc a new format
 
-The **binoc-sqlite** plugin is an example of a third-party plugin. It compares schema (tables, columns, types) and row counts — not row-by-row content — so you see "1 table modified", "1 row added (1 → 2 rows)", or "Table added (2 columns, 5 rows)" instead of a raw binary change.
-
-`just materialize` already built the demo databases from the plugin's `.sqlite.d/*.sql` sources via the plugin's own [`SqliteMaterializer`](../model-plugins/binoc-sqlite/src/test_support.rs). Install the plugin into the active environment and diff the materialized snapshots:
+Binoc can learn domain formats through plugins. For example, the standard
+library does not understand FASTA:
 
 ```bash
-uv pip install -q -e ./model-plugins/binoc-sqlite && binoc diff model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-a model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-b
+binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
 ```
 
 ```output
-# Changelog: model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-a → model-plugins/binoc-sqlite/test-vectors-materialized/sqlite-row-addition/snapshot-b
-
-## Substantive Changes
-
-- **data.sqlite/users**: 1 row added (1 → 2 rows)
-
-```
-
-Snapshot-a has one row in `users`, snapshot-b has two. Without the plugin, the same files would be compared as binary and reported as "Content changed". See [binoc-sqlite’s README](../model-plugins/binoc-sqlite/README.md) and [Writing Binoc Plugins](writing_plugins.md).
-
-## Architecture
-
-Now that you've seen the user-facing behavior, let's look under the hood.
-
-### Putting It All Together: A Mental Model for Contributors
-
-Here's the flow for a single `binoc diff` invocation, from input to output:
-
-    Snapshot A ──┐                                          ┌── JSON changeset
-                 ├── Controller ─── Comparators ─── IR ─── Transformers ─── Renderer ──┤
-    Snapshot B ──┘   (type-ignorant)  (format-aware) (tree) (pattern-aware)  (format)   └── Markdown changelog
-
-**Separation of concerns**:
-- The **controller** is a generic tree-processing engine. It never imports or references any data format.
-- **Comparators** are the parsers: raw data → IR. They have data access. They're where format knowledge lives.
-- **Transformers** are optimization passes: IR → IR. They detect patterns (moves, reorders) across the tree. They don't need raw data.
-- **Renderers** serialize the IR. Significance classification (clerical vs. substantive) lives here.
-- **Config** controls ordering and composition. Plugins suggest; config decides.
-
-### The Controller Loop
-
-The central insight: **the controller is type-ignorant**. It processes a work queue of item pairs without knowing what a directory, zip, or CSV is.
-
-The algorithm:
-1. Receive a root item pair (snapshot A, snapshot B).
-2. Walk the comparator pipeline. First comparator to claim the item wins.
-3. The comparator either emits a **Leaf** diff (terminal), expands into **child item pairs** (recursive), or reports **Identical** (filtered out).
-4. Independent subtrees are processed in parallel (rayon).
-5. Once the tree is fully expanded, run the transformer pipeline in order.
-
-In pseudocode, the core `process_pair` method (in `binoc-core/src/controller.rs`):
-
-    process_pair(pair):
-        if both sides have matching content hashes:
-            return Identical (skip comparator entirely)
-
-        comparator = first comparator in pipeline that claims this pair
-        result = comparator.compare(pair)
-
-        match result:
-            Identical  → mark node "identical"
-            Leaf(node) → return the comparator's diff node
-            Expand(container, children) →
-                process each child pair in parallel (recurse)
-                attach children to container node
-
-The controller has no knowledge of what constitutes a "directory" or "CSV" — that's all in the comparators. Three possible outcomes: `Identical` (filtered out after transformers), `Leaf` (terminal diff), or `Expand` (recurse into children).
-
-### The DiffNode IR
-
-Every comparator emits `DiffNode` values. Every transformer rewrites them. The CLI, serializers, and Python bindings all consume the same structure. Here are its fields (defined in `binoc-core/src/ir.rs`):
-
-| Field | Type | Purpose |
-|---|---|---|
-| `action` | open enum | `"add"`, `"remove"`, `"modify"`, `"move"`, `"reorder"`, etc. Plugins may define new actions. |
-| `item_type` | open string | `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, etc. The core never interprets it. |
-| `path` | string | Logical path within snapshot, e.g. `"archive.zip/data/file.csv"`. |
-| `source_path` | optional | For moves/renames: the original path. |
-| `summary` | optional | Human-readable one-liner (e.g. "2 lines added, 1 removed"). Set by comparators/transformers, rendered by renderers. |
-| `tags` | set of strings | Semantic observations: `binoc.column-reorder`, `binoc.content-changed`, etc. Open and namespaced by convention. |
-| `children` | list | Child diff nodes forming the tree structure. |
-| `details` | map | Comparator-specific structured data (column lists, row counts, hashes). |
-| `annotations` | map | Transformer-added metadata, separate from comparator data. |
-| `comparator` | optional | Which comparator produced this node (provenance for extract chain). |
-| `transformed_by` | list | Transformers that modified this node, in order (provenance for extract chain). |
-
-Key design decisions:
-- **Everything is openly typed.** `action`, `item_type`, and `tags` are plain strings — conventions, not enforcement. A genomics plugin can define `action: "gap-change"` without touching core.
-- **Tags are factual observations, not judgments.** Significance classification maps tags to categories in output config, not in the IR.
-- **Provenance is tracked.** `comparator` and `transformed_by` record who produced and modified each node, enabling `binoc extract` to reopen data through the right plugin chain.
-
-### The Plugin Dispatch System
-
-Comparators are tried in pipeline order. The first to claim an item wins — URL-routing semantics. Each comparator declares its dispatch criteria in a `ComparatorDescriptor`: file extensions, media types, and scope (files, containers, or both). For each comparator in order, the controller checks whether the item matches the descriptor. If extensions or media types are declared, the item must match at least one. Scope filtering ensures that file-only comparators don't see directories and vice versa. If the descriptor matches but the comparator discovers at compare-time that it can't handle the item, it returns `Skip` and the controller tries the next candidate.
-
-The default pipeline order (from `DatasetConfig::default_config()` in `binoc-core/src/config.rs`):
-
-| # | Comparator | Claims by |
-|---|---|---|
-| 1 | `binoc.zip` | `.zip` extension |
-| 2 | `binoc.tar` | `.tar`, `.tar.gz`, `.tgz` extensions |
-| 3 | `binoc.directory` | `scope: Containers` |
-| 4 | `binoc.csv` | `.csv`, `.tsv` extensions |
-| 5 | `binoc.text` | `.txt`, `.md`, `.rs`, and other text extensions |
-| 6 | `binoc.binary` | catch-all (no extension/media type filter) |
-
-Order matters. Archive comparators come first because `.zip`/`.tar` extension match must happen before the directory comparator claims the extracted contents. CSV comes before text because `.csv` files should use the column-aware comparator, not line-level diff. Binary is the catch-all fallback.
-
-After comparators, transformers run in declared order. Each transformer declares matching criteria in a `TransformerDescriptor`: item types, tags, actions, artifact formats, and node shape (leaf vs. container). All non-empty fields must match (AND); within each field, any value suffices (OR). The default pipeline:
-
-`binoc.correlation_detector` → `binoc.folder_move_detector` → `binoc.tabular_analyzer` → `binoc.column_reorder_detector`
-
-The tabular analyzer matches any node with `tabular_v1` artifacts and adds tags, details, and summary text. The column reorder detector runs after it and reclassifies pure column reorders. This separation means any comparator that publishes `tabular_v1` artifacts (CSV today, Parquet or Excel in the future) gets the same analysis pipeline automatically.
-
-**This is a config concern, not a plugin concern.** A custom dataset config can reorder, add, or remove any plugin.
-
-### Significance Classification
-
-Significance is an output concern, not a core IR concern. The mapping is layered:
-
-1. **Comparators** emit nodes with basic metadata (action, item type) and publish typed artifacts (e.g. `tabular_v1`).
-2. **Transformers** attach semantic tags (`binoc.column-reorder`, `binoc.row-addition`) and summary text — factual reporting. Later transformers may refine or replace earlier results.
-3. **The output config** maps tags to categories — different users and domains can define different mappings over the same tags.
-
-The default significance mapping lives in the markdown renderer (`binoc-stdlib/src/renderers/markdown.rs`) — since classification is a renderer concern, not a core concern:
-
-| Category | Tags |
-|---|---|
-| **Clerical** | `binoc.column-reorder`, `binoc.whitespace-change`, `binoc.folder-rename`, `binoc.encoding-change` |
-| **Substantive** | `binoc.column-addition`, `binoc.column-removal`, `binoc.schema-change`, `binoc.row-addition`, `binoc.row-removal`, `binoc.content-changed` |
-
-Column reordering is clerical (housekeeping). Column addition is substantive (policy change). A bio research lab could define `biobinoc.alignment-gap` as clerical and `biobinoc.sequence-deletion` as substantive, using the same mechanism. Users override these defaults via the `output.markdown.significance` section of their dataset config YAML.
-
-### The Transformer Pattern
-
-Transformers rewrite the completed diff tree. They run in declared order, matching nodes via their `TransformerDescriptor` (item types, tags, actions, artifact formats, node shape). The controller walks the tree bottom-up: children are transformed first, then the transformer sees each matched node with its children already in final form. This means a transformer that operates on a container observes the transformed children, which is what you want for correlation passes like move and copy detection.
-
-Both `Comparator` and `Transformer` are trait objects registered in a `PluginRegistry`. See [Writing Plugins](writing_plugins.md) for the full trait API and implementation guide.
-
-### The Standard Library
-
-The stdlib (`binoc-stdlib`) registers itself into a `PluginRegistry` by name — exactly as a third-party plugin pack would. Its `register_stdlib()` function registers each comparator, transformer, and renderer under its `binoc.*` name. A third-party pack (e.g., BioBinoc for genomics) would do the same: implement the traits, register by name, and users reference them in their dataset config YAML.
-
-## Test Vectors: How Testing Works
-
-Test vectors live in `test-vectors/`. Each is a pair of snapshots plus a TOML manifest declaring what the vector tests and what assertions to check:
-
-```bash
-cat test-vectors/csv-column-reorder/manifest.toml
-```
-
-```output
-[vector]
-name = "csv-column-reorder"
-description = "Columns shuffled, content identical"
-tags = ["csv", "column-reorder", "clerical"]
-
-[config]
-comparators = ["binoc.directory", "binoc.csv"]
-transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]
-
-[expected]
-root_kind = "modify"
-child_count = 1
-has_tags = ["binoc.column-reorder"]
-significance = "clerical"
-```
-
-Structural assertions in the manifest (`root_action`, `child_count`, `has_tags`) are the primary check — they survive IR schema evolution. The `[config]` section specifies which plugins to use, so vectors test specific comparators in isolation.
-
-The test vector runner discovers all vectors, loads each manifest, runs the full pipeline, and checks assertions. Let's see how many vectors we have:
-
-```bash
-ls -1d test-vectors/*/manifest.toml | wc -l && echo 'test vectors:' && ls -1d test-vectors/*/ | sed 's|test-vectors/||;s|/||'
-```
-
-```output
-      25
-test vectors:
-csv-cell-changes
-csv-column-addition
-csv-column-removal
-csv-column-reorder
-csv-mixed-changes
-csv-row-addition
-csv-row-removal
-directory-file-copy
-directory-nested-with-tar
-directory-nested
-folder-move-nested
-kitchen-sink
-single-file-add
-single-file-modify-binary
-single-file-modify-csv
-single-file-modify-text-root
-single-file-modify-text
-single-file-remove
-tar-nested
-tar-simple
-tree-wide-correlation
-trivial-identical-csv
-trivial-identical
-zip-nested
-zip-simple
-```
-
-Vectors are named for what they test, not how they test it: `csv-column-reorder`, not `test-comparator-csv-3`. They double as documentation.
-
-**Adding a new test vector** is one of the easiest ways to contribute:
-1. Create a directory under `test-vectors/` with snapshot-a and snapshot-b.
-2. Write a `manifest.toml` with the expected behavior.
-3. Run `cargo test -p binoc-stdlib` — the vector runner auto-discovers it.
-
-## Extending Binoc: A Worked Example
-
-The built-in comparators handle common formats — directories, text files, CSVs, zip archives. But datasets often contain domain-specific formats that a generic diff can't interpret meaningfully. This is where Python plugins come in.
-
-### The Problem: Noisy Diffs on Domain Files
-
-Suppose you're tracking a genomics dataset that contains FASTA sequence files. Between two releases, a database re-export rewrote all the header annotations but left the actual sequences unchanged:
-
-```bash
-cat docs/examples/fasta-demo/snapshot-a/sequences.fasta
-```
-
-```output
->gene_1 src=GenBank date=2024-01
-ATCGATCGATCG
->gene_2 src=GenBank date=2024-01
-GCTAGCTAGCTA
-```
-
-```bash
-cat docs/examples/fasta-demo/snapshot-b/sequences.fasta
-```
-
-```output
->gene_1 source=NCBI retrieved=2024-06
-ATCGATCGATCG
->gene_2 source=NCBI retrieved=2024-06
-GCTAGCTAGCTA
-```
-
-Out of the box, Binoc doesn't know what FASTA is. The `.fasta` extension isn't claimed by any comparator except the binary catch-all:
-
-```bash
-binoc diff docs/examples/fasta-demo/snapshot-a docs/examples/fasta-demo/snapshot-b
-```
-
-```output
-# Changelog: docs/examples/fasta-demo/snapshot-a → docs/examples/fasta-demo/snapshot-b
+# Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
 
 ## Substantive Changes
 
@@ -768,131 +198,106 @@ binoc diff docs/examples/fasta-demo/snapshot-a docs/examples/fasta-demo/snapshot
 
 ```
 
-"Content changed" — true, but unhelpful. An archivist seeing this can't tell whether the actual genomic data changed or if it's just metadata noise. And because `binoc.content-changed` is classified as substantive, this would show up alongside real data changes.
+All the default tool can say is that the two FASTA files are different.
 
-### The Solution: A Python Comparator
+With a short plugin, we can report the useful fact instead of the generic byte
+change. This example defines the comparator in one Python script; the same
+class could later be packaged as a reusable plugin.
 
-A custom comparator that understands FASTA can parse the format and report what actually changed. Here's the complete plugin — about 30 lines of Python:
+```bash
+python - <<'PY'
+from pathlib import Path
+import binoc
 
-    import binoc
+class FastaComparator(binoc.Comparator):
+    name = 'bio.fasta'
+    extensions = ['.fasta', '.fa']
 
-    class FastaComparator(binoc.Comparator):
-        name = "bio.fasta"
-        extensions = [".fasta", ".fa"]
+    def compare(self, pair):
+        left = self._parse(Path(pair.left_path).read_text()) if pair.left_path else {}
+        right = self._parse(Path(pair.right_path).read_text()) if pair.right_path else {}
 
-        def compare(self, pair):
-            left = self._parse(open(pair.left_path).read()) if pair.left_path else {}
-            right = self._parse(open(pair.right_path).read()) if pair.right_path else {}
+        ids = sorted(set(left) | set(right))
+        sequences_changed = sum(
+            1
+            for record_id in ids
+            if left.get(record_id, {}).get('seq') != right.get(record_id, {}).get('seq')
+        )
+        headers_changed = sum(
+            1
+            for record_id in ids
+            if left.get(record_id, {}).get('hdr') != right.get(record_id, {}).get('hdr')
+        )
 
-            ids = sorted(set(left) | set(right))
-            seqs_changed = sum(
-                1 for i in ids
-                if left.get(i, {}).get("seq") != right.get(i, {}).get("seq")
+        if not sequences_changed and not headers_changed:
+            return binoc.Identical()
+
+        summary = (
+            f'{sequences_changed} sequence(s) changed'
+            if sequences_changed
+            else f'Headers updated ({headers_changed} records); sequences unchanged'
+        )
+        tags = ['bio.header-change'] if headers_changed else []
+        if sequences_changed:
+            tags.append('bio.sequence-change')
+
+        return binoc.Leaf(
+            binoc.DiffNode(
+                action='modify',
+                item_type='fasta',
+                path=pair.logical_path,
+                summary=summary,
+                tags=tags,
             )
-            hdrs_changed = sum(
-                1 for i in ids
-                if left.get(i, {}).get("hdr") != right.get(i, {}).get("hdr")
-            )
+        )
 
-            if not seqs_changed and not hdrs_changed:
-                return binoc.Identical()
+    @staticmethod
+    def _parse(text):
+        records = {}
+        current = None
+        for line in text.strip().split('\n'):
+            if line.startswith('>'):
+                current = line.split()[0][1:]
+                records[current] = {'hdr': line, 'seq': ''}
+            elif current:
+                records[current]['seq'] += line.strip()
+        return records
 
-            tags = []
-            if seqs_changed:
-                tags.append("bio.sequence-change")
-            if hdrs_changed:
-                tags.append("bio.header-change")
+config = binoc.Config(comparators=['binoc.text'])
+config.add_comparator(FastaComparator())
+changeset = binoc.diff(
+    './docs/examples/fasta-demo/snapshot-a/sequences.fasta',
+    './docs/examples/fasta-demo/snapshot-b/sequences.fasta',
+    config=config,
+)
+print(binoc.to_markdown([changeset]))
+PY
+```
 
-            if seqs_changed:
-                summary = f"{seqs_changed} sequence(s) changed"
-            else:
-                summary = f"Headers updated ({hdrs_changed} records); sequences unchanged"
+```output
+# Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
 
-            return binoc.Leaf(binoc.DiffNode(
-                action="modify", item_type="fasta", path=pair.logical_path,
-                summary=summary, tags=tags,
-            ))
+## Other Changes
 
-        @staticmethod
-        def _parse(text):
-            records = {}
-            current = None
-            for line in text.strip().split("\n"):
-                if line.startswith(">"):
-                    current = line.split()[0][1:]
-                    records[current] = {"hdr": line, "seq": ""}
-                elif current:
-                    records[current]["seq"] += line.strip()
-            return records
+- **sequences.fasta**: Headers updated (2 records); sequences unchanged
 
-Register it and run:
 
-    config = binoc.Config.default()
-    config.add_comparator(FastaComparator())
+```
 
-    changeset = binoc.diff(
-        "docs/examples/fasta-demo/snapshot-a",
-        "docs/examples/fasta-demo/snapshot-b",
-        config=config,
-    )
-    print(binoc.to_markdown([changeset]))
+Now binoc reports that only the headers changed, and these two FASTA files do
+not substantively differ.
 
-Now the output reads:
+## Where next
 
-    ## Other Changes
+If you want to keep working from the command line, continue with
+[Diff two snapshots](howto/diff-two-snapshots.md),
+[Save and render changesets](howto/save-and-render-changesets.md), and
+[Extract changed data](howto/extract-changed-data.md).
 
-    - **sequences.fasta**: Headers updated (2 records); sequences unchanged
+If you want to use packaged extensions, go to
+[Install and use plugins](howto/install-and-use-plugins.md). If you
+want to turn the FASTA script into a real plugin, continue with
+[Write a Python comparator](howto/write-a-python-comparator.md).
 
-The archivist immediately knows this is metadata noise, not a data change.
-
-### Classifying Custom Tags with Config
-
-The output says "Other Changes" because the default significance mapping doesn't know about `bio.header-change`. A dataset config YAML file can teach the renderer about your domain-specific tags:
-
-    # dataset.yaml
-    output:
-      markdown:
-        significance:
-          clerical:
-            - binoc.column-reorder
-            - binoc.whitespace-change
-            - bio.header-change       # header-only changes are housekeeping
-          substantive:
-            - binoc.column-addition
-            - binoc.content-changed
-            - bio.sequence-change     # actual sequence changes matter
-
-Load this config alongside your custom comparator:
-
-    config = binoc.Config.from_file("dataset.yaml")
-    config.add_comparator(FastaComparator())
-
-    changeset = binoc.diff("snapshot-a", "snapshot-b", config=config)
-    print(binoc.to_markdown([changeset]))
-
-Now the same diff appears under **Clerical Changes** instead, clearly separated from real data changes in the changelog.
-
-The `add_comparator()` call above is the scripting path — great for Jupyter notebooks and one-off analysis. For reusable plugins, Binoc uses **Python entry points** for automatic discovery: `pip install biobinoc` makes the plugin available to the `binoc` CLI automatically, and the config file can reference it by name (`comparators: [biobinoc.fasta]`).
-
-This is the separation of concerns in practice: the **comparator** reports facts (which tags apply), **config** decides what those facts mean (clerical vs. substantive), and the **renderer** renders the result. Different teams tracking the same dataset can use different configs to prioritize different kinds of changes.
-
-For the full story on packaging plugins (Python and Rust), entry-point discovery, the `PluginRegistry` API, naming conventions, and the two-CLI architecture (`binoc` vs `binoc-cli`), see [Writing Binoc Plugins](writing_plugins.md).
-
-## Quick Reference: Contributing
-
-| Task | Where to Start |
-|---|---|
-| Add a new test vector | `test-vectors/` — create a dir with snapshot-a, snapshot-b, manifest.toml |
-| Write a new comparator | `binoc-stdlib/src/comparators/` for stdlib; see [Writing Plugins](writing_plugins.md) for third-party |
-| Write a new transformer | `binoc-stdlib/src/transformers/` for stdlib; see [Writing Plugins](writing_plugins.md) for third-party |
-| Fix a CLI bug | `binoc-cli/src/lib.rs` — the CLI library; `main.rs` just calls `binoc_cli::run()` |
-| Add Python API surface | `binoc-python/src/lib.rs` (PyO3) + `binoc-python/python/binoc/__init__.py` |
-| Change the IR | `binoc-core/src/ir.rs` — affects everything downstream |
-| Modify dispatch logic | `binoc-core/src/controller.rs` — the `find_comparator` and `process_pair` methods |
-| Tune default significance | `binoc-stdlib/src/renderers/markdown.rs` — the `default_significance` function |
-
-Run the full test suite before submitting:
-
-    cargo test
-
-All green. Welcome to the project.
+If you want to learn more about the design of binoc, start with the
+[Architecture overview](explanation/architecture.md).

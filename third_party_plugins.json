@@ -1,0 +1,39 @@
+{
+  "plugins": [
+    {
+      "id": "binoc-sqlite",
+      "title": "binoc-sqlite",
+      "summary": "Compares two SQLite database files: table/column layout, column types, primary keys, and per-table row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.",
+      "repository": "https://github.com/harvard-lil/binoc",
+      "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite",
+      "source_path": "model-plugins/binoc-sqlite",
+      "packages": {
+        "pypi": "binoc-sqlite",
+        "crate": "binoc-sqlite"
+      },
+      "entry_point": {
+        "group": "binoc.plugins",
+        "name": "binoc-sqlite",
+        "target": "binoc_sqlite",
+        "loader": "native_rust_module"
+      },
+      "comparators": [
+        {
+          "name": "binoc-sqlite.sqlite",
+          "dispatch": {
+            "extensions": [".sqlite", ".sqlite3", ".db"],
+            "media_types": [
+              "application/vnd.sqlite3",
+              "application/x-sqlite3"
+            ],
+            "scope": "Files",
+            "handles_identical": false
+          },
+          "ir_item_types": ["sqlite_database", "sqlite_table"]
+        }
+      ],
+      "transformers": [],
+      "renderers": []
+    }
+  ]
+}

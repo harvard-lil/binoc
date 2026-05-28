@@ -7,6 +7,7 @@ use crate::types::{ArtifactDescriptor, ItemPair};
 /// Every comparator emits it, every transformer rewrites it, and serializers
 /// or bindings read it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DiffNode {
     /// Open enum: "add", "remove", "modify", "move", "reorder",
     /// "schema_change", etc. Plugins may define new actions.
@@ -174,6 +175,7 @@ impl DiffNode {
 
 /// A structured description of how to get from one snapshot to the next.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Changeset {
     pub from_snapshot: String,
     pub to_snapshot: String,

@@ -58,7 +58,7 @@ clear the transient fields on a node/tree. The controller calls
 returning, so every consumer (JSON output, renderers, insta snapshots, Python
 bindings, CLI) sees a stripped changeset. Extract does not rely on stripped
 output: it rebuilds transient state on demand by replaying the comparator
-chain (see [provenance and extract](provenance_and_extract.md)).
+chain (see [provenance and extract](2026-03-05-provenance_and_extract.md)).
 
 ### 3. ABI request types stop carrying transient sidecars
 
@@ -111,7 +111,7 @@ any transformer acting on a container. Such transformers that need child
 artifacts would have to `data.local_path()` source items and re-parse each
 child. Rejected because it contradicts the thin-comparator /
 composable-transformer model established by the [transformer composition and
-artifact flow](transformer_composition_and_artifact_flow.md) ADR: a
+artifact flow](2026-03-20-transformer_composition_and_artifact_flow.md) ADR: a
 container-scope transformer that wants to reclassify based on child-level
 semantic content is a normal thing to build, and forcing each such transformer
 to re-parse every child defeats the purpose of publishing artifacts at all.

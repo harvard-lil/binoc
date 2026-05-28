@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Changeset",
+  "description": "A structured description of how to get from one snapshot to the next.",
+  "type": "object",
+  "properties": {
+    "from_snapshot": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "root": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiffNode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "to_snapshot": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "from_snapshot",
+    "to_snapshot"
+  ],
+  "$defs": {
+    "ArtifactDescriptor": {
+      "description": "Descriptor for a published artifact attached to a node.\n\nArtifacts are the unified mechanism for both private reuse and\ncross-plugin composition. A comparator or transformer publishes\nzero or more artifacts; downstream plugins consume them by format.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/ArtifactFormat"
+        },
+        "handle": {
+          "description": "Opaque handle managed by the SDK's DataAccess implementation.\nPlugins should not create or interpret this value directly.",
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "subject": {
+          "$ref": "#/$defs/ArtifactSubject"
+        }
+      },
+      "required": [
+        "format",
+        "subject",
+        "producer",
+        "handle"
+      ]
+    },
+    "ArtifactFormat": {
+      "description": "Identifies an artifact's data format as a structured tuple of\n(package, name, version).\n\n- **`package`** — the package that owns and defines this format,\n  resolvable through the language's normal package system\n  (e.g. `\"binoc\"`, `\"binoc-csv\"`, `\"acme-parquet\"`).\n- **`name`** — the format name within that package\n  (e.g. `\"tabular\"`, `\"relational-schema\"`).\n- **`version`** — a single integer. Bump only for breaking schema\n  changes. Adding optional fields to an existing version is fine\n  and does not require a bump (JSON/serde naturally ignore unknown\n  fields and default missing ones).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "package",
+        "name",
+        "version"
+      ]
+    },
+    "ArtifactSubject": {
+      "description": "Which side of a comparison an artifact describes.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right",
+        "pair"
+      ]
+    },
+    "DiffNode": {
+      "description": "A node in the diff tree — the central data structure of the system.\nEvery comparator emits it, every transformer rewrites it, and serializers\nor bindings read it.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Open enum: \"add\", \"remove\", \"modify\", \"move\", \"reorder\",\n\"schema_change\", etc. Plugins may define new actions.",
+          "type": "string"
+        },
+        "annotations": {
+          "description": "Transformer-added metadata.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "artifacts": {
+          "description": "Published artifacts for this node. Session-scoped working data: carried\nacross the plugin ABI wire as descriptors (the bytes live in the shared\n`data_root` cache), but not meaningful outside a session. Callers\nwriting changeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactDescriptor"
+          }
+        },
+        "children": {
+          "description": "Child diff nodes forming the tree structure.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffNode"
+          }
+        },
+        "comparator": {
+          "description": "Which comparator produced this node (provenance for extract chain).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "details": {
+          "description": "Comparator-specific payload, schema determined by item_type convention.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "item_type": {
+          "description": "Open string: \"directory\", \"file\", \"tabular\", \"zip_archive\", etc.\nNo built-in types — conventions, not enforcement.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Location within snapshot (logical path, including interior paths\nlike \"archive.zip/data/file.csv\").",
+          "type": "string"
+        },
+        "pending_recompare": {
+          "description": "Request that the controller re-dispatch the given `ItemPair` through\nthe comparator pipeline and merge the result into this node before\nthe next transformer runs. Set by transformers (e.g. fuzzy\ncorrelation) that have decided two leaves represent the same logical\nitem but need a content diff under the new (move) node. Session-\nscoped working data: wire-visible so plugins can set it across the\nABI boundary, but cleared by [`DiffNode::strip_transient`] before\nchangeset output. The controller takes (clears) this field as it\nprocesses it; nodes in a finalized changeset never carry it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemPair"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_items": {
+          "description": "The original item pair that produced this node. Session-scoped working\ndata: available during a live diff/transform session for transformers\nand extractors that need to re-read source data, and carried across the\nplugin ABI wire so separately-compiled plugins can access it. Callers\nwriting changeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemPair"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_path": {
+          "description": "For moves/renames: the original path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "description": "Optional human-readable one-liner describing the change.\nSet by comparator or transformer; used by renderers for narrative rendering.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "description": "Open bag of semantic tags, namespaced by convention.\ne.g. \"binoc.column-reorder\", \"biobinoc.gap-change\"",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "transformed_by": {
+          "description": "Transformers that modified this node, in order (provenance for extract chain).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "item_type",
+        "path"
+      ]
+    },
+    "ItemPair": {
+      "description": "A pair of items to compare. Either side may be None (add/remove).",
+      "type": "object",
+      "properties": {
+        "left": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ItemRef": {
+      "description": "Metadata-only view of one side of a comparison. Carries logical identity\nand content metadata but NOT a filesystem path — data access goes through\n`DataAccess`.\n\n# Metadata invariants\n\n`content_hash`, `size`, and `media_type` are **opportunistic hints**.\nProducers (expanding comparators like directory/zip, or data backends)\npopulate them when doing so is cheap — typically as a byproduct of work\nthey were already performing. Consumers **must not assume presence**, but\n**may trust presence**: when a field is set, the value accurately reflects\nthe current bytes. Use [`ItemRef::resolve_hash`] / [`ItemRef::resolve_size`]\nto obtain a value with a transparent fall-back read.\n\nThis keeps fast paths (directory-only listings, short-circuit identical\ndetection) cheap while letting consumers that need a value — most notably\nthe move detector, which correlates leaves across container boundaries —\nhydrate on demand.",
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handle": {
+          "description": "Opaque identifier used by DataAccess implementations to locate data.\nPlugin authors should not create or interpret this value directly.",
+          "type": "string",
+          "default": ""
+        },
+        "is_dir": {
+          "type": "boolean"
+        },
+        "logical_path": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "logical_path",
+        "is_dir"
+      ]
+    }
+  }
+}

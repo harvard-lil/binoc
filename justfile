@@ -36,17 +36,150 @@ test:
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 
-# Regenerate docs/tutorial.md by re-running all embedded code blocks. Depends on
-# `just materialize` so the tutorial's `test-vectors-materialized/...` commands
-# resolve.
-docs: materialize
+# Aggregate docs generators. Each sub-recipe is cache-aware and skips work when
+# inputs are unchanged. See docs/adr/2026-04-17-documentation_platform_and_info_design.md §6.
+docs: docs-tutorial docs-cli docs-adr-index docs-plugin-catalog docs-schema docs-sdk docs-vectors
+
+# Regenerate docs/tutorial.md by re-running all embedded code blocks. Showboat
+# runs in a uv tool env that includes ./binoc-python, so visible `binoc`
+# commands use the local source tree. Depends on `just materialize` so the
+# tutorial's `test-vectors-materialized/...` commands resolve.
+docs-tutorial: materialize
     #!/usr/bin/env bash
     set -euo pipefail
-    if uvx showboat verify docs/tutorial.md --output docs/tutorial.md > /dev/null 2>&1; then
-        echo "docs/tutorial.md is up to date."
+    TARGET="docs/tutorial.md"
+    if uvx --with ./binoc-python showboat verify "${TARGET}" --output "${TARGET}" > /dev/null 2>&1; then
+        echo "${TARGET} is up to date."
     else
-        echo "docs/tutorial.md updated."
+        echo "${TARGET} updated."
     fi
+
+# Regenerate docs/reference/cli.md from the binoc-cli clap Command tree.
+# Inputs: binoc-cli/** (every .rs file under binoc-cli/ contributes to the
+# Command tree). The emitter only rewrites the region between the BEGIN/END
+# markers in docs/reference/cli.md, leaving the authored framing intact.
+# Cargo's incremental build makes the no-change case cheap; the emitter
+# itself skips the write when the regenerated region already matches.
+docs-cli:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo run --quiet -p binoc-cli --bin emit-cli-markdown -- docs/reference/cli.md
+
+# Regenerate docs/adr/README.md from front matter of docs/adr/*.md.
+docs-adr-index:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --quiet --script scripts/build_adr_index.py
+
+# Create a new ADR from docs/adr/TEMPLATE.md with today's date in the filename,
+# then refresh docs/adr/README.md. Usage: `just adr "Some title"`.
+adr title:
+    #!/usr/bin/env -S uv run --quiet python
+    import datetime, pathlib, re, sys
+    title = {{quote(title)}}
+    slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
+    date = datetime.date.today().isoformat()
+    adr_dir = pathlib.Path('docs/adr')
+    template = adr_dir.joinpath('TEMPLATE.md').read_text()
+    adr_file = adr_dir.joinpath(f'{date}-{slug}.md')
+    suffix = 1
+    while adr_file.exists():
+        adr_file = adr_dir.joinpath(f'{date}-{slug}-{suffix}.md')
+        suffix += 1
+    adr_file.write_text(template.replace('TITLE', title).replace('DATE', date))
+    print(f'Created {adr_file}')
+    import subprocess
+    subprocess.run(['just', 'docs-adr-index'], check=True)
+    print('Next: edit the file. The ADR is already wired into the index and mkdocs nav.')
+
+# Regenerate docs/explanation/test-vectors-gallery.md from the shared workspace
+# vectors under test-vectors/. This first pass is manifest-only: it summarizes
+# metadata, assertions, and committed snapshot layouts without materializing
+# archives or running diffs.
+docs-vectors:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --quiet --script scripts/build_test_vector_gallery.py
+
+# Regenerate docs/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+docs-plugin-catalog:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --quiet --script scripts/build_third_party_plugins_page.py
+
+# Regenerate docs/reference/changeset-schema.{json,md} from the binoc-sdk IR
+# types. Inputs: binoc-sdk/src/ir.rs, binoc-sdk/src/types.rs (the types that
+# carry `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]`), and
+# scripts/build_changeset_schema_page.py. The Rust binary lives behind the
+# `schema` feature on binoc-sdk so schemars stays out of the default
+# dependency graph; Cargo's incremental build keeps reruns cheap, and the
+# Markdown renderer skips the write when output is unchanged. See ADR
+# `2026-04-17-documentation_platform_and_info_design.md` Open Question 1.
+docs-schema:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo run --quiet -p binoc-sdk --features schema --bin gen-changeset-schema -- \
+        docs/reference/changeset-schema.json
+    uv run --quiet --script scripts/build_changeset_schema_page.py
+
+# Regenerate docs/sdk/ by running `cargo doc` for binoc-sdk and copying the
+# rendered rustdoc HTML into the docs tree so mkdocs serves it as a static
+# subpath at /sdk/. Cargo's own incremental cache keeps reruns cheap. Output
+# under docs/sdk/ is gitignored. See docs/reference/sdk.md for the landing page.
+docs-sdk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo doc --no-deps --package binoc-sdk --quiet
+    rm -rf docs/sdk
+    mkdir -p docs/sdk
+    cp -R target/doc/. docs/sdk/
+
+mkdocs *ARGS:
+    uvx --with mkdocs-material --with mkdocs-include-markdown-plugin --with pymdown-extensions \
+        --with 'mkdocstrings[python]' --with ./binoc-python --with ruff \
+        mkdocs {{ARGS}}
+
+# Build the docs site (with --strict to fail on broken links / missing files).
+# Runs `just docs` first to refresh generated inputs. `mkdocstrings[python]`
+# imports the installed `binoc` package to render `docs/reference/python.md`
+# from its docstrings, so `./binoc-python` is installed into the docs env
+# (requires a Rust toolchain via maturin).
+docs-build: docs
+    just mkdocs build --strict
+
+# Live-preview the docs site at http://127.0.0.1:8000/. Uses watchexec to run
+# `docs-build` then `mkdocs serve`, restarting whenever inputs to `just docs`
+# or MkDocs config change. Requires watchexec on PATH (`brew install watchexec`).
+docs-serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v watchexec >/dev/null 2>&1; then
+        echo "error: docs-serve requires watchexec (e.g. brew install watchexec)" >&2
+        exit 1
+    fi
+    exec watchexec \
+        --restart \
+        --debounce 750ms \
+        -w docs \
+        -w scripts \
+        -w binoc-cli \
+        -w binoc-sdk \
+        -w binoc-python \
+        -w binoc-stdlib \
+        -w test-vectors \
+        -w model-plugins/binoc-sqlite \
+        -w mkdocs.yml \
+        -w third_party_plugins.json \
+        -w justfile \
+        -w Cargo.toml \
+        -i docs/tutorial.md \
+        -i docs/adr/README.md \
+        -i docs/explanation/test-vectors-gallery.md \
+        -i docs/reference/third-party-plugins.md \
+        -i docs/reference/changeset-schema.json \
+        -i docs/reference/changeset-schema.md \
+        -i 'docs/sdk/**' \
+        -- bash -c 'just docs-build && exec just mkdocs serve'
 
 # Review pending snapshot changes interactively.
 snapshot-review:
@@ -58,7 +191,7 @@ snapshot-update:
 
 # Materialize test-vectors/ into test-vectors-materialized/ for every workspace
 # crate that ships vectors (same builders the test harness uses). Each plugin
-# contributes its own VectorMaterializers; see docs/adr/test_vector_materialization.md.
+# contributes its own VectorMaterializers; see docs/adr/2026-04-16-test_vector_materialization.md.
 # Output: test-vectors-materialized/<vector-name>/ (gitignored) next to each vectors dir.
 materialize:
     #!/usr/bin/env bash

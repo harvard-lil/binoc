@@ -12,6 +12,9 @@ snapshot-b. Every leaf is byte-identical.
 """
 tags = ["folder-move", "rollup", "nested", "directory"]
 
+[docs]
+summary = "Detects a whole-folder rename and rolls many file moves up into one folder-move entry."
+
 [expected]
 root_kind = "modify"
 has_tags = ["binoc.move", "binoc.folder-move"]

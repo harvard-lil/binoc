@@ -42,7 +42,7 @@ If a comparator is dispatched by descriptor match but discovers at compare-time 
 
 The closed `ReopenedData { Tabular, Text, Binary }` enum was an extensibility bottleneck — third-party plugins couldn't add variants. Replaced by two mechanisms:
 
-**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. (Superseded by [Transient fields on the wire](transient_fields_on_wire.md): the field is wire-visible on `DiffNode` itself and the controller strips it from the changeset at output time, so `TransformRequest`/`ExtractRequest` no longer carry it as a separate sidecar.)
+**`DiffNode.source_items` — direct source access.** The controller sets `source_items: Option<ItemPair>` on every node it processes. Transformers and extractors that need the original data re-parse it via `data.local_path()` or `data.read_bytes()` on the `ItemRef`s. (Superseded by [Transient fields on the wire](2026-04-16-transient_fields_on_wire.md): the field is wire-visible on `DiffNode` itself and the controller strips it from the changeset at output time, so `TransformRequest`/`ExtractRequest` no longer carry it as a separate sidecar.)
 
 This is the preferred pattern for tabular transformers. The CSV comparator no longer caches its parsed data — the row-reorder transformer and column-reorder detector re-parse the source CSVs directly. This avoids writing a JSON-serialized copy of the CSV to disk (which was strictly larger and slower to parse than the original).
 
@@ -52,7 +52,7 @@ This is the preferred pattern for tabular transformers. The CSV comparator no lo
 
 The `reopen` method remains on the `Comparator` trait. Container comparators (directory, zip, tar) implement `reopen(pair, child_path, data)` to reconstruct physical access to a child item without re-diffing — directory resolves a child path, zip re-extracts to a workspace.
 
-`Controller::extract()` walks the ancestor chain from root to target node, calling `reopen()` at each container level to reconstruct the scratchpad. At the leaf, it calls `compare()` to re-derive the data, sets `source_items` on the target node, then calls `extract()` on the last transformer (or the comparator itself if no transformer modified the node). See the [provenance and extract ADR](provenance_and_extract.md) for the design rationale.
+`Controller::extract()` walks the ancestor chain from root to target node, calling `reopen()` at each container level to reconstruct the scratchpad. At the leaf, it calls `compare()` to re-derive the data, sets `source_items` on the target node, then calls `extract()` on the last transformer (or the comparator itself if no transformer modified the node). See the [provenance and extract ADR](2026-03-05-provenance_and_extract.md) for the design rationale.
 
 ### 5. SDK version checking at registration
 

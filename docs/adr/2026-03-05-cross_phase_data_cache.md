@@ -1,7 +1,7 @@
 # Cross-Phase Data Cache in CompareContext
 
 **Date:** 2026-03-05
-**Status:** Superseded by [Published artifacts for cross-plugin composition](published_artifacts_for_cross_plugin_composition.md)
+**Status:** Superseded by [Published artifacts for cross-plugin composition](2026-03-19-published_artifacts_for_cross_plugin_composition.md)
 
 ## Problem
 
