@@ -364,6 +364,11 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
+    "plugin": "binoc.fuzzy_correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
     "plugin": "binoc.folder_move_detector",
     "data_ops": []
   }

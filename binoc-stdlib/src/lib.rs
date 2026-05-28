@@ -21,6 +21,9 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
         transformers::correlation_detector::CorrelationDetector,
     )));
     r(registry.register_transformer(Arc::new(
+        transformers::fuzzy_correlation_detector::FuzzyCorrelationDetector,
+    )));
+    r(registry.register_transformer(Arc::new(
         transformers::folder_move_detector::FolderMoveDetector,
     )));
     r(registry.register_transformer(Arc::new(transformers::tabular_analyzer::TabularAnalyzer)));

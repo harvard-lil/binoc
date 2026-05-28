@@ -135,6 +135,17 @@
           "description": "Location within snapshot (logical path, including interior paths\nlike \"archive.zip/data/file.csv\").",
           "type": "string"
         },
+        "pending_recompare": {
+          "description": "Request that the controller re-dispatch the given `ItemPair` through\nthe comparator pipeline and merge the result into this node before\nthe next transformer runs. Set by transformers (e.g. fuzzy\ncorrelation) that have decided two leaves represent the same logical\nitem but need a content diff under the new (move) node. Session-\nscoped working data: wire-visible so plugins can set it across the\nABI boundary, but cleared by [`DiffNode::strip_transient`] before\nchangeset output. The controller takes (clears) this field as it\nprocesses it; nodes in a finalized changeset never carry it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemPair"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source_items": {
           "description": "The original item pair that produced this node. Session-scoped working\ndata: available during a live diff/transform session for transformers\nand extractors that need to re-read source data, and carried across the\nplugin ABI wire so separately-compiled plugins can access it. Callers\nwriting changeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",
           "anyOf": [

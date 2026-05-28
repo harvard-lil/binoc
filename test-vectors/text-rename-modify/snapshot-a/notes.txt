@@ -1,0 +1,13 @@
+Meeting Notes
+=============
+
+Attendees: Alice, Bob, Carol
+
+Discussion Points:
+- Budget review for Q3
+- Timeline for product launch
+- Hiring plan for engineering
+
+Action Items:
+- Alice to finalize budget by Friday
+- Bob to update project timeline

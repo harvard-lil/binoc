@@ -1,0 +1,11 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 478
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **meeting-notes-v2.txt**: Moved from notes.txt (modified)
+- **meeting-notes-v2.txt**: 2 lines added

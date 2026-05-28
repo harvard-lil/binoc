@@ -1,0 +1,11 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 478
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **data_v2.csv**: Moved from data.csv (modified)
+- **data_v2.csv**: Column added: 'email'

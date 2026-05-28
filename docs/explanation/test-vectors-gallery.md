@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **25 shared examples** in this gallery.
+Binoc currently ships **27 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -34,6 +34,7 @@ just materialize
 | [`csv-column-removal`](#csv-column-removal) | Column removed | data.csv: Column removed: 'city' | Default pipeline |
 | [`csv-column-reorder`](#csv-column-reorder) | Columns shuffled, content identical | data.csv: Columns reordered (content unchanged) | Custom config |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; columns reordered; 1 row added | Default pipeline |
+| [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation | data_v2.csv: Moved from data.csv (modified) | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
@@ -49,6 +50,7 @@ just materialize
 | [`single-file-remove`](#single-file-remove) | File present in A but not B | removed_file.txt: File removed (1 line) | Default pipeline |
 | [`tar-nested`](#tar-nested) | Nested tar.gz containing CSV | outer.tar.gz/inner.tar.gz/data.csv: 1 row added | Default pipeline |
 | [`tar-simple`](#tar-simple) | Tar.gz archive with changes inside | archive.tar.gz/data.csv: 1 row added | Default pipeline |
+| [`text-rename-modify`](#text-rename-modify) | Text file renamed and lines added: detected as a single move with content diff via fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt (modified) | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from gamma.txt | Default pipeline |
 | [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | No changes detected. | Default pipeline |
 | [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | No changes detected. | Default pipeline |
@@ -181,6 +183,30 @@ Result:
 ## Substantive Changes
 
 - **data.csv**: Column added: 'email'; columns reordered; 1 row added
+```
+
+## csv-rename-modify
+
+CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation
+
+- **Browse source:** [csv-rename-modify](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-rename-modify)
+- **Tags:** `csv`, `fuzzy-move`, `rename-modify`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data_v2.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-rename-modify/snapshot-a \
+  ./test-vectors-materialized/csv-rename-modify/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **data_v2.csv**: Moved from data.csv (modified)
+- **data_v2.csv**: Column added: 'email'
 ```
 
 ## csv-row-addition
@@ -548,6 +574,30 @@ Result:
 
 - **archive.tar.gz/data.csv**: 1 row added
 - **archive.tar.gz/hello.txt**: 1 line added
+```
+
+## text-rename-modify
+
+Text file renamed and lines added: detected as a single move with content diff via fuzzy correlation
+
+- **Browse source:** [text-rename-modify](https://github.com/harvard-lil/binoc/tree/main/test-vectors/text-rename-modify)
+- **Tags:** `text`, `fuzzy-move`, `rename-modify`
+- **Snapshots:** `snapshot-a` has 1 file — `notes.txt`; `snapshot-b` has 1 file — `meeting-notes-v2.txt`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/text-rename-modify/snapshot-a \
+  ./test-vectors-materialized/text-rename-modify/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **meeting-notes-v2.txt**: Moved from notes.txt (modified)
+- **meeting-notes-v2.txt**: 2 lines added
 ```
 
 ## tree-wide-correlation

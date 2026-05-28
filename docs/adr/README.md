@@ -6,6 +6,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
+| 2026-05-13 | [Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch](rename_modify_detection.md) | Implemented |
 | 2026-04-17 | [Documentation Platform and Information Design](2026-04-17-documentation_platform_and_info_design.md) | Proposed |
 | 2026-04-16 | [Transient Fields Are Wire-Visible; Output Stripping Is a Boundary Concern](2026-04-16-transient_fields_on_wire.md) | Implemented |
 | 2026-04-16 | [Transformer dispatch: bottom-up by default, Root for tree-wide walkers](2026-04-16-transformer_scope_yagni.md) | Implemented |

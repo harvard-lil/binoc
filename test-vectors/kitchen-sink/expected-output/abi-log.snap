@@ -537,6 +537,22 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
+    "plugin": "binoc.fuzzy_correlation_detector",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "docs/old-notes.txt",
+        "result_size": 34
+      },
+      {
+        "op": "read_bytes",
+        "handle": "docs/new-file.txt",
+        "result_size": 35
+      }
+    ]
+  },
+  {
+    "method": "transform",
     "plugin": "binoc.folder_move_detector",
     "data_ops": []
   },

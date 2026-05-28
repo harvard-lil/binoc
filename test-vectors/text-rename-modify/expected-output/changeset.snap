@@ -1,0 +1,44 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 477
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "text",
+        "path": "meeting-notes-v2.txt",
+        "source_path": "notes.txt",
+        "summary": "Moved from notes.txt (modified)",
+        "tags": [
+          "binoc.content-changed",
+          "binoc.lines-added",
+          "binoc.move",
+          "binoc.move.modified"
+        ],
+        "details": {
+          "hash_left": "b1eae0c798f89df16c497cc75fa45078217f1d69c3e79486b1cd0397a34b1937",
+          "hash_right": "bd0422a0bcfb8406f1d41ced6afd5605ec2c08303d66ca495f68ca8c324268c3",
+          "lines_added": 2,
+          "lines_removed": 0,
+          "lines_unchanged": 13
+        },
+        "annotations": {
+          "content_summary": "2 lines added"
+        },
+        "comparator": "binoc.text"
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.fuzzy_correlation_detector"
+    ]
+  }
+}

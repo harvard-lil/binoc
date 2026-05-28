@@ -1,0 +1,102 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "meeting-notes-v2.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "meeting-notes-v2.txt",
+        "result_size": 306
+      },
+      {
+        "op": "register_local",
+        "logical": "notes.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "notes.txt",
+        "result_size": 246
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "meeting-notes-v2.txt",
+        "result_size": 306
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "notes.txt",
+        "result_size": 246
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.fuzzy_correlation_detector",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "notes.txt",
+        "result_size": 246
+      },
+      {
+        "op": "read_bytes",
+        "handle": "meeting-notes-v2.txt",
+        "result_size": 306
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "notes.txt",
+        "result_size": 246
+      },
+      {
+        "op": "read_bytes",
+        "handle": "meeting-notes-v2.txt",
+        "result_size": 306
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  }
+]
