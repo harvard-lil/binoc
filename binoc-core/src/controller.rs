@@ -88,6 +88,24 @@ impl Controller {
         Ok(changeset)
     }
 
+    /// Diff an ordered snapshot sequence and produce one changeset per
+    /// consecutive pair.
+    pub fn diff_many<S>(&self, snapshots: &[S]) -> BinocResult<Vec<Changeset>>
+    where
+        S: AsRef<str>,
+    {
+        if snapshots.len() < 2 {
+            return Err(BinocError::Config(
+                "diff_many requires at least two snapshots".into(),
+            ));
+        }
+
+        snapshots
+            .windows(2)
+            .map(|pair| self.diff(pair[0].as_ref(), pair[1].as_ref()))
+            .collect()
+    }
+
     /// Build the root `ItemPair` for a diff.
     ///
     /// Directories get `logical_path = ""` (their children build relative
@@ -736,6 +754,39 @@ mod tests {
         let root = changeset.root.as_ref().unwrap();
         assert_eq!(root.action, "modify");
         assert_eq!(root.item_type, "file");
+    }
+
+    #[test]
+    fn controller_diff_many_emits_consecutive_pairwise_changesets() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap_a = dir.path().join("snapshot-a");
+        let snap_b = dir.path().join("snapshot-b");
+        let snap_c = dir.path().join("snapshot-c");
+        std::fs::create_dir(&snap_a).unwrap();
+        std::fs::create_dir(&snap_b).unwrap();
+        std::fs::create_dir(&snap_c).unwrap();
+
+        let snapshots = vec![
+            snap_a.to_string_lossy().to_string(),
+            snap_b.to_string_lossy().to_string(),
+            snap_c.to_string_lossy().to_string(),
+        ];
+
+        let controller = Controller::new(vec![leaf_comparator()], vec![]);
+        let changesets = controller.diff_many(&snapshots).unwrap();
+
+        assert_eq!(changesets.len(), 2);
+        assert_eq!(changesets[0].from_snapshot, snapshots[0]);
+        assert_eq!(changesets[0].to_snapshot, snapshots[1]);
+        assert_eq!(changesets[1].from_snapshot, snapshots[1]);
+        assert_eq!(changesets[1].to_snapshot, snapshots[2]);
+    }
+
+    #[test]
+    fn controller_diff_many_rejects_short_sequences() {
+        let controller = Controller::new(vec![leaf_comparator()], vec![]);
+        let err = controller.diff_many::<String>(&[]).unwrap_err();
+        assert!(err.to_string().contains("at least two snapshots"));
     }
 
     #[test]

@@ -13,8 +13,8 @@ use binoc_sdk::{BinocError, Changeset, ExtractResult, Renderer};
     name = "binoc",
     about = "The missing changelog for datasets",
     long_about = "Binoc produces the missing changelog for datasets. It \
-                  detects, classifies, and renders changes between two \
-                  snapshots. The CLI is porcelain over the embeddable \
+                  detects, classifies, and renders changes across ordered \
+                  dataset snapshots. The CLI is porcelain over the embeddable \
                   library; see the Python API and Rust SDK reference pages \
                   for programmatic use."
 )]
@@ -25,17 +25,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Diff two snapshots and produce a changelog.
+    /// Diff an ordered sequence of snapshots and produce a changelog.
     ///
-    /// Runs the comparator chain over snapshot_a and snapshot_b and emits the
-    /// resulting changeset. Defaults to human-readable Markdown on stdout;
-    /// use --format json or -o for machine-readable or multi-output rendering.
+    /// Runs pairwise comparisons over each consecutive snapshot pair and emits
+    /// the resulting changeset sequence. Defaults to human-readable Markdown
+    /// on stdout; use --format json or -o for machine-readable or multi-output
+    /// rendering.
     Diff {
-        /// Path to the "before" snapshot (file, directory, or archive, depending
-        /// on which comparators are registered).
-        snapshot_a: PathBuf,
-        /// Path to the "after" snapshot.
-        snapshot_b: PathBuf,
+        /// Ordered snapshot paths. For N inputs, binoc emits N-1 pairwise
+        /// diffs (A→B, B→C, ...). Must provide at least two snapshots.
+        #[arg(required = true, num_args = 2..)]
+        snapshots: Vec<PathBuf>,
         /// Path to a dataset config YAML file. If omitted, the registry's
         /// default config is used.
         #[arg(long)]
@@ -196,6 +196,18 @@ fn render(
     }
 }
 
+fn parse_changesets_json(data: &str) -> Result<Vec<Changeset>, BinocError> {
+    match serde_json::from_str::<Changeset>(data) {
+        Ok(changeset) => Ok(vec![changeset]),
+        Err(single_err) => match serde_json::from_str::<Vec<Changeset>>(data) {
+            Ok(changesets) => Ok(changesets),
+            Err(seq_err) => Err(BinocError::Other(format!(
+                "failed to parse changeset JSON as object ({single_err}) or array ({seq_err})"
+            ))),
+        },
+    }
+}
+
 fn write_outputs(
     output_specs: &[String],
     stdout_format: &str,
@@ -250,8 +262,7 @@ pub fn run(
 
     match cli.command {
         Commands::Diff {
-            snapshot_a,
-            snapshot_b,
+            snapshots,
             config,
             output,
             format,
@@ -267,11 +278,11 @@ pub fn run(
                 Controller::new(resolved.comparators.clone(), resolved.transformers.clone())
                     .with_transformer_configs(dataset_config.transformer_config.as_map());
 
-            let snap_a = snapshot_a.to_string_lossy().to_string();
-            let snap_b = snapshot_b.to_string_lossy().to_string();
-
-            let changeset = controller.diff(&snap_a, &snap_b)?;
-            let changesets = [changeset];
+            let snapshots: Vec<String> = snapshots
+                .iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
+            let changesets = controller.diff_many(&snapshots)?;
 
             write_outputs(
                 &output,
@@ -299,8 +310,7 @@ pub fn run(
             let mut changesets: Vec<Changeset> = Vec::new();
             for path in &changeset_paths {
                 let data = std::fs::read_to_string(path)?;
-                let m: Changeset = serde_json::from_str(&data)?;
-                changesets.push(m);
+                changesets.extend(parse_changesets_json(&data)?);
             }
 
             write_outputs(

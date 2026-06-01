@@ -73,9 +73,14 @@ a plain path, not "format `/tmp/file`, path `json`".
 
 ## Combine many changesets into one changelog
 
-Running `binoc diff` produces a changeset for **one** snapshot pair.
-When you are tracking a dataset across many releases, you end up with
-a sequence of changesets:
+Running `binoc diff A B` produces a changeset for one snapshot pair.
+Running `binoc diff A B C ...` produces an ordered JSON array of
+pairwise changesets. You can also keep multiple earlier changeset files
+and combine them later. In both cases, `binoc changelog` flattens the
+sequence into one rendered changelog.
+
+When you are tracking a dataset across many releases, you may end up
+with a sequence like:
 
 ```
 changesets/
@@ -90,6 +95,8 @@ combined changelog:
 ```bash
 binoc changelog changesets/*.json -o CHANGELOG.md
 ```
+
+It also accepts the JSON array emitted by `binoc diff A B C -o changesets.json`.
 
 It shares the same `-o` / `--format` / `-q` flags as `diff`.
 
