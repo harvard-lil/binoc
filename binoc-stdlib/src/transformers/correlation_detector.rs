@@ -22,7 +22,7 @@ use binoc_sdk::*;
 
 use super::correlation::{
     apply_rewrite, collect_and_hydrate, english_list, file_name_of, group_by_hash, parent_path_of,
-    HashGroup, LeafEntry, RewritePlan,
+    source_label_for_move, HashGroup, LeafEntry, RewritePlan,
 };
 
 pub struct CorrelationDetector;
@@ -171,7 +171,10 @@ fn emit_move(group: &HashGroup, aggregate: bool, plan: &mut RewritePlan) {
         let add = sorted_adds[i];
         let rm = sorted_removes[i];
         let node = DiffNode::new("move", &add.item_type, &add.path)
-            .with_summary(format!("Moved from {}", file_name_of(&rm.path)))
+            .with_summary(format!(
+                "Moved from {}",
+                source_label_for_move(&rm.path, &add.path)
+            ))
             .with_source_path(&rm.path)
             .with_tag("binoc.move");
         plan.schedule_remove(&add.path);

@@ -47,7 +47,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use binoc_sdk::*;
 
-use super::correlation::{apply_rewrite, parent_path_of, RewritePlan};
+use super::correlation::{apply_rewrite, parent_path_of, source_label_for_move, RewritePlan};
 
 const DEFAULT_THRESHOLD: f64 = 0.5;
 const DEFAULT_RENAME_LIMIT: usize = 400;
@@ -297,7 +297,7 @@ fn greedy_assign(mut pairs: Vec<ScoredPair>, threshold: f64) -> Vec<(usize, usiz
 }
 
 fn build_move_node(rm: &FuzzyLeaf, add: &FuzzyLeaf) -> DiffNode {
-    let source_name = file_basename(&rm.path);
+    let source_name = source_label_for_move(&rm.path, &add.path);
     let mut node = DiffNode::new("move", &add.item_type, &add.path)
         .with_summary(format!("Moved from {source_name} (modified)"))
         .with_source_path(&rm.path)
@@ -305,10 +305,6 @@ fn build_move_node(rm: &FuzzyLeaf, add: &FuzzyLeaf) -> DiffNode {
         .with_tag("binoc.move.modified");
     node.pending_recompare = Some(ItemPair::both(rm.item.clone(), add.item.clone()));
     node
-}
-
-fn file_basename(path: &str) -> &str {
-    path.rsplit_once('/').map(|(_, n)| n).unwrap_or(path)
 }
 
 /// Both files must share the same (lowercased) extension. If neither has

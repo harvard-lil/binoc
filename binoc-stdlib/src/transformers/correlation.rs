@@ -124,6 +124,36 @@ pub(crate) fn file_name_of(path: &str) -> &str {
     path.rsplit_once('/').map(|(_, n)| n).unwrap_or(path)
 }
 
+/// Return a source-path label concise for leaf renames, but qualified
+/// enough to make parent-container moves obvious.
+pub(crate) fn source_label_for_move(source_path: &str, dest_path: &str) -> String {
+    if parent_path_of(source_path) == parent_path_of(dest_path) {
+        return file_name_of(source_path).to_string();
+    }
+
+    let source_segments: Vec<&str> = source_path.split('/').collect();
+    let dest_segments: Vec<&str> = dest_path.split('/').collect();
+
+    let mut common_prefix = 0;
+    while common_prefix < source_segments.len()
+        && common_prefix < dest_segments.len()
+        && source_segments[common_prefix] == dest_segments[common_prefix]
+    {
+        common_prefix += 1;
+    }
+
+    if common_prefix >= source_segments.len() {
+        return file_name_of(source_path).to_string();
+    }
+
+    let mut start = common_prefix;
+    if source_segments.len() - start == 1 && source_segments.len() > 1 {
+        start = start.saturating_sub(1);
+    }
+
+    source_segments[start..].join("/")
+}
+
 /// Plan for rewriting a tree in a single pass: set of leaf paths to
 /// delete, plus new nodes to insert under each parent container.
 #[derive(Default, Debug)]
@@ -256,6 +286,41 @@ mod tests {
     fn file_name() {
         assert_eq!(file_name_of("a/b/c.txt"), "c.txt");
         assert_eq!(file_name_of("c.txt"), "c.txt");
+    }
+
+    #[test]
+    fn move_label_keeps_leaf_rename_concise() {
+        assert_eq!(
+            source_label_for_move("docs/old-name.txt", "docs/new-name.txt"),
+            "old-name.txt"
+        );
+    }
+
+    #[test]
+    fn move_label_includes_changed_parent_segment() {
+        assert_eq!(
+            source_label_for_move(
+                "FoodData_Central_csv_2026-04-29/branded_food.csv",
+                "FoodData_Central_csv_2026-04-30/branded_food.csv"
+            ),
+            "FoodData_Central_csv_2026-04-29/branded_food.csv"
+        );
+    }
+
+    #[test]
+    fn move_label_includes_parent_when_destination_gains_container() {
+        assert_eq!(
+            source_label_for_move("outer.zip/beta.txt", "outer.zip/inner.zip/beta-renamed.txt"),
+            "outer.zip/beta.txt"
+        );
+    }
+
+    #[test]
+    fn move_label_falls_back_to_full_path_when_roots_diverge() {
+        assert_eq!(
+            source_label_for_move("outer.zip/inner.zip/gamma.txt", "gamma-renamed.txt"),
+            "outer.zip/inner.zip/gamma.txt"
+        );
     }
 
     #[test]
