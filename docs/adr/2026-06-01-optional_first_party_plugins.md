@@ -20,16 +20,19 @@ fallback formats. They also have enough parser complexity and dependency churn
 that putting them in `binoc-stdlib` would make every user pay for a specialized
 capability.
 
-Surveyed Rust candidates on 2026-06-01:
+Surveyed Rust candidates on 2026-06-01. Versions below are the latest
+non-yanked releases reported by the crates.io API and the docs.rs `latest`
+pages at the time of the survey; stale search snippets or cached search indexes
+are not a sufficient source for this decision.
 
 | Crate | Coverage | Dependency weight | Fit |
 |---|---|---|---|
-| [`dta 0.6.0`](https://crates.io/crates/dta/0.6.0) | Stata `.dta` versions 102-119, plus Stata dictionary files | Small. Direct runtime dependency on `encoding_rs`; optional `chrono` and `tokio`. | Good candidate for an optional Stata reader. |
-| [`sas_xport 0.4.1`](https://crates.io/crates/sas_xport/0.4.1) | SAS XPORT/XPT v5 and v8 | Small. Direct runtime dependencies on `encoding_rs` and `ibm_hfp`; optional `chrono` and `tokio`. | Good candidate for an optional XPT reader. |
-| [`sas7bdat 0.2.0`](https://crates.io/crates/sas7bdat/0.2.0) | SAS `.sas7bdat` | Medium. Pulls parser and CLI-oriented crates such as `clap`, `rayon`, `serde_json`, `time`, `walkdir`, hash-map variants, and numeric/string helpers; optional CSV/Parquet output can remain disabled. | Acceptable only in an optional plugin, not stdlib. |
-| [`xportrs 0.0.8`](https://crates.io/crates/xportrs/0.0.8) | SAS XPT with CDISC emphasis | Default dependencies are moderate, with optional `polars`, but the crate declares Rust 1.92. | Not usable without raising Binoc's Rust 1.88 MSRV. |
-| [`polars-readstat-rs 0.20.0`](https://crates.io/crates/polars-readstat-rs/0.20.0) | Broad Stata, SAS, XPT, SPSS support | Heavy. Directly depends on Polars, Polars Arrow/Core, `flate2`, `rayon`, `num_cpus`, and related parser dependencies. It declares Rust 1.93. | Reject for now unless Binoc deliberately accepts a Polars-scale dependency and an MSRV bump. |
-| [`xpttools 0.2.2`](https://crates.io/crates/xpttools/0.2.2) | XPT to CSV tooling | Heavy and unsuitable for Binoc: GPL-3.0 and a direct `tauri` dependency. | Reject. |
+| [`dta 0.6.0`](https://crates.io/crates/dta/0.6.0), published 2026-05-15 | Stata `.dta` versions 102-119, plus Stata dictionary files | Small. Direct runtime dependency on `encoding_rs`; optional `chrono` and `tokio`. | Good candidate for an optional Stata reader. |
+| [`sas_xport 0.4.1`](https://crates.io/crates/sas_xport/0.4.1), published 2026-05-14 | SAS XPORT/XPT v5 and v8 | Small. Direct runtime dependencies on `encoding_rs` and `ibm_hfp`; optional `chrono` and `tokio`. | Good candidate for an optional XPT reader. |
+| [`sas7bdat 0.2.0`](https://crates.io/crates/sas7bdat/0.2.0), published 2026-01-27 | SAS `.sas7bdat` | Medium. Pulls parser and CLI-oriented crates such as `clap`, `rayon`, `serde_json`, `time`, `walkdir`, hash-map variants, and numeric/string helpers; optional CSV/Parquet output can remain disabled. | Acceptable only in an optional plugin, not stdlib. |
+| [`xportrs 0.0.8`](https://crates.io/crates/xportrs/0.0.8), published 2026-01-13 | SAS XPT with CDISC emphasis | Default dependencies are moderate, with optional `polars`, but the crate declares Rust 1.92. | Not usable without raising Binoc's Rust 1.88 MSRV. |
+| [`polars-readstat-rs 0.20.0`](https://crates.io/crates/polars-readstat-rs/0.20.0), published 2026-05-30 | Broad Stata, SAS, XPT, SPSS support | Heavy. Directly depends on Polars, Polars Arrow/Core, `flate2`, `rayon`, `num_cpus`, and related parser dependencies. It declares Rust 1.93. | Reject for now unless Binoc deliberately accepts a Polars-scale dependency and an MSRV bump. |
+| [`xpttools 0.2.2`](https://crates.io/crates/xpttools/0.2.2), published 2025-11-10 | XPT to CSV tooling | Heavy and unsuitable for Binoc: GPL-3.0 and a direct `tauri` dependency. | Reject. |
 
 ## Decision
 
