@@ -197,6 +197,34 @@ fn csv_different_data_produces_modify_with_artifacts() {
 }
 
 #[test]
+fn tsv_different_data_produces_modify_with_artifacts() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("a.tsv"), "name\tage\nAlice\t30\n").unwrap();
+    std::fs::write(
+        tmp.path().join("b.tsv"),
+        "name\tage\temail\nAlice\t30\ta@b.com\n",
+    )
+    .unwrap();
+
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&tmp.path().join("a.tsv"), "data.tsv")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.tsv"), "data.tsv")
+            .unwrap(),
+    );
+    let result = CsvComparator.compare(&pair, &da).unwrap();
+    match result {
+        CompareResult::Leaf(node) => {
+            assert_eq!(node.action, "modify");
+            assert_eq!(node.item_type, "tabular");
+            assert_eq!(node.artifacts.len(), 2);
+        }
+        _ => panic!("Expected Leaf"),
+    }
+}
+
+#[test]
 fn csv_added_file_produces_add_with_artifact() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("b.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();

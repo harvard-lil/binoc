@@ -1,0 +1,8 @@
+[vector]
+name = "tsv-cell-changes"
+description = "Tab-delimited file parses into real columns and reports cell changes"
+tags = ["tsv", "cell-change"]
+
+[expected]
+root_kind = "modify"
+has_tags = ["binoc.cell-change"]
