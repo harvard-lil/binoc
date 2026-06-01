@@ -6,13 +6,13 @@ audience: anyone authoring a dataset config
 
 A *dataset config* is an optional YAML file that tells binoc which
 plugins to run, in what order, and how the renderer should classify
-the resulting tags. You do not need a config to run `binoc diff` —
+the resulting tags if you want grouped output. You do not need a config to run `binoc diff` —
 the defaults handle the built-in comparators. A config becomes
 useful when you want to:
 
 - Restrict or reorder the comparator / transformer pipeline.
-- Teach the Markdown renderer that a plugin-specific tag is clerical
-  or substantive for your domain.
+- Teach the Markdown renderer how to group plugin-specific tags for
+  your domain.
 - Configure a renderer's behavior (HTML theme, CI failure rules, …)
   without changing code.
 
@@ -117,8 +117,8 @@ The Markdown renderer is the most interesting case today.
 
 ### `output.markdown.significance`
 
-A map from category names (`clerical`, `substantive`, …) to lists of
-tag names. The renderer looks up each tagged node in this map and
+A map from category names (`clerical`, `substantive`, `review-first`, …)
+to lists of tag names. The renderer looks up each tagged node in this map and
 buckets the change under the corresponding heading in the changelog.
 
 ```yaml
@@ -136,7 +136,9 @@ output:
 ```
 
 A node with multiple tags is classified by the highest-priority
-match; anything unmapped falls under `Other Changes`. This is
+match; anything unmapped falls under `Other Changes`. If this map is
+omitted or empty, the default Markdown output is a flat factual list with no
+category headings. This is
 intentionally a renderer concern, not an IR concern — a single
 changeset can be rendered with different significance mappings for
 different audiences. See

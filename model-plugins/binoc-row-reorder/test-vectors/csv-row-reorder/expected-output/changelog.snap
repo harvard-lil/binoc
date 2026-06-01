@@ -4,6 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Other Changes
-
 - **data.csv**: Rows reordered (same data, different sort order)

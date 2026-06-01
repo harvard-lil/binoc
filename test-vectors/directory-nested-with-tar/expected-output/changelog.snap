@@ -4,10 +4,5 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data/records.csv**: 1 row added
-
-## Other Changes
-
 - **data.tar.gz/records.csv**: 1 cell changed

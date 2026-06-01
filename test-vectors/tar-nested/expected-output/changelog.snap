@@ -4,6 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **outer.tar.gz/inner.tar.gz/data.csv**: 1 row added

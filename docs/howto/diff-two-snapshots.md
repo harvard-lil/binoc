@@ -35,19 +35,13 @@ For a dataset that ships as a zip of CSVs alongside a SQLite database:
 ```text
 # Changelog: release-q3/ → release-q4/
 
-## Clerical Changes
-
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-
-## Substantive Changes
-
 - **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip and compared the CSV column by column — the
-reorder is flagged as a clerical change (housekeeping), not a real data
-change. The `.sqlite` file is opaque to the standard library, so you
-only learn the bytes differ. To get semantic SQLite diffing, see
+Binoc looked inside the zip and compared the CSV column by column. The
+`.sqlite` file is opaque to the standard library, so you only learn the bytes
+differ. To get semantic SQLite diffing, see
 [Install and use plugins](install-and-use-plugins.md).
 
 ## Choose an output format

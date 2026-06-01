@@ -6,7 +6,7 @@ use binoc_sdk::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkdownRendererConfig {
-    #[serde(default = "default_significance")]
+    #[serde(default)]
     pub significance: BTreeMap<String, Vec<String>>,
     #[serde(default = "default_max_diagnostics")]
     pub max_diagnostics: usize,
@@ -15,7 +15,7 @@ pub struct MarkdownRendererConfig {
 impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
-            significance: default_significance(),
+            significance: BTreeMap::new(),
             max_diagnostics: default_max_diagnostics(),
         }
     }
@@ -23,31 +23,6 @@ impl Default for MarkdownRendererConfig {
 
 fn default_max_diagnostics() -> usize {
     8
-}
-
-fn default_significance() -> BTreeMap<String, Vec<String>> {
-    let mut map = BTreeMap::new();
-    map.insert(
-        "clerical".into(),
-        vec![
-            "binoc.column-reorder".into(),
-            "binoc.whitespace-change".into(),
-            "binoc.folder-rename".into(),
-            "binoc.encoding-change".into(),
-        ],
-    );
-    map.insert(
-        "substantive".into(),
-        vec![
-            "binoc.column-addition".into(),
-            "binoc.column-removal".into(),
-            "binoc.schema-change".into(),
-            "binoc.row-addition".into(),
-            "binoc.row-removal".into(),
-            "binoc.content-changed".into(),
-        ],
-    );
-    map
 }
 
 pub struct MarkdownRenderer;
@@ -84,21 +59,28 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
                 &mut uncategorized,
             );
 
-            for (category, nodes) in &by_significance {
-                let title = capitalize(category);
-                out.push_str(&format!("## {title} Changes\n\n"));
-                for node in nodes {
-                    format_node(&mut out, node);
-                }
-                out.push('\n');
-            }
-
-            if !uncategorized.is_empty() {
-                out.push_str("## Other Changes\n\n");
+            if tag_to_significance.is_empty() {
                 for node in &uncategorized {
                     format_node(&mut out, node);
                 }
                 out.push('\n');
+            } else {
+                for (category, nodes) in &by_significance {
+                    let title = capitalize(category);
+                    out.push_str(&format!("## {title} Changes\n\n"));
+                    for node in nodes {
+                        format_node(&mut out, node);
+                    }
+                    out.push('\n');
+                }
+
+                if !uncategorized.is_empty() {
+                    out.push_str("## Other Changes\n\n");
+                    for node in &uncategorized {
+                        format_node(&mut out, node);
+                    }
+                    out.push('\n');
+                }
             }
         } else {
             out.push_str("No changes detected.\n\n");
