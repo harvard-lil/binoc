@@ -15,7 +15,7 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "gamma-renamed.txt",
         "source_path": "outer.zip/inner.zip/gamma.txt",
-        "summary": "Moved from gamma.txt",
+        "summary": "Moved from outer.zip/inner.zip/gamma.txt",
         "tags": [
           "binoc.move"
         ]
@@ -87,7 +87,7 @@ expression: "&stable_changeset"
                         "item_type": "text",
                         "path": "outer.zip/inner.zip/beta-renamed.txt",
                         "source_path": "outer.zip/beta.txt",
-                        "summary": "Moved from beta.txt",
+                        "summary": "Moved from outer.zip/beta.txt",
                         "tags": [
                           "binoc.move"
                         ]

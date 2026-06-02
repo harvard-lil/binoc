@@ -51,7 +51,7 @@ just materialize
 | [`tar-nested`](#tar-nested) | Nested tar.gz containing CSV | outer.tar.gz/inner.tar.gz/data.csv: 1 row added | Default pipeline |
 | [`tar-simple`](#tar-simple) | Tar.gz archive with changes inside | archive.tar.gz/data.csv: 1 row added | Default pipeline |
 | [`text-rename-modify`](#text-rename-modify) | Text file renamed and lines added: detected as a single move with content diff via fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt (modified) | Default pipeline |
-| [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from gamma.txt | Default pipeline |
+| [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/inner.zip/gamma.txt | Default pipeline |
 | [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | No changes detected. | Default pipeline |
 | [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | No changes detected. | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
@@ -621,11 +621,11 @@ Result:
 
 ## Other Changes
 
-- **gamma-renamed.txt**: Moved from gamma.txt
+- **gamma-renamed.txt**: Moved from outer.zip/inner.zip/gamma.txt
 - **kept-copy.txt**: Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt
 - **merged.bin**: Moved from dup.bin and dup-b.bin
 - **outer.zip/alpha-renamed.txt**: Moved from alpha.txt
-- **outer.zip/inner.zip/beta-renamed.txt**: Moved from beta.txt
+- **outer.zip/inner.zip/beta-renamed.txt**: Moved from outer.zip/beta.txt
 ```
 
 ## trivial-identical
