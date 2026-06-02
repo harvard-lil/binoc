@@ -33,12 +33,99 @@ impl CsvParseOptions {
 
 type DynRead = Box<dyn Read + Send>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Utf8SampleStats {
+    valid_multibyte_sequences: usize,
+    valid_multibyte_bytes: usize,
+    invalid_bytes: usize,
+}
+
+fn utf8_sample_stats(sample: &[u8]) -> Utf8SampleStats {
+    let mut stats = Utf8SampleStats {
+        valid_multibyte_sequences: 0,
+        valid_multibyte_bytes: 0,
+        invalid_bytes: 0,
+    };
+    let mut i = 0;
+    while i < sample.len() {
+        let byte = sample[i];
+        if byte <= 0x7F {
+            i += 1;
+            continue;
+        }
+
+        let width = if (0xC2..=0xDF).contains(&byte) {
+            2
+        } else if (0xE0..=0xEF).contains(&byte) {
+            3
+        } else if (0xF0..=0xF4).contains(&byte) {
+            4
+        } else {
+            stats.invalid_bytes += 1;
+            i += 1;
+            continue;
+        };
+
+        if i + width > sample.len() {
+            stats.invalid_bytes += sample.len() - i;
+            break;
+        }
+
+        let seq = &sample[i..i + width];
+        let valid = match width {
+            2 => (0x80..=0xBF).contains(&seq[1]),
+            3 => match seq[0] {
+                0xE0 => (0xA0..=0xBF).contains(&seq[1]) && (0x80..=0xBF).contains(&seq[2]),
+                0xED => (0x80..=0x9F).contains(&seq[1]) && (0x80..=0xBF).contains(&seq[2]),
+                _ => (0x80..=0xBF).contains(&seq[1]) && (0x80..=0xBF).contains(&seq[2]),
+            },
+            4 => match seq[0] {
+                0xF0 => {
+                    (0x90..=0xBF).contains(&seq[1])
+                        && (0x80..=0xBF).contains(&seq[2])
+                        && (0x80..=0xBF).contains(&seq[3])
+                }
+                0xF4 => {
+                    (0x80..=0x8F).contains(&seq[1])
+                        && (0x80..=0xBF).contains(&seq[2])
+                        && (0x80..=0xBF).contains(&seq[3])
+                }
+                _ => {
+                    (0x80..=0xBF).contains(&seq[1])
+                        && (0x80..=0xBF).contains(&seq[2])
+                        && (0x80..=0xBF).contains(&seq[3])
+                }
+            },
+            _ => unreachable!(),
+        };
+
+        if valid {
+            stats.valid_multibyte_sequences += 1;
+            stats.valid_multibyte_bytes += width;
+            i += width;
+        } else {
+            stats.invalid_bytes += 1;
+            i += 1;
+        }
+    }
+
+    stats
+}
+
+fn should_prefer_utf8_despite_invalid_bytes(sample: &[u8]) -> bool {
+    let stats = utf8_sample_stats(sample);
+    stats.valid_multibyte_sequences > 0 && stats.valid_multibyte_bytes >= stats.invalid_bytes * 2
+}
+
 fn sniff_encoding(reader: &mut BufReader<DynRead>) -> BinocResult<Option<&'static Encoding>> {
     let sample = reader.fill_buf().map_err(BinocError::Io)?;
     if sample.starts_with(&[0xEF, 0xBB, 0xBF]) {
         return Ok(None);
     }
     if std::str::from_utf8(sample).is_ok() {
+        return Ok(Some(UTF_8));
+    }
+    if should_prefer_utf8_despite_invalid_bytes(sample) {
         return Ok(Some(UTF_8));
     }
     Ok(Some(WINDOWS_1252))
@@ -236,5 +323,30 @@ mod tests {
         assert_eq!(parsed.rows.len(), 3);
         assert_eq!(parsed.rows[0][1], "Alice");
         assert_eq!(parsed.rows[2][1], "Carol");
+    }
+
+    #[test]
+    fn parse_csv_prefers_utf8_when_corruption_follows_valid_utf8() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mostly-utf8.csv");
+        std::fs::write(&path, b"id,name\n1,Jos\xc3\xa9\n2,bad\xffvalue\n").unwrap();
+
+        let parsed = parse_csv(&path, CsvParseOptions { delimiter: b',' }).unwrap();
+
+        assert_eq!(parsed.rows[0][1], "José");
+        assert_eq!(parsed.rows[1][1], "bad�value");
+    }
+
+    #[test]
+    fn utf8_sample_stats_counts_valid_and_invalid_non_ascii_bytes() {
+        let stats = utf8_sample_stats(b"Jos\xc3\xa9\xff");
+        assert_eq!(
+            stats,
+            Utf8SampleStats {
+                valid_multibyte_sequences: 1,
+                valid_multibyte_bytes: 2,
+                invalid_bytes: 1,
+            }
+        );
     }
 }
