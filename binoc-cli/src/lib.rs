@@ -283,7 +283,8 @@ pub fn run(
             let resolved = registry.resolve(&dataset_config)?;
             let controller =
                 Controller::new(resolved.comparators.clone(), resolved.transformers.clone())
-                    .with_transformer_configs(dataset_config.transformer_config.as_map());
+                    .with_transformer_configs(dataset_config.transformer_config.as_map())
+                    .with_dataset_config(dataset_config.dataset.clone());
 
             let snapshots: Vec<String> = snapshots
                 .iter()
@@ -365,7 +366,8 @@ pub fn run(
 
             let resolved = registry.resolve(&dataset_config)?;
             let controller = Controller::new(resolved.comparators, resolved.transformers)
-                .with_transformer_configs(dataset_config.transformer_config.as_map());
+                .with_transformer_configs(dataset_config.transformer_config.as_map())
+                .with_dataset_config(dataset_config.dataset.clone());
 
             match controller.extract(&changeset, &node, &aspect, &snap_a, &snap_b) {
                 Ok(result) => match result {
