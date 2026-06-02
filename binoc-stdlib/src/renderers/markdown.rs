@@ -631,9 +631,6 @@ fn capitalize(s: &str) -> String {
 
 fn format_known_quantities(input: &str, node: &DiffNode) -> String {
     let counts = known_count_values(node);
-    if counts.is_empty() {
-        return input.to_string();
-    }
 
     let mut out = String::with_capacity(input.len() + input.len() / 3);
     let mut cursor = 0;
@@ -659,8 +656,8 @@ fn format_known_quantities(input: &str, node: &DiffNode) -> String {
             .parse::<u64>()
             .ok()
             .filter(|value| *value > 999)
-            .filter(|value| counts.contains(value))
-            .filter(|_| is_quantity_context(input, start, end))
+            .filter(|_| !digits.starts_with('0'))
+            .filter(|value| is_quantity_context(input, start, end, counts.contains(value)))
             .map(format_count)
             .unwrap_or_else(|| digits.to_string());
         out.push_str(&formatted);
@@ -717,7 +714,7 @@ fn known_count_values(node: &DiffNode) -> BTreeSet<u64> {
     counts
 }
 
-fn is_quantity_context(input: &str, start: usize, end: usize) -> bool {
+fn is_quantity_context(input: &str, start: usize, end: usize, is_known_count: bool) -> bool {
     if path_or_identifier_adjacent(input, start, end) {
         return false;
     }
@@ -725,8 +722,17 @@ fn is_quantity_context(input: &str, start: usize, end: usize) -> bool {
     let Some(unit) = next_word(input, end) else {
         return false;
     };
+
+    if is_quantity_unit(unit) {
+        return true;
+    }
+
+    is_quantity_action(unit) && (is_known_count || recent_quantity_unit_before(input, start))
+}
+
+fn is_quantity_unit(word: &str) -> bool {
     matches!(
-        unit,
+        word.to_ascii_lowercase().as_str(),
         "row"
             | "rows"
             | "cell"
@@ -739,11 +745,29 @@ fn is_quantity_context(input: &str, start: usize, end: usize) -> bool {
             | "tables"
             | "null"
             | "nulls"
-            | "added"
-            | "removed"
-            | "changed"
-            | "modified"
     )
+}
+
+fn is_quantity_action(word: &str) -> bool {
+    matches!(
+        word.to_ascii_lowercase().as_str(),
+        "added" | "removed" | "changed" | "modified"
+    )
+}
+
+fn recent_quantity_unit_before(input: &str, start: usize) -> bool {
+    let prefix = &input[..start];
+    let window_start = prefix
+        .rfind([';', '.', '(', ')', '\n'])
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+
+    prefix[window_start..]
+        .split(|ch: char| !ch.is_ascii_alphabetic())
+        .rev()
+        .filter(|word| !word.is_empty())
+        .take(4)
+        .any(is_quantity_unit)
 }
 
 fn path_or_identifier_adjacent(input: &str, start: usize, end: usize) -> bool {
@@ -1125,6 +1149,41 @@ mod tests {
         assert!(md.contains("5,975 lines added, 18,133,333 removed"));
         assert!(md.contains("Folder moved from FoodData_Central_csv_2025-12-18"));
         assert!(!md.contains("FoodData_Central_csv_2,025-12-18"));
+    }
+
+    #[test]
+    fn formats_aggregate_counts_but_not_dates_in_summary_text() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular_collection", "")
+                    .with_summary(
+                        "Table FoodData_Central_csv_2025-12-18 changed: 5975 rows added; \
+                         18133333 cells changed",
+                    )
+                    .with_tag("binoc.tabular-collection-change")
+                    .with_children(vec![DiffNode::new(
+                        "modify",
+                        "tabular",
+                        "FoodData_Central_csv_2026-04-30/data.csv",
+                    )
+                    .with_summary("5975 rows added; 18133333 cells changed")
+                    .with_detail("rows_added", serde_json::json!(5975_u64))
+                    .with_detail("cells_changed", serde_json::json!(18133333_u64))]),
+            ),
+        );
+        let config = MarkdownRendererConfig::default();
+        let md = render_markdown(&[changeset], &config);
+
+        assert!(md.contains(
+            "- **(root)**: Table FoodData_Central_csv_2025-12-18 changed: 5,975 rows added; 18,133,333 cells changed"
+        ));
+        assert!(md.contains(
+            "- **FoodData_Central_csv_2026-04-30/data.csv**: 5,975 rows added; 18,133,333 cells changed"
+        ));
+        assert!(!md.contains("FoodData_Central_csv_2,025-12-18"));
+        assert!(!md.contains("FoodData_Central_csv_2,026-04-30"));
     }
 
     #[test]
