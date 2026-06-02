@@ -196,6 +196,10 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 
 - **sequences.fasta**: Content changed (92 bytes → 102 bytes)
 
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`sequences.fasta`) [binoc.binary-fallback]
+
 ```
 
 All the default tool can say is that the two FASTA files are different.

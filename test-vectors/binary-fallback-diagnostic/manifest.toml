@@ -1,0 +1,7 @@
+[vector]
+name = "binary-fallback-diagnostic"
+description = "Unknown file type compared by the binary fallback emits a suggestion"
+tags = ["modify", "binary", "diagnostics"]
+
+[expected]
+has_tags = ["binoc.content-changed"]

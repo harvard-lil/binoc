@@ -8,3 +8,7 @@ expression: "&md"
 ## Substantive Changes
 
 - **data.bin**: Content changed (4 bytes → 4 bytes)
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`data.bin`) [binoc.binary-fallback]

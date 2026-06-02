@@ -266,5 +266,13 @@ expression: "&stable_changeset"
     "transformed_by": [
       "binoc.correlation_detector"
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "severity": "suggestion",
+      "code": "binoc.binary-fallback",
+      "message": "Compared as binary; a plugin may provide a more semantic diff.",
+      "location": "icon.bin"
+    }
+  ]
 }

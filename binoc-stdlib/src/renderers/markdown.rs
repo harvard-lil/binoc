@@ -8,14 +8,21 @@ use binoc_sdk::*;
 pub struct MarkdownRendererConfig {
     #[serde(default = "default_significance")]
     pub significance: BTreeMap<String, Vec<String>>,
+    #[serde(default = "default_max_diagnostics")]
+    pub max_diagnostics: usize,
 }
 
 impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
             significance: default_significance(),
+            max_diagnostics: default_max_diagnostics(),
         }
     }
+}
+
+fn default_max_diagnostics() -> usize {
+    8
 }
 
 fn default_significance() -> BTreeMap<String, Vec<String>> {
@@ -66,43 +73,95 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
             changeset.from_snapshot, changeset.to_snapshot
         ));
 
-        let root = match &changeset.root {
-            Some(r) => r,
-            None => {
-                out.push_str("No changes detected.\n\n");
-                continue;
-            }
-        };
+        if let Some(root) = &changeset.root {
+            let tag_to_significance = build_tag_map(&config.significance);
+            let mut by_significance: BTreeMap<String, Vec<&DiffNode>> = BTreeMap::new();
+            let mut uncategorized: Vec<&DiffNode> = Vec::new();
+            collect_reportable_nodes(
+                root,
+                &tag_to_significance,
+                &mut by_significance,
+                &mut uncategorized,
+            );
 
-        let tag_to_significance = build_tag_map(&config.significance);
-        let mut by_significance: BTreeMap<String, Vec<&DiffNode>> = BTreeMap::new();
-        let mut uncategorized: Vec<&DiffNode> = Vec::new();
-        collect_reportable_nodes(
-            root,
-            &tag_to_significance,
-            &mut by_significance,
-            &mut uncategorized,
+            for (category, nodes) in &by_significance {
+                let title = capitalize(category);
+                out.push_str(&format!("## {title} Changes\n\n"));
+                for node in nodes {
+                    format_node(&mut out, node);
+                }
+                out.push('\n');
+            }
+
+            if !uncategorized.is_empty() {
+                out.push_str("## Other Changes\n\n");
+                for node in &uncategorized {
+                    format_node(&mut out, node);
+                }
+                out.push('\n');
+            }
+        } else {
+            out.push_str("No changes detected.\n\n");
+        }
+
+        let diagnostics = display_diagnostics(&changeset.diagnostics, config.max_diagnostics);
+        format_diagnostics_section(
+            &mut out,
+            "Warnings",
+            DiagnosticSeverity::Warning,
+            &diagnostics,
         );
-
-        for (category, nodes) in &by_significance {
-            let title = capitalize(category);
-            out.push_str(&format!("## {title} Changes\n\n"));
-            for node in nodes {
-                format_node(&mut out, node);
-            }
-            out.push('\n');
-        }
-
-        if !uncategorized.is_empty() {
-            out.push_str("## Other Changes\n\n");
-            for node in &uncategorized {
-                format_node(&mut out, node);
-            }
-            out.push('\n');
-        }
+        format_diagnostics_section(
+            &mut out,
+            "Suggestions",
+            DiagnosticSeverity::Suggestion,
+            &diagnostics,
+        );
     }
 
     out
+}
+
+fn display_diagnostics(diagnostics: &[Diagnostic], max_diagnostics: usize) -> Vec<&Diagnostic> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    for diagnostic in diagnostics {
+        let key = (&diagnostic.code, diagnostic.location.as_deref());
+        if seen.insert(key) {
+            out.push(diagnostic);
+            if out.len() >= max_diagnostics {
+                break;
+            }
+        }
+    }
+    out
+}
+
+fn format_diagnostics_section(
+    out: &mut String,
+    title: &str,
+    severity: DiagnosticSeverity,
+    diagnostics: &[&Diagnostic],
+) {
+    let matching: Vec<&Diagnostic> = diagnostics
+        .iter()
+        .copied()
+        .filter(|diagnostic| diagnostic.severity == severity)
+        .collect();
+    if matching.is_empty() {
+        return;
+    }
+
+    out.push_str(&format!("## {title}\n\n"));
+    for diagnostic in matching {
+        out.push_str("- ");
+        out.push_str(&humanize_numbers(&diagnostic.message));
+        if let Some(location) = &diagnostic.location {
+            out.push_str(&format!(" (`{location}`)"));
+        }
+        out.push_str(&format!(" [{}]\n", diagnostic.code));
+    }
+    out.push('\n');
 }
 
 fn build_tag_map(significance: &BTreeMap<String, Vec<String>>) -> BTreeMap<String, String> {
@@ -344,6 +403,45 @@ mod tests {
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("No changes detected"));
+    }
+
+    #[test]
+    fn renders_structured_diagnostics_sections() {
+        let mut changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "file", "data.bin").with_summary("Content changed")),
+        );
+        changeset.push_diagnostic(
+            Diagnostic::warning("binoc.test-warning", "A parser setting was ignored")
+                .with_location("data.bin"),
+        );
+        changeset.push_diagnostic(
+            Diagnostic::suggestion(
+                "binoc.binary-fallback",
+                "Compared as binary; a plugin may provide a more semantic diff.",
+            )
+            .with_location("data.bin"),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("## Warnings"));
+        assert!(md.contains("## Suggestions"));
+        assert!(md.contains("[binoc.binary-fallback]"));
+        assert!(md.contains("(`data.bin`)"));
+    }
+
+    #[test]
+    fn diagnostics_are_shown_even_without_changes() {
+        let mut changeset = Changeset::new("v1", "v2", None);
+        changeset.push_diagnostic(Diagnostic::suggestion(
+            "binoc.test",
+            "A plugin may provide more context.",
+        ));
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("No changes detected."));
+        assert!(md.contains("## Suggestions"));
     }
 
     #[test]

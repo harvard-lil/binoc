@@ -4,6 +4,12 @@
   "description": "A structured description of how to get from one snapshot to the next.",
   "type": "object",
   "properties": {
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      }
+    },
     "from_snapshot": {
       "type": "string"
     },
@@ -88,6 +94,38 @@
         "pair"
       ]
     },
+    "Diagnostic": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ]
+    },
+    "DiagnosticSeverity": {
+      "type": "string",
+      "enum": [
+        "warning",
+        "suggestion"
+      ]
+    },
     "DiffNode": {
       "description": "A node in the diff tree — the central data structure of the system.\nEvery comparator emits it, every transformer rewrites it, and serializers\nor bindings read it.",
       "type": "object",
@@ -126,6 +164,13 @@
           "description": "Comparator-specific payload, schema determined by item_type convention.",
           "type": "object",
           "additionalProperties": true
+        },
+        "diagnostics": {
+          "description": "Node-scoped diagnostics emitted during comparison or transform.\nTransient: the controller hoists them into [`Changeset::diagnostics`]\nat the end of the diff, then clears this field so the output shape\nstays as one durable top-level diagnostics list.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          }
         },
         "item_type": {
           "description": "Open string: \"directory\", \"file\", \"tabular\", \"zip_archive\", etc.\nNo built-in types — conventions, not enforcement.",

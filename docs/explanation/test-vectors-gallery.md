@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **29 shared examples** in this gallery.
+Binoc currently ships **30 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -29,6 +29,7 @@ just materialize
 
 | Example | What it shows | Example output | Setup |
 |---|---|---|---|
+| [`binary-fallback-diagnostic`](#binary-fallback-diagnostic) | Unknown file type compared by the binary fallback emits a suggestion | data.parquet: Content changed (7 bytes → 7 bytes) | Default pipeline |
 | [`csv-cell-changes`](#csv-cell-changes) | Individual cell values changed | data.csv: 2 cells changed | Default pipeline |
 | [`csv-column-addition`](#csv-column-addition) | New column added | data.csv: Column added: 'email' | Default pipeline |
 | [`csv-column-removal`](#csv-column-removal) | Column removed | data.csv: Column removed: 'city' | Default pipeline |
@@ -58,6 +59,33 @@ just materialize
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`zip-nested`](#zip-nested) | Nested zip containing CSV | outer.zip/inner.zip/data.csv: 1 row added | Default pipeline |
 | [`zip-simple`](#zip-simple) | Zipped files with changes inside | archive.zip/data.txt: 1 line added, 1 removed | Default pipeline |
+
+## binary-fallback-diagnostic
+
+Unknown file type compared by the binary fallback emits a suggestion
+
+- **Browse source:** [binary-fallback-diagnostic](https://github.com/harvard-lil/binoc/tree/main/test-vectors/binary-fallback-diagnostic)
+- **Tags:** `modify`, `binary`, `diagnostics`
+- **Snapshots:** `snapshot-a` has 1 file — `data.parquet`; `snapshot-b` has 1 file — `data.parquet`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/binary-fallback-diagnostic/snapshot-a \
+  ./test-vectors-materialized/binary-fallback-diagnostic/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **data.parquet**: Content changed (7 bytes → 7 bytes)
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`data.parquet`) [binoc.binary-fallback]
+```
 
 ## csv-cell-changes
 
@@ -430,6 +458,10 @@ Result:
 - **data.csv**: 2 cells changed
 - **license-copy.txt**: Copied from license.txt
 - **summary.txt**: Moved from report.txt
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`icon.bin`) [binoc.binary-fallback]
 ```
 
 ## single-file-add
@@ -476,6 +508,10 @@ Result:
 ## Substantive Changes
 
 - **data.bin**: Content changed (4 bytes → 4 bytes)
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`data.bin`) [binoc.binary-fallback]
 ```
 
 ## single-file-modify-csv

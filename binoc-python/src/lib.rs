@@ -790,7 +790,8 @@ impl PyDiffNodeIter {
 ///
 /// A ``Changeset`` records the two snapshot names it was computed from, the
 /// root of the diff tree (``None`` if the snapshots are identical), and a
-/// free-form ``metadata`` dict for plugin use. Serialize with
+/// free-form ``metadata`` dict for plugin use. Structured ``diagnostics``
+/// carry warnings or suggestions without failing the diff. Serialize with
 /// :meth:`to_json` / :meth:`to_dict`, or via the module-level :func:`to_json`
 /// and :func:`to_markdown`.
 #[pyclass(name = "Changeset", module = "binoc._binoc", from_py_object)]
@@ -843,6 +844,13 @@ impl PyChangeset {
         }
         Ok(dict)
     }
+    /// Structured warnings/suggestions attached to this changeset.
+    #[getter]
+    fn diagnostics<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let value = serde_json::to_value(&self.inner.diagnostics)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        json_to_py(py, &value)
+    }
     /// Total number of nodes in the diff tree (0 if :attr:`root` is ``None``).
     #[getter]
     fn node_count(&self) -> usize {
@@ -877,6 +885,9 @@ impl PyChangeset {
             meta.set_item(k, v)?;
         }
         dict.set_item("metadata", meta)?;
+        let diagnostics = serde_json::to_value(&self.inner.diagnostics)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("diagnostics", json_to_py(py, &diagnostics)?)?;
         Ok(dict)
     }
     fn save(&self, path: &str) -> PyResult<()> {

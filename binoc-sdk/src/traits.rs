@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{Changeset, DiffNode};
+use crate::ir::{Changeset, Diagnostic, DiffNode};
 use crate::types::*;
 
 pub type BinocResult<T> = Result<T, BinocError>;
@@ -367,6 +367,10 @@ pub trait Renderer: Send + Sync {
     fn descriptor(&self) -> RendererDescriptor;
 
     fn render(&self, changesets: &[Changeset], config: &serde_json::Value) -> BinocResult<String>;
+
+    fn diagnostics(&self, _changeset: &Changeset, _config: &serde_json::Value) -> Vec<Diagnostic> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

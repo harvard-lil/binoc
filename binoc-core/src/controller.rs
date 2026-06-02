@@ -7,6 +7,8 @@ use binoc_sdk::*;
 
 use crate::data_access::LocalDataAccess;
 
+const MAX_CHANGESET_DIAGNOSTICS: usize = 16;
+
 /// The core engine: processes a work queue of item pairs, dispatching to
 /// comparators, assembling the diff tree, then running transformers.
 /// Type-ignorant — it does not know what a directory, zip, or CSV is.
@@ -84,6 +86,8 @@ impl Controller {
         // session-local state. Extract rebuilds them on demand by replaying
         // the comparator chain.
         let mut changeset = Changeset::new(from_path, to_path, root_node);
+        changeset.hoist_node_diagnostics();
+        changeset.dedupe_and_cap_diagnostics(MAX_CHANGESET_DIAGNOSTICS);
         changeset.strip_transient();
         Ok(changeset)
     }

@@ -59,6 +59,7 @@ A structured description of how to get from one snapshot to the next.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `diagnostics` | array of [`Diagnostic`](#diagnostic) | no |  |
 | `from_snapshot` | string | yes |  |
 | `metadata` | object (map of string → string) | no |  |
 | `root` | [`DiffNode`](#diffnode) \| null | no |  |
@@ -76,6 +77,7 @@ A node in the diff tree — the central data structure of the system. Every comp
 | `children` | array of [`DiffNode`](#diffnode) | no | Child diff nodes forming the tree structure. |
 | `comparator` | string \| null | no | Which comparator produced this node (provenance for extract chain). |
 | `details` | object (free-form) | no | Comparator-specific payload, schema determined by item_type convention. |
+| `diagnostics` | array of [`Diagnostic`](#diagnostic) | no | Node-scoped diagnostics emitted during comparison or transform. Transient: the controller hoists them into [`Changeset::diagnostics`] at the end of the diff, then clears this field so the output shape stays as one durable top-level diagnostics list. |
 | `item_type` | string | yes | Open string: "directory", "file", "tabular", "zip_archive", etc. No built-in types — conventions, not enforcement. |
 | `path` | string | yes | Location within snapshot (logical path, including interior paths like "archive.zip/data/file.csv"). |
 | `pending_recompare` | [`ItemPair`](#itempair) \| null | no | Request that the controller re-dispatch the given `ItemPair` through the comparator pipeline and merge the result into this node before the next transformer runs. Set by transformers (e.g. fuzzy correlation) that have decided two leaves represent the same logical item but need a content diff under the new (move) node. Session- scoped working data: wire-visible so plugins can set it across the ABI boundary, but cleared by [`DiffNode::strip_transient`] before changeset output. The controller takes (clears) this field as it processes it; nodes in a finalized changeset never carry it. |
@@ -137,3 +139,19 @@ String enum. One of:
 - `left`
 - `right`
 - `pair`
+
+### `Diagnostic`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `code` | string | yes |  |
+| `location` | string \| null | no |  |
+| `message` | string | yes |  |
+| `severity` | [`DiagnosticSeverity`](#diagnosticseverity) | yes |  |
+
+### `DiagnosticSeverity`
+
+String enum. One of:
+
+- `warning`
+- `suggestion`

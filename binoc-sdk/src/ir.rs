@@ -3,6 +3,59 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::types::{ArtifactDescriptor, ItemPair};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticSeverity {
+    Warning,
+    Suggestion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub code: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+}
+
+impl Diagnostic {
+    pub fn new(
+        severity: DiagnosticSeverity,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity,
+            code: code.into(),
+            message: message.into(),
+            location: None,
+        }
+    }
+
+    pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(DiagnosticSeverity::Warning, code, message)
+    }
+
+    pub fn suggestion(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(DiagnosticSeverity::Suggestion, code, message)
+    }
+
+    pub fn with_location(mut self, location: impl Into<String>) -> Self {
+        self.location = Some(location.into());
+        self
+    }
+
+    fn normalized(mut self) -> Self {
+        if self.location.as_deref().is_some_and(|s| s.is_empty()) {
+            self.location = None;
+        }
+        self
+    }
+}
+
 /// A node in the diff tree — the central data structure of the system.
 /// Every comparator emits it, every transformer rewrites it, and serializers
 /// or bindings read it.
@@ -64,6 +117,13 @@ pub struct DiffNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_items: Option<ItemPair>,
 
+    /// Node-scoped diagnostics emitted during comparison or transform.
+    /// Transient: the controller hoists them into [`Changeset::diagnostics`]
+    /// at the end of the diff, then clears this field so the output shape
+    /// stays as one durable top-level diagnostics list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
+
     /// Published artifacts for this node. Session-scoped working data: carried
     /// across the plugin ABI wire as descriptors (the bytes live in the shared
     /// `data_root` cache), but not meaningful outside a session. Callers
@@ -104,6 +164,7 @@ impl DiffNode {
             comparator: None,
             transformed_by: Vec::new(),
             source_items: None,
+            diagnostics: Vec::new(),
             artifacts: Vec::new(),
             pending_recompare: None,
         }
@@ -139,9 +200,23 @@ impl DiffNode {
         self
     }
 
+    pub fn with_diagnostic(mut self, diagnostic: Diagnostic) -> Self {
+        self.push_diagnostic(diagnostic);
+        self
+    }
+
     pub fn with_artifact(mut self, artifact: ArtifactDescriptor) -> Self {
         self.artifacts.push(artifact);
         self
+    }
+
+    pub fn push_diagnostic(&mut self, diagnostic: Diagnostic) {
+        let diagnostic = if diagnostic.location.is_none() && !self.path.is_empty() {
+            diagnostic.with_location(self.path.clone())
+        } else {
+            diagnostic
+        };
+        self.diagnostics.push(diagnostic.normalized());
     }
 
     pub fn node_count(&self) -> usize {
@@ -156,8 +231,16 @@ impl DiffNode {
         tags
     }
 
+    fn drain_diagnostics_into(&mut self, target: &mut Vec<Diagnostic>) {
+        target.append(&mut self.diagnostics);
+        for child in &mut self.children {
+            child.drain_diagnostics_into(target);
+        }
+    }
+
     /// Recursively clear session-scoped transient fields (`source_items`,
-    /// `artifacts`, `pending_recompare`) on this node and all descendants.
+    /// `diagnostics`, `artifacts`, `pending_recompare`) on this node and all
+    /// descendants.
     ///
     /// These fields are wire-visible so the plugin ABI can move them across
     /// process-ready boundaries, but they are not meaningful outside a live
@@ -165,6 +248,7 @@ impl DiffNode {
     /// for users (JSON files, renderer output, Python return values).
     pub fn strip_transient(&mut self) {
         self.source_items = None;
+        self.diagnostics.clear();
         self.artifacts.clear();
         self.pending_recompare = None;
         for child in &mut self.children {
@@ -182,6 +266,8 @@ pub struct Changeset {
     pub root: Option<DiffNode>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Changeset {
@@ -191,11 +277,39 @@ impl Changeset {
             to_snapshot: to.into(),
             root,
             metadata: BTreeMap::new(),
+            diagnostics: Vec::new(),
         }
     }
 
     pub fn node_count(&self) -> usize {
         self.root.as_ref().map_or(0, |r| r.node_count())
+    }
+
+    pub fn push_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic.normalized());
+    }
+
+    pub fn hoist_node_diagnostics(&mut self) {
+        if let Some(root) = self.root.as_mut() {
+            root.drain_diagnostics_into(&mut self.diagnostics);
+        }
+    }
+
+    pub fn dedupe_and_cap_diagnostics(&mut self, max_diagnostics: usize) {
+        let mut seen: BTreeSet<(String, Option<String>)> = BTreeSet::new();
+        let mut deduped = Vec::with_capacity(self.diagnostics.len().min(max_diagnostics));
+
+        for diagnostic in self.diagnostics.drain(..).map(Diagnostic::normalized) {
+            let key = (diagnostic.code.clone(), diagnostic.location.clone());
+            if seen.insert(key) {
+                deduped.push(diagnostic);
+                if deduped.len() >= max_diagnostics {
+                    break;
+                }
+            }
+        }
+
+        self.diagnostics = deduped;
     }
 
     /// Recursively clear session-scoped transient fields on the root and all
@@ -313,11 +427,9 @@ mod tests {
 
     #[test]
     fn transient_fields_round_trip_through_serde() {
-        // Session-scoped transient fields (`source_items`, `artifacts`) are
-        // wire-visible so the plugin ABI can carry them across a (potentially
-        // process-isolated) boundary. This test pins that behavior: serializing
-        // and deserializing a node with transient fields populated preserves
-        // them on every descendant, not just the root.
+        // Session-scoped transient fields (`source_items`, `artifacts`,
+        // `diagnostics`) are wire-visible so the plugin ABI can carry them
+        // across a (potentially process-isolated) boundary.
         use crate::types::{
             ArtifactDescriptor, ArtifactFormat, ArtifactSubject, ItemPair, ItemRef,
         };
@@ -348,7 +460,8 @@ mod tests {
         );
         let child = DiffNode::new("modify", "tabular", "dir/data.csv")
             .with_artifact(artifact.clone())
-            .with_source_items(source_items.clone());
+            .with_source_items(source_items.clone())
+            .with_diagnostic(Diagnostic::suggestion("binoc.demo", "Try a richer plugin"));
         let root = DiffNode::new("modify", "directory", "dir").with_children(vec![child]);
 
         let json = serde_json::to_string(&root).unwrap();
@@ -362,6 +475,37 @@ mod tests {
             restored_child.source_items.is_some(),
             "child source_items missing"
         );
+        assert_eq!(restored_child.diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn hoisted_diagnostics_are_deduped_and_capped() {
+        let mut root = DiffNode::new("modify", "directory", "");
+        root.push_diagnostic(Diagnostic::suggestion(
+            "binoc.binary-fallback",
+            "Try a plugin",
+        ));
+        root.push_diagnostic(Diagnostic::suggestion(
+            "binoc.binary-fallback",
+            "Try a plugin",
+        ));
+        root.children = vec![
+            DiffNode::new("modify", "file", "a.bin").with_diagnostic(Diagnostic::suggestion(
+                "binoc.binary-fallback",
+                "Try a plugin",
+            )),
+            DiffNode::new("modify", "file", "b.bin")
+                .with_diagnostic(Diagnostic::warning("binoc.other", "Other issue")),
+        ];
+
+        let mut changeset = Changeset::new("a", "b", Some(root));
+        changeset.hoist_node_diagnostics();
+        changeset.dedupe_and_cap_diagnostics(2);
+
+        assert_eq!(changeset.diagnostics.len(), 2);
+        assert_eq!(changeset.diagnostics[0].code, "binoc.binary-fallback");
+        assert_eq!(changeset.diagnostics[0].location, None);
+        assert_eq!(changeset.diagnostics[1].location.as_deref(), Some("a.bin"));
     }
 
     #[test]
@@ -393,14 +537,16 @@ mod tests {
                 handle: "/tmp/b".into(),
             },
         );
-        let mut grandchild =
-            DiffNode::new("modify", "tabular", "a/b/c.csv").with_artifact(artifact);
+        let mut grandchild = DiffNode::new("modify", "tabular", "a/b/c.csv")
+            .with_artifact(artifact)
+            .with_diagnostic(Diagnostic::warning("binoc.test", "test"));
         grandchild.pending_recompare = Some(pair);
         let child = DiffNode::new("modify", "directory", "a/b").with_children(vec![grandchild]);
         let mut root = DiffNode::new("modify", "directory", "a").with_children(vec![child]);
         root.strip_transient();
         fn all_empty(n: &DiffNode) -> bool {
             n.artifacts.is_empty()
+                && n.diagnostics.is_empty()
                 && n.source_items.is_none()
                 && n.pending_recompare.is_none()
                 && n.children.iter().all(all_empty)

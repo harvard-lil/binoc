@@ -37,6 +37,10 @@ impl Comparator for BinaryComparator {
                 let node = DiffNode::new("modify", "file", &right.logical_path)
                     .with_summary(summary)
                     .with_tag("binoc.content-changed")
+                    .with_diagnostic(Diagnostic::suggestion(
+                        "binoc.binary-fallback",
+                        "Compared as binary; a plugin may provide a more semantic diff.",
+                    ))
                     .with_detail("hash_left", serde_json::json!(&hash_l))
                     .with_detail("hash_right", serde_json::json!(&hash_r))
                     .with_detail("size_left", serde_json::json!(size_l))

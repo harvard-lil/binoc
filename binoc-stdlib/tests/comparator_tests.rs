@@ -58,6 +58,9 @@ fn binary_different_files() {
             assert!(node.tags.contains("binoc.content-changed"));
             assert!(node.details.contains_key("hash_left"));
             assert!(node.details.contains_key("hash_right"));
+            assert_eq!(node.diagnostics.len(), 1);
+            assert_eq!(node.diagnostics[0].code, "binoc.binary-fallback");
+            assert_eq!(node.diagnostics[0].location.as_deref(), Some("file.bin"));
         }
         _ => panic!("Expected Leaf"),
     }
