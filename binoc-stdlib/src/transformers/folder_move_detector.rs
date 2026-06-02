@@ -283,7 +283,7 @@ fn apply_rollups(
                 format!("Folder copied from {}", display_name(&rollup.source_path)),
             ),
         };
-        let mut children = rewrite_destination_children(node.children, rollup);
+        let mut children = rewrite_destination_children(node.children, rollup, source_index);
         if let Some(source_node) = source_index.get(&rollup.source_path) {
             children.extend(relocate_source_remainders(source_node, rollup));
         }
@@ -315,35 +315,48 @@ fn apply_rollups(
     }
 }
 
-fn rewrite_destination_children(children: Vec<DiffNode>, rollup: &Rollup) -> Vec<DiffNode> {
+fn rewrite_destination_children(
+    children: Vec<DiffNode>,
+    rollup: &Rollup,
+    source_index: &BTreeMap<String, DiffNode>,
+) -> Vec<DiffNode> {
     merge_same_path_nodes(
         children
             .into_iter()
-            .filter_map(|child| rewrite_destination_node(child, rollup))
+            .filter_map(|child| rewrite_destination_node(child, rollup, source_index))
             .collect(),
     )
 }
 
-fn rewrite_destination_node(node: DiffNode, rollup: &Rollup) -> Option<DiffNode> {
-    let rel = strip_prefix_as_child(&node.path, &rollup.dst_path)?;
+fn rewrite_destination_node(
+    node: DiffNode,
+    rollup: &Rollup,
+    source_index: &BTreeMap<String, DiffNode>,
+) -> Option<DiffNode> {
+    let rel = strip_prefix_as_child(&node.path, &rollup.dst_path)?.to_string();
     if node.children.is_empty() {
-        if is_clean_matched_leaf(&node, rel, rollup) {
+        if is_clean_matched_leaf(&node, &rel, rollup) {
             return None;
         }
         return Some(normalize_rollup_remainder_leaf(node, rollup));
     }
 
-    let mut new_children = rewrite_destination_children(node.children, rollup);
+    let mut new_children = rewrite_destination_children(node.children, rollup, source_index);
     new_children = merge_same_path_nodes(new_children);
 
     if new_children.is_empty() && node.summary.is_none() && node.tags.is_empty() {
         return None;
     }
 
-    Some(DiffNode {
-        children: new_children,
-        ..node
-    })
+    Some(normalize_rollup_remainder_container(
+        DiffNode {
+            children: new_children,
+            ..node
+        },
+        &rel,
+        rollup,
+        source_index,
+    ))
 }
 
 fn is_clean_matched_leaf(node: &DiffNode, rel: &str, rollup: &Rollup) -> bool {
@@ -362,6 +375,39 @@ fn normalize_rollup_remainder_leaf(node: DiffNode, rollup: &Rollup) -> DiffNode 
     }
 
     maybe_demote_move_like_remainder(node)
+}
+
+fn normalize_rollup_remainder_container(
+    mut node: DiffNode,
+    rel: &str,
+    rollup: &Rollup,
+    source_index: &BTreeMap<String, DiffNode>,
+) -> DiffNode {
+    if node.action != "add" {
+        return node;
+    }
+
+    let source_path = if rollup.source_path.is_empty() {
+        rel.to_string()
+    } else if rel.is_empty() {
+        rollup.source_path.clone()
+    } else {
+        format!("{}/{}", rollup.source_path, rel)
+    };
+
+    let has_source_container = source_index
+        .get(&source_path)
+        .is_some_and(|source| source.item_type == node.item_type);
+    let has_matched_descendant = rollup
+        .matched_rel_paths
+        .iter()
+        .any(|matched| matched == rel || matched.starts_with(&format!("{rel}/")));
+
+    if has_source_container || has_matched_descendant {
+        node.action = "modify".to_string();
+    }
+
+    node
 }
 
 fn maybe_demote_move_like_remainder(mut node: DiffNode) -> DiffNode {
