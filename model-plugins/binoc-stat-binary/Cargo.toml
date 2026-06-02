@@ -1,0 +1,42 @@
+[package]
+name = "binoc-stat-binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Stata and SAS tabular reader plugin for Binoc"
+publish = false
+
+[lib]
+name = "binoc_stat_binary"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = ["dep:pyo3"]
+test-support = ["dep:binoc-stdlib"]
+
+[[bin]]
+name = "materialize-stat-binary-test-vectors"
+path = "src/bin/materialize_test_vectors.rs"
+required-features = ["test-support"]
+
+[dependencies]
+binoc-sdk = { workspace = true }
+dta = "0.6.0"
+pyo3 = { workspace = true, optional = true }
+sas7bdat = { version = "0.2.0", default-features = false }
+sas_xport = "0.4.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
+binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
+
+[dev-dependencies]
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-stat-binary = { path = ".", features = ["test-support"] }
+tempfile = "3"

@@ -1,0 +1,8 @@
+[vector]
+name = "sas7bdat-column-addition"
+description = "SAS7BDAT files parse into the standard tabular artifact and report column additions through the tabular analyzer."
+tags = ["sas7bdat", "tabular", "schema"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.column-addition", "binoc.schema-change"]

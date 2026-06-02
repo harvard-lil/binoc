@@ -18,6 +18,7 @@ updates:
     directories:
       - "/binoc-python"
       - "/model-plugins/binoc-sqlite"
+      - "/model-plugins/binoc-stat-binary"
       - "/model-plugins/binoc-html"
     schedule:
       interval: weekly

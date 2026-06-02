@@ -2,6 +2,7 @@
 build:
     cd binoc-python && uv sync --extra dev
     cd model-plugins/binoc-sqlite && uv sync --extra dev
+    cd model-plugins/binoc-stat-binary && uv sync --extra dev
     cd model-plugins/binoc-html && uv sync --extra dev
 
 # Build optimized release artifacts (Rust binaries + Python package).
@@ -11,7 +12,7 @@ build-release:
 
 # Run binoc CLI with latest source (auto-rebuilds if needed).
 binoc *ARGS:
-    uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-html binoc {{ARGS}}
+    uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-stat-binary --with ./model-plugins/binoc-html binoc {{ARGS}}
 
 # Auto-format Rust and Python code.
 fmt:
@@ -34,6 +35,7 @@ test:
     cargo test
     cd binoc-python && uv run --extra dev maturin develop && uv run --extra dev pytest
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
+    cd model-plugins/binoc-stat-binary && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 
 # Aggregate docs generators. Each sub-recipe is cache-aware and skips work when
@@ -168,6 +170,7 @@ docs-serve:
         -w binoc-stdlib \
         -w test-vectors \
         -w model-plugins/binoc-sqlite \
+        -w model-plugins/binoc-stat-binary \
         -w mkdocs.yml \
         -w third_party_plugins.json \
         -w justfile \
@@ -196,12 +199,14 @@ snapshot-update:
 materialize:
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf test-vectors-materialized model-plugins/binoc-sqlite/test-vectors-materialized
+    rm -rf test-vectors-materialized model-plugins/binoc-sqlite/test-vectors-materialized model-plugins/binoc-stat-binary/test-vectors-materialized
     cargo run -q -p binoc-stdlib --features test-vectors --bin materialize-test-vectors -- \
         test-vectors-materialized test-vectors
     cargo run -q -p binoc-sqlite --features test-support --bin materialize-test-vectors -- \
         model-plugins/binoc-sqlite/test-vectors-materialized model-plugins/binoc-sqlite/test-vectors
-    echo "Materialized vectors under test-vectors-materialized/ and model-plugins/binoc-sqlite/test-vectors-materialized/"
+    cargo run -q -p binoc-stat-binary --features test-support --bin materialize-stat-binary-test-vectors -- \
+        model-plugins/binoc-stat-binary/test-vectors-materialized model-plugins/binoc-stat-binary/test-vectors
+    echo "Materialized vectors under test-vectors-materialized/ and plugin test-vectors-materialized/ trees"
 
 # Set the shared published package version across Cargo + Python manifests.
 set-version package version:
@@ -234,11 +239,16 @@ set-version package version:
         set_manifest_version binoc-python/pyproject.toml
         relock_uv binoc-python
         relock_uv model-plugins/binoc-sqlite
+        relock_uv model-plugins/binoc-stat-binary
         relock_uv model-plugins/binoc-html
         ;;
       binoc-sqlite)
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
         relock_uv model-plugins/binoc-sqlite
+        ;;
+      binoc-stat-binary)
+        set_manifest_version model-plugins/binoc-stat-binary/pyproject.toml
+        relock_uv model-plugins/binoc-stat-binary
         ;;
       binoc-html)
         set_manifest_version model-plugins/binoc-html/pyproject.toml
@@ -252,14 +262,16 @@ set-version package version:
         set_manifest_version Cargo.toml
         set_manifest_version binoc-python/pyproject.toml
         set_manifest_version model-plugins/binoc-sqlite/pyproject.toml
+        set_manifest_version model-plugins/binoc-stat-binary/pyproject.toml
         set_manifest_version model-plugins/binoc-html/pyproject.toml
         cargo update -w
         relock_uv binoc-python
         relock_uv model-plugins/binoc-sqlite
+        relock_uv model-plugins/binoc-stat-binary
         relock_uv model-plugins/binoc-html
         ;;
       *)
-        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-html|binoc-sdk|all] <version>" >&2
+        echo "Usage: just set-version [binoc|binoc-sqlite|binoc-stat-binary|binoc-html|binoc-sdk|all] <version>" >&2
         exit 1
         ;;
     esac
@@ -292,6 +304,9 @@ release package:
         binoc-sqlite)
           toml_string_from_origin_main model-plugins/binoc-sqlite/pyproject.toml
           ;;
+        binoc-stat-binary)
+          toml_string_from_origin_main model-plugins/binoc-stat-binary/pyproject.toml
+          ;;
         binoc-sdk)
           toml_string_from_origin_main Cargo.toml
           ;;
@@ -312,14 +327,14 @@ release package:
     REMOTE_MAIN="$(git rev-parse origin/main)"
 
     case "$PACKAGE" in
-      binoc|binoc-sqlite|binoc-sdk)
+      binoc|binoc-sqlite|binoc-stat-binary|binoc-sdk)
         packages=("$PACKAGE")
         ;;
       all)
-        packages=("binoc" "binoc-sqlite" "binoc-sdk")
+        packages=("binoc" "binoc-sqlite" "binoc-stat-binary" "binoc-sdk")
         ;;
       *)
-        echo "Usage: just release [binoc|binoc-sqlite|binoc-sdk|all]" >&2
+        echo "Usage: just release [binoc|binoc-sqlite|binoc-stat-binary|binoc-sdk|all]" >&2
         exit 1
         ;;
     esac
