@@ -12,6 +12,7 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
     let r = |res: Result<(), _>| res.expect("same-build plugin must be SDK-compatible");
     r(registry.register_comparator(Arc::new(comparators::zip_compare::ZipComparator)));
     r(registry.register_comparator(Arc::new(comparators::tar_compare::TarComparator)));
+    r(registry.register_comparator(Arc::new(comparators::gzip_compare::GzipComparator)));
     r(registry.register_comparator(Arc::new(comparators::directory::DirectoryComparator)));
     r(registry.register_comparator(Arc::new(comparators::csv_compare::CsvComparator)));
     r(registry.register_comparator(Arc::new(comparators::text::TextComparator)));

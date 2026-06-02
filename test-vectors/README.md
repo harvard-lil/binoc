@@ -88,6 +88,15 @@ For tar-based vectors, use `.tar.d`, `.tar.gz.d`, or `.tgz.d` directories. The t
 - `archive.tar.gz.d/data.txt` → `archive.tar.gz` containing `data.txt`
 - `outer.tar.gz.d/inner.tar.gz.d/data.csv` → nested tar.gz archives
 
+## Gzip Vectors
+
+For single-stream gzip vectors, use `.gz.d` directories with the uncompressed
+inner file inside. The test harness builds the compressed file before
+comparison:
+
+- `data.csv.gz.d/data.csv` → `data.csv.gz` containing `data.csv` bytes
+- `census.txt.gz.d/census.txt` → `census.txt.gz` containing `census.txt` bytes
+
 ## SQLite Vectors (plugin)
 
 In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `.db.d` directories. Building the `.sqlite`/`.db` file from those sources is the **plugin’s** responsibility (via the harness’s optional `prepare` callback), not the shared harness; see `binoc-sqlite/tests/test_vectors.rs`. Example layout: `data.sqlite.d/01_schema.sql` and `data.sqlite.d/02_data.sql` → `data.sqlite`.
@@ -103,7 +112,8 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 2. Add `manifest.toml` with `[vector]`, optional `[config]`, and `[expected]`
 3. Create `snapshot-a/` and `snapshot-b/` with the required files
 4. For binary files, use `printf '\x00\x01...' > path` to write exact bytes
-5. For zip vectors, use `.zip.d` directories; the harness builds them into zips
+5. For archive/compression vectors, use staging directories such as `.zip.d`,
+   `.tar.gz.d`, or `.gz.d`; the harness builds them into artifacts
 
 ## Available Vectors
 

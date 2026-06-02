@@ -30,6 +30,7 @@ useful when you want to:
 comparators:
   - binoc.zip
   - binoc.tar
+  - binoc.gzip
   - binoc.directory
   - binoc.csv
   - binoc.text

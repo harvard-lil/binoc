@@ -23,6 +23,8 @@ pub enum BinocError {
     Zip(String),
     #[error("tar error: {0}")]
     Tar(String),
+    #[error("gzip error: {0}")]
+    Gzip(String),
     #[error("extract error: {0}")]
     Extract(String),
     #[error("path policy: {0}")]
