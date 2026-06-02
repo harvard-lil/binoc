@@ -5,9 +5,15 @@ use serde::{Deserialize, Serialize};
 use binoc_sdk::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarkdownGroup {
+    pub heading: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkdownRendererConfig {
     #[serde(default)]
-    pub significance: BTreeMap<String, Vec<String>>,
+    pub groups: Vec<MarkdownGroup>,
     #[serde(default = "default_max_diagnostics")]
     pub max_diagnostics: usize,
 }
@@ -15,7 +21,7 @@ pub struct MarkdownRendererConfig {
 impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
-            significance: BTreeMap::new(),
+            groups: Vec::new(),
             max_diagnostics: default_max_diagnostics(),
         }
     }
@@ -49,25 +55,19 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
         ));
 
         if let Some(root) = &changeset.root {
-            let tag_to_significance = build_tag_map(&config.significance);
-            let mut by_significance: BTreeMap<String, Vec<&DiffNode>> = BTreeMap::new();
+            let tag_to_group = build_tag_map(&config.groups);
+            let mut by_group: Vec<Vec<&DiffNode>> = vec![Vec::new(); config.groups.len()];
             let mut uncategorized: Vec<&DiffNode> = Vec::new();
-            collect_reportable_nodes(
-                root,
-                &tag_to_significance,
-                &mut by_significance,
-                &mut uncategorized,
-            );
+            collect_reportable_nodes(root, &tag_to_group, &mut by_group, &mut uncategorized);
 
-            if tag_to_significance.is_empty() {
+            if config.groups.is_empty() {
                 for node in &uncategorized {
                     format_node(&mut out, node);
                 }
                 out.push('\n');
             } else {
-                for (category, nodes) in &by_significance {
-                    let title = capitalize(category);
-                    out.push_str(&format!("## {title} Changes\n\n"));
+                for (group, nodes) in config.groups.iter().zip(by_group.iter()) {
+                    out.push_str(&format!("## {}\n\n", group.heading));
                     for node in nodes {
                         format_node(&mut out, node);
                     }
@@ -146,20 +146,36 @@ fn format_diagnostics_section(
     out.push('\n');
 }
 
-fn build_tag_map(significance: &BTreeMap<String, Vec<String>>) -> BTreeMap<String, String> {
+fn build_tag_map(groups: &[MarkdownGroup]) -> BTreeMap<String, usize> {
     let mut map = BTreeMap::new();
-    for (category, tags) in significance {
-        for tag in tags {
-            map.insert(tag.clone(), category.clone());
+    for (index, group) in groups.iter().enumerate() {
+        for tag in &group.tags {
+            map.entry(tag.clone()).or_insert(index);
         }
     }
     map
 }
 
+fn classify_tags(
+    tags: impl IntoIterator<Item = impl AsRef<str>>,
+    tag_map: &BTreeMap<String, usize>,
+) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    for tag in tags {
+        if let Some(index) = tag_map.get(tag.as_ref()) {
+            best = Some(match best {
+                Some(current) => current.min(*index),
+                None => *index,
+            });
+        }
+    }
+    best
+}
+
 fn collect_reportable_nodes<'a>(
     node: &'a DiffNode,
-    tag_map: &BTreeMap<String, String>,
-    by_significance: &mut BTreeMap<String, Vec<&'a DiffNode>>,
+    tag_map: &BTreeMap<String, usize>,
+    by_group: &mut [Vec<&'a DiffNode>],
     uncategorized: &mut Vec<&'a DiffNode>,
 ) {
     let is_reportable = node.summary.is_some()
@@ -172,24 +188,22 @@ fn collect_reportable_nodes<'a>(
     // `annotations.tabular_summary` (TabularAnalyzer), or in
     // `annotations.content_summary` (comparator leaf summary captured
     // during inflate). Without this grouping, the move and its content
-    // detail would land in different significance sections, hiding the
+    // detail would land in different sections, hiding the
     // relationship.
     let group_as_move = should_group_move_children(node);
 
     if is_reportable {
-        let category = if group_as_move {
-            // Promote to the highest-significance category among the move
-            // node's own tags and any descendant tags.
-            node.all_tags()
-                .iter()
-                .find_map(|tag| tag_map.get(tag))
-                .cloned()
+        let group_index = if group_as_move {
+            // Promote to the highest-priority group among the move
+            // node's own tags and any descendant tags. Priority is the
+            // first matching configured group.
+            classify_tags(node.all_tags().iter(), tag_map)
         } else {
-            node.tags.iter().find_map(|tag| tag_map.get(tag)).cloned()
+            classify_tags(node.tags.iter(), tag_map)
         };
 
-        match category {
-            Some(cat) => by_significance.entry(cat).or_default().push(node),
+        match group_index {
+            Some(index) => by_group[index].push(node),
             None => uncategorized.push(node),
         }
     }
@@ -201,7 +215,7 @@ fn collect_reportable_nodes<'a>(
     }
 
     for child in &node.children {
-        collect_reportable_nodes(child, tag_map, by_significance, uncategorized);
+        collect_reportable_nodes(child, tag_map, by_group, uncategorized);
     }
 }
 
@@ -361,7 +375,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn to_markdown_includes_significance_sections() {
+    fn to_markdown_default_is_flat_list() {
         let changeset = Changeset::new(
             "v1",
             "v2",
@@ -374,9 +388,76 @@ mod tests {
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("# Changelog: v1 → v2"));
-        assert!(md.contains("## Substantive Changes"));
+        assert!(!md.contains("## "));
         assert!(md.contains("**data.csv**"));
         assert!(md.contains("Column added: 'email'"));
+    }
+
+    #[test]
+    fn to_markdown_respects_explicit_group_sections() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "csv", "data.csv")
+                    .with_summary("Column added: 'email'")
+                    .with_tag("binoc.column-addition"),
+            ),
+        );
+        let config = MarkdownRendererConfig {
+            groups: vec![MarkdownGroup {
+                heading: "Substantive changes".into(),
+                tags: vec!["binoc.column-addition".into()],
+            }],
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("## Substantive changes"));
+    }
+
+    #[test]
+    fn to_markdown_uses_declared_group_order_and_first_match_priority() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "csv", "data.csv")
+                    .with_summary("Column added: 'email'")
+                    .with_tag("binoc.column-addition")
+                    .with_tag("binoc.content-changed"),
+            ),
+        );
+        let config = MarkdownRendererConfig {
+            groups: vec![
+                MarkdownGroup {
+                    heading: "Critical".into(),
+                    tags: vec!["binoc.content-changed".into()],
+                },
+                MarkdownGroup {
+                    heading: "Substantive".into(),
+                    tags: vec!["binoc.column-addition".into()],
+                },
+            ],
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        let critical = md.find("## Critical").expect("missing Critical heading");
+        let substantive = md
+            .find("## Substantive")
+            .expect("missing Substantive heading");
+        assert!(
+            critical < substantive,
+            "group headings should keep declaration order; got:\n{md}"
+        );
+        let substantive_section = md
+            .split("## Substantive")
+            .nth(1)
+            .expect("expected substantive section");
+        assert!(md.contains("## Critical\n\n- **data.csv**: Column added: 'email'"));
+        assert!(
+            !substantive_section.contains("**data.csv**"),
+            "node should land in first matching group; got:\n{md}"
+        );
     }
 
     #[test]
@@ -455,11 +536,17 @@ mod tests {
 
         let md = render_markdown(
             &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
+            &MarkdownRendererConfig {
+                groups: vec![MarkdownGroup {
+                    heading: "Substantive changes".into(),
+                    tags: vec!["binoc.column-addition".into()],
+                }],
+                ..Default::default()
+            },
         );
 
         assert!(
-            md.contains("## Substantive Changes"),
+            md.contains("## Substantive changes"),
             "should land in substantive section (promoted from child tag)"
         );
         assert!(md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"));
@@ -488,10 +575,16 @@ mod tests {
 
         let md = render_markdown(
             &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
+            &MarkdownRendererConfig {
+                groups: vec![MarkdownGroup {
+                    heading: "Substantive changes".into(),
+                    tags: vec!["binoc.column-addition".into(), "binoc.schema-change".into()],
+                }],
+                ..Default::default()
+            },
         );
 
-        assert!(md.contains("## Substantive Changes"));
+        assert!(md.contains("## Substantive changes"));
         assert!(
             md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"),
             "move headline bullet missing; got:\n{md}"

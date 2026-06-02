@@ -879,10 +879,14 @@ fn check_assertions(
         let md_val = config.output.get_for_renderer("binoc.markdown");
         let md_config: markdown::MarkdownRendererConfig =
             serde_json::from_value(md_val).unwrap_or_default();
-        let sig_tags = md_config.significance.get(significance.as_str());
+        let sig_tags = md_config
+            .groups
+            .iter()
+            .find(|group| group.heading == *significance)
+            .map(|group| &group.tags);
         assert!(
             sig_tags.is_some(),
-            "[{name}] Significance category '{significance}' not in markdown renderer config"
+            "[{name}] Significance group '{significance}' not in markdown renderer config"
         );
         let sig_tags = sig_tags.unwrap();
         let has_sig_tag = all_tags.iter().any(|t| sig_tags.contains(t));
