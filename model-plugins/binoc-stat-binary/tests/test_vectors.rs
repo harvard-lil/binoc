@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use binoc_sdk::test_support::{AbiComparator, AbiLogCollector};
-use binoc_stat_binary::test_support::{DtaMaterializer, XptMaterializer};
+use binoc_stat_binary::test_support::{DtaMaterializer, Sas7bdatMaterializer, XptMaterializer};
 use binoc_stat_binary::{Sas7bdatComparator, StataComparator, XptComparator};
 use binoc_stdlib::test_vectors::{
     abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
@@ -24,12 +24,14 @@ fn test_all_vectors() {
 
     let stdlib = stdlib_materializers();
     let dta = DtaMaterializer;
+    let sas7bdat = Sas7bdatMaterializer;
     let xpt = XptMaterializer;
     let mut materializers: Vec<&dyn VectorMaterializer> = stdlib
         .iter()
         .map(|m| &**m as &dyn VectorMaterializer)
         .collect();
     materializers.push(&dta);
+    materializers.push(&sas7bdat);
     materializers.push(&xpt);
 
     for vector in &vectors {

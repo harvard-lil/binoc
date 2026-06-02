@@ -22,7 +22,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "data.sas7bdat",
-        "result_size": 131072
+        "result_size": 3072
       },
       {
         "op": "register_local",
@@ -31,7 +31,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "data.sas7bdat",
-        "result_size": 73728
+        "result_size": 3072
       }
     ]
   },
@@ -56,7 +56,7 @@ expression: "&abi_log"
         },
         "subject": "Left",
         "producer": "binoc-stat-binary.sas7bdat",
-        "size": 8221
+        "size": 60
       },
       {
         "op": "publish_artifact",
@@ -67,7 +67,7 @@ expression: "&abi_log"
         },
         "subject": "Right",
         "producer": "binoc-stat-binary.sas7bdat",
-        "size": 9113
+        "size": 78
       }
     ]
   },
