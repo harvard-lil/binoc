@@ -1,0 +1,95 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.dta",
+        "summary": "Column added: 'score'",
+        "tags": [
+          "binoc.column-addition",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "cells_changed": 0,
+          "columns_added": [
+            "score"
+          ],
+          "columns_left": [
+            "id",
+            "name"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "id",
+            "name",
+            "score"
+          ],
+          "hash_left": "72ba9ae4587ee05cf127613ea96cb7b1ceb80a1ee5ae3df7c65c36bef3e99159",
+          "hash_right": "843005efe4a682d5165edf6333e12dc91d8e1c61d7bd424310396026d0471bb5",
+          "left_metadata": {
+            "cell_encoding": "values flattened to display strings; Stata missing values use '.', '.a' ... '.z'; value labels are metadata only",
+            "columns": {
+              "id": {
+                "format": null,
+                "label": "id label",
+                "value_label_set": null
+              },
+              "name": {
+                "format": null,
+                "label": "name label",
+                "value_label_set": null
+              }
+            },
+            "dataset_label": "binoc test vector",
+            "format": "stata_dta",
+            "release": "118",
+            "value_labels": {}
+          },
+          "right_metadata": {
+            "cell_encoding": "values flattened to display strings; Stata missing values use '.', '.a' ... '.z'; value labels are metadata only",
+            "columns": {
+              "id": {
+                "format": null,
+                "label": "id label",
+                "value_label_set": null
+              },
+              "name": {
+                "format": null,
+                "label": "name label",
+                "value_label_set": null
+              },
+              "score": {
+                "format": null,
+                "label": "score label",
+                "value_label_set": null
+              }
+            },
+            "dataset_label": "binoc test vector",
+            "format": "stata_dta",
+            "release": "118",
+            "value_labels": {}
+          },
+          "rows_added": 0,
+          "rows_left": 2,
+          "rows_removed": 0,
+          "rows_right": 2
+        },
+        "comparator": "binoc-stat-binary.stata",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

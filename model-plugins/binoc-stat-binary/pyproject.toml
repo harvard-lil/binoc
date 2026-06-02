@@ -1,12 +1,12 @@
 [project]
-name = "binoc"
+name = "binoc-stat-binary"
 version = "0.1.1"
-description = "The missing changelog for datasets"
+description = "Stata and SAS tabular reader plugin for binoc"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+dependencies = ["binoc>=0.1.1"]
 authors = [{ name = "Harvard Library Innovation Lab" }]
-keywords = ["archive", "changelog", "csv", "data-diff", "datasets"]
+keywords = ["binoc", "datasets", "sas", "stata", "statistics"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
@@ -19,30 +19,29 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Rust",
   "Topic :: Scientific/Engineering :: Information Analysis",
-  "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 [project.urls]
 Homepage = "https://github.com/harvard-lil/binoc"
 Repository = "https://github.com/harvard-lil/binoc"
 Issues = "https://github.com/harvard-lil/binoc/issues"
-Documentation = "https://github.com/harvard-lil/binoc/tree/main/docs"
+Documentation = "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary"
 
-[project.scripts]
-binoc = "binoc.__main__:main"
+[project.entry-points."binoc.plugins"]
+binoc-stat-binary = "binoc_stat_binary"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-datadir>=1.5", "maturin>=1.7,<2.0", "tomli>=2.0; python_version < '3.11'"]
-all = ["binoc-sqlite>=0.1.1", "binoc-stat-binary>=0.1.1"]
+dev = ["pytest>=8.0", "maturin>=1.7,<2.0", "tomli>=2.0; python_version < '3.11'"]
 
 [build-system]
 requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-python-source = "python"
-module-name = "binoc._binoc"
+features = ["python"]
 
 [tool.uv.sources]
-binoc-sqlite = { path = "../model-plugins/binoc-sqlite", editable = true }
-binoc-stat-binary = { path = "../model-plugins/binoc-stat-binary", editable = true }
+binoc = { path = "../../binoc-python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -2,6 +2,7 @@
 build:
     cd binoc-python && uv sync --extra dev
     cd model-plugins/binoc-sqlite && uv sync --extra dev
+    cd model-plugins/binoc-stat-binary && uv sync --extra dev
     cd model-plugins/binoc-html && uv sync --extra dev
 
 # Build optimized release artifacts (Rust binaries + Python package).
@@ -11,7 +12,7 @@ build-release:
 
 # Run binoc CLI with latest source (auto-rebuilds if needed).
 binoc *ARGS:
-    uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-html binoc {{ARGS}}
+    uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-stat-binary --with ./model-plugins/binoc-html binoc {{ARGS}}
 
 # Auto-format Rust and Python code.
 fmt:
@@ -34,6 +35,7 @@ test:
     cargo test
     cd binoc-python && uv run --extra dev maturin develop && uv run --extra dev pytest
     cd model-plugins/binoc-sqlite && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
+    cd model-plugins/binoc-stat-binary && uv run --extra dev maturin develop && uv run --extra dev python -m pytest
     cd model-plugins/binoc-html && uv run --extra dev python -m pytest
 
 # Aggregate docs generators. Each sub-recipe is cache-aware and skips work when
@@ -196,12 +198,14 @@ snapshot-update:
 materialize:
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf test-vectors-materialized model-plugins/binoc-sqlite/test-vectors-materialized
+    rm -rf test-vectors-materialized model-plugins/binoc-sqlite/test-vectors-materialized model-plugins/binoc-stat-binary/test-vectors-materialized
     cargo run -q -p binoc-stdlib --features test-vectors --bin materialize-test-vectors -- \
         test-vectors-materialized test-vectors
     cargo run -q -p binoc-sqlite --features test-support --bin materialize-test-vectors -- \
         model-plugins/binoc-sqlite/test-vectors-materialized model-plugins/binoc-sqlite/test-vectors
-    echo "Materialized vectors under test-vectors-materialized/ and model-plugins/binoc-sqlite/test-vectors-materialized/"
+    cargo run -q -p binoc-stat-binary --features test-support --bin materialize-stat-binary-test-vectors -- \
+        model-plugins/binoc-stat-binary/test-vectors-materialized model-plugins/binoc-stat-binary/test-vectors
+    echo "Materialized vectors under test-vectors-materialized/ and plugin test-vectors-materialized/ trees"
 
 # Set the shared published package version across Cargo + Python manifests.
 set-version package version:

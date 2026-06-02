@@ -52,6 +52,70 @@ A file is routed to this plugin when **either** its path matches one of the **ex
 
 *Labels you may see in a changeset (not used for routing):* `sqlite_database`, `sqlite_table`
 
+## binoc-stat-binary
+
+Reads Stata `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt` files as standard Binoc tabular data so normal column, row, and cell diffing applies.
+
+- **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
+
+- **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary)
+
+- **PyPI:** `binoc-stat-binary` · **crates.io:** `binoc-stat-binary`
+
+### Install
+
+After you install the package (for example from PyPI), binoc picks it up via the standard entry-point group — see [Install and use plugins](../howto/install-and-use-plugins.md) and [Plugin discovery](plugin-discovery.md).
+
+Published packages declare discovery metadata like this:
+
+```toml
+[project.entry-points."binoc.plugins"]
+binoc-stat-binary = "binoc_stat_binary"
+```
+
+This distribution is a **native Rust** plugin (`native_rust_module`): the target is a module name, not `module:function`.
+
+### When it handles your files
+
+#### `binoc-stat-binary.stata`
+
+A file is routed to this plugin when **either** its path matches one of the **extensions** or its detected **media type** matches (same rules as the rest of the pipeline). Ordering relative to other plugins and the standard library is up to your [dataset config](dataset-config.md).
+
+| Field | Value |
+|---|---|
+| `extensions` | `.dta` |
+| `media_types` | — |
+| `scope` | `Files` |
+| `handles_identical` | `false` |
+
+*Labels you may see in a changeset (not used for routing):* `tabular`
+
+#### `binoc-stat-binary.sas7bdat`
+
+A file is routed to this plugin when **either** its path matches one of the **extensions** or its detected **media type** matches (same rules as the rest of the pipeline). Ordering relative to other plugins and the standard library is up to your [dataset config](dataset-config.md).
+
+| Field | Value |
+|---|---|
+| `extensions` | `.sas7bdat` |
+| `media_types` | — |
+| `scope` | `Files` |
+| `handles_identical` | `false` |
+
+*Labels you may see in a changeset (not used for routing):* `tabular`
+
+#### `binoc-stat-binary.xpt`
+
+A file is routed to this plugin when **either** its path matches one of the **extensions** or its detected **media type** matches (same rules as the rest of the pipeline). Ordering relative to other plugins and the standard library is up to your [dataset config](dataset-config.md).
+
+| Field | Value |
+|---|---|
+| `extensions` | `.xpt` |
+| `media_types` | — |
+| `scope` | `Files` |
+| `handles_identical` | `false` |
+
+*Labels you may see in a changeset (not used for routing):* `tabular`
+
 ## Catalog file for tools
 
 The canonical data lives in `third_party_plugins.json` (JSON). Hosts that suggest plugins for unrecognized formats should read that file; dispatch fields mirror [`ComparatorDescriptor`](https://docs.rs/binoc-sdk/latest/binoc_sdk/struct.ComparatorDescriptor.html) in binoc-sdk.

@@ -1,0 +1,10 @@
+[config]
+comparators = [
+  "binoc.zip",
+  "binoc.tar",
+  "binoc.directory",
+  "binoc-stat-binary.stata",
+  "binoc.text",
+  "binoc.binary",
+]
+transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]

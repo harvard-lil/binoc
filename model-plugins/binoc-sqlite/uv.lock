@@ -9,12 +9,14 @@ source = { editable = "../../binoc-python" }
 
 [package.metadata]
 requires-dist = [
+    { name = "binoc-sqlite", marker = "extra == 'all'", editable = "." },
+    { name = "binoc-stat-binary", marker = "extra == 'all'", editable = "../binoc-stat-binary" },
     { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.7,<2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-datadir", marker = "extra == 'dev'", specifier = ">=1.5" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "all"]
 
 [[package]]
 name = "binoc-sqlite"
