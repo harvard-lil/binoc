@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.parquet**: Content changed (7 bytes → 7 bytes)
 
 ## Suggestions
