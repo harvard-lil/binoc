@@ -1,9 +1,7 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data.csv**: Column added: 'email'; columns reordered; 1 row added

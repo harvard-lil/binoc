@@ -1,11 +1,8 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 472
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data.bin**: Content changed (4 bytes → 4 bytes)
 

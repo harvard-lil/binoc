@@ -11,4 +11,3 @@ transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]
 root_kind = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]
-significance = "clerical"

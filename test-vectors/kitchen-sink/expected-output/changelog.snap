@@ -1,27 +1,18 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 472
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Clerical Changes
-
-- **metrics.csv**: Columns reordered (content unchanged)
-
-## Substantive Changes
-
 - **archive.tar.gz/inventory.csv**: 1 row added
 - **bundle.zip/notes.txt**: 2 lines added, 1 removed
+- **data.csv**: 2 cells changed
 - **docs/new-file.txt**: New file (1 line)
 - **docs/old-notes.txt**: File removed (1 line)
 - **docs/readme.txt**: 2 lines added, 2 removed
 - **icon.bin**: Content changed (19 bytes → 19 bytes)
-
-## Other Changes
-
-- **data.csv**: 2 cells changed
 - **license-copy.txt**: Copied from license.txt
+- **metrics.csv**: Columns reordered (content unchanged)
 - **summary.txt**: Moved from report.txt
 
 ## Suggestions

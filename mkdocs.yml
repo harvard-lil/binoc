@@ -161,6 +161,7 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Markdown Renderer Groups Replace Significance-Map Grouping': adr/2026-06-02-renderer_groups.md
           - 'Optional First-Party Plugins and `binoc[all]`': adr/2026-06-01-optional_first_party_plugins.md
           - 'Diagnostics Channel for Non-Fatal Warnings and Suggestions': adr/2026-06-01-diagnostics_channel.md
           - 'Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch': adr/rename_modify_detection.md

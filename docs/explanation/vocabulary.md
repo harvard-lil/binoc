@@ -22,7 +22,7 @@ flowchart LR
     Dispatch[Dispatch descriptors] --> Comparator
     Dispatch --> Transformer
     Fields["action / item_type / tags / details / annotations / summary"] --> IR
-    IR --> Significance[Significance categories]
+    IR --> Significance[Renderer grouping]
 ```
 
 ## Core objects
@@ -71,12 +71,11 @@ See [IR and changesets](ir-and-changesets.md) for the full picture.
 
 | Term | Meaning |
 |---|---|
-| **Clerical** | Changes that are mechanically necessary but semantically unimportant: column reordering, whitespace normalization, encoding changes. |
-| **Substantive** | Changes that alter the information content: added columns, removed rows, schema changes. |
+| **Significance classification** | The historical name for renderer-side grouping: mapping factual tags into user-facing sections in a changelog. |
+| **Clerical / substantive** | Common heading names some teams may choose for grouped Markdown output. They are not built into the IR or shipped as defaults. |
 
-These are the *default* category names in the Markdown renderer; they are not
-baked into the IR. Any renderer or dataset config can define its own
-categories. See [Significance classification](significance-classification.md).
+Any renderer or dataset config can define its own headings and order. See
+[Significance classification](significance-classification.md).
 
 ## Plugin distribution
 

@@ -3,8 +3,8 @@
 Binoc generates changelogs for datasets that don't have them. Given a
 series of snapshots of a dataset downloaded at different times, it
 detects what changed, expresses those changes as a minimal structured
-diff, and produces human-readable summaries that distinguish
-substantive policy changes from clerical housekeeping. The primary
+diff, and produces human-readable summaries from the resulting
+changeset. The primary
 audience is archivists, data scientists, and stewards tracking
 undocumented changes to published datasets.
 

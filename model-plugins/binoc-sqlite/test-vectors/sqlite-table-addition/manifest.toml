@@ -6,4 +6,3 @@ tags = ["sqlite", "table-addition"]
 [expected]
 root_kind = "modify"
 has_tags = ["binoc-sqlite.table-addition", "binoc.schema-change"]
-significance = "substantive"

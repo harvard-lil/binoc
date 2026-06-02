@@ -91,8 +91,6 @@ binoc diff ./test-vectors-materialized/single-file-modify-text/snapshot-a ./test
 ```output
 # Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a → ./test-vectors-materialized/single-file-modify-text/snapshot-b
 
-## Substantive Changes
-
 - **story.txt**: 2 lines added, 1 removed
 
 ```
@@ -130,8 +128,6 @@ binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vect
 ```output
 # Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
-## Clerical Changes
-
 - **data.csv**: Columns reordered (content unchanged)
 
 ```
@@ -150,8 +146,6 @@ binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vecto
 ```output
 # Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a → ./test-vectors-materialized/csv-mixed-changes/snapshot-b
 
-## Substantive Changes
-
 - **data.csv**: Column added: 'email'; columns reordered; 1 row added
 
 ```
@@ -169,8 +163,6 @@ binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-mate
 
 ```output
 # Changelog: ./test-vectors-materialized/zip-simple/snapshot-a → ./test-vectors-materialized/zip-simple/snapshot-b
-
-## Substantive Changes
 
 - **archive.zip/data.txt**: 1 line added, 1 removed
 - **archive.zip/extra.txt**: New file (1 line)
@@ -191,8 +183,6 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 
 ```output
 # Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
-
-## Substantive Changes
 
 - **sequences.fasta**: Content changed (92 bytes → 102 bytes)
 
@@ -280,8 +270,6 @@ PY
 
 ```output
 # Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
-
-## Other Changes
 
 - **sequences.fasta**: Headers updated (2 records); sequences unchanged
 
