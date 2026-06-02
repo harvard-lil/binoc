@@ -1,9 +1,7 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **new_file.txt**: New file (1 line)

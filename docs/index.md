@@ -9,8 +9,7 @@ audience: anyone
 Binoc generates changelogs for datasets that don't have them. Given a series of
 snapshots of a dataset downloaded at different times, binoc detects what
 changed, expresses those changes as a minimal structured diff, and produces
-human-readable summaries that distinguish substantive policy changes from
-clerical housekeeping.
+human-readable summaries from the resulting changeset.
 
 The core workflow: an archivist, data scientist, or steward has five copies of
 a government dataset containing CSVs, downloaded over two years. Some are
@@ -30,18 +29,13 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Clerical Changes
-
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-
-## Substantive Changes
-
 - **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip and compared the CSV column-by-column — the reorder
-is flagged as clerical housekeeping, not a real data change. But `.sqlite` is
-opaque to the standard library, so you only learn that the bytes differ.
+Binoc looked inside the zip and compared the CSV column-by-column. But
+`.sqlite` is opaque to the standard library, so you only learn that the bytes
+differ.
 
 ```bash
 pip install binoc-sqlite
@@ -51,12 +45,7 @@ binoc diff release-q3/ release-q4/
 ```
 # Changelog: release-q3/ → release-q4/
 
-## Clerical Changes
-
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-
-## Substantive Changes
-
 - **summary.sqlite/allocations**: 3 rows added (84 → 87 rows)
 ```
 

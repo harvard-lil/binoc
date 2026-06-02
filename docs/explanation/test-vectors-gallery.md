@@ -42,8 +42,8 @@ just materialize
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 rows) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
-| [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30/data/new-table.csv: New table (2 columns, 1 rows) | Custom config |
-| [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | metrics.csv: Columns reordered (content unchanged) | Default pipeline |
+| [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2,025-12-18 | Custom config |
+| [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/inventory.csv: 1 row added | Default pipeline |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: New file (1 line) | Default pipeline |
 | [`single-file-modify-binary`](#single-file-modify-binary) | Binary file, different hash | data.bin: Content changed (4 bytes → 4 bytes) | Default pipeline |
 | [`single-file-modify-csv`](#single-file-modify-csv) | CSV file compared directly (file-to-file, not via directory) | data.csv: 1 row added | Default pipeline |
@@ -78,8 +78,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.parquet**: Content changed (7 bytes → 7 bytes)
 
 ## Suggestions
@@ -105,8 +103,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Other Changes
-
 - **data.csv**: 2 cells changed
 ```
 
@@ -128,8 +124,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.csv**: Column added: 'email'
 ```
 
@@ -150,8 +144,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data.csv**: Column removed: 'city'
 ```
@@ -187,8 +179,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Clerical Changes
-
 - **data.csv**: Columns reordered (content unchanged)
 ```
 
@@ -210,8 +200,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.csv**: Column added: 'email'; columns reordered; 1 row added
 ```
 
@@ -232,8 +220,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data_v2.csv**: Moved from data.csv (modified)
 - **data_v2.csv**: Column added: 'email'
@@ -257,8 +243,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.csv**: 2 rows added
 ```
 
@@ -279,8 +263,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data.csv**: 2 rows removed
 ```
@@ -303,8 +285,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Other Changes
-
 - **duplicate.txt**: Copied from original.txt
 ```
 
@@ -325,8 +305,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data/extra.csv**: New table (2 columns, 1 rows)
 - **data/records.csv**: 1 row added
@@ -351,12 +329,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data/records.csv**: 1 row added
-
-## Other Changes
-
 - **data.tar.gz/records.csv**: 1 cell changed
 ```
 
@@ -377,8 +350,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Other Changes
 
 - **documentation**: Folder moved from docs
 ```
@@ -411,15 +382,10 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
+- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
 - **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 rows)
 - **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
 - **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
-
-## Other Changes
-
-- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
 ```
 
 ## kitchen-sink
@@ -440,23 +406,15 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Clerical Changes
-
-- **metrics.csv**: Columns reordered (content unchanged)
-
-## Substantive Changes
-
 - **archive.tar.gz/inventory.csv**: 1 row added
 - **bundle.zip/notes.txt**: 2 lines added, 1 removed
+- **data.csv**: 2 cells changed
 - **docs/new-file.txt**: New file (1 line)
 - **docs/old-notes.txt**: File removed (1 line)
 - **docs/readme.txt**: 2 lines added, 2 removed
 - **icon.bin**: Content changed (19 bytes → 19 bytes)
-
-## Other Changes
-
-- **data.csv**: 2 cells changed
 - **license-copy.txt**: Copied from license.txt
+- **metrics.csv**: Columns reordered (content unchanged)
 - **summary.txt**: Moved from report.txt
 
 ## Suggestions
@@ -482,8 +440,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **new_file.txt**: New file (1 line)
 ```
 
@@ -504,8 +460,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **data.bin**: Content changed (4 bytes → 4 bytes)
 
@@ -532,8 +486,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.csv**: 1 row added
 ```
 
@@ -554,8 +506,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **story.txt**: 2 lines added, 1 removed
 ```
@@ -578,8 +528,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **story.txt**: 2 lines added, 1 removed
 ```
 
@@ -600,8 +548,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **removed_file.txt**: File removed (1 line)
 ```
@@ -624,8 +570,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **outer.tar.gz/inner.tar.gz/data.csv**: 1 row added
 ```
 
@@ -646,8 +590,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **archive.tar.gz/data.csv**: 1 row added
 - **archive.tar.gz/hello.txt**: 1 line added
@@ -671,8 +613,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **meeting-notes-v2.txt**: Moved from notes.txt (modified)
 - **meeting-notes-v2.txt**: 2 lines added
 ```
@@ -694,8 +634,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Other Changes
 
 - **gamma-renamed.txt**: Moved from outer.zip/inner.zip/gamma.txt
 - **kept-copy.txt**: Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt
@@ -764,8 +702,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Other Changes
-
 - **data.tsv**: 2 cells changed
 ```
 
@@ -787,8 +723,6 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **outer.zip/inner.zip/data.csv**: 1 row added
 ```
 
@@ -809,8 +743,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-## Substantive Changes
 
 - **archive.zip/data.txt**: 1 line added, 1 removed
 - **archive.zip/extra.txt**: New file (1 line)

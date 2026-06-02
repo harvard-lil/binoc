@@ -101,18 +101,19 @@ distribute, see [Publish a plugin](publish-a-plugin.md).
 ## Classify your tags
 
 Out of the box your custom tags (for example `biobinoc.sequence-changed`)
-fall under "Other Changes" in the Markdown renderer. Teach the
-renderer your classification via
+render in the default flat Markdown list. Teach the renderer your grouping via
 [dataset config](../reference/dataset-config.md):
 
 ```yaml
 output:
   markdown:
-    significance:
-      clerical:
-        - biobinoc.header-change
-      substantive:
-        - biobinoc.sequence-changed
+    groups:
+      - heading: "Substantive changes"
+        tags:
+          - biobinoc.sequence-changed
+      - heading: "Clerical changes"
+        tags:
+          - biobinoc.header-change
 ```
 
 ```python

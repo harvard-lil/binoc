@@ -70,15 +70,16 @@ care about precise dispatch can do so safely. See
 ### Tags are facts, not judgments
 
 Every tag in the IR is a *factual observation*: `binoc.column-reorder`
-means "the columns were reordered" — not "this is unimportant." Whether a
-column reorder counts as clerical or substantive is a *renderer* concern,
-mapped from tags via configuration. See
+means "the columns were reordered" — not "this belongs under a particular
+heading." Whether a column reorder is grouped as clerical, substantive, or
+something custom is a *renderer* concern, mapped from tags via
+configuration. See
 [Significance classification](significance-classification.md).
 
 This split is the reason a single dataset's binoc output can be read
 differently by different audiences without re-running the diff: the same
-changeset JSON, fed through two renderer configs, can produce two
-changelogs that disagree about what mattered.
+changeset JSON can be rendered as a flat factual list or grouped output
+depending on renderer config.
 
 ### The tree is structural, not just additive
 
@@ -110,21 +111,19 @@ flowchart LR
 ## What a changeset looks like on disk
 
 A changeset on disk is JSON. The root node is the top-level object;
-children nest naturally. The default Markdown renderer reads the tree,
-applies significance classification, and produces grouped output:
+children nest naturally. The default Markdown renderer reads the tree and
+produces a flat factual list:
 
 ```
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data/records.csv**: 1 row added
 - **data/extra.csv**: New table (2 columns, 1 row)
-
-## Clerical Changes
-
 - **summary.csv**: Columns reordered (content unchanged)
 ```
+
+With explicit renderer config, the same tree can instead be grouped under
+literal headings in a declared order.
 
 Pipeline integrators consume the JSON directly. The
 [changeset JSON schema](../reference/changeset-schema.md) is the canonical

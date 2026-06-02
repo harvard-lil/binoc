@@ -3,6 +3,8 @@
 **Date:** 2026-03-09
 **Status:** Decided (implemented)
 
+Superseded in part by [2026-06-02-renderer_groups.md](2026-06-02-renderer_groups.md) for the Markdown renderer's `groups` naming and ordered-list semantics.
+
 ## Problem
 
 The original design placed significance classification config in a flat `output.significance` section of the dataset config:

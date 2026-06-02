@@ -125,7 +125,7 @@ fn diff_output_md_file() {
 
     let md = std::fs::read_to_string(&md_path).unwrap();
     assert!(md.contains("# Changelog:"));
-    assert!(md.contains("Substantive Changes"));
+    assert!(!md.contains("## "));
 }
 
 #[test]

@@ -120,11 +120,11 @@ def render(self, changesets, config):
 Renderers deserialize their own config — no coordination with core
 required for new knobs.
 
-## Apply significance classification
+## Apply renderer-side grouping
 
-If your renderer wants to group changes by clerical vs. substantive,
-read the significance map from config and look up each node's tags
-against it. The Markdown renderer is the reference; see its source
+If your renderer wants grouped sections, read an ordered `groups` list from
+config and match each node's tags against it. Preserve declared order and let
+the first matching group win. The Markdown renderer is the reference; see its source
 and [Significance classification](../explanation/significance-classification.md)
 for the pattern.
 
