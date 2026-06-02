@@ -18,7 +18,7 @@ Binoc has two distinct output concepts:
 - **The changeset JSON** is the raw "IR" (intermediate representation) — the structured diff tree.
   It's what `extract`, `changelog`, and downstream pipelines consume.
 - **Rendered outputs** (Markdown today; HTML or others via plugins)
-  are *views* of the changeset. They apply significance classification
+  are *views* of the changeset. They can apply renderer-side grouping
   and format the tree for humans.
 
 `json` is a reserved format name handled by the CLI directly. Every
@@ -133,4 +133,4 @@ and suggests the `format:path` syntax.
 - [Changeset JSON schema](../reference/changeset-schema.md) — the
   contract for anyone consuming the JSON.
 - [Dataset config](../reference/dataset-config.md) — per-renderer
-  config, including significance classification.
+  config, including Markdown grouping.

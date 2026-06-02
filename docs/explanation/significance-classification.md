@@ -12,64 +12,65 @@ Binoc separates the two:
 - **The IR records facts.** Tags like `binoc.column-reorder`,
   `binoc.row-addition`, and `binoc.content-changed` are factual
   observations attached to nodes by comparators and transformers.
-- **The renderer applies judgments.** A renderer's config maps tags to
-  significance categories (`clerical`, `substantive`, `critical`,
-  `informational`, …). The same IR can be rendered through different
-  configs to produce different changelogs.
+- **The renderer applies judgments.** A renderer's config maps tags into
+  changelog groups with ordered headings. The same IR can be rendered
+  through different configs to produce different changelogs.
 
 This split is documented in the
 [per-renderer config ADR](../adr/2026-03-09-renderer_config.md) and the
-[terminology ADR](../adr/2026-03-18-terminology.md).
+[terminology ADR](../adr/2026-03-18-terminology.md). "Significance
+classification" is the historical name for this renderer-side grouping
+feature.
 
-## The default mapping
+## The default behavior
 
-The default Markdown renderer uses two categories:
+If you omit `output.markdown.groups`, the Markdown renderer emits a flat list
+with no group headings at all.
 
-| Category | Default tags |
-|---|---|
-| **Clerical** | `binoc.column-reorder`, `binoc.whitespace-change`, `binoc.folder-rename`, `binoc.encoding-change` |
-| **Substantive** | `binoc.column-addition`, `binoc.column-removal`, `binoc.schema-change`, `binoc.row-addition`, `binoc.row-removal`, `binoc.content-changed` |
+Grouping is opt-in. Once `groups` is configured, the renderer emits sections
+in declared order and puts any unmatched nodes in a trailing
+`## Other Changes` section.
 
-Anything that doesn't match is grouped under "Other Changes."
+## Configuring groups
 
-Why "clerical" and "substantive"? They are domain-neutral and capture the
-basic split most data audiences care about. *Clerical* over alternatives
-like *minor*, *cosmetic*, or *ministerial* — see the
-[terminology ADR](../adr/2026-03-18-terminology.md) for the rejected alternatives.
-
-## Overriding the mapping
-
-A dataset config YAML can replace or extend the defaults under
-`output.markdown.significance`:
+A dataset config YAML can define ordered groups under
+`output.markdown.groups`:
 
 ```yaml
 output:
   markdown:
-    significance:
-      clerical:
-        - binoc.column-reorder
-        - binoc.whitespace-change
-        - bio.header-change
-      substantive:
-        - binoc.column-addition
-        - binoc.content-changed
-        - bio.sequence-change
-      critical:
-        - bio.cross-contamination
+    groups:
+      - heading: "Critical review"
+        tags:
+          - bio.cross-contamination
+      - heading: "Substantive changes"
+        tags:
+          - binoc.column-addition
+          - binoc.content-changed
+          - bio.sequence-change
+      - heading: "Clerical changes"
+        tags:
+          - binoc.column-reorder
+          - binoc.whitespace-change
+          - bio.header-change
 ```
 
-A plugin pack can ship a recommended significance config that users opt into.
+A plugin pack can ship a recommended grouping config that users opt into.
 A team can ship a stricter or looser version of the same config without
 changing any plugin code.
 
-## How a node is classified when it has multiple tags
+## Group order is priority
 
-When a node carries tags from more than one category, the renderer picks
-the *highest-priority* match. The priority is the order in which categories
-are declared in the renderer config. If a node has both
-`binoc.column-reorder` (clerical) and `binoc.column-addition`
-(substantive), and the config lists `substantive` before `clerical`, the
-node is classified as substantive.
+Groups are an ordered list, not a map. The renderer preserves the declared
+order when it writes sections, and the same order defines priority when a
+node matches more than one group.
+
+If a node has both `binoc.column-reorder` and `binoc.column-addition`, and
+the config lists "Substantive changes" before "Clerical changes", the node
+goes into "Substantive changes". First matching group wins.
+
+Headings are literal strings. The renderer does not auto-capitalize them or
+append `" Changes"`.
 
 This is consistent with the principle that *the IR records facts* — both
 tags genuinely apply — and *the renderer decides what to do about it*.
@@ -89,18 +90,19 @@ A naive design would put `significance: "substantive"` directly in
   re-classified by re-rendering.
 - **Plugin packs that don't know about a tag shouldn't have to.** A plugin
   emitting `bio.sequence-change` doesn't know whether a downstream user
-  considers it clerical or substantive. The user does.
+  considers it a critical review item, a routine content change, or
+  something else. The user does.
 
 ## Classification is one renderer's job
 
 Different renderers can apply different classification logic — or none.
 The JSON renderer doesn't classify at all; it just serializes the tree.
-The Markdown renderer is where the default mapping lives. A custom HTML
+The Markdown renderer can emit either a flat list or configured groups. A custom HTML
 renderer (see the [`binoc-html` model plugin](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html))
 applies its own grouping with hooks for review workflows.
 
-This is why significance config is *per-renderer* (`output.markdown.significance`,
-`output.html.significance`) rather than a global setting on the changeset.
+This is why grouping config is *per-renderer* (`output.markdown.groups`,
+`output.html.groups`) rather than a global setting on the changeset.
 
 ## Where to go next
 

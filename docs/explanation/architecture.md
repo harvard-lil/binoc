@@ -34,7 +34,7 @@ Five moving parts:
 | **Controller** | Dispatches item pairs through a work queue, assembles the diff tree, drives transformers. | No |
 | **Comparators** | Parsers. Take raw data and emit IR (a leaf node, or an expansion into child item pairs). | Yes |
 | **Transformers** | Optimization passes over the IR. Detect cross-cutting patterns (moves, reorders) without touching raw data. | Yes (about *patterns* in IR) |
-| **Renderers** | Serialize the IR for a presentation surface (Markdown, JSON, HTML…). Optionally apply significance classification. | Yes (about *output*) |
+| **Renderers** | Serialize the IR for a presentation surface (Markdown, JSON, HTML…). Optionally apply renderer-side grouping. | Yes (about *output*) |
 | **Config** | Decides which plugins run and in what order. | n/a |
 
 For the conceptual model behind each part, see
@@ -67,7 +67,7 @@ The three plugin axes correspond to three phases of work:
   by default — they consume *artifacts* published by comparators. See
   [Artifacts and composition](artifacts-and-composition.md).
 - **Renderers** decide what the IR *means* for a given output surface.
-  Optional significance classification is a renderer concern. See
+  Optional grouping is a renderer concern. See
   [Significance classification](significance-classification.md).
 
 This split is not just hygiene; it is what enables cross-plugin composition.

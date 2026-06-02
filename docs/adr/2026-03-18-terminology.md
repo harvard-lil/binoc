@@ -50,12 +50,14 @@ Binoc introduces a number of domain-specific terms. This ADR catalogs the delibe
 
 ### Significance Classification
 
+Superseded in part by [2026-06-02-renderer_groups.md](2026-06-02-renderer_groups.md) for the current Markdown grouping model and the removal of shipped default headings.
+
 | Chosen term | Meaning |
 |---|---|---|---|
 | **Clerical** | Changes that are mechanically necessary but semantically unimportant: column reordering, whitespace normalization, encoding changes. Chosen over *ministerial* (precise in records management but unfamiliar to most developers), *minor*/*trivial* (judgmental), *cosmetic* (implies visual concerns). |
 | **Substantive** | Changes that alter the information content: added columns, removed rows, schema changes. |
 
-Note: these are the *default* category names in the Markdown renderer. They are not baked into the IR. Any renderer or dataset config can define its own categories (e.g. `critical`, `informational`, `review-required`). 
+Note: these were the original category names used in the Markdown renderer design. They are not baked into the IR. Current renderer config uses explicit ordered groups with literal headings. 
 
 ### Testing
 

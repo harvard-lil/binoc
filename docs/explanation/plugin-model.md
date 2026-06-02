@@ -79,8 +79,8 @@ Typical transformer jobs:
 A renderer takes a finished changeset and produces a presentation-format
 output: Markdown changelog, JSON, HTML, RSS, anything. Renderers are also
 where **significance classification** lives when a presentation wants it —
-the mapping from semantic tags (facts) to categories like "clerical" or
-"substantive" (judgments).
+the mapping from semantic tags (facts) to grouped changelog sections
+(judgments).
 This is a deliberate placement: see
 [Significance classification](significance-classification.md).
 

@@ -85,7 +85,7 @@ For focused iteration: `cargo build` or `cargo test -p binoc-core`
 | Fix the controller / dispatch logic | `binoc-core/src/controller.rs`. See [Dispatch model](../explanation/dispatch-model.md). |
 | Fix the CLI | `binoc-cli/src/lib.rs` (the library); `binoc-cli/src/main.rs` is a thin wrapper around `binoc_cli::run()`. |
 | Add a Python API surface | `binoc-python/src/lib.rs` (PyO3) and `binoc-python/python/binoc/__init__.py`. |
-| Change Markdown grouping behavior | `binoc-stdlib/src/renderers/markdown.rs` — `MarkdownRendererConfig` and `render_markdown`. See [Significance classification](../explanation/significance-classification.md). |
+| Change Markdown grouping behavior | `binoc-stdlib/src/renderers/markdown.rs` — `MarkdownRendererConfig`, `MarkdownGroup`, and `render_markdown`. See [Significance classification](../explanation/significance-classification.md). |
 
 ## Test vectors are the cheap contribution
 

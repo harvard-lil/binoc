@@ -32,7 +32,8 @@ You care about contracts, automation, and stable machine-readable output.
   output routing and [Extract changed data](howto/extract-changed-data.md)
   for extracting the underlying changed records.
 - Read [Significance classification](explanation/significance-classification.md)
-  if you need to understand how semantic tags become user-facing severity.
+  if you need to understand how semantic tags become user-facing changelog
+  sections.
 
 ## Plugin developers
 

@@ -22,8 +22,8 @@ from the Rust IR types. The tables below are a rendering of that schema.
 
 ## What is *not* in the changeset
 
-- **Significance classification.** Clerical vs. substantive is a renderer
-  concern, applied at render time from a tag-to-category mapping in config.
+- **Significance classification.** Changelog grouping is a renderer
+  concern, applied at render time from configured headings and tag lists.
   The IR is judgment-free. See
   [Significance classification](../explanation/significance-classification.md).
 - **Transient session data.** `source_items` and `artifacts` are wire-visible

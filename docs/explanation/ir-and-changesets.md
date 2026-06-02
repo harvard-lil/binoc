@@ -70,9 +70,10 @@ care about precise dispatch can do so safely. See
 ### Tags are facts, not judgments
 
 Every tag in the IR is a *factual observation*: `binoc.column-reorder`
-means "the columns were reordered" — not "this is unimportant." Whether a
-column reorder counts as clerical or substantive is a *renderer* concern,
-mapped from tags via configuration. See
+means "the columns were reordered" — not "this belongs under a particular
+heading." Whether a column reorder is grouped as clerical, substantive, or
+something custom is a *renderer* concern, mapped from tags via
+configuration. See
 [Significance classification](significance-classification.md).
 
 This split is the reason a single dataset's binoc output can be read
@@ -122,7 +123,7 @@ produces a flat factual list:
 ```
 
 With explicit renderer config, the same tree can instead be grouped under
-custom headings such as `clerical` and `substantive`.
+literal headings in a declared order.
 
 Pipeline integrators consume the JSON directly. The
 [changeset JSON schema](../reference/changeset-schema.md) is the canonical
