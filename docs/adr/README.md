@@ -6,7 +6,6 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
-<<<<<<< HEAD
 | 2026-06-01 | [Optional First-Party Plugins and `binoc[all]`](2026-06-01-optional_first_party_plugins.md) | Accepted |
 | 2026-06-01 | [Diagnostics Channel for Non-Fatal Warnings and Suggestions](2026-06-01-diagnostics_channel.md) | Implemented |
 | 2026-05-13 | [Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch](rename_modify_detection.md) | Implemented |
