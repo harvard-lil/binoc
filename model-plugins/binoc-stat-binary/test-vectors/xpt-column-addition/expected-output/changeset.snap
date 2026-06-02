@@ -39,16 +39,51 @@ expression: "&stable_changeset"
           "left_metadata": {
             "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
             "columns": {},
+            "dataset_index": 1,
             "dataset_label": null,
             "dataset_name": "BINOCTST",
-            "format": "sas_xport"
+            "datasets": [
+              {
+                "columns": [
+                  "id",
+                  "name"
+                ],
+                "dataset_index": 1,
+                "dataset_label": null,
+                "dataset_name": "BINOCTST",
+                "logical_name": "BINOCTST",
+                "node_name": "BINOCTST",
+                "rows": 2
+              }
+            ],
+            "format": "sas_xport",
+            "logical_name": "BINOCTST",
+            "node_name": "BINOCTST"
           },
           "right_metadata": {
             "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
             "columns": {},
+            "dataset_index": 1,
             "dataset_label": null,
             "dataset_name": "BINOCTST",
-            "format": "sas_xport"
+            "datasets": [
+              {
+                "columns": [
+                  "id",
+                  "name",
+                  "score"
+                ],
+                "dataset_index": 1,
+                "dataset_label": null,
+                "dataset_name": "BINOCTST",
+                "logical_name": "BINOCTST",
+                "node_name": "BINOCTST",
+                "rows": 2
+              }
+            ],
+            "format": "sas_xport",
+            "logical_name": "BINOCTST",
+            "node_name": "BINOCTST"
           },
           "rows_added": 0,
           "rows_left": 2,

@@ -40,8 +40,8 @@ impl VectorMaterializer for XptMaterializer {
     }
 
     fn build(&self, staging_dir: &Path, out_path: &Path, _all_staging_suffixes: &[&str]) {
-        let fixture = read_csv_fixture(staging_dir);
-        write_xpt(out_path, &fixture.headers, &fixture.rows);
+        let fixtures = read_xpt_fixture(staging_dir);
+        write_xpt(out_path, &fixtures);
     }
 }
 
@@ -57,6 +57,7 @@ impl VectorMaterializer for Sas7bdatMaterializer {
 }
 
 struct CsvFixture {
+    dataset_name: Option<String>,
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
 }
@@ -71,11 +72,44 @@ fn read_csv_fixture(staging_dir: &Path) -> CsvFixture {
         .unwrap_or_else(|| panic!("{} must contain a header row", csv_path.display()));
 
     CsvFixture {
+        dataset_name: None,
         headers: header_line.split(',').map(ToOwned::to_owned).collect(),
         rows: lines
             .map(|line| line.split(',').map(ToOwned::to_owned).collect())
             .collect(),
     }
+}
+
+fn read_xpt_fixture(staging_dir: &Path) -> Vec<CsvFixture> {
+    let single_table = staging_dir.join("table.csv");
+    if single_table.is_file() {
+        return vec![read_csv_fixture(staging_dir)];
+    }
+
+    let mut datasets = Vec::new();
+    let entries = std::fs::read_dir(staging_dir)
+        .unwrap_or_else(|e| panic!("read_dir {}: {e}", staging_dir.display()));
+    let mut dataset_dirs = entries
+        .map(|entry| {
+            entry.unwrap_or_else(|e| panic!("read_dir entry {}: {e}", staging_dir.display()))
+        })
+        .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
+        .collect::<Vec<_>>();
+    dataset_dirs.sort_by_key(|entry| entry.file_name());
+
+    for entry in dataset_dirs {
+        let dataset_dir = entry.path();
+        let mut fixture = read_csv_fixture(&dataset_dir);
+        fixture.dataset_name = Some(entry.file_name().to_string_lossy().into_owned());
+        datasets.push(fixture);
+    }
+
+    assert!(
+        !datasets.is_empty(),
+        "{} must contain table.csv or dataset subdirectories with table.csv",
+        staging_dir.display()
+    );
+    datasets
 }
 
 fn write_dta(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
@@ -124,16 +158,58 @@ fn write_dta(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
         .unwrap_or_else(|e| panic!("finish dta {}: {e}", out_path.display()));
 }
 
-fn write_xpt(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
+fn write_xpt(out_path: &Path, datasets: &[CsvFixture]) {
     if out_path.exists() {
         std::fs::remove_file(out_path)
             .unwrap_or_else(|e| panic!("remove_file {}: {e}", out_path.display()));
     }
 
+    let file = std::fs::File::create(out_path)
+        .unwrap_or_else(|e| panic!("create {}: {e}", out_path.display()));
+    let writer = XportWriter::from_file(file, XportMetadata::builder().build())
+        .unwrap_or_else(|e| panic!("open xpt writer {}: {e}", out_path.display()));
+    let mut writer = Some(writer);
+
+    for (index, dataset) in datasets.iter().enumerate() {
+        let schema = build_xpt_schema(dataset);
+        let next_writer = writer
+            .take()
+            .expect("xpt writer state")
+            .write_schema(schema)
+            .unwrap_or_else(|e| panic!("write xpt schema {}: {e}", out_path.display()));
+
+        let mut dataset_writer = next_writer;
+        for row in &dataset.rows {
+            let values: Vec<XportValue<'_>> = row
+                .iter()
+                .map(|value| XportValue::from(value.as_str()))
+                .collect();
+            dataset_writer
+                .write_record(&values)
+                .unwrap_or_else(|e| panic!("write xpt record {}: {e}", out_path.display()));
+        }
+
+        if index + 1 == datasets.len() {
+            dataset_writer
+                .finish()
+                .unwrap_or_else(|e| panic!("finish xpt {}: {e}", out_path.display()));
+        } else {
+            writer = Some(
+                dataset_writer
+                    .next_dataset()
+                    .unwrap_or_else(|e| panic!("advance xpt dataset {}: {e}", out_path.display())),
+            );
+        }
+    }
+}
+
+fn build_xpt_schema(dataset: &CsvFixture) -> XportSchema {
+    let dataset_name = dataset.dataset_name.as_deref().unwrap_or("BINOCTST");
     let mut schema_builder = XportSchema::builder();
-    let mut schema = schema_builder.dataset_name("BINOCTST");
-    for (index, header) in headers.iter().enumerate() {
-        let width = rows
+    let mut schema = schema_builder.dataset_name(dataset_name);
+    for (index, header) in dataset.headers.iter().enumerate() {
+        let width = dataset
+            .rows
             .iter()
             .filter_map(|row| row.get(index))
             .map(String::len)
@@ -147,31 +223,9 @@ fn write_xpt(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
             .value_length(width.try_into().expect("xpt field width fits in u16"));
         schema = schema.add_variable(variable);
     }
-    let schema = schema
+    schema
         .try_build()
-        .unwrap_or_else(|e| panic!("build xpt schema: {e}"));
-
-    let file = std::fs::File::create(out_path)
-        .unwrap_or_else(|e| panic!("create {}: {e}", out_path.display()));
-    let writer = XportWriter::from_file(file, XportMetadata::builder().build())
-        .unwrap_or_else(|e| panic!("open xpt writer {}: {e}", out_path.display()));
-    let mut writer = writer
-        .write_schema(schema)
-        .unwrap_or_else(|e| panic!("write xpt schema {}: {e}", out_path.display()));
-
-    for row in rows {
-        let values: Vec<XportValue<'_>> = row
-            .iter()
-            .map(|value| XportValue::from(value.as_str()))
-            .collect();
-        writer
-            .write_record(&values)
-            .unwrap_or_else(|e| panic!("write xpt record {}: {e}", out_path.display()));
-    }
-
-    writer
-        .finish()
-        .unwrap_or_else(|e| panic!("finish xpt {}: {e}", out_path.display()));
+        .unwrap_or_else(|e| panic!("build xpt schema: {e}"))
 }
 
 fn write_sas7bdat(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
