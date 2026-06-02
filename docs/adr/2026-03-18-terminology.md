@@ -57,7 +57,9 @@ Superseded in part by [2026-06-02-renderer_groups.md](2026-06-02-renderer_groups
 | **Clerical** | Changes that are mechanically necessary but semantically unimportant: column reordering, whitespace normalization, encoding changes. Chosen over *ministerial* (precise in records management but unfamiliar to most developers), *minor*/*trivial* (judgmental), *cosmetic* (implies visual concerns). |
 | **Substantive** | Changes that alter the information content: added columns, removed rows, schema changes. |
 
-Note: these were the original category names used in the Markdown renderer design. They are not baked into the IR. Current renderer config uses explicit ordered groups with literal headings. 
+Note: these were the original category names used in the Markdown renderer
+design. They are not baked into the IR. Current renderer config uses explicit
+ordered groups with literal headings.
 
 ### Testing
 
