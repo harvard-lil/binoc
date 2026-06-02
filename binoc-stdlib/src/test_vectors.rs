@@ -61,6 +61,8 @@ struct ManifestConfig {
     output: Option<OutputConfig>,
     #[serde(default)]
     transformer_config: Option<TransformerConfig>,
+    #[serde(default)]
+    dataset: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -349,7 +351,8 @@ pub fn run_vector(
         )
     });
     let controller = Controller::new(resolved.comparators, resolved.transformers)
-        .with_transformer_configs(config.transformer_config.as_map());
+        .with_transformer_configs(config.transformer_config.as_map())
+        .with_dataset_config(config.dataset.clone());
 
     let changeset = controller
         .diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap())
@@ -425,7 +428,8 @@ pub fn run_vector_with_abi_log(
     });
     let direct_controller =
         Controller::new(direct_resolved.comparators, direct_resolved.transformers)
-            .with_transformer_configs(config.transformer_config.as_map());
+            .with_transformer_configs(config.transformer_config.as_map())
+            .with_dataset_config(config.dataset.clone());
     let direct_changeset = pool
         .install(|| direct_controller.diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap()))
         .unwrap_or_else(|e| panic!("Direct diff failed for {}: {e}", manifest.vector.name));
@@ -440,7 +444,8 @@ pub fn run_vector_with_abi_log(
         )
     });
     let abi_controller = Controller::new(abi_resolved.comparators, abi_resolved.transformers)
-        .with_transformer_configs(config.transformer_config.as_map());
+        .with_transformer_configs(config.transformer_config.as_map())
+        .with_dataset_config(config.dataset.clone());
     let abi_changeset = pool
         .install(|| abi_controller.diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap()))
         .unwrap_or_else(|e| panic!("ABI diff failed for {}: {e}", manifest.vector.name));
@@ -551,6 +556,7 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
                 transformers: cfg.transformers.clone().unwrap_or(default.transformers),
                 renderers: default.renderers,
                 output: cfg.output.clone().unwrap_or(default.output),
+                dataset: cfg.dataset.clone().unwrap_or(default.dataset),
                 transformer_config: cfg
                     .transformer_config
                     .clone()

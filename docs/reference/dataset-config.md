@@ -11,6 +11,8 @@ the defaults handle the built-in comparators. A config becomes
 useful when you want to:
 
 - Restrict or reorder the comparator / transformer pipeline.
+- Declare dataset semantics, such as logical file correspondence and
+  row identity, for plugins that understand those fields.
 - Teach the Markdown renderer how to group plugin-specific tags for
   your domain.
 - Configure a renderer's behavior (HTML theme, CI failure rules, …)
@@ -38,6 +40,35 @@ transformers:
   - binoc.folder_move_detector
   - binoc.tabular_analyzer
   - binoc.column_reorder_detector
+
+dataset:
+  files:
+    correspondences:
+      - name: quarterly-csvs
+        left:
+          path_regex: '^raw/(?P<table>[^/]+)/(?P<year>[0-9]{4})\.csv$'
+        right:
+          path_regex: '^normalized/(?P<year>[0-9]{4})/(?P<table>[^/]+)\.csv$'
+        key: '${table}:${year}'
+        logical_path: 'tables/${table}-${year}.csv'
+        cardinality: one-to-one
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+
+  tables:
+    defaults:
+      parse:
+        header: true
+        delimiter: ','
+      row_identity:
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+    entries:
+      products:
+        match:
+          logical_name: products
+        row_identity:
+          columns: ['BLA Number', 'Product Number']
 
 output:
   markdown:
@@ -108,6 +139,59 @@ transformer_config:
   binoc.folder_move_detector:
     threshold: 0.8
 ```
+
+## `dataset`
+
+The `dataset` block is a top-level semantic description of the dataset being
+compared. Core carries this value through unchanged and exposes it to plugins
+under the `dataset` key in their run config; core does not interpret paths,
+tables, delimiters, or keys.
+
+The SDK owns a shared v1 shape so independently authored plugins can agree on
+common dataset semantics:
+
+- `dataset.files.correspondences` declares that files with different snapshot
+  paths are the same logical file.
+- `dataset.tables.defaults` declares table-wide defaults, such as parse options
+  and row identity failure policy.
+- `dataset.tables.entries` declares per-table selectors, parse options, and row
+  identity keys.
+
+```yaml
+dataset:
+  files:
+    correspondences:
+      - name: state-records
+        left:
+          path_regex: '^data/state_(?P<state>[A-Z]{2})\.csv$'
+        right:
+          path_regex: '^by-state/(?P<state>[A-Z]{2})/records\.csv$'
+        key: '${state}'
+        logical_path: 'states/${state}.csv'
+        cardinality: one-to-one
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+        report_path_change: false
+
+  tables:
+    defaults:
+      row_identity:
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+    entries:
+      products:
+        match:
+          logical_name: products
+        parse:
+          header: true
+          delimiter: ','
+        row_identity:
+          columns: ['BLA Number', 'Product Number']
+```
+
+`cardinality` is currently `one-to-one`. `on_null_key` and
+`on_duplicate_key` accept `diagnostic`, `error`, or `ignore`; plugins decide how
+to apply those policies for the semantics they implement.
 
 ## `output.<renderer>`
 

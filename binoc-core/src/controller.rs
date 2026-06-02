@@ -16,6 +16,7 @@ pub struct Controller {
     comparators: Vec<(Arc<dyn Comparator>, ComparatorDescriptor)>,
     transformers: Vec<(Arc<dyn Transformer>, TransformerDescriptor)>,
     transformer_configs: BTreeMap<String, serde_json::Value>,
+    dataset_config: serde_json::Value,
 }
 
 impl Controller {
@@ -42,6 +43,7 @@ impl Controller {
             comparators,
             transformers,
             transformer_configs: BTreeMap::new(),
+            dataset_config: serde_json::Value::Null,
         }
     }
 
@@ -56,11 +58,37 @@ impl Controller {
         self
     }
 
+    /// Attach dataset-level semantic configuration. The controller does not
+    /// deserialize this value; it is exposed to plugins under `dataset`.
+    pub fn with_dataset_config(mut self, config: serde_json::Value) -> Self {
+        self.dataset_config = config;
+        self
+    }
+
     fn config_for(&self, name: &str) -> serde_json::Value {
-        self.transformer_configs
+        let plugin = self
+            .transformer_configs
             .get(name)
             .cloned()
-            .unwrap_or(serde_json::Value::Null)
+            .unwrap_or(serde_json::Value::Null);
+        if self.dataset_config.is_null() {
+            return plugin;
+        }
+
+        match plugin {
+            serde_json::Value::Object(mut map) => {
+                map.entry("dataset")
+                    .or_insert_with(|| self.dataset_config.clone());
+                serde_json::Value::Object(map)
+            }
+            serde_json::Value::Null => serde_json::json!({
+                "dataset": self.dataset_config.clone(),
+            }),
+            other => serde_json::json!({
+                "plugin": other,
+                "dataset": self.dataset_config.clone(),
+            }),
+        }
     }
 
     /// Diff two snapshots and produce a changeset.
@@ -1140,7 +1168,18 @@ mod tests {
         );
 
         let controller = Controller::new(vec![leaf_comparator()], vec![reader])
-            .with_transformer_configs(configs);
+            .with_transformer_configs(configs)
+            .with_dataset_config(serde_json::json!({
+                "tables": {
+                    "entries": {
+                        "people": {
+                            "row_identity": {
+                                "columns": ["id"]
+                            }
+                        }
+                    }
+                }
+            }));
         let dir = tempfile::tempdir().unwrap();
         controller
             .diff(
@@ -1149,6 +1188,22 @@ mod tests {
             )
             .unwrap();
         let got = out.lock().unwrap().clone();
-        assert_eq!(got, serde_json::json!({ "threshold": 0.42 }));
+        assert_eq!(
+            got,
+            serde_json::json!({
+                "threshold": 0.42,
+                "dataset": {
+                    "tables": {
+                        "entries": {
+                            "people": {
+                                "row_identity": {
+                                    "columns": ["id"]
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+        );
     }
 }

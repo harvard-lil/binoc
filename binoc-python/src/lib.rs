@@ -1602,7 +1602,9 @@ fn build_controller(
         transformers.push(Arc::new(bridge));
     }
 
-    Ok(Controller::new(comparators, transformers))
+    Ok(Controller::new(comparators, transformers)
+        .with_transformer_configs(config.dataset_config.transformer_config.as_map())
+        .with_dataset_config(config.dataset_config.dataset.clone()))
 }
 
 /// Diff two snapshots and return the resulting :class:`Changeset`.

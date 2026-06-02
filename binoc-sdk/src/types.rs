@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::ir::DiffNode;
@@ -117,6 +119,135 @@ impl TabularData {
         }
         out
     }
+}
+
+// ── Dataset semantics config ───────────────────────────────────────
+
+/// SDK-owned dataset semantics section shared by plugins.
+///
+/// Hosts pass this through unchanged; plugins deserialize the parts they
+/// understand. The schema is intentionally conservative in v1.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatasetSemanticsV1 {
+    #[serde(default)]
+    pub files: FileIdentityConfig,
+    #[serde(default)]
+    pub tables: TableConfig,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FileIdentityConfig {
+    #[serde(default)]
+    pub correspondences: Vec<FileCorrespondenceRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileCorrespondenceRule {
+    pub name: String,
+    #[serde(default)]
+    pub left: FileSelector,
+    #[serde(default)]
+    pub right: FileSelector,
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logical_path: Option<String>,
+    #[serde(default)]
+    pub cardinality: Cardinality,
+    #[serde(default)]
+    pub on_null_key: IdentityFailurePolicy,
+    #[serde(default)]
+    pub on_duplicate_key: IdentityFailurePolicy,
+    #[serde(default)]
+    pub report_path_change: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FileSelector {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_regex: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Cardinality {
+    #[default]
+    OneToOne,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentityFailurePolicy {
+    #[default]
+    Diagnostic,
+    Error,
+    Ignore,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TableConfig {
+    #[serde(default)]
+    pub defaults: TableDefaults,
+    #[serde(default)]
+    pub entries: BTreeMap<String, TableEntry>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TableDefaults {
+    #[serde(default)]
+    pub parse: TabularParseConfig,
+    #[serde(default)]
+    pub row_identity: RowIdentity,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TableEntry {
+    #[serde(default, rename = "match")]
+    pub match_: TableSelector,
+    #[serde(default)]
+    pub parse: TabularParseConfig,
+    #[serde(default)]
+    pub row_identity: RowIdentity,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TableSelector {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logical_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<FileSelector>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabularParseConfig {
+    #[serde(default = "default_header")]
+    pub header: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<String>,
+}
+
+impl Default for TabularParseConfig {
+    fn default() -> Self {
+        Self {
+            header: true,
+            delimiter: None,
+        }
+    }
+}
+
+fn default_header() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RowIdentity {
+    #[serde(default)]
+    pub columns: Vec<String>,
+    #[serde(default)]
+    pub cardinality: Cardinality,
+    #[serde(default)]
+    pub on_null_key: IdentityFailurePolicy,
+    #[serde(default)]
+    pub on_duplicate_key: IdentityFailurePolicy,
 }
 
 /// A pair of tabular data (left/right sides of a comparison).

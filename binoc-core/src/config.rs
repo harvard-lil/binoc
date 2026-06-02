@@ -16,6 +16,10 @@ pub struct DatasetConfig {
     pub renderers: Vec<String>,
     #[serde(default)]
     pub output: OutputConfig,
+    /// Dataset-level semantic configuration. Core carries this JSON and passes
+    /// it through to plugins, but does not interpret it.
+    #[serde(default)]
+    pub dataset: serde_json::Value,
     /// Per-transformer configuration, keyed by transformer name
     /// (e.g. `"binoc.folder_move_detector"`). Unset entries pass
     /// [`serde_json::Value::Null`] to the transformer.
@@ -108,6 +112,7 @@ impl DatasetConfig {
             ],
             renderers: default_renderers(),
             output: OutputConfig::default(),
+            dataset: serde_json::Value::Null,
             transformer_config: TransformerConfig::default(),
         }
     }
@@ -374,6 +379,7 @@ mod tests {
             transformers: vec![],
             renderers: vec![],
             output: OutputConfig::default(),
+            dataset: serde_json::Value::Null,
             transformer_config: TransformerConfig::default(),
         };
         let result = registry.resolve(&config);
@@ -398,6 +404,7 @@ mod tests {
             transformers: vec![],
             renderers: vec![],
             output: OutputConfig::default(),
+            dataset: serde_json::Value::Null,
             transformer_config: TransformerConfig::default(),
         };
         let resolved = registry.resolve(&config).unwrap();
