@@ -1208,8 +1208,6 @@ dependencies = [
 [[package]]
 name = "sas_xport"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabe91297162b55e05081c5831cb36328e56edb5b6a7f33c380ad260130d5427"
 dependencies = [
  "encoding_rs",
  "ibm_hfp",

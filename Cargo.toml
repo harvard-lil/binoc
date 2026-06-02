@@ -39,3 +39,6 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tempfile = "3.26.0"
 pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py310"] }
+
+[patch.crates-io]
+sas_xport = { path = "vendor/sas_xport" }
