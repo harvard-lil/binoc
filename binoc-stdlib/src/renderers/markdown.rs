@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -179,7 +179,7 @@ fn format_diagnostics_section(
     out.push_str(&format!("## {title}\n\n"));
     for diagnostic in matching {
         out.push_str("- ");
-        out.push_str(&humanize_numbers(&diagnostic.message));
+        out.push_str(&diagnostic.message);
         if let Some(location) = &diagnostic.location {
             out.push_str(&format!(" (`{location}`)"));
         }
@@ -275,11 +275,7 @@ fn format_node(
 
     out.push_str(&format!("- **{path}**: "));
 
-    if let Some(summary) = &node.summary {
-        out.push_str(&humanize_numbers(summary));
-    } else {
-        out.push_str(&humanize_numbers(&fallback_description(node)));
-    }
+    out.push_str(&format_summary_text(node));
     out.push('\n');
 
     // For a move with content detail, emit the detail as a second
@@ -289,11 +285,34 @@ fn format_node(
     // inline punctuation or capitalization fixups.
     if should_group_move_children(node) {
         if let Some(detail) = move_trailer(node) {
-            out.push_str(&format!("- **{path}**: {}\n", humanize_numbers(&detail)));
+            out.push_str(&format!(
+                "- **{path}**: {}\n",
+                format_known_quantities(&detail, node)
+            ));
         }
     }
 
     render_detail_blocks(out, node, path, config, detail_budget);
+}
+
+fn format_summary_text(node: &DiffNode) -> String {
+    let text = node
+        .summary
+        .clone()
+        .unwrap_or_else(|| fallback_description(node));
+
+    if summary_is_path_statement(node, &text) {
+        text
+    } else {
+        format_known_quantities(&text, node)
+    }
+}
+
+fn summary_is_path_statement(node: &DiffNode, text: &str) -> bool {
+    matches!(node.action.as_str(), "move" | "copy")
+        && (text.starts_with("Moved from ")
+            || text.starts_with("Folder moved from ")
+            || text.starts_with("Copied from "))
 }
 
 fn should_group_move_children(node: &DiffNode) -> bool {
@@ -321,7 +340,7 @@ fn move_trailer(node: &DiffNode) -> Option<String> {
             .children
             .iter()
             .filter(|c| c.action != "identical")
-            .map(|c| c.summary.clone().unwrap_or_else(|| fallback_description(c)))
+            .map(format_summary_text)
             .collect();
         if !parts.is_empty() {
             return Some(parts.join("; "));
@@ -336,6 +355,11 @@ fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+fn format_count(value: u64) -> String {
+    let digits = value.to_string();
+    group_digits(&digits)
 }
 
 fn fallback_description(node: &DiffNode) -> String {
@@ -407,11 +431,15 @@ fn render_detail_blocks(
         let mut header = block.label.clone().unwrap_or_else(|| block.id.clone());
         if truncated {
             if shown == 0 && block.examples.is_empty() && total > 0 {
-                header.push_str(&format!(" ({total} total)"));
+                header.push_str(&format!(" ({} total)", format_count(total)));
             } else if total > 0 {
-                header.push_str(&format!(" (showing {shown} of {total})"));
+                header.push_str(&format!(
+                    " (showing {} of {})",
+                    format_count(shown),
+                    format_count(total)
+                ));
             } else {
-                header.push_str(&format!(" (showing {shown})"));
+                header.push_str(&format!(" (showing {})", format_count(shown)));
             }
         }
         if let Some(extract) = block.extract.first() {
@@ -601,45 +629,162 @@ fn capitalize(s: &str) -> String {
     }
 }
 
-fn humanize_numbers(input: &str) -> String {
-    // Locale-aware formatting is intentionally out of scope for now; this is US-style grouping.
+fn format_known_quantities(input: &str, node: &DiffNode) -> String {
+    let counts = known_count_values(node);
+    if counts.is_empty() {
+        return input.to_string();
+    }
+
     let mut out = String::with_capacity(input.len() + input.len() / 3);
-    let mut digits = String::new();
+    let mut cursor = 0;
+    let mut chars = input.char_indices().peekable();
 
-    let flush_digits = |out: &mut String, digits: &mut String| {
-        if digits.len() > 3 {
-            let first_group = digits.len() % 3;
-            let mut idx = 0;
-            if first_group != 0 {
-                out.push_str(&digits[..first_group]);
-                idx = first_group;
-                if idx < digits.len() {
-                    out.push(',');
-                }
-            }
-            while idx < digits.len() {
-                let end = (idx + 3).min(digits.len());
-                out.push_str(&digits[idx..end]);
-                idx = end;
-                if idx < digits.len() {
-                    out.push(',');
-                }
-            }
-        } else {
-            out.push_str(digits);
+    while let Some((start, ch)) = chars.next() {
+        if !ch.is_ascii_digit() {
+            continue;
         }
-        digits.clear();
-    };
 
-    for ch in input.chars() {
-        if ch.is_ascii_digit() {
-            digits.push(ch);
-        } else {
-            flush_digits(&mut out, &mut digits);
-            out.push(ch);
+        let mut end = start + ch.len_utf8();
+        while let Some((next_idx, next_ch)) = chars.peek().copied() {
+            if !next_ch.is_ascii_digit() {
+                break;
+            }
+            chars.next();
+            end = next_idx + next_ch.len_utf8();
+        }
+
+        out.push_str(&input[cursor..start]);
+        let digits = &input[start..end];
+        let formatted = digits
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 999)
+            .filter(|value| counts.contains(value))
+            .filter(|_| is_quantity_context(input, start, end))
+            .map(format_count)
+            .unwrap_or_else(|| digits.to_string());
+        out.push_str(&formatted);
+        cursor = end;
+    }
+
+    out.push_str(&input[cursor..]);
+    out
+}
+
+fn known_count_values(node: &DiffNode) -> BTreeSet<u64> {
+    let mut counts = BTreeSet::new();
+    for key in [
+        "rows_added",
+        "rows_removed",
+        "rows_modified",
+        "rows_left",
+        "rows_right",
+        "cells_changed",
+        "lines",
+        "lines_added",
+        "lines_removed",
+        "lines_unchanged",
+        "row_count",
+        "total_rows",
+    ] {
+        if let Some(value) = node.details.get(key).and_then(|value| value.as_u64()) {
+            counts.insert(value);
         }
     }
-    flush_digits(&mut out, &mut digits);
+    for key in [
+        "columns",
+        "columns_left",
+        "columns_right",
+        "columns_added",
+        "columns_removed",
+        "columns_type_changed",
+        "tables",
+    ] {
+        if let Some(len) = node
+            .details
+            .get(key)
+            .and_then(|value| value.as_array())
+            .map(|values| values.len() as u64)
+        {
+            counts.insert(len);
+        }
+    }
+    for block in &node.detail_blocks {
+        if let Some(total_count) = block.total_count {
+            counts.insert(total_count);
+        }
+    }
+    counts
+}
+
+fn is_quantity_context(input: &str, start: usize, end: usize) -> bool {
+    if path_or_identifier_adjacent(input, start, end) {
+        return false;
+    }
+
+    let Some(unit) = next_word(input, end) else {
+        return false;
+    };
+    matches!(
+        unit,
+        "row"
+            | "rows"
+            | "cell"
+            | "cells"
+            | "line"
+            | "lines"
+            | "column"
+            | "columns"
+            | "table"
+            | "tables"
+            | "null"
+            | "nulls"
+            | "added"
+            | "removed"
+            | "changed"
+            | "modified"
+    )
+}
+
+fn path_or_identifier_adjacent(input: &str, start: usize, end: usize) -> bool {
+    let prev = input[..start].chars().next_back();
+    let next = input[end..].chars().next();
+    prev.is_some_and(is_path_or_identifier_char) || next.is_some_and(is_path_or_identifier_char)
+}
+
+fn is_path_or_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphabetic() || matches!(ch, '_' | '/' | '\\' | '.' | '-' | ':')
+}
+
+fn next_word(input: &str, start: usize) -> Option<&str> {
+    let trimmed = input[start..].trim_start();
+    let word_len = trimmed
+        .char_indices()
+        .take_while(|(_, ch)| ch.is_ascii_alphabetic())
+        .last()
+        .map(|(idx, ch)| idx + ch.len_utf8())?;
+    Some(&trimmed[..word_len])
+}
+
+fn group_digits(digits: &str) -> String {
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    let first_group = digits.len() % 3;
+    let mut idx = 0;
+    if first_group != 0 {
+        out.push_str(&digits[..first_group]);
+        idx = first_group;
+        if idx < digits.len() {
+            out.push(',');
+        }
+    }
+    while idx < digits.len() {
+        let end = (idx + 3).min(digits.len());
+        out.push_str(&digits[idx..end]);
+        idx = end;
+        if idx < digits.len() {
+            out.push(',');
+        }
+    }
     out
 }
 
@@ -956,18 +1101,30 @@ mod tests {
     }
 
     #[test]
-    fn humanizes_large_numbers_in_summaries() {
+    fn formats_known_counts_but_not_years_in_paths() {
         let changeset = Changeset::new(
             "v1",
             "v2",
-            Some(
-                DiffNode::new("modify", "csv", "data.csv")
-                    .with_summary("5975 rows added; 18133333 cells changed"),
-            ),
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![
+                    DiffNode::new("move", "directory", "FoodData_Central_csv_2026-04-30")
+                        .with_source_path("FoodData_Central_csv_2025-12-18")
+                        .with_summary("Folder moved from FoodData_Central_csv_2025-12-18"),
+                    DiffNode::new("modify", "csv", "data.csv")
+                        .with_summary("5975 rows added; 18133333 cells changed")
+                        .with_detail("rows_added", serde_json::json!(5975_u64))
+                        .with_detail("cells_changed", serde_json::json!(18133333_u64)),
+                    DiffNode::new("modify", "text", "notes.txt")
+                        .with_summary("5975 lines added, 18133333 removed")
+                        .with_detail("lines_added", serde_json::json!(5975_u64))
+                        .with_detail("lines_removed", serde_json::json!(18133333_u64)),
+                ])),
         );
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("5,975 rows added; 18,133,333 cells changed"));
+        assert!(md.contains("5,975 lines added, 18,133,333 removed"));
+        assert!(md.contains("Folder moved from FoodData_Central_csv_2025-12-18"));
+        assert!(!md.contains("FoodData_Central_csv_2,025-12-18"));
     }
 
     #[test]
