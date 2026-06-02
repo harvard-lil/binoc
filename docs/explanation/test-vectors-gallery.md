@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **27 shared examples** in this gallery.
+Binoc currently ships **28 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -54,6 +54,7 @@ just materialize
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from gamma.txt | Default pipeline |
 | [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | No changes detected. | Default pipeline |
 | [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | No changes detected. | Default pipeline |
+| [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`zip-nested`](#zip-nested) | Nested zip containing CSV | outer.zip/inner.zip/data.csv: 1 row added | Default pipeline |
 | [`zip-simple`](#zip-simple) | Zipped files with changes inside | archive.zip/data.txt: 1 line added, 1 removed | Default pipeline |
 
@@ -667,6 +668,29 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 No changes detected.
+```
+
+## tsv-cell-changes
+
+Tab-delimited file parses into real columns and reports cell changes
+
+- **Browse source:** [tsv-cell-changes](https://github.com/harvard-lil/binoc/tree/main/test-vectors/tsv-cell-changes)
+- **Tags:** `tsv`, `cell-change`
+- **Snapshots:** `snapshot-a` has 1 file — `data.tsv`; `snapshot-b` has 1 file — `data.tsv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/tsv-cell-changes/snapshot-a \
+  ./test-vectors-materialized/tsv-cell-changes/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Other Changes
+
+- **data.tsv**: 2 cells changed
 ```
 
 ## zip-nested

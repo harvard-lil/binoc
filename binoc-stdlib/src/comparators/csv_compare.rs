@@ -1,4 +1,5 @@
 use std::io::BufReader;
+use std::path::Path;
 
 use binoc_sdk::*;
 
@@ -10,10 +11,30 @@ use binoc_sdk::*;
 /// source-format-agnostic.
 pub struct CsvComparator;
 
-fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CsvParseOptions {
+    delimiter: u8,
+}
+
+impl CsvParseOptions {
+    fn for_item(item: &ItemRef) -> Self {
+        // TODO(#48/#51): move comparator parse options into the dataset-config
+        // surface once per-target comparator config lands.
+        let delimiter = match item.extension().as_deref() {
+            Some(".tsv") => b'\t',
+            _ => b',',
+        };
+        Self { delimiter }
+    }
+}
+
+fn parse_csv(path: &Path, options: CsvParseOptions) -> BinocResult<TabularData> {
     let file = std::fs::File::open(path).map_err(BinocError::Io)?;
     let reader = BufReader::new(file);
-    let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(reader);
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(options.delimiter)
+        .flexible(true)
+        .from_reader(reader);
 
     let headers: Vec<String> = rdr
         .headers()
@@ -33,7 +54,7 @@ fn parse_csv(path: &std::path::Path) -> BinocResult<TabularData> {
 
 fn parse_csv_via_data(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<TabularData> {
     let path = data.local_path(item)?;
-    parse_csv(&path)
+    parse_csv(&path, CsvParseOptions::for_item(item))
 }
 
 fn publish_tabular(
@@ -96,5 +117,41 @@ impl Comparator for CsvComparator {
     ) -> Option<ExtractResult> {
         let pair = TabularDataPair::from_artifacts(node, data)?;
         tabular_extract(&pair, node, aspect)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(logical_path: &str) -> ItemRef {
+        ItemRef {
+            logical_path: logical_path.into(),
+            is_dir: false,
+            content_hash: None,
+            size: None,
+            media_type: None,
+            handle: String::new(),
+        }
+    }
+
+    #[test]
+    fn parse_options_use_tab_for_tsv() {
+        assert_eq!(
+            CsvParseOptions::for_item(&item("table.tsv")),
+            CsvParseOptions { delimiter: b'\t' }
+        );
+    }
+
+    #[test]
+    fn parse_options_default_to_comma() {
+        assert_eq!(
+            CsvParseOptions::for_item(&item("table.csv")),
+            CsvParseOptions { delimiter: b',' }
+        );
+        assert_eq!(
+            CsvParseOptions::for_item(&item("table.unknown")),
+            CsvParseOptions { delimiter: b',' }
+        );
     }
 }
