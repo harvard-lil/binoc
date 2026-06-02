@@ -127,6 +127,12 @@ configuration simply ignore the argument; the default is
 wire format (`plugin_abi::TransformRequest`) carries `config` across the
 ABI boundary.
 
+Revisit on 2026-06-01: this paid off immediately. `FolderMoveDetector`
+shipped strict `threshold = 1.0` semantics first, then grew partial
+rollup without any controller or ABI redesign: the transformer now honors
+`threshold < 1.0`, defaults to `0.8`, and keeps added/removed/modified
+remainder entries beneath the rolled-up folder move.
+
 ## Alternatives Considered
 
 - **Keep `TransformScope` and make `Subtree` mean "`Unchanged` recurses".**

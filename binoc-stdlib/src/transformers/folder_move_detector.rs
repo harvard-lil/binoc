@@ -1,18 +1,18 @@
-//! Folder-move rollup: when every leaf under a destination directory
-//! is a `move` (or `copy`) from a consistent source directory, collapse
-//! the pair into a single folder-level `move` (or `copy`) node.
+//! Folder-move rollup: when most leaves under a destination directory
+//! are clean `move` (or `copy`) descendants from a consistent source
+//! directory, roll the pair up into one folder-level `move` (or `copy`)
+//! while keeping remainder changes beneath it.
 //!
 //! Runs at the root, after [`super::correlation_detector::CorrelationDetector`].
 //!
 //! ```json
-//! { "threshold": 1.0 }
+//! { "threshold": 0.8 }
 //! ```
 //!
-//! Default threshold is `1.0` (strict: every leaf descendant of both
-//! sides must be accounted for as a matching move or copy). Lower
-//! thresholds (0.0–1.0) are accepted by the config parser but treated
-//! as strict for v1 — partial rollup semantics are deliberately left
-//! for future work, see `docs/adr/transformer_scope_yagni.md`.
+//! Default threshold is `0.8`: at least 80% of destination leaves must
+//! be clean, consistently sourced moves/copies of the same dominant kind.
+//! The remainder stays attached under the rolled-up destination node as
+//! ordinary adds/removes/modifies.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,7 +27,7 @@ struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { threshold: 1.0 }
+        Self { threshold: 0.8 }
     }
 }
 
@@ -68,7 +68,10 @@ impl Transformer for FolderMoveDetector {
         let source_paths: BTreeSet<String> =
             rollups.values().map(|r| r.source_path.clone()).collect();
 
-        let rewritten = apply_rollups(node, &rollups, &source_paths);
+        let mut source_index = BTreeMap::new();
+        index_nodes_by_path(&node, &mut source_index);
+
+        let rewritten = apply_rollups(node, &rollups, &source_paths, &source_index);
         TransformResult::Replace(Box::new(rewritten))
     }
 }
@@ -78,6 +81,7 @@ struct Rollup {
     dst_path: String,
     source_path: String,
     kind: RollupKind,
+    matched_rel_paths: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,45 +122,30 @@ fn try_rollup(container: &DiffNode, threshold: f64) -> Option<Rollup> {
         return None;
     }
 
-    // All leaves must be moves (or all copies) with a source_path.
-    let kind = infer_kind(&leaves)?;
-    let tag = match kind {
-        RollupKind::Move => "binoc.move",
-        RollupKind::Copy => "binoc.copy",
-    };
-
-    let mut matched = 0usize;
+    let mut candidates: Vec<LeafMatch> = Vec::new();
     let mut source_prefix: Option<String> = None;
 
     for leaf in &leaves {
-        if !leaf.tags.contains(tag) {
-            continue;
-        }
-        let Some(src) = leaf.source_path.as_deref() else {
-            continue;
-        };
-        let Some(rel) = strip_prefix_as_child(&leaf.path, &container.path) else {
-            continue;
-        };
-        // Expect: src ends with "/" + rel (or equals rel if the source
-        // container is the root).
-        let Some(prefix) = strip_suffix_as_parent(src, rel) else {
+        let Some(candidate) = classify_clean_leaf(leaf, &container.path) else {
             continue;
         };
         match &source_prefix {
-            None => source_prefix = Some(prefix.to_string()),
-            Some(existing) if existing == prefix => {}
+            None => source_prefix = Some(candidate.source_prefix.clone()),
+            Some(existing) if *existing == candidate.source_prefix => {}
             _ => return None, // inconsistent source prefixes
         }
-        matched += 1;
+        candidates.push(candidate);
     }
 
+    let kind = infer_kind(&candidates)?;
+    let matched_rel_paths: BTreeSet<String> = candidates
+        .iter()
+        .filter(|c| c.kind == kind)
+        .map(|c| c.rel_path.clone())
+        .collect();
+    let matched = matched_rel_paths.len();
     let fraction = matched as f64 / leaves.len() as f64;
     if fraction < threshold {
-        return None;
-    }
-    // V1: only fully strict rollups actually fire. Partial is gated out.
-    if matched != leaves.len() {
         return None;
     }
 
@@ -170,6 +159,7 @@ fn try_rollup(container: &DiffNode, threshold: f64) -> Option<Rollup> {
         dst_path: container.path.clone(),
         source_path,
         kind,
+        matched_rel_paths,
     })
 }
 
@@ -183,22 +173,19 @@ fn gather_leaves<'a>(node: &'a DiffNode, out: &mut Vec<&'a DiffNode>) {
     }
 }
 
-fn infer_kind(leaves: &[&DiffNode]) -> Option<RollupKind> {
-    let mut has_move = false;
-    let mut has_copy = false;
-    for leaf in leaves {
-        if leaf.tags.contains("binoc.move") {
-            has_move = true;
-        } else if leaf.tags.contains("binoc.copy") {
-            has_copy = true;
-        } else {
-            return None; // any non-move/copy leaf disqualifies
-        }
-    }
-    match (has_move, has_copy) {
-        (true, false) => Some(RollupKind::Move),
-        (false, true) => Some(RollupKind::Copy),
-        _ => None, // mixed or empty
+fn infer_kind(candidates: &[LeafMatch]) -> Option<RollupKind> {
+    let move_count = candidates
+        .iter()
+        .filter(|c| c.kind == RollupKind::Move)
+        .count();
+    let copy_count = candidates
+        .iter()
+        .filter(|c| c.kind == RollupKind::Copy)
+        .count();
+    match move_count.cmp(&copy_count) {
+        std::cmp::Ordering::Greater if move_count > 0 => Some(RollupKind::Move),
+        std::cmp::Ordering::Less if copy_count > 0 => Some(RollupKind::Copy),
+        _ => None,
     }
 }
 
@@ -227,6 +214,52 @@ fn strip_suffix_as_parent<'a>(path: &'a str, suffix: &str) -> Option<&'a str> {
     rest.strip_suffix('/')
 }
 
+#[derive(Debug, Clone)]
+struct LeafMatch {
+    rel_path: String,
+    source_prefix: String,
+    kind: RollupKind,
+}
+
+fn classify_clean_leaf(leaf: &DiffNode, dst_prefix: &str) -> Option<LeafMatch> {
+    if !leaf.children.is_empty() || has_modification_detail(leaf) {
+        return None;
+    }
+
+    let kind = if leaf.action == "move" && leaf.tags.contains("binoc.move") {
+        RollupKind::Move
+    } else if leaf.action == "copy" && leaf.tags.contains("binoc.copy") {
+        RollupKind::Copy
+    } else {
+        return None;
+    };
+
+    let src = leaf.source_path.as_deref()?;
+    let rel = strip_prefix_as_child(&leaf.path, dst_prefix)?;
+    let prefix = strip_suffix_as_parent(src, rel)?;
+    Some(LeafMatch {
+        rel_path: rel.to_string(),
+        source_prefix: prefix.to_string(),
+        kind,
+    })
+}
+
+fn has_modification_detail(node: &DiffNode) -> bool {
+    node.tags.contains("binoc.move.modified")
+        || node.tags.contains("binoc.copy.modified")
+        || node.tags.contains("binoc.content-changed")
+        || node.annotations.contains_key("content_summary")
+        || node.annotations.contains_key("tabular_summary")
+        || !node.children.is_empty()
+}
+
+fn index_nodes_by_path(node: &DiffNode, out: &mut BTreeMap<String, DiffNode>) {
+    out.insert(node.path.clone(), node.clone());
+    for child in &node.children {
+        index_nodes_by_path(child, out);
+    }
+}
+
 /// Rewrite the tree per collected rollups:
 /// - At each destination container path: replace with a bare folder-level
 ///   move/copy node (no children).
@@ -235,16 +268,8 @@ fn apply_rollups(
     node: DiffNode,
     rollups: &BTreeMap<String, Rollup>,
     source_paths: &BTreeSet<String>,
+    source_index: &BTreeMap<String, DiffNode>,
 ) -> DiffNode {
-    // Rewrite children first (bottom-up for removal of source containers),
-    // but replace at this node if it's a destination.
-    let mut new_children: Vec<DiffNode> = node
-        .children
-        .into_iter()
-        .filter(|c| !source_paths.contains(&c.path))
-        .map(|c| apply_rollups(c, rollups, source_paths))
-        .collect();
-
     if let Some(rollup) = rollups.get(&node.path) {
         let (action, tag, summary) = match rollup.kind {
             RollupKind::Move => (
@@ -258,22 +283,213 @@ fn apply_rollups(
                 format!("Folder copied from {}", display_name(&rollup.source_path)),
             ),
         };
+        let mut children = rewrite_destination_children(node.children, rollup);
+        if let Some(source_node) = source_index.get(&rollup.source_path) {
+            children.extend(relocate_source_remainders(source_node, rollup));
+        }
+        children = merge_same_path_nodes(children);
         let mut folded = DiffNode::new(action, &node.item_type, &node.path)
             .with_source_path(&rollup.source_path)
             .with_summary(summary)
             .with_tag(tag)
             .with_tag("binoc.folder-move");
+        folded.children = children;
         // Preserve comparator provenance so extract chains still work.
         folded.comparator = node.comparator.clone();
         folded.transformed_by = node.transformed_by.clone();
         return folded;
     }
 
-    new_children.sort_by(|a, b| a.path.cmp(&b.path));
+    // Rewrite children first (bottom-up for removal of source containers).
+    let mut new_children: Vec<DiffNode> = node
+        .children
+        .into_iter()
+        .filter(|c| !source_paths.contains(&c.path))
+        .map(|c| apply_rollups(c, rollups, source_paths, source_index))
+        .collect();
+
+    new_children = merge_same_path_nodes(new_children);
     DiffNode {
         children: new_children,
         ..node
     }
+}
+
+fn rewrite_destination_children(children: Vec<DiffNode>, rollup: &Rollup) -> Vec<DiffNode> {
+    merge_same_path_nodes(
+        children
+            .into_iter()
+            .filter_map(|child| rewrite_destination_node(child, rollup))
+            .collect(),
+    )
+}
+
+fn rewrite_destination_node(node: DiffNode, rollup: &Rollup) -> Option<DiffNode> {
+    let rel = strip_prefix_as_child(&node.path, &rollup.dst_path)?;
+    if node.children.is_empty() {
+        if is_clean_matched_leaf(&node, rel, rollup) {
+            return None;
+        }
+        return Some(normalize_rollup_remainder_leaf(node, rollup));
+    }
+
+    let mut new_children = rewrite_destination_children(node.children, rollup);
+    new_children = merge_same_path_nodes(new_children);
+
+    if new_children.is_empty() && node.summary.is_none() && node.tags.is_empty() {
+        return None;
+    }
+
+    Some(DiffNode {
+        children: new_children,
+        ..node
+    })
+}
+
+fn is_clean_matched_leaf(node: &DiffNode, rel: &str, rollup: &Rollup) -> bool {
+    classify_clean_leaf(node, &rollup.dst_path)
+        .filter(|candidate| candidate.kind == rollup.kind)
+        .is_some_and(|_| rollup.matched_rel_paths.contains(rel))
+}
+
+fn normalize_rollup_remainder_leaf(node: DiffNode, rollup: &Rollup) -> DiffNode {
+    let Some(candidate) = classify_clean_leaf(&node, &rollup.dst_path) else {
+        return maybe_demote_move_like_remainder(node);
+    };
+
+    if candidate.kind == rollup.kind && rollup.matched_rel_paths.contains(&candidate.rel_path) {
+        return node;
+    }
+
+    maybe_demote_move_like_remainder(node)
+}
+
+fn maybe_demote_move_like_remainder(mut node: DiffNode) -> DiffNode {
+    if matches!(node.action.as_str(), "move" | "copy") {
+        let detail = node
+            .annotations
+            .get("tabular_summary")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                node.annotations
+                    .get("content_summary")
+                    .and_then(|v| v.as_str())
+            })
+            .map(str::to_string);
+        node.action = "modify".to_string();
+        node.source_path = None;
+        node.tags.remove("binoc.move");
+        node.tags.remove("binoc.copy");
+        node.tags.remove("binoc.move.modified");
+        node.tags.remove("binoc.copy.modified");
+        node.summary = detail.or_else(|| {
+            if node
+                .summary
+                .as_deref()
+                .is_some_and(|s| s.starts_with("Moved from "))
+                || node
+                    .summary
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with("Copied from "))
+            {
+                None
+            } else {
+                node.summary.clone()
+            }
+        });
+    }
+    node
+}
+
+fn relocate_source_remainders(source_node: &DiffNode, rollup: &Rollup) -> Vec<DiffNode> {
+    source_node
+        .children
+        .iter()
+        .filter_map(|child| relocate_source_node(child, rollup))
+        .collect()
+}
+
+fn relocate_source_node(node: &DiffNode, rollup: &Rollup) -> Option<DiffNode> {
+    let rel = strip_prefix_as_child(&node.path, &rollup.source_path)?;
+    if node.children.is_empty() && rollup.matched_rel_paths.contains(rel) {
+        return None;
+    }
+
+    let new_path = if rollup.dst_path.is_empty() {
+        rel.to_string()
+    } else if rel.is_empty() {
+        rollup.dst_path.clone()
+    } else {
+        format!("{}/{}", rollup.dst_path, rel)
+    };
+
+    let mut cloned = node.clone();
+    cloned.path = new_path;
+    cloned.children = node
+        .children
+        .iter()
+        .filter_map(|child| relocate_source_node(child, rollup))
+        .collect();
+
+    if cloned.children.is_empty() && cloned.summary.is_none() && cloned.tags.is_empty() {
+        return None;
+    }
+
+    Some(cloned)
+}
+
+fn merge_same_path_nodes(mut nodes: Vec<DiffNode>) -> Vec<DiffNode> {
+    nodes.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let mut merged: Vec<DiffNode> = Vec::new();
+    for mut node in nodes {
+        node.children = merge_same_path_nodes(node.children);
+
+        if let Some(prev) = merged.pop() {
+            if prev.path == node.path {
+                merged.push(merge_node_pair(prev, node));
+            } else {
+                merged.push(prev);
+                merged.push(node);
+            }
+        } else {
+            merged.push(node);
+        }
+    }
+
+    merged
+}
+
+fn merge_node_pair(left: DiffNode, right: DiffNode) -> DiffNode {
+    match (left.action.as_str(), right.action.as_str()) {
+        ("add", "remove") | ("remove", "add") => merge_add_remove_pair(left, right),
+        _ => {
+            let mut left = left;
+            left.children.extend(right.children);
+            left.children = merge_same_path_nodes(left.children);
+            left
+        }
+    }
+}
+
+fn merge_add_remove_pair(left: DiffNode, right: DiffNode) -> DiffNode {
+    let (mut add, remove) = if left.action == "add" {
+        (left, right)
+    } else {
+        (right, left)
+    };
+
+    add.action = "modify".to_string();
+    add.source_path = None;
+    add.summary = None;
+    add.children.extend(remove.children);
+    add.children = merge_same_path_nodes(add.children);
+    add.tags.extend(remove.tags);
+    add.tags.remove("binoc.move");
+    add.tags.remove("binoc.copy");
+    add.tags.remove("binoc.move.modified");
+    add.tags.remove("binoc.copy.modified");
+    add
 }
 
 fn display_name(path: &str) -> String {
@@ -289,9 +505,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn config_defaults_strict() {
+    fn config_defaults_to_partial_rollup_threshold() {
         let cfg = Config::from_value(&serde_json::Value::Null);
-        assert_eq!(cfg.threshold, 1.0);
+        assert_eq!(cfg.threshold, 0.8);
     }
 
     #[test]

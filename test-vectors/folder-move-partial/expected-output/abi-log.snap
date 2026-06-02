@@ -1,0 +1,640 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&abi_log"
+---
+[
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "local_path",
+        "handle": ""
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/README.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/README.txt",
+        "result_size": 24
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/docs"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/README.txt",
+        "result_size": 24
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data/categories.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/data/categories.csv",
+        "result_size": 20
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data/food.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/data/food.csv",
+        "result_size": 16
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data/new-table.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/data/new-table.csv",
+        "result_size": 17
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data/nutrients.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/data/nutrients.csv",
+        "result_size": 24
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/data/portions.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/data/portions.csv",
+        "result_size": 15
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data/categories.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 52
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data/food.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 48
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data/new-table.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 49
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data/nutrients.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 56
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/data/portions.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc.csv",
+        "size": 47
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2026-04-30/docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/docs/changelog-note.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/changelog-note.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/docs/license.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/license.txt",
+        "result_size": 18
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/docs/modified.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/modified.txt",
+        "result_size": 32
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2026-04-30/docs/schema.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/schema.txt",
+        "result_size": 17
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/changelog-note.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/license.txt",
+        "result_size": 18
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/modified.txt",
+        "result_size": 32
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/schema.txt",
+        "result_size": 17
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/README.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/README.txt",
+        "result_size": 24
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/data"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs"
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/README.txt",
+        "result_size": 24
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/data"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/data/categories.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/data/categories.csv",
+        "result_size": 20
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/data/food.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/data/food.csv",
+        "result_size": 16
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/data/nutrients.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/data/nutrients.csv",
+        "result_size": 24
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/data/portions.csv"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/data/portions.csv",
+        "result_size": 15
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/data/categories.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 52
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/data/food.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 48
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/data/nutrients.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 56
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.csv",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/data/portions.csv"
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Left",
+        "producer": "binoc.csv",
+        "size": 47
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.directory",
+    "data_ops": [
+      {
+        "op": "local_path",
+        "handle": "FoodData_Central_csv_2025-12-18/docs"
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs/changelog-note.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/changelog-note.txt",
+        "result_size": 13
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs/license.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/license.txt",
+        "result_size": 18
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs/modified.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/modified.txt",
+        "result_size": 12
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs/old-table.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/old-table.txt",
+        "result_size": 27
+      },
+      {
+        "op": "register_local",
+        "logical": "FoodData_Central_csv_2025-12-18/docs/schema.txt"
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/schema.txt",
+        "result_size": 17
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/changelog-note.txt",
+        "result_size": 13
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/license.txt",
+        "result_size": 18
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/modified.txt",
+        "result_size": 12
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/old-table.txt",
+        "result_size": 27
+      }
+    ]
+  },
+  {
+    "method": "compare",
+    "plugin": "binoc.text",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/schema.txt",
+        "result_size": 17
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.correlation_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.fuzzy_correlation_detector",
+    "data_ops": [
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/modified.txt",
+        "result_size": 12
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2026-04-30/docs/modified.txt",
+        "result_size": 32
+      },
+      {
+        "op": "read_bytes",
+        "handle": "FoodData_Central_csv_2025-12-18/docs/old-table.txt",
+        "result_size": 27
+      }
+    ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.folder_move_detector",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_analyzer",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  }
+]

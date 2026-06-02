@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **28 shared examples** in this gallery.
+Binoc currently ships **29 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -41,6 +41,7 @@ just materialize
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 rows) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
+| [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30/data/new-table.csv: New table (2 columns, 1 rows) | Custom config |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | metrics.csv: Columns reordered (content unchanged) | Default pipeline |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: New file (1 line) | Default pipeline |
 | [`single-file-modify-binary`](#single-file-modify-binary) | Binary file, different hash | data.bin: Content changed (4 bytes → 4 bytes) | Default pipeline |
@@ -352,6 +353,45 @@ Result:
 ## Other Changes
 
 - **documentation**: Folder moved from docs
+```
+
+## folder-move-partial
+
+Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it.
+
+- **Browse source:** [folder-move-partial](https://github.com/harvard-lil/binoc/tree/main/test-vectors/folder-move-partial)
+- **Tags:** `folder-move`, `partial`, `rollup`, `directory`
+- **Snapshots:** `snapshot-a` has 10 files — `FoodData_Central_csv_2025-12-18/README.txt`, `FoodData_Central_csv_2025-12-18/data/categories.csv`, `FoodData_Central_csv_2025-12-18/data/food.csv`, `FoodData_Central_csv_2025-12-18/data/nutrients.csv`, +6 more; `snapshot-b` has 10 files — `FoodData_Central_csv_2026-04-30/README.txt`, `FoodData_Central_csv_2026-04-30/data/categories.csv`, `FoodData_Central_csv_2026-04-30/data/food.csv`, `FoodData_Central_csv_2026-04-30/data/new-table.csv`, +6 more
+- **Setup:** This example uses a custom dataset config to narrow the pipeline to the comparators and transformers that make the behavior obvious.
+Save this dataset config as `/tmp/folder-move-partial.yaml`:
+
+```yaml
+transformer_config:
+  binoc.folder_move_detector:
+    threshold: 0.8
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/folder-move-partial/snapshot-a \
+  ./test-vectors-materialized/folder-move-partial/snapshot-b \
+  --config /tmp/folder-move-partial.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 rows)
+- **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
+- **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
+
+## Other Changes
+
+- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
 ```
 
 ## kitchen-sink

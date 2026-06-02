@@ -1,0 +1,15 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 rows)
+- **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
+- **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
+
+## Other Changes
+
+- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18

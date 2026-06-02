@@ -133,7 +133,7 @@ fn collect_reportable_nodes<'a>(
     // during inflate). Without this grouping, the move and its content
     // detail would land in different significance sections, hiding the
     // relationship.
-    let group_as_move = node.action == "move" && move_trailer(node).is_some();
+    let group_as_move = should_group_move_children(node);
 
     if is_reportable {
         let category = if group_as_move {
@@ -185,11 +185,17 @@ fn format_node(out: &mut String, node: &DiffNode) {
     // the rename and the content change visually grouped (they share a
     // path and stay in the same significance section) without needing
     // inline punctuation or capitalization fixups.
-    if node.action == "move" {
+    if should_group_move_children(node) {
         if let Some(detail) = move_trailer(node) {
             out.push_str(&format!("- **{path}**: {}\n", humanize_numbers(&detail)));
         }
     }
+}
+
+fn should_group_move_children(node: &DiffNode) -> bool {
+    node.action == "move"
+        && !node.tags.contains("binoc.folder-move")
+        && move_trailer(node).is_some()
 }
 
 /// Build the trailing description for a move bullet, if any.
@@ -472,6 +478,34 @@ mod tests {
         assert!(
             !md.contains("CSV modified"),
             "content_summary should be shadowed by tabular_summary"
+        );
+    }
+
+    #[test]
+    fn folder_move_descends_into_children_instead_of_grouping() {
+        let node = DiffNode::new("move", "directory", "docs-v2")
+            .with_source_path("docs-v1")
+            .with_summary("Folder moved from docs-v1")
+            .with_tag("binoc.move")
+            .with_tag("binoc.folder-move")
+            .with_children(vec![DiffNode::new("add", "file", "docs-v2/new.txt")
+                .with_summary("New file")
+                .with_tag("binoc.content-changed")]);
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "a",
+                "b",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(md.contains("- **docs-v2**: Folder moved from docs-v1\n"));
+        assert!(md.contains("- **docs-v2/new.txt**: New file\n"));
+        assert!(
+            !md.contains("- **docs-v2**: New file"),
+            "folder-move children should render as their own bullets"
         );
     }
 

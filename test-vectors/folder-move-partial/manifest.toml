@@ -1,0 +1,19 @@
+[vector]
+name = "folder-move-partial"
+description = """
+Partial folder-move rollup exercise: a date-stamped top folder is renamed while
+most files are clean moves, one file is added, one file is removed, and one
+file is renamed-and-modified. The folder-move detector should roll the rename
+up to the folder level and keep only the real remainder changes beneath it.
+"""
+tags = ["folder-move", "partial", "rollup", "directory"]
+
+[docs]
+summary = "Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it."
+
+[config]
+transformer_config = { "binoc.folder_move_detector" = { threshold = 0.8 } }
+
+[expected]
+root_kind = "modify"
+has_tags = ["binoc.move", "binoc.folder-move", "binoc.content-changed"]
