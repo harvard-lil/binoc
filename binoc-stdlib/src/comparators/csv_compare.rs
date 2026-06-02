@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 
@@ -147,10 +146,6 @@ pub(crate) fn csv_reader_from_read(
         .delimiter(delimiter)
         .flexible(true)
         .from_reader(decoded))
-}
-
-pub(crate) fn lossy_field(record: &csv::ByteRecord, index: usize) -> Cow<'_, str> {
-    String::from_utf8_lossy(record.get(index).unwrap_or(b""))
 }
 
 pub(crate) fn lossy_record(record: &csv::ByteRecord) -> Vec<String> {
