@@ -1,0 +1,91 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular_collection",
+        "path": "data.csv",
+        "summary": "Table table_2 changed: 1 row added",
+        "tags": [
+          "binoc.table-change",
+          "binoc.tabular-collection",
+          "binoc.tabular-collection-change"
+        ],
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.csv#table_2",
+            "summary": "1 row added",
+            "tags": [
+              "binoc.row-addition",
+              "binoc.table-change"
+            ],
+            "details": {
+              "cells_changed": 0,
+              "columns": [
+                "Appl No",
+                "Product",
+                "Applicant",
+                "Approval Date"
+              ],
+              "columns_added": [],
+              "columns_left": [
+                "Appl No",
+                "Product",
+                "Applicant",
+                "Approval Date"
+              ],
+              "columns_removed": [],
+              "columns_right": [
+                "Appl No",
+                "Product",
+                "Applicant",
+                "Approval Date"
+              ],
+              "end_row": 8,
+              "header_row": 6,
+              "logical_name": "table_2",
+              "rows_added": 1,
+              "rows_left": 2,
+              "rows_removed": 0,
+              "rows_right": 3
+            },
+            "comparator": "binoc.csv",
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
+          }
+        ],
+        "details": {
+          "tables_changed": [
+            "table_2"
+          ],
+          "tables_left": [
+            "table_1",
+            "table_2"
+          ],
+          "tables_right": [
+            "table_1",
+            "table_2"
+          ]
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.table_splitter",
+          "binoc.table_collection_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}
