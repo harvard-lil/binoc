@@ -174,9 +174,9 @@ fn format_node(out: &mut String, node: &DiffNode) {
     out.push_str(&format!("- **{path}**: "));
 
     if let Some(summary) = &node.summary {
-        out.push_str(summary);
+        out.push_str(&humanize_numbers(summary));
     } else {
-        out.push_str(&fallback_description(node));
+        out.push_str(&humanize_numbers(&fallback_description(node)));
     }
     out.push('\n');
 
@@ -187,7 +187,7 @@ fn format_node(out: &mut String, node: &DiffNode) {
     // inline punctuation or capitalization fixups.
     if node.action == "move" {
         if let Some(detail) = move_trailer(node) {
-            out.push_str(&format!("- **{path}**: {detail}\n"));
+            out.push_str(&format!("- **{path}**: {}\n", humanize_numbers(&detail)));
         }
     }
 }
@@ -265,6 +265,48 @@ fn capitalize(s: &str) -> String {
         None => String::new(),
         Some(c) => c.to_uppercase().to_string() + chars.as_str(),
     }
+}
+
+fn humanize_numbers(input: &str) -> String {
+    // Locale-aware formatting is intentionally out of scope for now; this is US-style grouping.
+    let mut out = String::with_capacity(input.len() + input.len() / 3);
+    let mut digits = String::new();
+
+    let flush_digits = |out: &mut String, digits: &mut String| {
+        if digits.len() > 3 {
+            let first_group = digits.len() % 3;
+            let mut idx = 0;
+            if first_group != 0 {
+                out.push_str(&digits[..first_group]);
+                idx = first_group;
+                if idx < digits.len() {
+                    out.push(',');
+                }
+            }
+            while idx < digits.len() {
+                let end = (idx + 3).min(digits.len());
+                out.push_str(&digits[idx..end]);
+                idx = end;
+                if idx < digits.len() {
+                    out.push(',');
+                }
+            }
+        } else {
+            out.push_str(digits);
+        }
+        digits.clear();
+    };
+
+    for ch in input.chars() {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+        } else {
+            flush_digits(&mut out, &mut digits);
+            out.push(ch);
+        }
+    }
+    flush_digits(&mut out, &mut digits);
+    out
 }
 
 #[cfg(test)]
@@ -431,5 +473,20 @@ mod tests {
             !md.contains("CSV modified"),
             "content_summary should be shadowed by tabular_summary"
         );
+    }
+
+    #[test]
+    fn humanizes_large_numbers_in_summaries() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "csv", "data.csv")
+                    .with_summary("5975 rows added; 18133333 cells changed"),
+            ),
+        );
+        let config = MarkdownRendererConfig::default();
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("5,975 rows added; 18,133,333 cells changed"));
     }
 }
