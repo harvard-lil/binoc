@@ -117,6 +117,41 @@ section receives an empty object and applies its own defaults.
 
 The Markdown renderer is the most interesting case today.
 
+### `output.markdown.verbosity`
+
+Controls how much renderer-visible evidence the Markdown changelog shows:
+
+- `summary` renders only the main one-line bullet for each reportable node.
+- `examples` renders the summary plus bounded inline examples from any
+  `detail_blocks` attached to the node. This is the default.
+- `full` renders all captured detail blocks and examples from the changeset,
+  still subject to the renderer's hard safety budget.
+
+The renderer never reopens source data. If a node advertises an extract aspect,
+the changelog points you at `binoc extract` for the exhaustive content.
+
+### `output.markdown.max_examples_per_block`
+
+Only used at `verbosity: examples`. Caps how many examples the renderer shows
+from each structured detail block before it switches to a "showing N of M"
+message and an extract hint.
+
+### `output.markdown.max_detail_blocks_per_node`
+
+Only used at `verbosity: examples`. Caps how many structured detail blocks the
+renderer shows under a single changelog bullet.
+
+### `output.markdown.max_value_chars`
+
+Caps how many characters of a single example value the renderer prints inline
+before truncating it with `...`.
+
+### `output.markdown.max_rendered_detail_bytes`
+
+Hard safety budget for all rendered detail lines across the whole Markdown
+output. When the renderer hits this budget it stops printing further inline
+detail and leaves the summary bullets intact.
+
 ### `output.markdown.groups`
 
 An ordered list of group definitions. Each group has a literal `heading`

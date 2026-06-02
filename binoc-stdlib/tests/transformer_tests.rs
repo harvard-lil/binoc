@@ -538,6 +538,14 @@ fn tabular_analyzer_detects_cell_changes() {
             assert!(n.tags.contains("binoc.cell-change"));
             assert_eq!(n.details["cells_changed"], 2);
             assert!(n.summary.as_ref().unwrap().contains("2 cells changed"));
+            assert_eq!(n.detail_blocks.len(), 1);
+            let block = &n.detail_blocks[0];
+            assert_eq!(block.id, "cells_changed");
+            assert_eq!(block.kind, "binoc.tabular.cell_changes.v1");
+            assert_eq!(block.total_count, Some(2));
+            assert_eq!(block.examples.len(), 2);
+            assert_eq!(block.extract.len(), 1);
+            assert_eq!(block.extract[0].aspect, "cells_changed");
         }
         _ => panic!("Expected Replace"),
     }

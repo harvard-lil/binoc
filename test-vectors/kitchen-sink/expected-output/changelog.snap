@@ -7,6 +7,9 @@ expression: "&md"
 - **archive.tar.gz/inventory.csv**: 1 row added
 - **bundle.zip/notes.txt**: 2 lines added, 1 removed
 - **data.csv**: 2 cells changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 1, column 'age': '30' -> '31'
+    - row 3, column 'city': 'Seattle' -> 'Portland'
 - **docs/new-file.txt**: New file (1 line)
 - **docs/old-notes.txt**: File removed (1 line)
 - **docs/readme.txt**: 2 lines added, 2 removed

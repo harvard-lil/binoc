@@ -5,3 +5,7 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: Rows reordered (same data, different sort order)
+  - Changed cells (showing 3 of 9); use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 1, column 'age': '30' -> '35'
+    - row 1, column 'city': 'NYC' -> 'Chicago'
+    - row 1, column 'name': 'Alice' -> 'Charlie'

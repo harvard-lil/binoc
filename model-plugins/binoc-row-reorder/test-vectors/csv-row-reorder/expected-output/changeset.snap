@@ -40,6 +40,135 @@ expression: "&stable_changeset"
           "rows_removed": 0,
           "rows_right": 3
         },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 9,
+            "examples": [
+              {
+                "locator": {
+                  "column": "age",
+                  "row": 0
+                },
+                "before": {
+                  "value": "30",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "35",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "city",
+                  "row": 0
+                },
+                "before": {
+                  "value": "NYC",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "Chicago",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "name",
+                  "row": 0
+                },
+                "before": {
+                  "value": "Alice",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "Charlie",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "age",
+                  "row": 1
+                },
+                "before": {
+                  "value": "25",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "30",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "city",
+                  "row": 1
+                },
+                "before": {
+                  "value": "LA",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "NYC",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "name",
+                  "row": 1
+                },
+                "before": {
+                  "value": "Bob",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "Alice",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "age",
+                  "row": 2
+                },
+                "before": {
+                  "value": "35",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "25",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "city",
+                  "row": 2
+                },
+                "before": {
+                  "value": "Chicago",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "LA",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ],
+            "truncated": true
+          }
+        ],
         "comparator": "binoc.csv",
         "transformed_by": [
           "binoc.tabular_analyzer",

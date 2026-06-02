@@ -94,6 +94,96 @@
         "pair"
       ]
     },
+    "DetailBlock": {
+      "description": "Renderer-visible, bounded evidence attached to a diff node.",
+      "type": "object",
+      "properties": {
+        "examples": {
+          "description": "Captured examples for inline rendering.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailExample"
+          }
+        },
+        "extract": {
+          "description": "Named extract aspects for exhaustive retrieval.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtractHint"
+          }
+        },
+        "id": {
+          "description": "Stable within this node, for anchors and extract selection.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Open, namespaced kind such as `binoc.tabular.cell_changes.v1`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Short renderer-facing label.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_count": {
+          "description": "Total matching items if known, including omitted examples.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "truncated": {
+          "description": "Whether the producer truncated capture before exhausting candidates.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ]
+    },
+    "DetailExample": {
+      "description": "One bounded example inside a detail block.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "Value after the change, if present.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValuePreview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "before": {
+          "description": "Value before the change, if present.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValuePreview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "Domain-specific structured context.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "locator": {
+          "description": "Structured locator such as row/column, line range, or key path.",
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
     "Diagnostic": {
       "type": "object",
       "properties": {
@@ -159,6 +249,13 @@
             "string",
             "null"
           ]
+        },
+        "detail_blocks": {
+          "description": "Renderer-visible, structured evidence blocks. Comparators and\ntransformers populate these with bounded examples while they still have\ndomain knowledge; renderers decide how much to display.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailBlock"
+          }
         },
         "details": {
           "description": "Comparator-specific payload, schema determined by item_type convention.",
@@ -238,6 +335,25 @@
         "path"
       ]
     },
+    "ExtractHint": {
+      "description": "Pointer to an extract aspect that can return exhaustive content.",
+      "type": "object",
+      "properties": {
+        "aspect": {
+          "description": "Aspect name accepted by `binoc extract`.",
+          "type": "string"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "aspect"
+      ]
+    },
     "ItemPair": {
       "description": "A pair of items to compare. Either side may be None (add/remove).",
       "type": "object",
@@ -303,6 +419,25 @@
       "required": [
         "logical_path",
         "is_dir"
+      ]
+    },
+    "ValuePreview": {
+      "description": "A bounded preview of one value in a detail example.",
+      "type": "object",
+      "properties": {
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "value": true
+      },
+      "required": [
+        "value"
       ]
     }
   }

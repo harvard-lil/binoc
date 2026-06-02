@@ -2,6 +2,9 @@ use std::collections::BTreeSet;
 
 use binoc_sdk::*;
 
+const MAX_CAPTURED_CELL_EXAMPLES: usize = 8;
+const MAX_CAPTURED_VALUE_CHARS: usize = 256;
+
 /// Analyzes tabular data artifacts to detect schema changes, row changes,
 /// and cell-level changes. Source-format-agnostic — works with any
 /// comparator that publishes [`tabular_v1`] artifacts (CSV, Parquet,
@@ -122,6 +125,7 @@ fn transform_modify(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
 
     let min_rows = left.rows.len().min(right.rows.len());
     let mut cells_changed: u64 = 0;
+    let mut cell_examples = Vec::new();
     for i in 0..min_rows {
         let row_l = &left.rows[i];
         let row_r = &right.rows[i];
@@ -138,6 +142,9 @@ fn transform_modify(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
                 .unwrap_or("");
             if val_l != val_r {
                 cells_changed += 1;
+                if cell_examples.len() < MAX_CAPTURED_CELL_EXAMPLES {
+                    cell_examples.push(changed_cell_example(i, col, val_l, val_r));
+                }
             }
         }
     }
@@ -163,6 +170,21 @@ fn transform_modify(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
         .insert("rows_removed".into(), serde_json::json!(rows_removed));
     node.details
         .insert("cells_changed".into(), serde_json::json!(cells_changed));
+
+    if cells_changed > 0 {
+        node.detail_blocks.push(
+            DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+                .with_label("Changed cells")
+                .with_total_count(cells_changed)
+                .with_extract_hint(
+                    ExtractHint::new("cells_changed").with_label("All changed cells"),
+                ),
+        );
+        if let Some(block) = node.detail_blocks.last_mut() {
+            block.examples = cell_examples;
+            block.truncated = cells_changed as usize > block.examples.len();
+        }
+    }
 
     if !columns_added.is_empty() {
         node.tags.insert("binoc.column-addition".into());
@@ -273,4 +295,32 @@ fn fmt_quoted_list(items: &[&str]) -> String {
         .map(|s| format!("'{s}'"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn changed_cell_example(row: usize, column: &str, before: &str, after: &str) -> DetailExample {
+    let mut example = DetailExample::new();
+    example.locator.insert("row".into(), serde_json::json!(row));
+    example
+        .locator
+        .insert("column".into(), serde_json::json!(column));
+    example.before = Some(capture_value_preview(before));
+    example.after = Some(capture_value_preview(after));
+    example
+}
+
+fn capture_value_preview(value: &str) -> ValuePreview {
+    let truncated = value.chars().count() > MAX_CAPTURED_VALUE_CHARS;
+    let value = if truncated {
+        value
+            .chars()
+            .take(MAX_CAPTURED_VALUE_CHARS)
+            .collect::<String>()
+    } else {
+        value.to_string()
+    };
+    ValuePreview {
+        value: serde_json::json!(value),
+        media_type: Some("text/plain".into()),
+        truncated,
+    }
 }
