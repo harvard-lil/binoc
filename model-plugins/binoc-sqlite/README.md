@@ -1,6 +1,6 @@
 # binoc-sqlite
 
-SQLite comparator plugin for [Binoc](https://github.com/example/binoc). Diffs `.sqlite` / `.sqlite3` / `.db` files by **schema** (tables, columns, types) and **row counts** — not row-by-row content — so you get summaries like “1 table modified”, “1 row added (1 → 2 rows)”, or “Table added (2 columns, 5 rows)” instead of a raw binary change.
+SQLite comparator plugin for [Binoc](https://github.com/example/binoc). Diffs `.sqlite` / `.sqlite3` / `.db` files as standard tabular collections: a database is a table set, and each SQLite table publishes normal Binoc tabular data for row, column, and cell analysis.
 
 ## Install
 
@@ -32,18 +32,17 @@ Example output:
 ```markdown
 # Changelog: /tmp/demo/snapshot-a → /tmp/demo/snapshot-b
 
-## Other Changes
-
-- **data.sqlite**: 1 table modified
-- **data.sqlite/t**: 1 row added (1 → 2 rows)
+- **data.sqlite**: Table t changed: 1 row added
+- **data.sqlite::t**: 1 row added
 ```
 
 Without the plugin, the same files would be reported as “Content changed” by the binary comparator.
 
 ## What it compares
 
-- **Schema**: tables added/removed, columns added/removed, column type changes.
-- **Row counts** per table (not cell-level diffs).
+- **Table set**: tables added/removed/changed via `binoc.tabular_collection.v1`.
+- **Schema**: columns added/removed, SQLite column type changes.
+- **Table content**: row count and cell changes via per-table `binoc.tabular.v1`.
 
 Tags emitted include `binoc-sqlite.row-addition`, `binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure significance (e.g. clerical vs substantive) in your dataset config; see [Writing Binoc Plugins](../docs/writing_plugins.md).
 

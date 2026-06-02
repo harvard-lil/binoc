@@ -19,7 +19,7 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "tabular",
             "path": "data/extra.csv",
-            "summary": "New table (2 columns, 1 rows)",
+            "summary": "New table (2 columns, 1 row)",
             "tags": [
               "binoc.content-changed"
             ],

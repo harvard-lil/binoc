@@ -14,8 +14,9 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular_collection",
         "path": "data.sqlite",
-        "summary": "Table users changed: 1 row added",
+        "summary": "Table users changed: 1 row added; Table orders added: new table (3 columns, 1 row)",
         "tags": [
+          "binoc.table-addition",
           "binoc.table-change",
           "binoc.tabular-collection-change"
         ],
@@ -51,18 +52,49 @@ expression: "&stable_changeset"
             "transformed_by": [
               "binoc.tabular_analyzer"
             ]
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data.sqlite::orders",
+            "summary": "New table (3 columns, 1 row)",
+            "tags": [
+              "binoc-sqlite.table-addition",
+              "binoc.content-changed",
+              "binoc.schema-change",
+              "binoc.table-addition"
+            ],
+            "details": {
+              "columns": [
+                "id",
+                "user_id",
+                "total"
+              ],
+              "logical_name": "orders",
+              "row_count": 1,
+              "rows": 1
+            },
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
           }
         ],
         "details": {
-          "hash_left": "0bb865f7f287a972d996d07f69dab0d625f02aa5825cc79a6ab79b5c2794355a",
-          "hash_right": "403f22fa3dbe2a501520c6b9bb9c2ecd8f8e431d957f2c050f112d546953bc72",
+          "hash_left": "feea398ad448a3460364a807be20f26be6fdd5f84304663c70692a6b5ed8963e",
+          "hash_right": "b02249e479928626396a89c2a8a05b6dea6568bc4176ee1725feeab68b3c63d6",
+          "tables_added": [
+            "orders"
+          ],
           "tables_changed": [
             "users"
           ],
           "tables_left": [
+            "products",
             "users"
           ],
           "tables_right": [
+            "orders",
+            "products",
             "users"
           ]
         },

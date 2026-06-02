@@ -31,6 +31,9 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
     r(registry.register_transformer(Arc::new(
         transformers::column_reorder::ColumnReorderDetector,
     )));
+    r(registry.register_transformer(Arc::new(
+        transformers::table_collection_analyzer::TableCollectionAnalyzer,
+    )));
 
     r(registry.register_renderer(Arc::new(MarkdownRenderer)));
 }

@@ -4,6 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data/extra.csv**: New table (2 columns, 1 rows)
+- **data/extra.csv**: New table (2 columns, 1 row)
 - **data/records.csv**: 1 row added
 - **docs/readme.txt**: 2 lines added, 1 removed

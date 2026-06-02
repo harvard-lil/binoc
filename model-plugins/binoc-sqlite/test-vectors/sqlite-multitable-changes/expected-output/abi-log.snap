@@ -22,7 +22,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "data.sqlite",
-        "result_size": 8192
+        "result_size": 12288
       },
       {
         "op": "register_local",
@@ -31,7 +31,7 @@ expression: "&abi_log"
       {
         "op": "read_bytes",
         "handle": "data.sqlite",
-        "result_size": 12288
+        "result_size": 16384
       }
     ]
   },
@@ -54,6 +54,28 @@ expression: "&abi_log"
           "name": "tabular",
           "version": 1
         },
+        "subject": "Left",
+        "producer": "binoc-sqlite.sqlite",
+        "size": 48
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "subject": "Right",
+        "producer": "binoc-sqlite.sqlite",
+        "size": 60
+      },
+      {
+        "op": "publish_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
         "subject": "Right",
         "producer": "binoc-sqlite.sqlite",
         "size": 63
@@ -67,7 +89,7 @@ expression: "&abi_log"
         },
         "subject": "Left",
         "producer": "binoc-sqlite.sqlite",
-        "size": 205
+        "size": 407
       },
       {
         "op": "publish_artifact",
@@ -78,7 +100,7 @@ expression: "&abi_log"
         },
         "subject": "Right",
         "producer": "binoc-sqlite.sqlite",
-        "size": 409
+        "size": 614
       },
       {
         "op": "publish_artifact",
@@ -89,7 +111,7 @@ expression: "&abi_log"
         },
         "subject": "Left",
         "producer": "binoc-sqlite.sqlite",
-        "size": 159
+        "size": 320
       },
       {
         "op": "publish_artifact",
@@ -100,7 +122,7 @@ expression: "&abi_log"
         },
         "subject": "Right",
         "producer": "binoc-sqlite.sqlite",
-        "size": 385
+        "size": 547
       }
     ]
   },
@@ -113,6 +135,30 @@ expression: "&abi_log"
     "method": "transform",
     "plugin": "binoc.folder_move_detector",
     "data_ops": []
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_analyzer",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
   },
   {
     "method": "transform",

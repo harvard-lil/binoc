@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.sqlite**: Table users changed: 1 row added; Table orders added: new table (3 columns, 1 row)
+- **data.sqlite::users**: 1 row added
+- **data.sqlite::orders**: New table (3 columns, 1 row)

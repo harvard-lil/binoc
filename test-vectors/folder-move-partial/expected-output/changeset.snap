@@ -30,7 +30,7 @@ expression: "&stable_changeset"
                 "action": "add",
                 "item_type": "tabular",
                 "path": "FoodData_Central_csv_2026-04-30/data/new-table.csv",
-                "summary": "New table (2 columns, 1 rows)",
+                "summary": "New table (2 columns, 1 row)",
                 "tags": [
                   "binoc.content-changed"
                 ],

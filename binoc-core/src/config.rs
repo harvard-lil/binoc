@@ -110,6 +110,7 @@ impl DatasetConfig {
                 "binoc.folder_move_detector".into(),
                 "binoc.tabular_analyzer".into(),
                 "binoc.column_reorder_detector".into(),
+                "binoc.table_collection_analyzer".into(),
             ],
             renderers: default_renderers(),
             output: OutputConfig::default(),

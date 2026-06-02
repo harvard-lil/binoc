@@ -82,6 +82,15 @@ pub fn tabular_v1() -> ArtifactFormat {
     ArtifactFormat::new("binoc", "tabular", 1)
 }
 
+/// Standard manifest format for sources that contain multiple logical tables.
+///
+/// This artifact is a table-set manifest, not a copy of table data. Individual
+/// table nodes should still publish [`tabular_v1`] artifacts for row/column/cell
+/// analysis.
+pub fn tabular_collection_v1() -> ArtifactFormat {
+    ArtifactFormat::new("binoc", "tabular_collection", 1)
+}
+
 // ── Format-neutral data types ───────────────────────────────────────
 
 /// Format-neutral tabular data. Produced by CSV, Excel, Parquet comparators;
@@ -118,6 +127,84 @@ impl TabularData {
             out.push('\n');
         }
         out
+    }
+}
+
+/// Format-neutral manifest for a source that contains multiple logical tables.
+///
+/// This is the codec type for the [`tabular_collection_v1`] artifact format.
+/// Serialize with `serde_json::to_vec`, deserialize with `serde_json::from_slice`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TabularCollectionData {
+    pub tables: Vec<TableMember>,
+}
+
+/// One logical table within a [`TabularCollectionData`] manifest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableMember {
+    /// Stable identity used to match this table across snapshots.
+    pub logical_name: String,
+    /// Path of the table node in the IR.
+    pub node_path: String,
+    /// Provenance inside the source item.
+    pub source: TableSourceLocation,
+    /// Cheap shape summary. Full table data lives in `tabular_v1`.
+    pub shape: TableShape,
+    /// Optional plugin/domain metadata. Consumers must ignore unknown fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata: BTreeMap<String, serde_json::Value>,
+}
+
+/// Where a logical table came from inside a source item.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableSourceLocation {
+    /// Logical path of the source item in the Binoc tree.
+    pub item_path: String,
+    /// Open string such as "sheet", "sqlite_table", or "csv_region".
+    pub kind: String,
+    /// Source-specific locator values, such as `{"table": "products"}`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locator: BTreeMap<String, serde_json::Value>,
+}
+
+/// Shape summary for one logical table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableShape {
+    pub columns: Vec<String>,
+    pub row_count: Option<u64>,
+}
+
+/// A pair of tabular collection manifests (left/right sides of a comparison).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabularCollectionDataPair {
+    pub left: Option<TabularCollectionData>,
+    pub right: Option<TabularCollectionData>,
+}
+
+impl TabularCollectionDataPair {
+    /// Build a `TabularCollectionDataPair` from [`tabular_collection_v1`]
+    /// artifacts on a node.
+    pub fn from_artifacts(
+        node: &crate::ir::DiffNode,
+        data: &dyn crate::traits::DataAccess,
+    ) -> Option<Self> {
+        let fmt = tabular_collection_v1();
+        let left = node
+            .artifacts
+            .iter()
+            .find(|a| a.format == fmt && a.subject == ArtifactSubject::Left)
+            .and_then(|desc| data.get_artifact(desc).ok()?)
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        let right = node
+            .artifacts
+            .iter()
+            .find(|a| a.format == fmt && a.subject == ArtifactSubject::Right)
+            .and_then(|desc| data.get_artifact(desc).ok()?)
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        if left.is_none() && right.is_none() {
+            return None;
+        }
+        Some(Self { left, right })
     }
 }
 

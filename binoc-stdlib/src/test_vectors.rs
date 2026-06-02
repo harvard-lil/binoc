@@ -332,6 +332,7 @@ pub fn abi_wrapped_default_registry() -> (
     wrap_transformer!(folder_move_detector::FolderMoveDetector);
     wrap_transformer!(tabular_analyzer::TabularAnalyzer);
     wrap_transformer!(column_reorder::ColumnReorderDetector);
+    wrap_transformer!(table_collection_analyzer::TableCollectionAnalyzer);
 
     registry
         .register_renderer(Arc::new(markdown::MarkdownRenderer))
