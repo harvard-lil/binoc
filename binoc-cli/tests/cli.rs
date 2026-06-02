@@ -53,6 +53,32 @@ fn diff_format_json_outputs_raw_changeset() {
 }
 
 #[test]
+fn diff_three_snapshots_outputs_pairwise_sequence() {
+    let tmp = tempfile::tempdir().unwrap();
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    let snap_c = tmp.path().join("snapshot-c");
+    std::fs::create_dir(&snap_a).unwrap();
+    std::fs::create_dir(&snap_b).unwrap();
+    std::fs::create_dir(&snap_c).unwrap();
+    std::fs::write(snap_a.join("story.txt"), "alpha\n").unwrap();
+    std::fs::write(snap_b.join("story.txt"), "alpha\nbeta\n").unwrap();
+    std::fs::write(snap_c.join("story.txt"), "alpha\nbeta\ngamma\n").unwrap();
+
+    binoc()
+        .arg("diff")
+        .arg(&snap_a)
+        .arg(&snap_b)
+        .arg(&snap_c)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("# Changelog:"))
+        .stdout(predicates::str::contains("snapshot-a"))
+        .stdout(predicates::str::contains("snapshot-b"))
+        .stdout(predicates::str::contains("snapshot-c"));
+}
+
+#[test]
 fn diff_csv_column_addition_markdown() {
     let dir = vectors_dir().join("csv-column-addition");
     binoc()
@@ -124,6 +150,20 @@ fn diff_multiple_outputs() {
 
     let md = std::fs::read_to_string(&md_path).unwrap();
     assert!(md.contains("# Changelog:"));
+}
+
+#[test]
+fn diff_two_snapshots_json_stdout_remains_single_object() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .success()
+        .stdout(predicates::str::starts_with("{"));
 }
 
 #[test]
@@ -296,6 +336,47 @@ fn changelog_output_to_file() {
     let md = std::fs::read_to_string(&changelog_path).unwrap();
     assert!(md.contains("Changelog:"));
     assert!(md.contains("data.csv"));
+}
+
+#[test]
+fn changelog_accepts_multi_snapshot_changeset_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let changeset_path = tmp.path().join("changesets.json");
+    let changelog_path = tmp.path().join("CHANGELOG.md");
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    let snap_c = tmp.path().join("snapshot-c");
+    std::fs::create_dir(&snap_a).unwrap();
+    std::fs::create_dir(&snap_b).unwrap();
+    std::fs::create_dir(&snap_c).unwrap();
+    std::fs::write(snap_a.join("story.txt"), "alpha\n").unwrap();
+    std::fs::write(snap_b.join("story.txt"), "alpha\nbeta\n").unwrap();
+    std::fs::write(snap_c.join("story.txt"), "alpha\nbeta\ngamma\n").unwrap();
+
+    binoc()
+        .arg("diff")
+        .arg(&snap_a)
+        .arg(&snap_b)
+        .arg(&snap_c)
+        .arg("-o")
+        .arg(&changeset_path)
+        .arg("-q")
+        .assert()
+        .success();
+
+    binoc()
+        .arg("changelog")
+        .arg(&changeset_path)
+        .arg("-o")
+        .arg(&changelog_path)
+        .arg("-q")
+        .assert()
+        .success();
+
+    let md = std::fs::read_to_string(&changelog_path).unwrap();
+    assert!(md.contains("snapshot-a"));
+    assert!(md.contains("snapshot-b"));
+    assert!(md.contains("snapshot-c"));
 }
 
 // ── help and version ───────────────────────────────────────────────

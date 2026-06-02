@@ -5,7 +5,7 @@ audience: data steward, archivist, pipeline integrator
 # Diff two snapshots
 
 **Goal.** Produce a human-readable changelog that describes what
-changed between two snapshots of a dataset.
+changed across an ordered sequence of dataset snapshots.
 
 **Prerequisites.** `binoc` installed (`pip install binoc` or
 `uvx binoc …`). Nothing else.
@@ -18,6 +18,15 @@ binoc diff path/to/snapshot-a path/to/snapshot-b
 
 By default this prints a Markdown changelog to stdout. That's usually
 what you want at a terminal.
+
+To diff a release sequence in one run, pass more snapshots:
+
+```bash
+binoc diff release-q1/ release-q2/ release-q3/
+```
+
+Binoc will emit two pairwise sections: `release-q1/ → release-q2/` and
+`release-q2/ → release-q3/`.
 
 ## What the output looks like
 
@@ -48,7 +57,8 @@ are `markdown` (the default) and `json` (raw changeset IR):
 
 ```bash
 binoc diff A B                    # Markdown to stdout (default)
-binoc diff A B --format json      # raw changeset JSON to stdout
+binoc diff A B --format json      # raw changeset JSON object to stdout
+binoc diff A B C --format json    # JSON array of pairwise changesets
 ```
 
 A third-party plugin may register additional renderers (for example

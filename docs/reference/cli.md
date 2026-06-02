@@ -7,7 +7,7 @@ audience: anyone using the CLI
 Binoc ships a single entry point — the `binoc` console script — with three
 subcommands:
 
-- `binoc diff A B` diffs two snapshots and prints a changelog.
+- `binoc diff A B [C ...]` diffs an ordered snapshot sequence and prints pairwise changelog sections.
 - `binoc changelog changesets/*.json` combines one or more saved changesets.
 - `binoc extract changeset.json PATH ASPECT` reopens both snapshots through
   the comparator chain and prints the actual changed data for a given node.
@@ -34,13 +34,13 @@ and `binoc <subcommand> --help` print the same information at the terminal.
 
 ## `binoc`
 
-Binoc produces the missing changelog for datasets. It detects, classifies, and renders changes between two snapshots. The CLI is porcelain over the embeddable library; see the Python API and Rust SDK reference pages for programmatic use.
+Binoc produces the missing changelog for datasets. It detects, classifies, and renders changes across ordered dataset snapshots. The CLI is porcelain over the embeddable library; see the Python API and Rust SDK reference pages for programmatic use.
 
 **Usage:** `binoc <COMMAND>`
 
 ###### **Subcommands:**
 
-* `diff` — Diff two snapshots and produce a changelog
+* `diff` — Diff an ordered sequence of snapshots and produce a changelog
 * `changelog` — Generate a human-readable changelog from one or more saved changesets
 * `extract` — Extract actual changed data from a changeset node
 
@@ -48,16 +48,15 @@ Binoc produces the missing changelog for datasets. It detects, classifies, and r
 
 ## `binoc diff`
 
-Diff two snapshots and produce a changelog.
+Diff an ordered sequence of snapshots and produce a changelog.
 
-Runs the comparator chain over snapshot_a and snapshot_b and emits the resulting changeset. Defaults to human-readable Markdown on stdout; use --format json or -o for machine-readable or multi-output rendering.
+Runs pairwise comparisons over each consecutive snapshot pair and emits the resulting changeset sequence. Defaults to human-readable Markdown on stdout; use --format json or -o for machine-readable or multi-output rendering.
 
-**Usage:** `binoc diff [OPTIONS] <SNAPSHOT_A> <SNAPSHOT_B>`
+**Usage:** `binoc diff [OPTIONS] <SNAPSHOTS> <SNAPSHOTS>...`
 
 ###### **Arguments:**
 
-* `<SNAPSHOT_A>` — Path to the "before" snapshot (file, directory, or archive, depending on which comparators are registered)
-* `<SNAPSHOT_B>` — Path to the "after" snapshot
+* `<SNAPSHOTS>` — Ordered snapshot paths. For N inputs, binoc emits N-1 pairwise diffs (A→B, B→C, ...). Must provide at least two snapshots
 
 ###### **Options:**
 
