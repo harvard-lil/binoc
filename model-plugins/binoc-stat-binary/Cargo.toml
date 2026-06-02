@@ -29,7 +29,7 @@ binoc-sdk = { workspace = true }
 dta = "0.6.0"
 pyo3 = { workspace = true, optional = true }
 sas7bdat = { version = "0.2.0", default-features = false }
-sas_xport = "0.4.1"
+sas_xport = "0.4.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
