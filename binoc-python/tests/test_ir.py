@@ -241,6 +241,25 @@ class TestChangeset:
         assert d['from_snapshot'] == 'a'
         assert d['to_snapshot'] == 'b'
         assert d['root']['action'] == 'add'
+        assert d['diagnostics'] == []
+
+    def test_diagnostics_round_trip(self):
+        payload = {
+            'from_snapshot': 'v1',
+            'to_snapshot': 'v2',
+            'root': None,
+            'diagnostics': [
+                {
+                    'severity': 'suggestion',
+                    'code': 'binoc.binary-fallback',
+                    'message': 'Compared as binary; a plugin may provide a more semantic diff.',
+                    'location': 'data.bin',
+                }
+            ],
+        }
+        restored = binoc.Changeset.from_json(json.dumps(payload))
+        assert restored.diagnostics[0]['code'] == 'binoc.binary-fallback'
+        assert restored.to_dict()['diagnostics'][0]['location'] == 'data.bin'
 
     def test_repr_and_str(self):
         m = binoc.Changeset('v1', 'v2')

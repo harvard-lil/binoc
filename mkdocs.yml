@@ -161,6 +161,7 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Diagnostics Channel for Non-Fatal Warnings and Suggestions': adr/2026-06-01-diagnostics_channel.md
           - 'Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch': adr/rename_modify_detection.md
           - 'Documentation Platform and Information Design': adr/2026-04-17-documentation_platform_and_info_design.md
           - 'Transient Fields Are Wire-Visible; Output Stripping Is a Boundary Concern': adr/2026-04-16-transient_fields_on_wire.md

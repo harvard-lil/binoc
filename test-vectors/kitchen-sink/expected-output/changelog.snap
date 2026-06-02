@@ -23,3 +23,7 @@ expression: "&md"
 - **data.csv**: 2 cells changed
 - **license-copy.txt**: Copied from license.txt
 - **summary.txt**: Moved from report.txt
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`icon.bin`) [binoc.binary-fallback]

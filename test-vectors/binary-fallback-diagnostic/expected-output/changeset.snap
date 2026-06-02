@@ -13,16 +13,16 @@ expression: "&stable_changeset"
       {
         "action": "modify",
         "item_type": "file",
-        "path": "data.bin",
-        "summary": "Content changed (4 bytes → 4 bytes)",
+        "path": "data.parquet",
+        "summary": "Content changed (7 bytes → 7 bytes)",
         "tags": [
           "binoc.content-changed"
         ],
         "details": {
-          "hash_left": "f30f5ab28fe047904037f77b6da4fea1e27241c5d132638d8bedce9d40494f32",
-          "hash_right": "3d9931d0c7afd26a680f6305c583cfdb2ecd9c18096c12069e8f054fac45251b",
-          "size_left": 4,
-          "size_right": 4
+          "hash_left": "7fe6f87320b7cc2354e51fc6b45eec4b3df2578563457c6898adb9bdbe497d95",
+          "hash_right": "40687e758c23a99ead29b92dc452cbafb22f883ca72a845c1da34bc5116ca5ce",
+          "size_left": 7,
+          "size_right": 7
         },
         "comparator": "binoc.binary"
       }
@@ -34,7 +34,7 @@ expression: "&stable_changeset"
       "severity": "suggestion",
       "code": "binoc.binary-fallback",
       "message": "Compared as binary; a plugin may provide a more semantic diff.",
-      "location": "data.bin"
+      "location": "data.parquet"
     }
   ]
 }

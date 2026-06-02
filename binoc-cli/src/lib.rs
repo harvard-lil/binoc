@@ -191,7 +191,14 @@ fn render(
         }
         ResolvedFormat::Renderer(o) => {
             let renderer_config = config.output.get_for_renderer(&o.descriptor().name);
-            o.render(changesets, &renderer_config)
+            let mut augmented = changesets.to_vec();
+            for changeset in &mut augmented {
+                for diagnostic in o.diagnostics(changeset, &renderer_config) {
+                    changeset.push_diagnostic(diagnostic);
+                }
+                changeset.dedupe_and_cap_diagnostics(16);
+            }
+            o.render(&augmented, &renderer_config)
         }
     }
 }

@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Substantive Changes
+
+- **data.parquet**: Content changed (7 bytes → 7 bytes)
+
+## Suggestions
+
+- Compared as binary; a plugin may provide a more semantic diff. (`data.parquet`) [binoc.binary-fallback]
