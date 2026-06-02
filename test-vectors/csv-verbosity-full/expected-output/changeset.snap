@@ -14,35 +14,37 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "2 cells changed",
+        "summary": "5 cells changed",
         "tags": [
           "binoc.cell-change"
         ],
         "details": {
-          "cells_changed": 2,
+          "cells_changed": 5,
           "columns_added": [],
           "columns_left": [
             "name",
-            "score"
+            "score",
+            "status"
           ],
           "columns_removed": [],
           "columns_right": [
             "name",
-            "score"
+            "score",
+            "status"
           ],
-          "hash_left": "bed182a183cdfc4b775833b347569c98740d8e000d85278e82ac9602d2af36fa",
-          "hash_right": "b083286a3ada2ec6791d8793982075d220b30857177753b12ce45e864a584d10",
+          "hash_left": "39aa5d33ab998f37a8d1450b1b905a610c62dfdbc4c049524fac6f8dd83826fd",
+          "hash_right": "3a6797a7abe1d941dbc9e48b613806f84dc1c61f7e4d26fabb0a444046756758",
           "rows_added": 0,
-          "rows_left": 3,
+          "rows_left": 5,
           "rows_removed": 0,
-          "rows_right": 3
+          "rows_right": 5
         },
         "detail_blocks": [
           {
             "id": "cells_changed",
             "kind": "binoc.tabular.cell_changes.v1",
             "label": "Changed cells",
-            "total_count": 2,
+            "total_count": 5,
             "examples": [
               {
                 "locator": {
@@ -50,11 +52,11 @@ expression: "&stable_changeset"
                   "row": 0
                 },
                 "before": {
-                  "value": "85",
+                  "value": "10",
                   "media_type": "text/plain"
                 },
                 "after": {
-                  "value": "92",
+                  "value": "11",
                   "media_type": "text/plain"
                 }
               },
@@ -64,11 +66,53 @@ expression: "&stable_changeset"
                   "row": 1
                 },
                 "before": {
-                  "value": "90",
+                  "value": "20",
                   "media_type": "text/plain"
                 },
                 "after": {
-                  "value": "88",
+                  "value": "21",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 2
+                },
+                "before": {
+                  "value": "30",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "31",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 3
+                },
+                "before": {
+                  "value": "40",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "41",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 4
+                },
+                "before": {
+                  "value": "50",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "51",
                   "media_type": "text/plain"
                 }
               }

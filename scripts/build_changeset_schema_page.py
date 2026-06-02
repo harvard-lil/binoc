@@ -126,7 +126,7 @@ def clean_description(text: str | None) -> str:
     return " ".join(cleaned.split())
 
 
-def type_display(prop: dict) -> str:
+def type_display(prop: dict | bool) -> str:
     """Render a JSON-Schema type fragment as short human prose.
 
     Handles the shapes schemars actually emits: `type` scalars, `type`
@@ -134,6 +134,11 @@ def type_display(prop: dict) -> str:
     `array` with `items`, `object` with `additionalProperties`, and
     `enum` strings.
     """
+    if prop is True:
+        return "any"
+    if prop is False:
+        return "never"
+
     # Nullable $ref: anyOf: [{$ref}, {type: null}]
     if "anyOf" in prop:
         branches = prop["anyOf"]
@@ -188,12 +193,13 @@ def fields_from_object(def_schema: dict) -> list[Field]:
     props = def_schema.get("properties", {})
     out = []
     for name, prop in sorted(props.items()):
+        description = clean_description(prop.get("description")) if isinstance(prop, dict) else ""
         out.append(
             Field(
                 name=name,
                 type_display=type_display(prop),
                 required=name in required,
-                description=clean_description(prop.get("description")),
+                description=description,
             )
         )
     return out

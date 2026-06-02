@@ -76,6 +76,7 @@ A node in the diff tree — the central data structure of the system. Every comp
 | `artifacts` | array of [`ArtifactDescriptor`](#artifactdescriptor) | no | Published artifacts for this node. Session-scoped working data: carried across the plugin ABI wire as descriptors (the bytes live in the shared `data_root` cache), but not meaningful outside a session. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
 | `children` | array of [`DiffNode`](#diffnode) | no | Child diff nodes forming the tree structure. |
 | `comparator` | string \| null | no | Which comparator produced this node (provenance for extract chain). |
+| `detail_blocks` | array of [`DetailBlock`](#detailblock) | no | Renderer-visible, structured evidence blocks. Comparators and transformers populate these with bounded examples while they still have domain knowledge; renderers decide how much to display. |
 | `details` | object (free-form) | no | Comparator-specific payload, schema determined by item_type convention. |
 | `diagnostics` | array of [`Diagnostic`](#diagnostic) | no | Node-scoped diagnostics emitted during comparison or transform. Transient: the controller hoists them into [`Changeset::diagnostics`] at the end of the diff, then clears this field so the output shape stays as one durable top-level diagnostics list. |
 | `item_type` | string | yes | Open string: "directory", "file", "tabular", "zip_archive", etc. No built-in types — conventions, not enforcement. |
@@ -140,6 +141,31 @@ String enum. One of:
 - `right`
 - `pair`
 
+### `DetailBlock`
+
+Renderer-visible, bounded evidence attached to a diff node.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `examples` | array of [`DetailExample`](#detailexample) | no | Captured examples for inline rendering. |
+| `extract` | array of [`ExtractHint`](#extracthint) | no | Named extract aspects for exhaustive retrieval. |
+| `id` | string | yes | Stable within this node, for anchors and extract selection. |
+| `kind` | string | yes | Open, namespaced kind such as `binoc.tabular.cell_changes.v1`. |
+| `label` | string \| null | no | Short renderer-facing label. |
+| `total_count` | integer \| null | no | Total matching items if known, including omitted examples. |
+| `truncated` | boolean | no | Whether the producer truncated capture before exhausting candidates. |
+
+### `DetailExample`
+
+One bounded example inside a detail block.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `after` | [`ValuePreview`](#valuepreview) \| null | no | Value after the change, if present. |
+| `before` | [`ValuePreview`](#valuepreview) \| null | no | Value before the change, if present. |
+| `fields` | object (free-form) | no | Domain-specific structured context. |
+| `locator` | object (free-form) | no | Structured locator such as row/column, line range, or key path. |
+
 ### `Diagnostic`
 
 | Field | Type | Required | Description |
@@ -155,3 +181,22 @@ String enum. One of:
 
 - `warning`
 - `suggestion`
+
+### `ExtractHint`
+
+Pointer to an extract aspect that can return exhaustive content.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `aspect` | string | yes | Aspect name accepted by `binoc extract`. |
+| `label` | string \| null | no |  |
+
+### `ValuePreview`
+
+A bounded preview of one value in a detail example.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `media_type` | string \| null | no |  |
+| `truncated` | boolean | no |  |
+| `value` | any | yes |  |

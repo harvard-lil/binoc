@@ -6,3 +6,5 @@ expression: "&md"
 
 - **data/records.csv**: 1 row added
 - **data.tar.gz/records.csv**: 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "data.tar.gz/records.csv" cells_changed` for all changed cells
+    - row 2, column 'count': '20' -> '25'

@@ -39,6 +39,50 @@ expression: "&stable_changeset"
           "rows_removed": 0,
           "rows_right": 2
         },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 2,
+            "examples": [
+              {
+                "locator": {
+                  "column": "age",
+                  "row": 0
+                },
+                "before": {
+                  "value": "30",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "31",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "city",
+                  "row": 1
+                },
+                "before": {
+                  "value": "Boston",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "Cambridge",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ]
+          }
+        ],
         "comparator": "binoc.csv",
         "transformed_by": [
           "binoc.tabular_analyzer"

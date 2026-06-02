@@ -1,0 +1,14 @@
+[vector]
+name = "csv-verbosity-full"
+description = "Markdown full verbosity renders every captured changed-cell example"
+tags = ["csv", "cell-change", "verbosity"]
+
+[docs]
+summary = "Markdown full verbosity renders every captured changed-cell example."
+setup = "This example sets `output.markdown.verbosity: full` so the changelog prints every captured changed-cell example instead of the default capped sample."
+
+[config]
+output = { markdown = { verbosity = "full" } }
+
+[expected]
+has_tags = ["binoc.cell-change"]

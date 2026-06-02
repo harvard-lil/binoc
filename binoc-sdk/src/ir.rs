@@ -96,6 +96,12 @@ pub struct DiffNode {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub details: BTreeMap<String, serde_json::Value>,
 
+    /// Renderer-visible, structured evidence blocks. Comparators and
+    /// transformers populate these with bounded examples while they still have
+    /// domain knowledge; renderers decide how much to display.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detail_blocks: Vec<DetailBlock>,
+
     /// Transformer-added metadata.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub annotations: BTreeMap<String, serde_json::Value>,
@@ -160,6 +166,7 @@ impl DiffNode {
             tags: BTreeSet::new(),
             children: Vec::new(),
             details: BTreeMap::new(),
+            detail_blocks: Vec::new(),
             annotations: BTreeMap::new(),
             comparator: None,
             transformed_by: Vec::new(),
@@ -187,6 +194,11 @@ impl DiffNode {
 
     pub fn with_children(mut self, children: Vec<DiffNode>) -> Self {
         self.children = children;
+        self
+    }
+
+    pub fn with_detail_block(mut self, block: DetailBlock) -> Self {
+        self.detail_blocks.push(block);
         self
     }
 
@@ -254,6 +266,135 @@ impl DiffNode {
         for child in &mut self.children {
             child.strip_transient();
         }
+    }
+}
+
+/// Renderer-visible, bounded evidence attached to a diff node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct DetailBlock {
+    /// Stable within this node, for anchors and extract selection.
+    pub id: String,
+    /// Open, namespaced kind such as `binoc.tabular.cell_changes.v1`.
+    pub kind: String,
+    /// Short renderer-facing label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Total matching items if known, including omitted examples.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_count: Option<u64>,
+    /// Captured examples for inline rendering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub examples: Vec<DetailExample>,
+    /// Named extract aspects for exhaustive retrieval.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extract: Vec<ExtractHint>,
+    /// Whether the producer truncated capture before exhausting candidates.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
+}
+
+impl DetailBlock {
+    pub fn new(id: impl Into<String>, kind: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            kind: kind.into(),
+            label: None,
+            total_count: None,
+            examples: Vec::new(),
+            extract: Vec::new(),
+            truncated: false,
+        }
+    }
+
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub fn with_total_count(mut self, total_count: u64) -> Self {
+        self.total_count = Some(total_count);
+        self
+    }
+
+    pub fn with_example(mut self, example: DetailExample) -> Self {
+        self.examples.push(example);
+        self
+    }
+
+    pub fn with_extract_hint(mut self, hint: ExtractHint) -> Self {
+        self.extract.push(hint);
+        self
+    }
+}
+
+/// One bounded example inside a detail block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct DetailExample {
+    /// Structured locator such as row/column, line range, or key path.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locator: BTreeMap<String, serde_json::Value>,
+    /// Value before the change, if present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<ValuePreview>,
+    /// Value after the change, if present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<ValuePreview>,
+    /// Domain-specific structured context.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
+}
+
+impl DetailExample {
+    pub fn new() -> Self {
+        Self {
+            locator: BTreeMap::new(),
+            before: None,
+            after: None,
+            fields: BTreeMap::new(),
+        }
+    }
+}
+
+impl Default for DetailExample {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A bounded preview of one value in a detail example.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ValuePreview {
+    pub value: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_type: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
+}
+
+/// Pointer to an extract aspect that can return exhaustive content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ExtractHint {
+    /// Aspect name accepted by `binoc extract`.
+    pub aspect: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+impl ExtractHint {
+    pub fn new(aspect: impl Into<String>) -> Self {
+        Self {
+            aspect: aspect.into(),
+            label: None,
+        }
+    }
+
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
     }
 }
 
@@ -335,6 +476,7 @@ mod tests {
         assert!(node.tags.is_empty());
         assert!(node.children.is_empty());
         assert!(node.details.is_empty());
+        assert!(node.detail_blocks.is_empty());
         assert!(node.annotations.is_empty());
     }
 
@@ -355,6 +497,7 @@ mod tests {
             node.details.get("lines_changed"),
             Some(&serde_json::json!(42))
         );
+        assert!(node.detail_blocks.is_empty());
         assert_eq!(node.children.len(), 1);
         assert_eq!(node.children[0].path, "child.txt");
         assert_eq!(node.source_path.as_deref(), Some("old/dir"));
@@ -402,6 +545,31 @@ mod tests {
         let node = DiffNode::new("move", "file", "new/path.csv")
             .with_tag("binoc.move")
             .with_detail("distance", serde_json::json!(10))
+            .with_detail_block(
+                DetailBlock::new("changed_cells", "binoc.tabular.cell_changes.v1")
+                    .with_label("Changed cells")
+                    .with_total_count(1)
+                    .with_example(DetailExample {
+                        locator: BTreeMap::from([
+                            ("row".into(), serde_json::json!(1)),
+                            ("column".into(), serde_json::json!("status")),
+                        ]),
+                        before: Some(ValuePreview {
+                            value: serde_json::json!("draft"),
+                            media_type: Some("text/plain".into()),
+                            truncated: false,
+                        }),
+                        after: Some(ValuePreview {
+                            value: serde_json::json!("published"),
+                            media_type: Some("text/plain".into()),
+                            truncated: false,
+                        }),
+                        fields: BTreeMap::new(),
+                    })
+                    .with_extract_hint(
+                        ExtractHint::new("cells_changed").with_label("All changed cells"),
+                    ),
+            )
             .with_source_path("old/path.csv");
         let json = serde_json::to_string(&node).unwrap();
         let restored: DiffNode = serde_json::from_str(&json).unwrap();
@@ -411,6 +579,8 @@ mod tests {
         assert_eq!(node.source_path, restored.source_path);
         assert_eq!(node.tags, restored.tags);
         assert_eq!(node.details, restored.details);
+        assert_eq!(restored.detail_blocks.len(), 1);
+        assert_eq!(restored.detail_blocks[0].examples.len(), 1);
     }
 
     #[test]

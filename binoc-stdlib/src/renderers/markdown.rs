@@ -10,10 +10,29 @@ pub struct MarkdownGroup {
     pub tags: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Verbosity {
+    Summary,
+    #[default]
+    Examples,
+    Full,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkdownRendererConfig {
     #[serde(default)]
     pub groups: Vec<MarkdownGroup>,
+    #[serde(default)]
+    pub verbosity: Verbosity,
+    #[serde(default = "default_max_examples_per_block")]
+    pub max_examples_per_block: usize,
+    #[serde(default = "default_max_detail_blocks_per_node")]
+    pub max_detail_blocks_per_node: usize,
+    #[serde(default = "default_max_value_chars")]
+    pub max_value_chars: usize,
+    #[serde(default = "default_max_rendered_detail_bytes")]
+    pub max_rendered_detail_bytes: usize,
     #[serde(default = "default_max_diagnostics")]
     pub max_diagnostics: usize,
 }
@@ -22,9 +41,30 @@ impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
             groups: Vec::new(),
+            verbosity: Verbosity::Examples,
+            max_examples_per_block: default_max_examples_per_block(),
+            max_detail_blocks_per_node: default_max_detail_blocks_per_node(),
+            max_value_chars: default_max_value_chars(),
+            max_rendered_detail_bytes: default_max_rendered_detail_bytes(),
             max_diagnostics: default_max_diagnostics(),
         }
     }
+}
+
+fn default_max_examples_per_block() -> usize {
+    3
+}
+
+fn default_max_detail_blocks_per_node() -> usize {
+    4
+}
+
+fn default_max_value_chars() -> usize {
+    160
+}
+
+fn default_max_rendered_detail_bytes() -> usize {
+    200_000
 }
 
 fn default_max_diagnostics() -> usize {
@@ -47,6 +87,7 @@ impl Renderer for MarkdownRenderer {
 
 pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig) -> String {
     let mut out = String::new();
+    let mut detail_budget = DetailBudget::new(config.max_rendered_detail_bytes);
 
     for changeset in changesets {
         out.push_str(&format!(
@@ -62,14 +103,14 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
 
             if config.groups.is_empty() {
                 for node in &uncategorized {
-                    format_node(&mut out, node);
+                    format_node(&mut out, node, config, &mut detail_budget);
                 }
                 out.push('\n');
             } else {
                 for (group, nodes) in config.groups.iter().zip(by_group.iter()) {
                     out.push_str(&format!("## {}\n\n", group.heading));
                     for node in nodes {
-                        format_node(&mut out, node);
+                        format_node(&mut out, node, config, &mut detail_budget);
                     }
                     out.push('\n');
                 }
@@ -77,7 +118,7 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
                 if !uncategorized.is_empty() {
                     out.push_str("## Other Changes\n\n");
                     for node in &uncategorized {
-                        format_node(&mut out, node);
+                        format_node(&mut out, node, config, &mut detail_budget);
                     }
                     out.push('\n');
                 }
@@ -219,7 +260,12 @@ fn collect_reportable_nodes<'a>(
     }
 }
 
-fn format_node(out: &mut String, node: &DiffNode) {
+fn format_node(
+    out: &mut String,
+    node: &DiffNode,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
     let path = if node.path.is_empty() {
         "(root)"
     } else {
@@ -245,6 +291,8 @@ fn format_node(out: &mut String, node: &DiffNode) {
             out.push_str(&format!("- **{path}**: {}\n", humanize_numbers(&detail)));
         }
     }
+
+    render_detail_blocks(out, node, path, config, detail_budget);
 }
 
 fn should_group_move_children(node: &DiffNode) -> bool {
@@ -317,6 +365,205 @@ fn fallback_description(node: &DiffNode) -> String {
         }
         "reorder" => format!("{} reordered", capitalize(item_type)),
         _ => format!("{action} ({item_type})"),
+    }
+}
+
+fn render_detail_blocks(
+    out: &mut String,
+    node: &DiffNode,
+    path: &str,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    if config.verbosity == Verbosity::Summary || node.detail_blocks.is_empty() {
+        return;
+    }
+
+    let block_limit = if config.verbosity == Verbosity::Full {
+        node.detail_blocks.len()
+    } else {
+        node.detail_blocks
+            .len()
+            .min(config.max_detail_blocks_per_node)
+    };
+    for block in node.detail_blocks.iter().take(block_limit) {
+        let example_limit = if config.verbosity == Verbosity::Full {
+            block.examples.len()
+        } else {
+            block.examples.len().min(config.max_examples_per_block)
+        };
+        if example_limit == 0 && block.examples.is_empty() && block.extract.is_empty() {
+            continue;
+        }
+
+        let shown = example_limit as u64;
+        let total = block.total_count.unwrap_or(block.examples.len() as u64);
+        let omitted_by_renderer = shown < block.examples.len() as u64
+            || (config.verbosity != Verbosity::Full
+                && node.detail_blocks.len() > config.max_detail_blocks_per_node);
+        let truncated = block.truncated || omitted_by_renderer || shown < total;
+
+        let mut header = block.label.clone().unwrap_or_else(|| block.id.clone());
+        if truncated {
+            if shown == 0 && block.examples.is_empty() && total > 0 {
+                header.push_str(&format!(" ({total} total)"));
+            } else if total > 0 {
+                header.push_str(&format!(" (showing {shown} of {total})"));
+            } else {
+                header.push_str(&format!(" (showing {shown})"));
+            }
+        }
+        if let Some(extract) = block.extract.first() {
+            let label = extract
+                .label
+                .as_deref()
+                .unwrap_or("all matching data")
+                .to_lowercase();
+            header.push_str(&format!(
+                "; use `binoc extract CHANGESET \"{path}\" {}` for {label}",
+                extract.aspect
+            ));
+        }
+
+        if !detail_budget.push_line(out, format!("  - {header}\n")) {
+            return;
+        }
+
+        for example in block.examples.iter().take(example_limit) {
+            let line = format_detail_example(block, example, config);
+            if !detail_budget.push_line(out, format!("    - {line}\n")) {
+                return;
+            }
+        }
+    }
+}
+
+fn format_detail_example(
+    block: &DetailBlock,
+    example: &DetailExample,
+    config: &MarkdownRendererConfig,
+) -> String {
+    if block.kind == "binoc.tabular.cell_changes.v1" {
+        return format_tabular_cell_example(example, config);
+    }
+
+    let locator = if example.locator.is_empty() {
+        None
+    } else {
+        Some(compact_json_map(&example.locator))
+    };
+    let before = example
+        .before
+        .as_ref()
+        .map(|v| format_value_preview(v, config));
+    let after = example
+        .after
+        .as_ref()
+        .map(|v| format_value_preview(v, config));
+
+    match (locator, before, after) {
+        (Some(locator), Some(before), Some(after)) => format!("{locator}: {before} -> {after}"),
+        (Some(locator), None, Some(after)) => format!("{locator}: -> {after}"),
+        (Some(locator), Some(before), None) => format!("{locator}: {before} ->"),
+        (Some(locator), None, None) => locator,
+        (None, Some(before), Some(after)) => format!("{before} -> {after}"),
+        (None, None, Some(after)) => format!("-> {after}"),
+        (None, Some(before), None) => format!("{before} ->"),
+        (None, None, None) => "example".into(),
+    }
+}
+
+fn format_tabular_cell_example(example: &DetailExample, config: &MarkdownRendererConfig) -> String {
+    let row = example
+        .locator
+        .get("row")
+        .and_then(|value| value.as_u64())
+        .map(|row| row + 1)
+        .map(|row| format!("row {row}"));
+    let column = example
+        .locator
+        .get("column")
+        .and_then(|value| value.as_str())
+        .map(|column| {
+            format!(
+                "column '{}'",
+                truncate_text(column, config.max_value_chars).0
+            )
+        });
+    let locator = match (row, column) {
+        (Some(row), Some(column)) => format!("{row}, {column}"),
+        (Some(row), None) => row,
+        (None, Some(column)) => column,
+        (None, None) => "cell".into(),
+    };
+    let before = example
+        .before
+        .as_ref()
+        .map(|v| format_value_preview(v, config))
+        .unwrap_or_else(|| "(none)".into());
+    let after = example
+        .after
+        .as_ref()
+        .map(|v| format_value_preview(v, config))
+        .unwrap_or_else(|| "(none)".into());
+    format!("{locator}: {before} -> {after}")
+}
+
+fn format_value_preview(value: &ValuePreview, config: &MarkdownRendererConfig) -> String {
+    match &value.value {
+        serde_json::Value::String(text) => {
+            let (truncated_text, render_truncated) = truncate_text(text, config.max_value_chars);
+            let mut rendered = format!("'{}'", truncated_text.replace('\'', "\\'"));
+            if value.truncated || render_truncated {
+                rendered.push_str("...");
+            }
+            rendered
+        }
+        other => {
+            let raw = serde_json::to_string(other).unwrap_or_else(|_| "null".into());
+            let (truncated, render_truncated) = truncate_text(&raw, config.max_value_chars);
+            if value.truncated || render_truncated {
+                format!("{truncated}...")
+            } else {
+                truncated
+            }
+        }
+    }
+}
+
+fn truncate_text(input: &str, max_chars: usize) -> (String, bool) {
+    if input.chars().count() <= max_chars {
+        return (input.to_string(), false);
+    }
+    (input.chars().take(max_chars).collect(), true)
+}
+
+fn compact_json_map(map: &BTreeMap<String, serde_json::Value>) -> String {
+    serde_json::to_string(map).unwrap_or_else(|_| "{}".into())
+}
+
+struct DetailBudget {
+    remaining_bytes: usize,
+}
+
+impl DetailBudget {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            remaining_bytes: max_bytes,
+        }
+    }
+
+    fn push_line(&mut self, out: &mut String, line: String) -> bool {
+        if line.len() > self.remaining_bytes {
+            if self.remaining_bytes > 0 {
+                out.push_str("  - Additional detail omitted (renderer detail budget reached)\n");
+                self.remaining_bytes = 0;
+            }
+            return false;
+        }
+        self.remaining_bytes -= line.len();
+        out.push_str(&line);
+        true
     }
 }
 
@@ -695,5 +942,116 @@ mod tests {
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("5,975 rows added; 18,133,333 cells changed"));
+    }
+
+    #[test]
+    fn summary_verbosity_hides_detail_blocks() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular", "data.csv")
+                    .with_summary("2 cells changed")
+                    .with_detail_block(sample_detail_block(2)),
+            ),
+        );
+        let config = MarkdownRendererConfig {
+            verbosity: Verbosity::Summary,
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("- **data.csv**: 2 cells changed"));
+        assert!(!md.contains("Changed cells"));
+        assert!(!md.contains("binoc extract"));
+    }
+
+    #[test]
+    fn examples_verbosity_renders_capped_tabular_examples() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular", "data.csv")
+                    .with_summary("4 cells changed")
+                    .with_detail_block(sample_detail_block(4)),
+            ),
+        );
+        let config = MarkdownRendererConfig {
+            verbosity: Verbosity::Examples,
+            max_examples_per_block: 2,
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("Changed cells (showing 2 of 4); use `binoc extract CHANGESET \"data.csv\" cells_changed` for all changed cells"));
+        assert!(md.contains("row 1, column 'score': '10' -> '12'"));
+        assert!(md.contains("row 2, column 'score': '20' -> '22'"));
+        assert!(!md.contains("row 3, column 'score': '30' -> '32'"));
+    }
+
+    #[test]
+    fn examples_verbosity_renders_extract_only_detail_blocks() {
+        let block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(4)
+            .with_extract_hint(ExtractHint::new("cells_changed").with_label("All changed cells"));
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular", "large.csv")
+                    .with_summary("4 cells changed")
+                    .with_detail_block(block),
+            ),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("Changed cells (4 total); use `binoc extract CHANGESET \"large.csv\" cells_changed` for all changed cells"));
+    }
+
+    #[test]
+    fn full_verbosity_renders_all_captured_examples() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular", "data.csv")
+                    .with_summary("4 cells changed")
+                    .with_detail_block(sample_detail_block(4)),
+            ),
+        );
+        let config = MarkdownRendererConfig {
+            verbosity: Verbosity::Full,
+            max_examples_per_block: 1,
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("row 4, column 'score': '40' -> '42'"));
+        assert!(!md.contains("showing 1 of 4"));
+    }
+
+    fn sample_detail_block(total_count: u64) -> DetailBlock {
+        let mut block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(total_count)
+            .with_extract_hint(ExtractHint::new("cells_changed").with_label("All changed cells"));
+        for row in 0..total_count {
+            let mut example = DetailExample::new();
+            example.locator.insert("row".into(), serde_json::json!(row));
+            example
+                .locator
+                .insert("column".into(), serde_json::json!("score"));
+            example.before = Some(ValuePreview {
+                value: serde_json::json!(format!("{}", (row + 1) * 10)),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            example.after = Some(ValuePreview {
+                value: serde_json::json!(format!("{}", (row + 1) * 10 + 2)),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            block.examples.push(example);
+        }
+        block
     }
 }

@@ -87,6 +87,36 @@ expression: "&stable_changeset"
                   "rows_removed": 0,
                   "rows_right": 3
                 },
+                "detail_blocks": [
+                  {
+                    "id": "cells_changed",
+                    "kind": "binoc.tabular.cell_changes.v1",
+                    "label": "Changed cells",
+                    "total_count": 1,
+                    "examples": [
+                      {
+                        "locator": {
+                          "column": "count",
+                          "row": 1
+                        },
+                        "before": {
+                          "value": "20",
+                          "media_type": "text/plain"
+                        },
+                        "after": {
+                          "value": "25",
+                          "media_type": "text/plain"
+                        }
+                      }
+                    ],
+                    "extract": [
+                      {
+                        "aspect": "cells_changed",
+                        "label": "All changed cells"
+                      }
+                    ]
+                  }
+                ],
                 "comparator": "binoc.csv",
                 "transformed_by": [
                   "binoc.tabular_analyzer"

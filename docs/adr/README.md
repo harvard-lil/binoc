@@ -8,6 +8,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 |---|---|---|
 | 2026-06-02 | [Markdown Renderer Groups Replace Significance-Map Grouping](2026-06-02-renderer_groups.md) | Implemented |
 | 2026-06-01 | [Optional First-Party Plugins and `binoc[all]`](2026-06-01-optional_first_party_plugins.md) | Accepted |
+| 2026-06-01 | [Example Verbosity and Plugin-Supplied Details](2026-06-01-example_verbosity.md) | Decided |
 | 2026-06-01 | [Diagnostics Channel for Non-Fatal Warnings and Suggestions](2026-06-01-diagnostics_channel.md) | Implemented |
 | 2026-05-13 | [Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch](rename_modify_detection.md) | Implemented |
 | 2026-04-17 | [Documentation Platform and Information Design](2026-04-17-documentation_platform_and_info_design.md) | Proposed |
