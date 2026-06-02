@@ -1,6 +1,6 @@
 [vector]
 name = "gzip-tabular"
-description = "Gzipped CSV and pipe-delimited text are decompressed and compared as tables"
+description = "Gzipped CSV and pipe-delimited text are decompressed and redispatched under their inner names"
 tags = ["gzip", "csv", "pipe", "cell-change", "row-addition"]
 
 [expected]
