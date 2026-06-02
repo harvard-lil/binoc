@@ -1,0 +1,1389 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.sas7bdat",
+        "summary": "216 cells changed",
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "cells_changed": 216,
+          "columns_added": [],
+          "columns_left": [
+            "Column1",
+            "Column2",
+            "Column3",
+            "Column4",
+            "Column5",
+            "Column6",
+            "Column7",
+            "Column8",
+            "Column9",
+            "Column10",
+            "Column11",
+            "Column12",
+            "Column13",
+            "Column14",
+            "Column15",
+            "Column16",
+            "Column17",
+            "Column18",
+            "Column19",
+            "Column20",
+            "Column21",
+            "Column22",
+            "Column23",
+            "Column24",
+            "Column25",
+            "Column26",
+            "Column27",
+            "Column28",
+            "Column29",
+            "Column30",
+            "Column31",
+            "Column32",
+            "Column33",
+            "Column34",
+            "Column35",
+            "Column36",
+            "Column37",
+            "Column38",
+            "Column39",
+            "Column40",
+            "Column41",
+            "Column42",
+            "Column43",
+            "Column44",
+            "Column45",
+            "Column46",
+            "Column47",
+            "Column48",
+            "Column49",
+            "Column50",
+            "Column51",
+            "Column52",
+            "Column53",
+            "Column54",
+            "Column55",
+            "Column56",
+            "Column57",
+            "Column58",
+            "Column59",
+            "Column60",
+            "Column61",
+            "Column62",
+            "Column63",
+            "Column64",
+            "Column65",
+            "Column66",
+            "Column67",
+            "Column68",
+            "Column69",
+            "Column70",
+            "Column71",
+            "Column72",
+            "Column73",
+            "Column74",
+            "Column75",
+            "Column76",
+            "Column77",
+            "Column78",
+            "Column79",
+            "Column80",
+            "Column81",
+            "Column82",
+            "Column83",
+            "Column84",
+            "Column85",
+            "Column86",
+            "Column87",
+            "Column88",
+            "Column89",
+            "Column90",
+            "Column91",
+            "Column92",
+            "Column93",
+            "Column94",
+            "Column95",
+            "Column96",
+            "Column97",
+            "Column98",
+            "Column99",
+            "Column100"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "Column1",
+            "Column2",
+            "Column3",
+            "Column4",
+            "Column5",
+            "Column6",
+            "Column7",
+            "Column8",
+            "Column9",
+            "Column10",
+            "Column11",
+            "Column12",
+            "Column13",
+            "Column14",
+            "Column15",
+            "Column16",
+            "Column17",
+            "Column18",
+            "Column19",
+            "Column20",
+            "Column21",
+            "Column22",
+            "Column23",
+            "Column24",
+            "Column25",
+            "Column26",
+            "Column27",
+            "Column28",
+            "Column29",
+            "Column30",
+            "Column31",
+            "Column32",
+            "Column33",
+            "Column34",
+            "Column35",
+            "Column36",
+            "Column37",
+            "Column38",
+            "Column39",
+            "Column40",
+            "Column41",
+            "Column42",
+            "Column43",
+            "Column44",
+            "Column45",
+            "Column46",
+            "Column47",
+            "Column48",
+            "Column49",
+            "Column50",
+            "Column51",
+            "Column52",
+            "Column53",
+            "Column54",
+            "Column55",
+            "Column56",
+            "Column57",
+            "Column58",
+            "Column59",
+            "Column60",
+            "Column61",
+            "Column62",
+            "Column63",
+            "Column64",
+            "Column65",
+            "Column66",
+            "Column67",
+            "Column68",
+            "Column69",
+            "Column70",
+            "Column71",
+            "Column72",
+            "Column73",
+            "Column74",
+            "Column75",
+            "Column76",
+            "Column77",
+            "Column78",
+            "Column79",
+            "Column80",
+            "Column81",
+            "Column82",
+            "Column83",
+            "Column84",
+            "Column85",
+            "Column86",
+            "Column87",
+            "Column88",
+            "Column89",
+            "Column90",
+            "Column91",
+            "Column92",
+            "Column93",
+            "Column94",
+            "Column95",
+            "Column96",
+            "Column97",
+            "Column98",
+            "Column99",
+            "Column100"
+          ],
+          "hash_left": "92acc2d34a34716e29939b567cb2cbdde2966e27ad69189ef967aa7aa04f558f",
+          "hash_right": "a1f8b7e5b22c6daebf49a86da612a0bee1a16008b5e371ced55ccba41746c4b8",
+          "left_metadata": {
+            "cell_encoding": "values flattened to display strings; SAS missing values use '.', '.A' ... where available; value labels are metadata only",
+            "columns": {
+              "Column1": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column10": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column100": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column11": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column12": {
+                "format": "MMDDYY",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column13": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column14": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column15": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column16": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column17": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column18": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column19": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column2": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column20": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column21": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column22": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column23": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column24": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column25": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column26": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column27": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column28": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column29": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column3": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column30": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column31": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column32": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column33": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column34": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column35": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column36": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column37": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column38": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column39": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column4": {
+                "format": "MMDDYY",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column40": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column41": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column42": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column43": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column44": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column45": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column46": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column47": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column48": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column49": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column5": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column50": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column51": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column52": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column53": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column54": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column55": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column56": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column57": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column58": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column59": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column6": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column60": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column61": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column62": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column63": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column64": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column65": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column66": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column67": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column68": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column69": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column7": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column70": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column71": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column72": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column73": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column74": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column75": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column76": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column77": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column78": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column79": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column8": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column80": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column81": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column82": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column83": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column84": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column85": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column86": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column87": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column88": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column89": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column9": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column90": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column91": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column92": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column93": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column94": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column95": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column96": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column97": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column98": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column99": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              }
+            },
+            "dataset_label": null,
+            "dataset_name": "TEST1",
+            "format": "sas7bdat"
+          },
+          "right_metadata": {
+            "cell_encoding": "values flattened to display strings; SAS missing values use '.', '.A' ... where available; value labels are metadata only",
+            "columns": {
+              "Column1": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column10": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column100": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column11": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column12": {
+                "format": "MMDDYY",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column13": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column14": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column15": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column16": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column17": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column18": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column19": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column2": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column20": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column21": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column22": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column23": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column24": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column25": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column26": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column27": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column28": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column29": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column3": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column30": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column31": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column32": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column33": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column34": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column35": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column36": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column37": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column38": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column39": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column4": {
+                "format": "MMDDYY",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column40": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column41": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column42": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column43": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column44": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column45": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column46": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column47": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column48": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column49": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column5": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column50": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column51": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column52": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column53": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column54": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column55": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column56": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column57": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column58": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column59": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column6": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column60": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column61": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column62": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column63": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column64": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column65": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column66": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column67": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column68": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column69": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column7": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column70": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column71": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column72": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column73": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column74": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column75": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column76": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column77": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column78": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column79": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column8": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column80": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column81": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column82": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column83": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column84": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column85": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column86": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column87": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column88": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column89": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column9": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column90": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column91": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column92": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column93": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column94": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column95": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column96": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column97": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column98": {
+                "format": "$",
+                "label": null,
+                "value_label_set": null
+              },
+              "Column99": {
+                "format": "BEST",
+                "label": null,
+                "value_label_set": null
+              }
+            },
+            "dataset_label": null,
+            "dataset_name": "TEST16",
+            "format": "sas7bdat"
+          },
+          "rows_added": 0,
+          "rows_left": 10,
+          "rows_removed": 0,
+          "rows_right": 10
+        },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 216,
+            "examples": [
+              {
+                "locator": {
+                  "column": "Column10",
+                  "row": 0
+                },
+                "before": {
+                  "value": "apple",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "부산",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column14",
+                  "row": 0
+                },
+                "before": {
+                  "value": "dog",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "Иркутск",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column18",
+                  "row": 0
+                },
+                "before": {
+                  "value": "crocodile",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "鱷魚",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column2",
+                  "row": 0
+                },
+                "before": {
+                  "value": "pear",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "高雄市",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column22",
+                  "row": 0
+                },
+                "before": {
+                  "value": "crocodile",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "鱷魚",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column26",
+                  "row": 0
+                },
+                "before": {
+                  "value": "crocodile",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "鱷魚",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column30",
+                  "row": 0
+                },
+                "before": {
+                  "value": "crocodile",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "鱷魚",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "Column34",
+                  "row": 0
+                },
+                "before": {
+                  "value": "crocodile",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "鱷魚",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ],
+            "truncated": true
+          }
+        ],
+        "comparator": "binoc-stat-binary.sas7bdat",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

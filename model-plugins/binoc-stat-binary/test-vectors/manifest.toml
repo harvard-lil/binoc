@@ -4,6 +4,8 @@ comparators = [
   "binoc.tar",
   "binoc.directory",
   "binoc-stat-binary.stata",
+  "binoc-stat-binary.sas7bdat",
+  "binoc-stat-binary.xpt",
   "binoc.text",
   "binoc.binary",
 ]

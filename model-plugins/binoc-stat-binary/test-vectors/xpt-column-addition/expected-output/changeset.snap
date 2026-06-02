@@ -1,0 +1,66 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.xpt",
+        "summary": "Column added: 'score'",
+        "tags": [
+          "binoc.column-addition",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "cells_changed": 0,
+          "columns_added": [
+            "score"
+          ],
+          "columns_left": [
+            "id",
+            "name"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "id",
+            "name",
+            "score"
+          ],
+          "hash_left": "066683a11a620dc829460d7be10de18b0fe1ce24c47e57bd196874a5eafdfc8e",
+          "hash_right": "1c3b282391da3ae95355796cc95f3106db303d873d6fbfc39c518484771fe330",
+          "left_metadata": {
+            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
+            "columns": {},
+            "dataset_label": null,
+            "dataset_name": "BINOCTST",
+            "format": "sas_xport"
+          },
+          "right_metadata": {
+            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
+            "columns": {},
+            "dataset_label": null,
+            "dataset_name": "BINOCTST",
+            "format": "sas_xport"
+          },
+          "rows_added": 0,
+          "rows_left": 2,
+          "rows_removed": 0,
+          "rows_right": 2
+        },
+        "comparator": "binoc-stat-binary.xpt",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

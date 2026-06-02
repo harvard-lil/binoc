@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use binoc_stat_binary::test_support::DtaMaterializer;
+use binoc_stat_binary::test_support::{DtaMaterializer, XptMaterializer};
 use binoc_stdlib::test_vectors::{
     discover_vectors, materialize_snapshots, stdlib_materializers, VectorMaterializer,
 };
@@ -30,11 +30,13 @@ fn main() {
 
     let stdlib = stdlib_materializers();
     let dta = DtaMaterializer;
+    let xpt = XptMaterializer;
     let mut materializers: Vec<&dyn VectorMaterializer> = stdlib
         .iter()
         .map(|m| &**m as &dyn VectorMaterializer)
         .collect();
     materializers.push(&dta);
+    materializers.push(&xpt);
 
     for vector in vectors {
         let name = vector
