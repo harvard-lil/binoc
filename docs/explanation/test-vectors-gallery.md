@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **30 shared examples** in this gallery.
+Binoc currently ships **31 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -38,6 +38,7 @@ just materialize
 | [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation | data_v2.csv: Moved from data.csv (modified) | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
+| [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 rows) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
@@ -104,6 +105,9 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: 2 cells changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 1, column 'score': '85' -> '92'
+    - row 2, column 'score': '90' -> '88'
 ```
 
 ## csv-column-addition
@@ -267,6 +271,43 @@ Result:
 - **data.csv**: 2 rows removed
 ```
 
+## csv-verbosity-full
+
+Markdown full verbosity renders every captured changed-cell example.
+
+- **Browse source:** [csv-verbosity-full](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-verbosity-full)
+- **Tags:** `csv`, `cell-change`, `verbosity`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data.csv`
+- **Setup:** This example sets `output.markdown.verbosity: full` so the changelog prints every captured changed-cell example instead of the default capped sample.
+Save this dataset config as `/tmp/csv-verbosity-full.yaml`:
+
+```yaml
+output:
+  markdown:
+    verbosity: full
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-verbosity-full/snapshot-a \
+  ./test-vectors-materialized/csv-verbosity-full/snapshot-b \
+  --config /tmp/csv-verbosity-full.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 5 cells changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 1, column 'score': '10' -> '11'
+    - row 2, column 'score': '20' -> '21'
+    - row 3, column 'score': '30' -> '31'
+    - row 4, column 'score': '40' -> '41'
+    - row 5, column 'score': '50' -> '51'
+```
+
 ## directory-file-copy
 
 New file with same content as an existing unchanged file detected as a copy
@@ -331,6 +372,8 @@ Result:
 
 - **data/records.csv**: 1 row added
 - **data.tar.gz/records.csv**: 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "data.tar.gz/records.csv" cells_changed` for all changed cells
+    - row 2, column 'count': '20' -> '25'
 ```
 
 ## folder-move-nested
@@ -409,6 +452,9 @@ Result:
 - **archive.tar.gz/inventory.csv**: 1 row added
 - **bundle.zip/notes.txt**: 2 lines added, 1 removed
 - **data.csv**: 2 cells changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 1, column 'age': '30' -> '31'
+    - row 3, column 'city': 'Seattle' -> 'Portland'
 - **docs/new-file.txt**: New file (1 line)
 - **docs/old-notes.txt**: File removed (1 line)
 - **docs/readme.txt**: 2 lines added, 2 removed
@@ -703,6 +749,9 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **data.tsv**: 2 cells changed
+  - Changed cells; use `binoc extract CHANGESET "data.tsv" cells_changed` for all changed cells
+    - row 1, column 'age': '30' -> '31'
+    - row 2, column 'city': 'Boston' -> 'Cambridge'
 ```
 
 ## zip-nested

@@ -1,0 +1,136 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "5 cells changed",
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "cells_changed": 5,
+          "columns_added": [],
+          "columns_left": [
+            "name",
+            "score",
+            "status"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "name",
+            "score",
+            "status"
+          ],
+          "hash_left": "39aa5d33ab998f37a8d1450b1b905a610c62dfdbc4c049524fac6f8dd83826fd",
+          "hash_right": "3a6797a7abe1d941dbc9e48b613806f84dc1c61f7e4d26fabb0a444046756758",
+          "rows_added": 0,
+          "rows_left": 5,
+          "rows_removed": 0,
+          "rows_right": 5
+        },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 5,
+            "examples": [
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 0
+                },
+                "before": {
+                  "value": "10",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "11",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 1
+                },
+                "before": {
+                  "value": "20",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "21",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 2
+                },
+                "before": {
+                  "value": "30",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "31",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 3
+                },
+                "before": {
+                  "value": "40",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "41",
+                  "media_type": "text/plain"
+                }
+              },
+              {
+                "locator": {
+                  "column": "score",
+                  "row": 4
+                },
+                "before": {
+                  "value": "50",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "51",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ]
+          }
+        ],
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

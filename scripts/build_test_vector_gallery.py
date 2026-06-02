@@ -60,6 +60,7 @@ class DocsMeta:
 class ManifestConfig:
     comparators: list[str] | None = None
     transformers: list[str] | None = None
+    output: dict[str, Any] | None = None
     transformer_config: dict[str, Any] | None = None
 
     @property
@@ -69,6 +70,7 @@ class ManifestConfig:
             for value in (
                 self.comparators,
                 self.transformers,
+                self.output,
                 self.transformer_config,
             )
         )
@@ -170,6 +172,7 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
 
     comparators = raw.get("comparators")
     transformers = raw.get("transformers")
+    output = raw.get("output")
     transformer_config = raw.get("transformer_config")
 
     if comparators is not None:
@@ -180,12 +183,15 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
         transformers = _validate_str_list(
             transformers, f"{manifest_path}: [config].transformers"
         )
+    if output is not None and not isinstance(output, dict):
+        _die(f"{manifest_path}: [config].output must be a table")
     if transformer_config is not None and not isinstance(transformer_config, dict):
         _die(f"{manifest_path}: [config].transformer_config must be a table")
 
     return ManifestConfig(
         comparators=comparators,
         transformers=transformers,
+        output=output,
         transformer_config=transformer_config,
     )
 
@@ -246,6 +252,8 @@ def _render_config_yaml(config: ManifestConfig) -> str | None:
         data["transformers"] = config.transformers
     if config.transformer_config:
         data["transformer_config"] = config.transformer_config
+    if config.output:
+        data["output"] = config.output
     if not data:
         return None
     return "\n".join(_yaml_lines(data))

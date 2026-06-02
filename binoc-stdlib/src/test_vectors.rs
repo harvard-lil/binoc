@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
-use binoc_core::config::{DatasetConfig, PluginRegistry, TransformerConfig};
+use binoc_core::config::{DatasetConfig, OutputConfig, PluginRegistry, TransformerConfig};
 use binoc_core::controller::Controller;
 use binoc_sdk::ir::DiffNode;
 use binoc_sdk::test_support::{AbiCall, AbiComparator, AbiLogCollector, AbiTransformer};
@@ -57,6 +57,8 @@ struct ManifestConfig {
     comparators: Option<Vec<String>>,
     #[serde(default)]
     transformers: Option<Vec<String>>,
+    #[serde(default)]
+    output: Option<OutputConfig>,
     #[serde(default)]
     transformer_config: Option<TransformerConfig>,
 }
@@ -362,10 +364,8 @@ pub fn run_vector(
     let mut stable_changeset = changeset.clone();
     stable_changeset.from_snapshot = "snapshot-a".into();
     stable_changeset.to_snapshot = "snapshot-b".into();
-    let md = markdown::render_markdown(
-        &[stable_changeset.clone()],
-        &markdown::MarkdownRendererConfig::default(),
-    );
+    let md_config = markdown_config_for_dataset(&config);
+    let md = markdown::render_markdown(&[stable_changeset.clone()], &md_config);
 
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(vector_dir.join("expected-output"));
@@ -465,10 +465,8 @@ pub fn run_vector_with_abi_log(
     let mut stable_changeset = changeset.clone();
     stable_changeset.from_snapshot = "snapshot-a".into();
     stable_changeset.to_snapshot = "snapshot-b".into();
-    let md = markdown::render_markdown(
-        &[stable_changeset.clone()],
-        &markdown::MarkdownRendererConfig::default(),
-    );
+    let md_config = markdown_config_for_dataset(&config);
+    let md = markdown::render_markdown(&[stable_changeset.clone()], &md_config);
 
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_path(vector_dir.join("expected-output"));
@@ -552,7 +550,7 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
                 comparators: cfg.comparators.clone().unwrap_or(default.comparators),
                 transformers: cfg.transformers.clone().unwrap_or(default.transformers),
                 renderers: default.renderers,
-                output: default.output,
+                output: cfg.output.clone().unwrap_or(default.output),
                 transformer_config: cfg
                     .transformer_config
                     .clone()
@@ -561,6 +559,11 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
         }
         None => DatasetConfig::default_config(),
     }
+}
+
+fn markdown_config_for_dataset(config: &DatasetConfig) -> markdown::MarkdownRendererConfig {
+    let md_val = config.output.get_for_renderer("binoc.markdown");
+    serde_json::from_value(md_val).unwrap_or_default()
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) {
