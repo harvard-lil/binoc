@@ -96,6 +96,17 @@ See [Artifacts and composition](../explanation/artifacts-and-composition.md)
 for why the order matters and how to slot a third-party transformer
 into a sensible position.
 
+Per-transformer knobs live under `transformer_config`, keyed by
+transformer name. For example, `binoc.folder_move_detector` accepts a
+`threshold` float (default `0.8`; set `1.0` for strict all-leaves
+rollup-only behavior):
+
+```yaml
+transformer_config:
+  binoc.folder_move_detector:
+    threshold: 0.8
+```
+
 ## `output.<renderer>`
 
 Each renderer gets its own config section, keyed by the renderer's

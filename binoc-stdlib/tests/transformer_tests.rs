@@ -360,7 +360,8 @@ fn folder_move_rejects_partial_under_strict_threshold() {
     ]);
     let src = DiffNode::new("remove", "directory", "olddir");
     let root = DiffNode::new("modify", "directory", "").with_children(vec![src, dst]);
-    let result = FolderMoveDetector.transform(root, &da(), &null_cfg());
+    let strict_cfg = serde_json::json!({ "threshold": 1.0 });
+    let result = FolderMoveDetector.transform(root, &da(), &strict_cfg);
     assert!(matches!(result, TransformResult::Unchanged));
 }
 
@@ -377,6 +378,84 @@ fn folder_move_rejects_inconsistent_sources() {
     let root = DiffNode::new("modify", "directory", "").with_children(vec![dst]);
     let result = FolderMoveDetector.transform(root, &da(), &null_cfg());
     assert!(matches!(result, TransformResult::Unchanged));
+}
+
+#[test]
+fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
+    let mut moved_modified = DiffNode::new("move", "file", "newdir/changed.txt")
+        .with_source_path("olddir/changed.txt")
+        .with_summary("Moved from changed.txt (modified)")
+        .with_tag("binoc.move")
+        .with_tag("binoc.move.modified")
+        .with_tag("binoc.content-changed");
+    moved_modified
+        .annotations
+        .insert("content_summary".into(), serde_json::json!("2 lines added"));
+
+    let dst = DiffNode::new("add", "directory", "newdir").with_children(vec![
+        DiffNode::new("move", "file", "newdir/a.txt")
+            .with_source_path("olddir/a.txt")
+            .with_tag("binoc.move"),
+        DiffNode::new("move", "file", "newdir/keep/b.txt")
+            .with_source_path("olddir/keep/b.txt")
+            .with_tag("binoc.move"),
+        moved_modified,
+        DiffNode::new("add", "file", "newdir/added.txt")
+            .with_summary("New file")
+            .with_tag("binoc.content-changed"),
+    ]);
+    let src = DiffNode::new("remove", "directory", "olddir").with_children(vec![DiffNode::new(
+        "remove",
+        "file",
+        "olddir/removed.txt",
+    )
+    .with_summary("File removed")
+    .with_tag("binoc.content-changed")]);
+    let root = DiffNode::new("modify", "directory", "").with_children(vec![src, dst]);
+
+    let cfg = serde_json::json!({ "threshold": 0.5 });
+    let TransformResult::Replace(root) = FolderMoveDetector.transform(root, &da(), &cfg) else {
+        panic!("Expected Replace");
+    };
+
+    assert_eq!(root.children.len(), 1, "source container removed");
+    let folded = &root.children[0];
+    assert_eq!(folded.action, "move");
+    assert_eq!(folded.path, "newdir");
+    assert_eq!(folded.source_path.as_deref(), Some("olddir"));
+    assert_eq!(folded.children.len(), 3, "only remainder nodes survive");
+
+    let added = folded
+        .children
+        .iter()
+        .find(|c| c.path == "newdir/added.txt")
+        .expect("added remainder");
+    assert_eq!(added.action, "add");
+
+    let modified = folded
+        .children
+        .iter()
+        .find(|c| c.path == "newdir/changed.txt")
+        .expect("modified remainder");
+    assert_eq!(modified.action, "modify");
+    assert_eq!(modified.source_path, None);
+    assert_eq!(modified.summary.as_deref(), Some("2 lines added"));
+    assert!(!modified.tags.contains("binoc.move"));
+
+    let removed = folded
+        .children
+        .iter()
+        .find(|c| c.path == "newdir/removed.txt")
+        .expect("relocated remove remainder");
+    assert_eq!(removed.action, "remove");
+
+    assert!(
+        folded
+            .children
+            .iter()
+            .all(|c| c.path != "newdir/a.txt" && c.path != "newdir/keep/b.txt"),
+        "clean moved descendants are suppressed beneath the folder move"
+    );
 }
 
 #[test]

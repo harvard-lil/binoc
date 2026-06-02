@@ -1,0 +1,98 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "directory",
+        "path": "FoodData_Central_csv_2026-04-30",
+        "source_path": "FoodData_Central_csv_2025-12-18",
+        "summary": "Folder moved from FoodData_Central_csv_2025-12-18",
+        "tags": [
+          "binoc.folder-move",
+          "binoc.move"
+        ],
+        "children": [
+          {
+            "action": "add",
+            "item_type": "directory",
+            "path": "FoodData_Central_csv_2026-04-30/data",
+            "children": [
+              {
+                "action": "add",
+                "item_type": "tabular",
+                "path": "FoodData_Central_csv_2026-04-30/data/new-table.csv",
+                "summary": "New table (2 columns, 1 rows)",
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "id",
+                    "value"
+                  ],
+                  "hash_right": "2d019c1a2e29c11e3fabd6cc928c3b751bd93d24a1888f9621e449daea79a9eb",
+                  "rows": 1
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              }
+            ],
+            "comparator": "binoc.directory"
+          },
+          {
+            "action": "modify",
+            "item_type": "directory",
+            "path": "FoodData_Central_csv_2026-04-30/docs",
+            "children": [
+              {
+                "action": "modify",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2026-04-30/docs/modified.txt",
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "hash_right": "2b5392085abbd5789de2d8996d5caf9d25435a125733d067b1c830cbb4ed698a",
+                  "lines": 2
+                },
+                "comparator": "binoc.text"
+              },
+              {
+                "action": "remove",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2026-04-30/docs/old-table.txt",
+                "summary": "File removed (1 line)",
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "hash_left": "05bf7075e8168a12d3c731b21ba3e28567d3df053bdb31822e2cf19ca54cc212",
+                  "lines": 1
+                },
+                "comparator": "binoc.text"
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "comparator": "binoc.directory"
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.correlation_detector",
+      "binoc.folder_move_detector"
+    ]
+  }
+}
