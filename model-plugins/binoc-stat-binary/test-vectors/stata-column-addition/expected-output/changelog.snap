@@ -4,6 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.dta**: Column added: 'score'

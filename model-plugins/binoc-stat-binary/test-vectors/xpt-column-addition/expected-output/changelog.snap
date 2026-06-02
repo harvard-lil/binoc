@@ -4,6 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-## Substantive Changes
-
 - **data.xpt**: Column added: 'score'
