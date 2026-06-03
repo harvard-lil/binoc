@@ -105,6 +105,7 @@ impl DatasetConfig {
                 "binoc.binary".into(),
             ],
             transformers: vec![
+                "binoc.declared_correspondence".into(),
                 "binoc.correlation_detector".into(),
                 "binoc.fuzzy_correlation_detector".into(),
                 "binoc.folder_move_detector".into(),

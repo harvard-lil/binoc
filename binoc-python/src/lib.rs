@@ -791,7 +791,7 @@ impl PyDiffNodeIter {
 /// A ``Changeset`` records the two snapshot names it was computed from, the
 /// root of the diff tree (``None`` if the snapshots are identical), and a
 /// free-form ``metadata`` dict for plugin use. Structured ``diagnostics``
-/// carry warnings or suggestions without failing the diff. Serialize with
+/// carry plugin and renderer findings. Serialize with
 /// :meth:`to_json` / :meth:`to_dict`, or via the module-level :func:`to_json`
 /// and :func:`to_markdown`.
 #[pyclass(name = "Changeset", module = "binoc._binoc", from_py_object)]
@@ -844,7 +844,7 @@ impl PyChangeset {
         }
         Ok(dict)
     }
-    /// Structured warnings/suggestions attached to this changeset.
+    /// Structured diagnostics attached to this changeset.
     #[getter]
     fn diagnostics<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let value = serde_json::to_value(&self.inner.diagnostics)

@@ -1,0 +1,56 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "states/AL.csv",
+        "summary": "1 row added",
+        "tags": [
+          "binoc.declared-correspondence",
+          "binoc.row-addition"
+        ],
+        "details": {
+          "cells_changed": 0,
+          "columns_added": [],
+          "columns_left": [
+            "id",
+            "city"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "id",
+            "city"
+          ],
+          "correspondence_key": "AL",
+          "correspondence_rule": "state-records",
+          "destination_path": "by-state/AL/records.csv",
+          "hash_left": "eff803d89835b196a34290b8962335829020b8b8977420dd33f3e1cf00e1a311",
+          "hash_right": "393887ee3fd7d1a896bd16c503c9701699129a12467fb4b0595243b3494d0cd4",
+          "rows_added": 1,
+          "rows_left": 1,
+          "rows_removed": 0,
+          "rows_right": 2,
+          "source_path": "data/state_AL.csv"
+        },
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.declared_correspondence"
+    ]
+  }
+}

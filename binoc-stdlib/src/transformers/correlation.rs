@@ -195,32 +195,44 @@ impl RewritePlan {
 /// - Children are sorted by path after modification.
 pub(crate) fn apply_rewrite(node: DiffNode, plan: &RewritePlan) -> DiffNode {
     let mut inserts = plan.inserts.clone();
-    apply_rewrite_inner(node, &plan.remove_paths, &mut inserts)
+    apply_rewrite_inner(node, &plan.remove_paths, &mut inserts, true)
+        .expect("rewrite must keep the root node")
 }
 
 fn apply_rewrite_inner(
     mut node: DiffNode,
     remove_paths: &BTreeSet<String>,
     inserts: &mut BTreeMap<String, Vec<DiffNode>>,
-) -> DiffNode {
+    is_root: bool,
+) -> Option<DiffNode> {
     if node.children.is_empty() {
-        return node;
+        return Some(node);
     }
 
+    let had_children = !node.children.is_empty();
     let mut new_children: Vec<DiffNode> = node
         .children
         .into_iter()
         .filter(|child| !remove_paths.contains(&child.path))
-        .map(|child| apply_rewrite_inner(child, remove_paths, inserts))
+        .filter_map(|child| apply_rewrite_inner(child, remove_paths, inserts, false))
         .collect();
 
     if let Some(added) = inserts.remove(&node.path) {
         new_children.extend(added);
     }
 
+    if !is_root
+        && had_children
+        && new_children.is_empty()
+        && node.details.is_empty()
+        && node.tags.is_empty()
+    {
+        return None;
+    }
+
     new_children.sort_by(|a, b| a.path.cmp(&b.path));
     node.children = new_children;
-    node
+    Some(node)
 }
 
 /// Group a flat list of leaf entries by content hash.

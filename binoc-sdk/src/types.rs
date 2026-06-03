@@ -251,6 +251,8 @@ pub struct FileCorrespondenceRule {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileSelector {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_regex: Option<String>,
 }
 

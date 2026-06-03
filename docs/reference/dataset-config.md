@@ -37,25 +37,27 @@ comparators:
   - binoc.binary
 
 transformers:
+  - binoc.declared_correspondence
   - binoc.correlation_detector
+  - binoc.fuzzy_correlation_detector
   - binoc.folder_move_detector
+  - binoc.table_splitter
   - binoc.tabular_analyzer
   - binoc.column_reorder_detector
+  - binoc.table_collection_analyzer
 
 dataset:
   files:
     correspondences:
-      - name: quarterly-csvs
+      - name: running-list
         left:
-          path_regex: '^raw/(?P<table>[^/]+)/(?P<year>[0-9]{4})\.csv$'
+          path_regex: '^(?P<list>running_list)_as_of_[0-9]{4}\.csv$'
         right:
-          path_regex: '^normalized/(?P<year>[0-9]{4})/(?P<table>[^/]+)\.csv$'
-        key: '${table}:${year}'
-        logical_path: 'tables/${table}-${year}.csv'
-        cardinality: one-to-one
+          path_regex: '^(?P<list>running_list)_as_of_[0-9]{4}\.csv$'
+        key: '${list}'
+        logical_path: '${list}.csv'
         on_null_key: diagnostic
         on_duplicate_key: diagnostic
-
   tables:
     defaults:
       parse:
@@ -119,13 +121,16 @@ A list of transformer names, in the order they should run.
 Transformers rewrite the already-built IR tree; later transformers
 see the output of earlier ones.
 
-The default order is shown above. `binoc.correlation_detector` and
-`binoc.folder_move_detector` run first so that per-file moves and
-folder renames collapse before the tabular pipeline adds cell-level
-details. `binoc.tabular_analyzer` reads `tabular_v1` artifacts and
-attaches tags and summaries; `binoc.column_reorder_detector`
-downgrades pure column reorders to `action: "reorder"` after the
-analyzer has labeled them.
+The default order is shown above. `binoc.declared_correspondence` runs before
+heuristic correlation so user-declared file identity consumes matching
+add/remove leaves first. `binoc.correlation_detector`,
+`binoc.fuzzy_correlation_detector`, and `binoc.folder_move_detector` then
+collapse inferred per-file moves, rename-and-modify cases, and folder renames
+before the tabular pipeline adds cell-level details. `binoc.table_splitter`
+separates stacked logical tables before `binoc.tabular_analyzer` reads
+`tabular_v1` artifacts and attaches tags and summaries;
+`binoc.column_reorder_detector` downgrades pure column reorders to
+`action: "reorder"` after the analyzer has labeled them.
 
 See [Artifacts and composition](../explanation/artifacts-and-composition.md)
 for why the order matters and how to slot a third-party transformer
@@ -194,6 +199,40 @@ dataset:
 `cardinality` is currently `one-to-one`. `on_null_key` and
 `on_duplicate_key` accept `diagnostic`, `error`, or `ignore`; plugins decide how
 to apply those policies for the semantics they implement.
+
+### `dataset.files.correspondences`
+
+Declared correspondence rules tell binoc that an unmatched removed file and an
+unmatched added file are the same logical file even though their paths differ.
+When a rule produces one unambiguous left match and one unambiguous right match
+for the same key, binoc emits one logical correspondence node and re-runs the
+normal comparator pipeline on that pair. If `report_path_change` is false and
+the content is identical, the node is pruned like any other identical change.
+If `report_path_change` is true, binoc keeps a move-style path change node even
+when the content is identical.
+
+```yaml
+dataset:
+  files:
+    correspondences:
+      - name: state-records
+        left:
+          path_regex: '^data/state_(?P<state>[A-Z]{2})\.csv$'
+        right:
+          path_regex: '^by-state/(?P<state>[A-Z]{2})/records\.csv$'
+        key: '${state}'
+        logical_path: 'states/${state}.csv'
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+        report_path_change: false
+```
+
+`path_regex` uses named capture groups. `key` and `logical_path` are templates
+that substitute captures as `${name}`. If `logical_path` is omitted, the right
+path is used. Null keys, duplicate keys, one-to-many, and many-to-one matches
+are skipped by default with warning diagnostics; use `error` to emit an
+error-severity diagnostic or `ignore` to silence those diagnostics. Error
+diagnostics do not stop the snapshot comparison.
 
 ### `dataset.tables`
 

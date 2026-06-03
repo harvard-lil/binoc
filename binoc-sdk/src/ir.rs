@@ -7,6 +7,7 @@ use crate::types::{ArtifactDescriptor, ItemPair};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticSeverity {
+    Error,
     Warning,
     Suggestion,
 }
@@ -37,6 +38,10 @@ impl Diagnostic {
 
     pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(DiagnosticSeverity::Warning, code, message)
+    }
+
+    pub fn error(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(DiagnosticSeverity::Error, code, message)
     }
 
     pub fn suggestion(code: impl Into<String>, message: impl Into<String>) -> Self {
@@ -139,14 +144,17 @@ pub struct DiffNode {
     pub artifacts: Vec<ArtifactDescriptor>,
 
     /// Request that the controller re-dispatch the given `ItemPair` through
-    /// the comparator pipeline and merge the result into this node before
-    /// the next transformer runs. Set by transformers (e.g. fuzzy
-    /// correlation) that have decided two leaves represent the same logical
-    /// item but need a content diff under the new (move) node. Session-
-    /// scoped working data: wire-visible so plugins can set it across the
-    /// ABI boundary, but cleared by [`DiffNode::strip_transient`] before
-    /// changeset output. The controller takes (clears) this field as it
-    /// processes it; nodes in a finalized changeset never carry it.
+    /// the comparator pipeline and merge the result into this semantic wrapper
+    /// node before the next transformer runs. Set by transformers that have
+    /// discovered a correspondence (for example, a rename-with-edits or a
+    /// config-declared logical file pair) but still need normal comparators to
+    /// parse the paired content. If the recomparison is identical, a plain
+    /// `modify` wrapper is converted to `identical` so it can be pruned, while
+    /// semantic wrappers such as moves remain reportable. Session-scoped
+    /// working data: wire-visible so plugins can set it across the ABI
+    /// boundary, but cleared by [`DiffNode::strip_transient`] before changeset
+    /// output. The controller takes (clears) this field as it processes it;
+    /// nodes in a finalized changeset never carry it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_recompare: Option<ItemPair>,
 }
