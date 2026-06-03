@@ -108,6 +108,8 @@ fn read_table_data(conn: &Connection, table: &str, info: &TableInfo) -> BinocRes
         }
         tabular_rows.push(values);
     }
+    // SQLite table row order is not semantic; keep positional tabular diffs deterministic.
+    tabular_rows.sort();
 
     Ok(TabularData {
         headers: info.columns.iter().map(|c| c.name.clone()).collect(),
@@ -648,6 +650,36 @@ mod tests {
         ];
         create_test_db(&a, sql);
         create_test_db(&b, sql);
+
+        let data = LocalDataAccess::new();
+        let cmp = SqliteComparator;
+        let pair = make_pair(&data, &a, &b, "test.sqlite");
+        let result = cmp.compare(&pair, &data).unwrap();
+        assert!(matches!(result, CompareResult::Identical));
+    }
+
+    #[test]
+    fn row_order_does_not_change_sqlite_table_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.sqlite");
+        let b = dir.path().join("b.sqlite");
+
+        create_test_db(
+            &a,
+            &[
+                "CREATE TABLE users (name TEXT, state TEXT);",
+                "INSERT INTO users VALUES ('Alice', 'MA');",
+                "INSERT INTO users VALUES ('Bob', 'CA');",
+            ],
+        );
+        create_test_db(
+            &b,
+            &[
+                "CREATE TABLE users (name TEXT, state TEXT);",
+                "INSERT INTO users VALUES ('Bob', 'CA');",
+                "INSERT INTO users VALUES ('Alice', 'MA');",
+            ],
+        );
 
         let data = LocalDataAccess::new();
         let cmp = SqliteComparator;
