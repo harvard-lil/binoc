@@ -826,6 +826,49 @@ fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
 }
 
 #[test]
+fn folder_move_marks_persisting_remainder_container_as_modify() {
+    let dst = DiffNode::new("add", "directory", "newdir").with_children(vec![
+        DiffNode::new("add", "directory", "newdir/data").with_children(vec![
+            DiffNode::new("move", "file", "newdir/data/kept.txt")
+                .with_source_path("olddir/data/kept.txt")
+                .with_tag("binoc.move"),
+            DiffNode::new("add", "file", "newdir/data/new.txt")
+                .with_summary("New file")
+                .with_tag("binoc.content-changed"),
+        ]),
+        DiffNode::new("move", "file", "newdir/readme.txt")
+            .with_source_path("olddir/readme.txt")
+            .with_tag("binoc.move"),
+    ]);
+    let src = DiffNode::new("remove", "directory", "olddir").with_children(vec![
+        DiffNode::new("remove", "directory", "olddir/data").with_children(vec![DiffNode::new(
+            "remove",
+            "file",
+            "olddir/data/kept.txt",
+        )]),
+        DiffNode::new("remove", "file", "olddir/readme.txt"),
+    ]);
+    let root = DiffNode::new("modify", "directory", "").with_children(vec![src, dst]);
+
+    let cfg = serde_json::json!({ "threshold": 0.5 });
+    let TransformResult::Replace(root) = FolderMoveDetector.transform(root, &da(), &cfg) else {
+        panic!("Expected Replace");
+    };
+
+    let folded = &root.children[0];
+    let data = folded
+        .children
+        .iter()
+        .find(|c| c.path == "newdir/data")
+        .expect("data remainder container");
+    assert_eq!(data.action, "modify");
+    assert_eq!(data.item_type, "directory");
+    assert_eq!(data.children.len(), 1);
+    assert_eq!(data.children[0].path, "newdir/data/new.txt");
+    assert_eq!(data.children[0].action, "add");
+}
+
+#[test]
 fn folder_move_descriptor() {
     let desc = FolderMoveDetector.descriptor();
     assert_eq!(desc.name, "binoc.folder_move_detector");

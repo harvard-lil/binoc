@@ -22,7 +22,7 @@ expression: "&stable_changeset"
         ],
         "children": [
           {
-            "action": "add",
+            "action": "modify",
             "item_type": "directory",
             "path": "FoodData_Central_csv_2026-04-30/data",
             "children": [
