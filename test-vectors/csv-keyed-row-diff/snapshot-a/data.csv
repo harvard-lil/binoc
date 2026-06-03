@@ -1,0 +1,4 @@
+id,name,price,status
+p1,Alpha,10,active
+p2,Beta,20,active
+p3,Gamma,30,retired

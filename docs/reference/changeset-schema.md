@@ -81,7 +81,7 @@ A node in the diff tree — the central data structure of the system. Every comp
 | `diagnostics` | array of [`Diagnostic`](#diagnostic) | no | Node-scoped diagnostics emitted during comparison or transform. Transient: the controller hoists them into [`Changeset::diagnostics`] at the end of the diff, then clears this field so the output shape stays as one durable top-level diagnostics list. |
 | `item_type` | string | yes | Open string: "directory", "file", "tabular", "zip_archive", etc. No built-in types — conventions, not enforcement. |
 | `path` | string | yes | Location within snapshot (logical path, including interior paths like "archive.zip/data/file.csv"). |
-| `pending_recompare` | [`ItemPair`](#itempair) \| null | no | Request that the controller re-dispatch the given `ItemPair` through the comparator pipeline and merge the result into this node before the next transformer runs. Set by transformers (e.g. fuzzy correlation) that have decided two leaves represent the same logical item but need a content diff under the new (move) node. Session- scoped working data: wire-visible so plugins can set it across the ABI boundary, but cleared by [`DiffNode::strip_transient`] before changeset output. The controller takes (clears) this field as it processes it; nodes in a finalized changeset never carry it. |
+| `pending_recompare` | [`ItemPair`](#itempair) \| null | no | Request that the controller re-dispatch the given `ItemPair` through the comparator pipeline and merge the result into this semantic wrapper node before the next transformer runs. Set by transformers that have discovered a correspondence (for example, a rename-with-edits or a config-declared logical file pair) but still need normal comparators to parse the paired content. If the recomparison is identical, a plain `modify` wrapper is converted to `identical` so it can be pruned, while semantic wrappers such as moves remain reportable. Session-scoped working data: wire-visible so plugins can set it across the ABI boundary, but cleared by [`DiffNode::strip_transient`] before changeset output. The controller takes (clears) this field as it processes it; nodes in a finalized changeset never carry it. |
 | `source_items` | [`ItemPair`](#itempair) \| null | no | The original item pair that produced this node. Session-scoped working data: available during a live diff/transform session for transformers and extractors that need to re-read source data, and carried across the plugin ABI wire so separately-compiled plugins can access it. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
 | `source_path` | string \| null | no | For moves/renames: the original path. |
 | `summary` | string \| null | no | Optional human-readable one-liner describing the change. Set by comparator or transformer; used by renderers for narrative rendering. |
@@ -179,6 +179,7 @@ One bounded example inside a detail block.
 
 String enum. One of:
 
+- `error`
 - `warning`
 - `suggestion`
 

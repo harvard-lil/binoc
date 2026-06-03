@@ -327,6 +327,7 @@ pub fn abi_wrapped_default_registry() -> (
     wrap_comparator!(text::TextComparator);
     wrap_comparator!(binary::BinaryComparator);
 
+    wrap_transformer!(declared_correspondence::DeclaredCorrespondence);
     wrap_transformer!(correlation_detector::CorrelationDetector);
     wrap_transformer!(fuzzy_correlation_detector::FuzzyCorrelationDetector);
     wrap_transformer!(folder_move_detector::FolderMoveDetector);

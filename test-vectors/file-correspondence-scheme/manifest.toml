@@ -1,0 +1,22 @@
+[vector]
+name = "file-correspondence-scheme"
+description = "Config declares that a state CSV moved into a new directory scheme is the same logical file"
+tags = ["csv", "file-correspondence", "scheme-change"]
+
+[config.dataset.files]
+[[config.dataset.files.correspondences]]
+name = "state-records"
+key = "${state}"
+logical_path = "states/${state}.csv"
+on_null_key = "diagnostic"
+on_duplicate_key = "diagnostic"
+
+[config.dataset.files.correspondences.left]
+path_regex = "^data/state_(?P<state>[A-Z]{2})\\.csv$"
+
+[config.dataset.files.correspondences.right]
+path_regex = "^by-state/(?P<state>[A-Z]{2})/records\\.csv$"
+
+[expected]
+child_count = 1
+has_tags = ["binoc.declared-correspondence", "binoc.row-addition"]

@@ -27,6 +27,7 @@ blake3 = "1.8.5"
 csv = "1.4.0"
 infer = "0.19"
 mime_guess = "2.0.5"
+regex = "1.12.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 similar = "3.1.1"

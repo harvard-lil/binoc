@@ -1,0 +1,24 @@
+[vector]
+name = "csv-keyed-null-duplicate"
+description = "Configured CSV row keys surface null and duplicate key diagnostics"
+tags = ["csv", "keyed", "null-key", "duplicate-key"]
+
+[config.dataset.tables.defaults.row_identity]
+on_null_key = "diagnostic"
+on_duplicate_key = "diagnostic"
+
+[[config.dataset.tables.entries]]
+path_regex = '^data\.csv$'
+columns = ["id"]
+
+[expected]
+root_action = "modify"
+has_tags = [
+  "binoc.row-addition",
+  "binoc.row-removal",
+  "binoc.cell-change",
+  "binoc.identity-diagnostic",
+  "binoc.null-key",
+  "binoc.duplicate-key",
+  "binoc.row-identity-ambiguous",
+]

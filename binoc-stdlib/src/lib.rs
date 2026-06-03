@@ -19,6 +19,9 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
     r(registry.register_comparator(Arc::new(comparators::binary::BinaryComparator)));
 
     r(registry.register_transformer(Arc::new(
+        transformers::declared_correspondence::DeclaredCorrespondence,
+    )));
+    r(registry.register_transformer(Arc::new(
         transformers::correlation_detector::CorrelationDetector,
     )));
     r(registry.register_transformer(Arc::new(

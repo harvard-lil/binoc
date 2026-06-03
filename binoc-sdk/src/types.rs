@@ -251,6 +251,8 @@ pub struct FileCorrespondenceRule {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FileSelector {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_regex: Option<String>,
 }
 
@@ -270,12 +272,39 @@ pub enum IdentityFailurePolicy {
     Ignore,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct TableConfig {
     #[serde(default)]
     pub defaults: TableDefaults,
     #[serde(default)]
-    pub entries: BTreeMap<String, TableEntry>,
+    pub entries: Vec<TableEntry>,
+}
+
+impl<'de> Deserialize<'de> for TableConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Entries(Vec<TableEntry>),
+            Full {
+                #[serde(default)]
+                defaults: TableDefaults,
+                #[serde(default)]
+                entries: Vec<TableEntry>,
+            },
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Entries(entries) => Ok(Self {
+                defaults: TableDefaults::default(),
+                entries,
+            }),
+            Repr::Full { defaults, entries } => Ok(Self { defaults, entries }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -286,7 +315,7 @@ pub struct TableDefaults {
     pub row_identity: RowIdentity,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct TableEntry {
     #[serde(default, rename = "match")]
     pub match_: TableSelector,
@@ -294,6 +323,64 @@ pub struct TableEntry {
     pub parse: TabularParseConfig,
     #[serde(default)]
     pub row_identity: RowIdentity,
+}
+
+impl<'de> Deserialize<'de> for TableEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawTableEntry {
+            #[serde(default, rename = "match")]
+            match_: TableSelector,
+            #[serde(default)]
+            parse: TabularParseConfig,
+            #[serde(default)]
+            row_identity: RowIdentity,
+            #[serde(default)]
+            logical_name: Option<String>,
+            #[serde(default)]
+            path: Option<String>,
+            #[serde(default)]
+            path_regex: Option<String>,
+            #[serde(default)]
+            columns: Vec<String>,
+            #[serde(default)]
+            on_null_key: Option<IdentityFailurePolicy>,
+            #[serde(default)]
+            on_duplicate_key: Option<IdentityFailurePolicy>,
+        }
+
+        let raw = RawTableEntry::deserialize(deserializer)?;
+        let mut match_ = raw.match_;
+        if match_.logical_name.is_none() {
+            match_.logical_name = raw.logical_name;
+        }
+        if match_.source.is_none() && (raw.path.is_some() || raw.path_regex.is_some()) {
+            match_.source = Some(FileSelector {
+                path: raw.path,
+                path_regex: raw.path_regex,
+            });
+        }
+
+        let mut row_identity = raw.row_identity;
+        if row_identity.columns.is_empty() {
+            row_identity.columns = raw.columns;
+        }
+        if let Some(policy) = raw.on_null_key {
+            row_identity.on_null_key = policy;
+        }
+        if let Some(policy) = raw.on_duplicate_key {
+            row_identity.on_duplicate_key = policy;
+        }
+
+        Ok(Self {
+            match_,
+            parse: raw.parse,
+            row_identity,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

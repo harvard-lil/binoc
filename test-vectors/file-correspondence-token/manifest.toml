@@ -1,0 +1,22 @@
+[vector]
+name = "file-correspondence-token"
+description = "Config declares that year-stamped CSV filenames are the same logical file"
+tags = ["csv", "file-correspondence", "declared-correspondence"]
+
+[config.dataset.files]
+[[config.dataset.files.correspondences]]
+name = "running-list"
+key = "${list}"
+logical_path = "${list}.csv"
+on_null_key = "diagnostic"
+on_duplicate_key = "diagnostic"
+
+[config.dataset.files.correspondences.left]
+path_regex = "^(?P<list>running_list)_as_of_[0-9]{4}\\.csv$"
+
+[config.dataset.files.correspondences.right]
+path_regex = "^(?P<list>running_list)_as_of_[0-9]{4}\\.csv$"
+
+[expected]
+child_count = 1
+has_tags = ["binoc.declared-correspondence", "binoc.row-addition"]

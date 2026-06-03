@@ -1,0 +1,6 @@
+id,name,score
+b,Bob,21
+dup,First,1
+dup,Second changed,3
+,MissingRight,100
+c,Carol,30

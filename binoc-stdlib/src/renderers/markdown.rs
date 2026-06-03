@@ -128,6 +128,7 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
         }
 
         let diagnostics = display_diagnostics(&changeset.diagnostics, config.max_diagnostics);
+        format_diagnostics_section(&mut out, "Errors", DiagnosticSeverity::Error, &diagnostics);
         format_diagnostics_section(
             &mut out,
             "Warnings",
@@ -474,6 +475,29 @@ fn format_detail_example(
 }
 
 fn format_tabular_cell_example(example: &DetailExample, config: &MarkdownRendererConfig) -> String {
+    let key = example.locator.get("key").and_then(|value| {
+        let map = value.as_object()?;
+        if map.is_empty() {
+            return None;
+        }
+        let parts: Vec<String> = map
+            .iter()
+            .filter_map(|(column, value)| {
+                value.as_str().map(|text| {
+                    format!(
+                        "{} '{}'",
+                        truncate_text(column, config.max_value_chars).0,
+                        truncate_text(text, config.max_value_chars).0
+                    )
+                })
+            })
+            .collect();
+        if parts.is_empty() {
+            None
+        } else {
+            Some(format!("key {}", parts.join(", ")))
+        }
+    });
     let row = example
         .locator
         .get("row")
@@ -490,11 +514,13 @@ fn format_tabular_cell_example(example: &DetailExample, config: &MarkdownRendere
                 truncate_text(column, config.max_value_chars).0
             )
         });
-    let locator = match (row, column) {
-        (Some(row), Some(column)) => format!("{row}, {column}"),
-        (Some(row), None) => row,
-        (None, Some(column)) => column,
-        (None, None) => "cell".into(),
+    let locator = match (key, row, column) {
+        (Some(key), _, Some(column)) => format!("{key}, {column}"),
+        (Some(key), _, None) => key,
+        (None, Some(row), Some(column)) => format!("{row}, {column}"),
+        (None, Some(row), None) => row,
+        (None, None, Some(column)) => column,
+        (None, None, None) => "cell".into(),
     };
     let before = example
         .before

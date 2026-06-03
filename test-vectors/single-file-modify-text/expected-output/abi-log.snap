@@ -53,6 +53,11 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
+    "plugin": "binoc.declared_correspondence",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
     "plugin": "binoc.correlation_detector",
     "data_ops": []
   },

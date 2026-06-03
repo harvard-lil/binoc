@@ -199,23 +199,29 @@ impl Controller {
             Path::new(snapshot_a),
             Path::new(snapshot_b),
         )?);
-        let mut current_pair = Self::make_root_pair(snapshot_a, snapshot_b, &data)?;
-
-        for ancestor in &ancestor_chain {
-            if ancestor.path == node_path {
-                break;
+        let current_pair = if let Some(pair) =
+            Self::explicit_replay_pair(target, snapshot_a, snapshot_b, &data)?
+        {
+            pair
+        } else {
+            let mut pair = Self::make_root_pair(snapshot_a, snapshot_b, &data)?;
+            for ancestor in &ancestor_chain {
+                if ancestor.path == node_path {
+                    break;
+                }
+                let comp_name = ancestor.comparator.as_deref().ok_or_else(|| {
+                    BinocError::Extract(format!(
+                        "ancestor '{}' has no comparator recorded",
+                        ancestor.path
+                    ))
+                })?;
+                let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
+                    BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
+                })?;
+                pair = comparator.reopen(&pair, node_path, data.as_ref())?;
             }
-            let comp_name = ancestor.comparator.as_deref().ok_or_else(|| {
-                BinocError::Extract(format!(
-                    "ancestor '{}' has no comparator recorded",
-                    ancestor.path
-                ))
-            })?;
-            let comparator = self.find_comparator_by_name(comp_name).ok_or_else(|| {
-                BinocError::Extract(format!("comparator '{comp_name}' not found in registry"))
-            })?;
-            current_pair = comparator.reopen(&current_pair, node_path, data.as_ref())?;
-        }
+            pair
+        };
 
         let comp_name = target.comparator.as_deref().ok_or_else(|| {
             BinocError::Extract(format!("node '{}' has no comparator recorded", target.path))
@@ -576,44 +582,99 @@ impl Controller {
     /// escapes a session.
     fn inflate_pending_recompares(&self, node: &mut DiffNode, data: &Arc<LocalDataAccess>) {
         if let Some(pair) = node.pending_recompare.take() {
-            if let Ok(result) = self.process_pair(pair, data) {
-                if result.action != "identical" {
-                    node.item_type.clone_from(&result.item_type);
-                    if result.comparator.is_some() {
-                        node.comparator.clone_from(&result.comparator);
-                    }
-                    if result.source_items.is_some() {
-                        node.source_items = result.source_items;
-                    }
-                    node.artifacts.extend(result.artifacts);
-                    // Union content-derived tags (e.g. binoc.content-changed,
-                    // binoc.lines-added) into the host so the move node
-                    // reflects both the rename and the content change.
-                    node.tags.extend(result.tags);
-                    for (k, v) in result.details {
-                        node.details.entry(k).or_insert(v);
-                    }
-                    if let Some(summary) = &result.summary {
-                        if !summary.is_empty() {
-                            node.annotations
-                                .entry("content_summary".into())
-                                .or_insert_with(|| serde_json::json!(summary));
-                        }
-                    }
-                    // Splice point: a future non-Root transformer that
-                    // wants to recurse through the inflated subtree in a
-                    // single pass would re-apply itself here. Today's only
-                    // caller is Root-shaped (FuzzyCorrelationDetector), so
-                    // recursing would be a no-op — and subsequent
-                    // transformers in the outer pipeline loop already pick
-                    // up the inflated subtree on later iterations.
-                    node.children = result.children;
+            let replay_pair = pair.clone();
+            match self.process_pair(pair, data) {
+                Ok(result) => Self::merge_recompare_result(node, replay_pair, result),
+                Err(err) => {
+                    node.push_diagnostic(
+                        Diagnostic::warning(
+                            "binoc.recompare-failed",
+                            format!("Could not recompare '{}': {err}", node.path),
+                        )
+                        .with_location(node.path.clone()),
+                    );
                 }
             }
         }
         for child in &mut node.children {
             self.inflate_pending_recompares(child, data);
         }
+    }
+
+    fn merge_recompare_result(node: &mut DiffNode, pair: ItemPair, result: DiffNode) {
+        if result.action == "identical" {
+            node.source_items = Some(pair);
+            for (k, v) in result.details {
+                node.details.entry(k).or_insert(v);
+            }
+            if node.action == "modify"
+                && node.source_path.is_none()
+                && !node.tags.contains("binoc.path-change")
+            {
+                node.action = "identical".into();
+            } else {
+                node.details
+                    .entry("content_identical".into())
+                    .or_insert_with(|| serde_json::json!(true));
+            }
+            return;
+        }
+
+        node.item_type.clone_from(&result.item_type);
+        if result.comparator.is_some() {
+            node.comparator.clone_from(&result.comparator);
+        }
+        if result.source_items.is_some() {
+            node.source_items = result.source_items;
+        } else {
+            node.source_items = Some(pair);
+        }
+        node.artifacts.extend(result.artifacts);
+        // Union content-derived tags (e.g. binoc.content-changed,
+        // binoc.lines-added) into the host so the correspondence node
+        // reflects both identity and content changes.
+        node.tags.extend(result.tags);
+        for (k, v) in result.details {
+            node.details.entry(k).or_insert(v);
+        }
+        if let Some(summary) = &result.summary {
+            if !summary.is_empty() {
+                if node.summary.is_none() {
+                    node.summary = Some(summary.clone());
+                }
+                node.annotations
+                    .entry("content_summary".into())
+                    .or_insert_with(|| serde_json::json!(summary));
+            }
+        }
+        // Splice point: future non-Root transformers that need same-pass
+        // recursion through inflated children can re-apply themselves here.
+        // Subsequent transformers in the outer pipeline already see these
+        // children on later iterations.
+        node.children = result.children;
+    }
+
+    fn explicit_replay_pair(
+        target: &DiffNode,
+        snapshot_a: &str,
+        snapshot_b: &str,
+        data: &Arc<LocalDataAccess>,
+    ) -> BinocResult<Option<ItemPair>> {
+        let left_path = target
+            .source_path
+            .as_deref()
+            .or_else(|| detail_str(target, "source_path"));
+        let right_path = detail_str(target, "destination_path");
+        if left_path.is_none() && right_path.is_none() {
+            return Ok(None);
+        }
+
+        let logical = target.path.as_str();
+        let left_rel = left_path.unwrap_or(logical);
+        let right_rel = right_path.unwrap_or(logical);
+        let left = data.register_local(&Path::new(snapshot_a).join(left_rel), logical)?;
+        let right = data.register_local(&Path::new(snapshot_b).join(right_rel), logical)?;
+        Ok(Some(ItemPair::both(left, right)))
     }
 
     /// All fields are AND (every non-empty field must pass).
@@ -655,6 +716,10 @@ impl Controller {
             || !desc.match_actions.is_empty()
             || !desc.match_artifacts.is_empty()
     }
+}
+
+fn detail_str<'a>(node: &'a DiffNode, key: &str) -> Option<&'a str> {
+    node.details.get(key)?.as_str()
 }
 
 #[cfg(test)]
@@ -1170,15 +1235,10 @@ mod tests {
         let controller = Controller::new(vec![leaf_comparator()], vec![reader])
             .with_transformer_configs(configs)
             .with_dataset_config(serde_json::json!({
-                "tables": {
-                    "entries": {
-                        "people": {
-                            "row_identity": {
-                                "columns": ["id"]
-                            }
-                        }
-                    }
-                }
+                "tables": [{
+                    "logical_name": "people",
+                    "columns": ["id"]
+                }]
             }));
         let dir = tempfile::tempdir().unwrap();
         controller
@@ -1193,15 +1253,10 @@ mod tests {
             serde_json::json!({
                 "threshold": 0.42,
                 "dataset": {
-                    "tables": {
-                        "entries": {
-                            "people": {
-                                "row_identity": {
-                                    "columns": ["id"]
-                                }
-                            }
-                        }
-                    }
+                    "tables": [{
+                        "logical_name": "people",
+                        "columns": ["id"]
+                    }]
                 }
             })
         );
