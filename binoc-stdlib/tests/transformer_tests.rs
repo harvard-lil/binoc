@@ -755,9 +755,11 @@ fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
         .with_tag("binoc.move")
         .with_tag("binoc.move.modified")
         .with_tag("binoc.content-changed");
-    moved_modified
-        .annotations
-        .insert("content_summary".into(), serde_json::json!("2 lines added"));
+    moved_modified.annotate_from(
+        "binoc",
+        "content_summary",
+        serde_json::json!("2 lines added"),
+    );
 
     let dst = DiffNode::new("add", "directory", "newdir").with_children(vec![
         DiffNode::new("move", "file", "newdir/a.txt")

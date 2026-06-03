@@ -293,6 +293,7 @@ fn format_node(
         }
     }
 
+    render_annotations(out, node, config, detail_budget);
     render_detail_blocks(out, node, path, config, detail_budget);
 }
 
@@ -331,11 +332,137 @@ fn move_trailer(node: &DiffNode) -> Option<String> {
 }
 
 fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
-    node.annotations
-        .get(key)
-        .and_then(|v| v.as_str())
+    node.binoc_annotation(key)
+        .and_then(Annotation::as_str)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+fn render_annotations(
+    out: &mut String,
+    node: &DiffNode,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    if config.verbosity == Verbosity::Summary {
+        return;
+    }
+    for annotation in node.annotations.iter().filter(|annotation| {
+        !(annotation.package == "binoc"
+            && matches!(
+                annotation.key.as_str(),
+                "content_summary" | "tabular_summary"
+            ))
+    }) {
+        if !render_annotation(out, annotation, config, detail_budget) {
+            return;
+        }
+    }
+}
+
+fn render_annotation(
+    out: &mut String,
+    annotation: &Annotation,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let label = annotation_label(annotation);
+    match &annotation.value {
+        serde_json::Value::Null => detail_budget.push_line(out, format!("  - {label}: null\n")),
+        serde_json::Value::Bool(value) => {
+            detail_budget.push_line(out, format!("  - {label}: {value}\n"))
+        }
+        serde_json::Value::Number(value) => {
+            detail_budget.push_line(out, format!("  - {label}: {value}\n"))
+        }
+        serde_json::Value::String(value) => {
+            let (value, truncated) = truncate_text(value, config.max_value_chars);
+            detail_budget.push_line(
+                out,
+                format!(
+                    "  - {label}: {}{}\n",
+                    value,
+                    if truncated { "..." } else { "" }
+                ),
+            )
+        }
+        serde_json::Value::Array(values) if values.iter().all(|value| value.as_str().is_some()) => {
+            render_string_list_annotation(out, &label, values, config, detail_budget)
+        }
+        value => detail_budget.push_line(
+            out,
+            format!(
+                "  - {label}: {}\n",
+                format_json_annotation_value(value, config)
+            ),
+        ),
+    }
+}
+
+fn render_string_list_annotation(
+    out: &mut String,
+    label: &str,
+    values: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let shown = if config.verbosity == Verbosity::Full {
+        values.len()
+    } else {
+        values.len().min(config.max_examples_per_block)
+    };
+    if shown == 0 {
+        return true;
+    }
+
+    let mut header = label.to_string();
+    if shown < values.len() {
+        header.push_str(&format!(" (showing {shown} of {})", values.len()));
+    }
+    if !detail_budget.push_line(out, format!("  - {header}\n")) {
+        return false;
+    }
+
+    for value in values.iter().take(shown).filter_map(|value| value.as_str()) {
+        let (value, truncated) = truncate_text(value, config.max_value_chars);
+        if !detail_budget.push_line(
+            out,
+            format!("    - {}{}\n", value, if truncated { "..." } else { "" }),
+        ) {
+            return false;
+        }
+    }
+    true
+}
+
+fn format_json_annotation_value(
+    value: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+) -> String {
+    let raw = serde_json::to_string(value).unwrap_or_else(|_| "null".into());
+    let (value, truncated) = truncate_text(&raw, config.max_value_chars);
+    if truncated {
+        format!("{value}...")
+    } else {
+        value
+    }
+}
+
+fn annotation_label(annotation: &Annotation) -> String {
+    let mut label = humanize_annotation_key(&annotation.key);
+    if annotation.package != "binoc" {
+        label = format!("{} {label}", annotation.package);
+    }
+    label
+}
+
+fn humanize_annotation_key(key: &str) -> String {
+    let text = key
+        .split(['_', '-'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    capitalize(&text)
 }
 
 fn fallback_description(node: &DiffNode) -> String {
@@ -840,8 +967,9 @@ mod tests {
             .with_tag("binoc.move.modified")
             .with_tag("binoc.column-addition")
             .with_tag("binoc.schema-change");
-        move_node.annotations.insert(
-            "tabular_summary".into(),
+        move_node.annotate_from(
+            "binoc",
+            "tabular_summary",
             serde_json::json!("Column added: 'email'"),
         );
         let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
@@ -880,9 +1008,11 @@ mod tests {
             .with_tag("binoc.move.modified")
             .with_tag("binoc.content-changed")
             .with_tag("binoc.lines-added");
-        move_node
-            .annotations
-            .insert("content_summary".into(), serde_json::json!("2 lines added"));
+        move_node.annotate_from(
+            "binoc",
+            "content_summary",
+            serde_json::json!("2 lines added"),
+        );
         let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
 
         let md = render_markdown(
@@ -906,13 +1036,16 @@ mod tests {
             .with_source_path("data.csv")
             .with_summary("Moved from data.csv (modified)")
             .with_tag("binoc.move");
-        move_node.annotations.insert(
-            "tabular_summary".into(),
+        move_node.annotate_from(
+            "binoc",
+            "tabular_summary",
             serde_json::json!("Column added: 'email'"),
         );
-        move_node
-            .annotations
-            .insert("content_summary".into(), serde_json::json!("CSV modified"));
+        move_node.annotate_from(
+            "binoc",
+            "content_summary",
+            serde_json::json!("CSV modified"),
+        );
         let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
 
         let md = render_markdown(
@@ -1053,6 +1186,61 @@ mod tests {
         let md = render_markdown(&[changeset], &config);
         assert!(md.contains("row 4, column 'score': '40' -> '42'"));
         assert!(!md.contains("showing 1 of 4"));
+    }
+
+    #[test]
+    fn examples_verbosity_renders_string_list_annotations() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("3 rows modified");
+        node.annotate_from(
+            "binoc",
+            "distribution_shifts",
+            serde_json::json!([
+                "column 'score': mean 20 -> 35.5",
+                "column 'rank': mean 2 -> 3",
+                "column 'cost': mean 10 -> 12",
+                "column 'height': mean 70 -> 72"
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "a",
+                "b",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig::default(),
+        );
+
+        assert!(md.contains("Distribution shifts (showing 3 of 4)"));
+        assert!(md.contains("column 'score': mean 20 -> 35.5"));
+        assert!(!md.contains("column 'height': mean 70 -> 72"));
+    }
+
+    #[test]
+    fn summary_verbosity_hides_annotations() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("3 rows modified");
+        node.annotate_from(
+            "binoc",
+            "distribution_shifts",
+            serde_json::json!(["column 'score' changed"]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "a",
+                "b",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                verbosity: Verbosity::Summary,
+                ..Default::default()
+            },
+        );
+
+        assert!(!md.contains("Distribution shifts"));
+        assert!(!md.contains("column 'score'"));
     }
 
     fn sample_detail_block(total_count: u64) -> DetailBlock {

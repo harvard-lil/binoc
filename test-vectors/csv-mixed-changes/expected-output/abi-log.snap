@@ -141,6 +141,11 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
+    "plugin": "binoc.tabular_stats_annotator",
+    "data_ops": []
+  },
+  {
+    "method": "transform",
     "plugin": "binoc.column_reorder_detector",
     "data_ops": [
       {

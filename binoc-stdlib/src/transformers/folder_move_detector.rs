@@ -248,8 +248,8 @@ fn has_modification_detail(node: &DiffNode) -> bool {
     node.tags.contains("binoc.move.modified")
         || node.tags.contains("binoc.copy.modified")
         || node.tags.contains("binoc.content-changed")
-        || node.annotations.contains_key("content_summary")
-        || node.annotations.contains_key("tabular_summary")
+        || node.binoc_annotation("content_summary").is_some()
+        || node.binoc_annotation("tabular_summary").is_some()
         || !node.children.is_empty()
 }
 
@@ -367,13 +367,11 @@ fn normalize_rollup_remainder_leaf(node: DiffNode, rollup: &Rollup) -> DiffNode 
 fn maybe_demote_move_like_remainder(mut node: DiffNode) -> DiffNode {
     if matches!(node.action.as_str(), "move" | "copy") {
         let detail = node
-            .annotations
-            .get("tabular_summary")
-            .and_then(|v| v.as_str())
+            .binoc_annotation("tabular_summary")
+            .and_then(Annotation::as_str)
             .or_else(|| {
-                node.annotations
-                    .get("content_summary")
-                    .and_then(|v| v.as_str())
+                node.binoc_annotation("content_summary")
+                    .and_then(Annotation::as_str)
             })
             .map(str::to_string);
         node.action = "modify".to_string();

@@ -56,6 +56,43 @@ class TestDiffNode:
         updated = node.with_detail('key', 'value')
         assert updated.details['key'] == 'value'
 
+    def test_annotations_are_namespaced_records(self):
+        node = binoc.DiffNode(
+            'modify',
+            'file',
+            'f',
+            annotations=[{'package': 'binoc', 'key': 'note', 'value': 'check me'}],
+        )
+        assert node.annotations == [{'package': 'binoc', 'key': 'note', 'value': 'check me'}]
+
+        updated = node.annotate_from('binoc', 'distribution_shifts', ['score changed'])
+        updated = updated.annotate_from('example.plugin', 'warning', {'level': 2})
+        assert updated.annotations == [
+            {'package': 'binoc', 'key': 'note', 'value': 'check me'},
+            {
+                'package': 'binoc',
+                'key': 'distribution_shifts',
+                'value': ['score changed'],
+            },
+            {
+                'package': 'example.plugin',
+                'key': 'warning',
+                'value': {'level': 2},
+            },
+        ]
+        assert node.annotations == [{'package': 'binoc', 'key': 'note', 'value': 'check me'}]
+
+    def test_annotation_records_can_be_constructed_explicitly(self):
+        node = binoc.DiffNode(
+            'modify',
+            'file',
+            'f',
+            annotations=[{'package': 'example.plugin', 'key': 'note', 'value': ['one', 'two']}],
+        )
+        assert node.to_dict()['annotations'] == [
+            {'package': 'example.plugin', 'key': 'note', 'value': ['one', 'two']}
+        ]
+
     def test_with_source_path(self):
         node = binoc.DiffNode('move', 'file', 'new.txt')
         moved = node.with_source_path('old.txt')

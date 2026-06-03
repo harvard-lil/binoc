@@ -46,9 +46,13 @@ expression: "&stable_changeset"
           "rows_removed": 0,
           "rows_right": 3
         },
-        "annotations": {
-          "tabular_summary": "Column added: 'email'"
-        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "tabular_summary",
+            "value": "Column added: 'email'"
+          }
+        ],
         "comparator": "binoc.csv",
         "transformed_by": [
           "binoc.tabular_analyzer"

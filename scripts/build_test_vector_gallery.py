@@ -60,6 +60,7 @@ class DocsMeta:
 class ManifestConfig:
     comparators: list[str] | None = None
     transformers: list[str] | None = None
+    dataset: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
     transformer_config: dict[str, Any] | None = None
 
@@ -70,6 +71,7 @@ class ManifestConfig:
             for value in (
                 self.comparators,
                 self.transformers,
+                self.dataset,
                 self.output,
                 self.transformer_config,
             )
@@ -172,6 +174,7 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
 
     comparators = raw.get("comparators")
     transformers = raw.get("transformers")
+    dataset = raw.get("dataset")
     output = raw.get("output")
     transformer_config = raw.get("transformer_config")
 
@@ -183,6 +186,8 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
         transformers = _validate_str_list(
             transformers, f"{manifest_path}: [config].transformers"
         )
+    if dataset is not None and not isinstance(dataset, dict):
+        _die(f"{manifest_path}: [config].dataset must be a table")
     if output is not None and not isinstance(output, dict):
         _die(f"{manifest_path}: [config].output must be a table")
     if transformer_config is not None and not isinstance(transformer_config, dict):
@@ -191,6 +196,7 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
     return ManifestConfig(
         comparators=comparators,
         transformers=transformers,
+        dataset=dataset,
         output=output,
         transformer_config=transformer_config,
     )
@@ -250,6 +256,8 @@ def _render_config_yaml(config: ManifestConfig) -> str | None:
         data["comparators"] = config.comparators
     if config.transformers:
         data["transformers"] = config.transformers
+    if config.dataset:
+        data["dataset"] = config.dataset
     if config.transformer_config:
         data["transformer_config"] = config.transformer_config
     if config.output:

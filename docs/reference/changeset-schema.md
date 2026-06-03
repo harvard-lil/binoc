@@ -72,7 +72,7 @@ A node in the diff tree — the central data structure of the system. Every comp
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `action` | string | yes | Open enum: "add", "remove", "modify", "move", "reorder", "schema_change", etc. Plugins may define new actions. |
-| `annotations` | object (free-form) | no | Transformer-added metadata. |
+| `annotations` | array of [`Annotation`](#annotation) | no | Renderer-visible annotations supplied by comparators or transformers. |
 | `artifacts` | array of [`ArtifactDescriptor`](#artifactdescriptor) | no | Published artifacts for this node. Session-scoped working data: carried across the plugin ABI wire as descriptors (the bytes live in the shared `data_root` cache), but not meaningful outside a session. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
 | `children` | array of [`DiffNode`](#diffnode) | no | Child diff nodes forming the tree structure. |
 | `comparator` | string \| null | no | Which comparator produced this node (provenance for extract chain). |
@@ -140,6 +140,16 @@ String enum. One of:
 - `left`
 - `right`
 - `pair`
+
+### `Annotation`
+
+Renderer-visible metadata attached to a diff node by a comparator or transformer. Annotations are intentionally progressively typed: producers can start with a string or simple JSON value, and renderers can either display the generic value shape or add package/key-specific handling later. The package namespace keeps independently-authored plugins from colliding on common keys.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes |  |
+| `package` | string | yes |  |
+| `value` | any | yes |  |
 
 ### `DetailBlock`
 

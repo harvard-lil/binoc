@@ -111,6 +111,7 @@ impl DatasetConfig {
                 "binoc.folder_move_detector".into(),
                 "binoc.table_splitter".into(),
                 "binoc.tabular_analyzer".into(),
+                "binoc.tabular_stats_annotator".into(),
                 "binoc.column_reorder_detector".into(),
                 "binoc.table_collection_analyzer".into(),
             ],

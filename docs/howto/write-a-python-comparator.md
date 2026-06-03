@@ -133,6 +133,7 @@ Nodes are immutable-ish — builder methods return new nodes:
 node = binoc.DiffNode(action="modify", item_type="fasta", path="seqs.fa")
 node = node.with_tag("biobinoc.gap-change")
 node = node.with_detail("gap_count", 42)
+node = node.annotate_from("biobinoc", "note", "large gap shift")
 node = node.with_source_path("old_seqs.fa")   # for moves/renames
 node = node.with_children([child1, child2])
 
@@ -143,7 +144,7 @@ node.path          # "seqs.fa"
 node.tags          # ["biobinoc.gap-change"]
 node.details       # {"gap_count": 42}
 node.children      # [child1, child2]
-node.annotations   # {} — typically set by transformers
+node.annotations   # [{"package": "binoc", "key": "note", "value": "..."}]
 ```
 
 ## Limits of Python comparators

@@ -573,8 +573,8 @@ impl Controller {
     /// re-dispatch the pair through the comparator pipeline, then merge the
     /// resulting `item_type`, `comparator`, `source_items`, `artifacts`,
     /// `details`, and `children` into the host node. The comparator's own
-    /// summary (e.g. "2 lines added") is stashed in
-    /// `annotations.content_summary` so renderers can surface it without
+    /// summary (e.g. "2 lines added") is stashed in the `content_summary`
+    /// annotation so renderers can surface it without
     /// overwriting the host's move headline.
     ///
     /// `pending_recompare` is `take()`n (cleared) on every visited node,
@@ -642,9 +642,9 @@ impl Controller {
                 if node.summary.is_none() {
                     node.summary = Some(summary.clone());
                 }
-                node.annotations
-                    .entry("content_summary".into())
-                    .or_insert_with(|| serde_json::json!(summary));
+                if node.binoc_annotation("content_summary").is_none() {
+                    node.annotate_from("binoc", "content_summary", serde_json::json!(summary));
+                }
             }
         }
         // Splice point: future non-Root transformers that need same-pass
