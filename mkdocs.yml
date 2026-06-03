@@ -163,6 +163,7 @@ nav:
           - adr/README.md
           - 'Markdown Renderer Groups Replace Significance-Map Grouping': adr/2026-06-02-renderer_groups.md
           - 'Unified Dataset Config and Identity Policy': adr/2026-06-01-unified_dataset_config_and_identity.md
+          - 'Tabular Collection Artifact Model': adr/2026-06-01-tabular_collection_artifact_model.md
           - 'Single-stream gzip as an expanding comparator': adr/2026-06-01-single_stream_gzip_as_expanding_comparator.md
           - 'Optional First-Party Plugins and `binoc[all]`': adr/2026-06-01-optional_first_party_plugins.md
           - 'Example Verbosity and Plugin-Supplied Details': adr/2026-06-01-example_verbosity.md

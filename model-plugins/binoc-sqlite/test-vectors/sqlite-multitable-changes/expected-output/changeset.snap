@@ -1,0 +1,109 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular_collection",
+        "path": "data.sqlite",
+        "summary": "Table users changed: 1 row added; Table orders added: new table (3 columns, 1 row)",
+        "tags": [
+          "binoc.table-addition",
+          "binoc.table-change",
+          "binoc.tabular-collection-change"
+        ],
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.sqlite::users",
+            "summary": "1 row added",
+            "tags": [
+              "binoc-sqlite.row-addition",
+              "binoc.row-addition",
+              "binoc.table-change"
+            ],
+            "details": {
+              "cells_changed": 0,
+              "columns_added": [],
+              "columns_left": [
+                "id",
+                "name"
+              ],
+              "columns_removed": [],
+              "columns_right": [
+                "id",
+                "name"
+              ],
+              "logical_name": "users",
+              "rows_added": 1,
+              "rows_left": 1,
+              "rows_removed": 0,
+              "rows_right": 2
+            },
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data.sqlite::orders",
+            "summary": "New table (3 columns, 1 row)",
+            "tags": [
+              "binoc-sqlite.table-addition",
+              "binoc.content-changed",
+              "binoc.schema-change",
+              "binoc.table-addition"
+            ],
+            "details": {
+              "columns": [
+                "id",
+                "user_id",
+                "total"
+              ],
+              "logical_name": "orders",
+              "row_count": 1,
+              "rows": 1
+            },
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
+          }
+        ],
+        "details": {
+          "hash_left": "feea398ad448a3460364a807be20f26be6fdd5f84304663c70692a6b5ed8963e",
+          "hash_right": "b02249e479928626396a89c2a8a05b6dea6568bc4176ee1725feeab68b3c63d6",
+          "tables_added": [
+            "orders"
+          ],
+          "tables_changed": [
+            "users"
+          ],
+          "tables_left": [
+            "products",
+            "users"
+          ],
+          "tables_right": [
+            "orders",
+            "products",
+            "users"
+          ]
+        },
+        "comparator": "binoc-sqlite.sqlite",
+        "transformed_by": [
+          "binoc.table_collection_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

@@ -29,7 +29,7 @@
             "scope": "Files",
             "handles_identical": false
           },
-          "ir_item_types": ["sqlite_database", "sqlite_table"]
+          "ir_item_types": ["tabular_collection", "tabular"]
         }
       ],
       "transformers": [],

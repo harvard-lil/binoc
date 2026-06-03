@@ -50,7 +50,7 @@ A file is routed to this plugin when **either** its path matches one of the **ex
 | `scope` | `Files` |
 | `handles_identical` | `false` |
 
-*Labels you may see in a changeset (not used for routing):* `sqlite_database`, `sqlite_table`
+*Labels you may see in a changeset (not used for routing):* `tabular_collection`, `tabular`
 
 ## binoc-stat-binary
 

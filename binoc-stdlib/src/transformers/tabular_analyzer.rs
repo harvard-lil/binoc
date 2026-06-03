@@ -57,9 +57,11 @@ fn transform_add(mut node: DiffNode, pair: &TabularDataPair) -> TransformResult 
         return TransformResult::Unchanged;
     };
     node.summary = Some(format!(
-        "New table ({} columns, {} rows)",
+        "New table ({} column{}, {} row{})",
         right.headers.len(),
-        right.rows.len()
+        if right.headers.len() == 1 { "" } else { "s" },
+        right.rows.len(),
+        if right.rows.len() == 1 { "" } else { "s" }
     ));
     node.tags.insert("binoc.content-changed".into());
     node.details
@@ -74,9 +76,11 @@ fn transform_remove(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
         return TransformResult::Unchanged;
     };
     node.summary = Some(format!(
-        "Table removed ({} columns, {} rows)",
+        "Table removed ({} column{}, {} row{})",
         left.headers.len(),
-        left.rows.len()
+        if left.headers.len() == 1 { "" } else { "s" },
+        left.rows.len(),
+        if left.rows.len() == 1 { "" } else { "s" }
     ));
     node.tags.insert("binoc.content-changed".into());
     node.details
@@ -224,7 +228,9 @@ fn transform_modify(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
         node.annotations
             .insert("tabular_summary".into(), serde_json::json!(tabular_desc));
     } else {
-        node.summary = Some(tabular_desc);
+        if tabular_desc != "Table modified" || node.summary.is_none() {
+            node.summary = Some(tabular_desc);
+        }
     }
 
     TransformResult::Replace(Box::new(node))

@@ -1,0 +1,13 @@
+[vector]
+name = "sqlite-multitable-changes"
+description = "SQLite database with one changed table and one added table"
+tags = ["sqlite", "multi-table", "row-addition", "table-addition"]
+
+[expected]
+root_kind = "modify"
+has_tags = [
+    "binoc.tabular-collection-change",
+    "binoc.table-change",
+    "binoc.table-addition",
+    "binoc.row-addition",
+]
