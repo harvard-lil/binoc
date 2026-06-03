@@ -6,7 +6,8 @@
 ## Context
 
 Binoc needs a lightweight way to tell callers about missing metadata,
-configuration opportunities, or fallback behavior without failing a diff.
+configuration opportunities, identity problems, or fallback behavior without
+failing a diff.
 Several follow-up issues will emit this kind of guidance, so the shape needs to
 be structured, durable in changeset JSON, and independent of any one renderer.
 
@@ -18,7 +19,7 @@ cannot flood output.
 
 Binoc adds a top-level `Changeset.diagnostics` list. Each record has:
 
-- `severity`: `warning` or `suggestion`
+- `severity`: `error`, `warning`, or `suggestion`
 - `code`: a stable, package-qualified string such as `binoc.binary-fallback`
 - `message`: human-facing advisory text
 - `location`: optional logical node path
@@ -30,9 +31,14 @@ list, and then strips node-local transient diagnostics before returning the
 changeset.
 
 Renderers consume `Changeset.diagnostics` directly. The Markdown renderer shows
-short `Warnings` and `Suggestions` sections. Renderer implementations may also
-add renderer-specific diagnostics during rendering via the renderer trait hook;
-those are merged into a cloned changeset rather than mutating stored JSON.
+short `Errors`, `Warnings`, and `Suggestions` sections. Renderer
+implementations may also add renderer-specific diagnostics during rendering via
+the renderer trait hook; those are merged into a cloned changeset rather than
+mutating stored JSON.
+
+Error-severity diagnostics are reportable findings in the completed changeset,
+not controller-level aborts; see
+[Error Diagnostics Are Reportable Findings](2026-06-03-error_diagnostics_are_reportable_findings.md).
 
 ## Conventions
 

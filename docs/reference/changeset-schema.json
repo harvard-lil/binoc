@@ -212,6 +212,7 @@
     "DiagnosticSeverity": {
       "type": "string",
       "enum": [
+        "error",
         "warning",
         "suggestion"
       ]
@@ -278,7 +279,7 @@
           "type": "string"
         },
         "pending_recompare": {
-          "description": "Request that the controller re-dispatch the given `ItemPair` through\nthe comparator pipeline and merge the result into this node before\nthe next transformer runs. Set by transformers (e.g. fuzzy\ncorrelation) that have decided two leaves represent the same logical\nitem but need a content diff under the new (move) node. Session-\nscoped working data: wire-visible so plugins can set it across the\nABI boundary, but cleared by [`DiffNode::strip_transient`] before\nchangeset output. The controller takes (clears) this field as it\nprocesses it; nodes in a finalized changeset never carry it.",
+          "description": "Request that the controller re-dispatch the given `ItemPair` through\nthe comparator pipeline and merge the result into this semantic wrapper\nnode before the next transformer runs. Set by transformers that have\ndiscovered a correspondence (for example, a rename-with-edits or a\nconfig-declared logical file pair) but still need normal comparators to\nparse the paired content. If the recomparison is identical, a plain\n`modify` wrapper is converted to `identical` so it can be pruned, while\nsemantic wrappers such as moves remain reportable. Session-scoped\nworking data: wire-visible so plugins can set it across the ABI\nboundary, but cleared by [`DiffNode::strip_transient`] before changeset\noutput. The controller takes (clears) this field as it processes it;\nnodes in a finalized changeset never carry it.",
           "anyOf": [
             {
               "$ref": "#/$defs/ItemPair"

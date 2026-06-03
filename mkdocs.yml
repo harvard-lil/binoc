@@ -161,6 +161,8 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Transformer-Initiated Recompare as a Correspondence Contract': adr/2026-06-03-transformer_initiated_recompare.md
+          - 'Error Diagnostics Are Reportable Findings': adr/2026-06-03-error_diagnostics_are_reportable_findings.md
           - 'Markdown Renderer Groups Replace Significance-Map Grouping': adr/2026-06-02-renderer_groups.md
           - 'Unified Dataset Config and Identity Policy': adr/2026-06-01-unified_dataset_config_and_identity.md
           - 'Tabular Collection Artifact Model': adr/2026-06-01-tabular_collection_artifact_model.md

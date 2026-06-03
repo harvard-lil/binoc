@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **33 shared examples** in this gallery.
+Binoc currently ships **37 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -34,6 +34,8 @@ just materialize
 | [`csv-column-addition`](#csv-column-addition) | New column added | data.csv: Column added: 'email' | Default pipeline |
 | [`csv-column-removal`](#csv-column-removal) | Column removed | data.csv: Column removed: 'city' | Default pipeline |
 | [`csv-column-reorder`](#csv-column-reorder) | Columns shuffled, content identical | data.csv: Columns reordered (content unchanged) | Custom config |
+| [`csv-keyed-null-duplicate`](#csv-keyed-null-duplicate) | Configured CSV row keys surface null and duplicate key diagnostics | data.csv: 4 rows added by key; 4 rows removed by key; 1 row modified by key | Default pipeline |
+| [`csv-keyed-row-diff`](#csv-keyed-row-diff) | Configured CSV row keys match reordered rows and report keyed row/cell changes | data.csv: 1 row added by key; 1 row removed by key; 1 row modified by key | Default pipeline |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; columns reordered; 1 row added | Default pipeline |
 | [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation | data_v2.csv: Moved from data.csv (modified) | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
@@ -43,6 +45,8 @@ just materialize
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 row) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
+| [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | states/AL.csv: 1 row added | Default pipeline |
+| [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2,025-12-18 | Custom config |
 | [`gzip-inner-dispatch`](#gzip-inner-dispatch) | Gzipped CSV and text are decompressed and redispatched under their inner names | census.txt: 1 line added, 1 removed | Default pipeline |
@@ -186,6 +190,57 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: Columns reordered (content unchanged)
+```
+
+## csv-keyed-null-duplicate
+
+Configured CSV row keys surface null and duplicate key diagnostics
+
+- **Browse source:** [csv-keyed-null-duplicate](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-keyed-null-duplicate)
+- **Tags:** `csv`, `keyed`, `null-key`, `duplicate-key`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-keyed-null-duplicate/snapshot-a \
+  ./test-vectors-materialized/csv-keyed-null-duplicate/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 4 rows added by key; 4 rows removed by key; 1 row modified by key
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - key id 'b', column 'score': '20' -> '21'
+
+## Warnings
+
+- 2 rows had null configured key values (`data.csv`) [binoc.null-key]
+- 1 configured row key appeared more than once (`data.csv`) [binoc.duplicate-key]
+```
+
+## csv-keyed-row-diff
+
+Configured CSV row keys match reordered rows and report keyed row/cell changes
+
+- **Browse source:** [csv-keyed-row-diff](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-keyed-row-diff)
+- **Tags:** `csv`, `keyed`, `row-addition`, `row-removal`, `cell-change`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-keyed-row-diff/snapshot-a \
+  ./test-vectors-materialized/csv-keyed-row-diff/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 1 row added by key; 1 row removed by key; 1 row modified by key
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - key id 'p2', column 'price': '20' -> '25'
 ```
 
 ## csv-mixed-changes
@@ -398,6 +453,48 @@ Result:
 - **data.tar.gz/records.csv**: 1 cell changed
   - Changed cells; use `binoc extract CHANGESET "data.tar.gz/records.csv" cells_changed` for all changed cells
     - row 2, column 'count': '20' -> '25'
+```
+
+## file-correspondence-scheme
+
+Config declares that a state CSV moved into a new directory scheme is the same logical file
+
+- **Browse source:** [file-correspondence-scheme](https://github.com/harvard-lil/binoc/tree/main/test-vectors/file-correspondence-scheme)
+- **Tags:** `csv`, `file-correspondence`, `scheme-change`
+- **Snapshots:** `snapshot-a` has 1 file — `data/state_AL.csv`; `snapshot-b` has 1 file — `by-state/AL/records.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/file-correspondence-scheme/snapshot-a \
+  ./test-vectors-materialized/file-correspondence-scheme/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **states/AL.csv**: 1 row added
+```
+
+## file-correspondence-token
+
+Config declares that year-stamped CSV filenames are the same logical file
+
+- **Browse source:** [file-correspondence-token](https://github.com/harvard-lil/binoc/tree/main/test-vectors/file-correspondence-token)
+- **Tags:** `csv`, `file-correspondence`, `declared-correspondence`
+- **Snapshots:** `snapshot-a` has 1 file — `running_list_as_of_2022.csv`; `snapshot-b` has 1 file — `running_list_as_of_2023.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/file-correspondence-token/snapshot-a \
+  ./test-vectors-materialized/file-correspondence-token/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **running_list.csv**: 1 row added
 ```
 
 ## folder-move-nested
