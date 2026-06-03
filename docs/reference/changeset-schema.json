@@ -38,6 +38,24 @@
     "to_snapshot"
   ],
   "$defs": {
+    "Annotation": {
+      "description": "Renderer-visible metadata attached to a diff node by a comparator or\ntransformer.\n\nAnnotations are intentionally progressively typed: producers can start with\na string or simple JSON value, and renderers can either display the generic\nvalue shape or add package/key-specific handling later. The package namespace\nkeeps independently-authored plugins from colliding on common keys.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": [
+        "package",
+        "key",
+        "value"
+      ]
+    },
     "ArtifactDescriptor": {
       "description": "Descriptor for a published artifact attached to a node.\n\nArtifacts are the unified mechanism for both private reuse and\ncross-plugin composition. A comparator or transformer publishes\nzero or more artifacts; downstream plugins consume them by format.",
       "type": "object",
@@ -226,9 +244,11 @@
           "type": "string"
         },
         "annotations": {
-          "description": "Transformer-added metadata.",
-          "type": "object",
-          "additionalProperties": true
+          "description": "Renderer-visible annotations supplied by comparators or transformers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          }
         },
         "artifacts": {
           "description": "Published artifacts for this node. Session-scoped working data: carried\nacross the plugin ABI wire as descriptors (the bytes live in the shared\n`data_root` cache), but not meaningful outside a session. Callers\nwriting changeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",

@@ -9,8 +9,8 @@ pub mod test_support;
 
 pub use data_access::LocalDataAccess;
 pub use ir::{
-    Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode, ExtractHint,
-    ValuePreview,
+    Annotation, Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode,
+    ExtractHint, ValuePreview,
 };
 pub use traits::*;
 pub use types::*;

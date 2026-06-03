@@ -33,6 +33,9 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
     r(registry.register_transformer(Arc::new(transformers::table_splitter::TableSplitter)));
     r(registry.register_transformer(Arc::new(transformers::tabular_analyzer::TabularAnalyzer)));
     r(registry.register_transformer(Arc::new(
+        transformers::tabular_stats_annotator::TabularStatsAnnotator,
+    )));
+    r(registry.register_transformer(Arc::new(
         transformers::column_reorder::ColumnReorderDetector,
     )));
     r(registry.register_transformer(Arc::new(

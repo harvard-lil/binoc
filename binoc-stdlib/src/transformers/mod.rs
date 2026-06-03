@@ -7,3 +7,4 @@ pub mod fuzzy_correlation_detector;
 pub mod table_collection_analyzer;
 pub mod table_splitter;
 pub mod tabular_analyzer;
+pub mod tabular_stats_annotator;

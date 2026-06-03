@@ -278,8 +278,7 @@ fn transform_modify(
     // stash the tabular description as an annotation so renderers can
     // surface it if they want without overwriting "Moved from ...".
     if node.action == "move" {
-        node.annotations
-            .insert("tabular_summary".into(), serde_json::json!(tabular_desc));
+        node.annotate_from("binoc", "tabular_summary", serde_json::json!(tabular_desc));
     } else {
         if tabular_desc != "Table modified" || node.summary.is_none() {
             node.summary = Some(tabular_desc);
@@ -437,8 +436,7 @@ fn transform_modify_keyed(
     );
 
     if node.action == "move" {
-        node.annotations
-            .insert("tabular_summary".into(), serde_json::json!(tabular_desc));
+        node.annotate_from("binoc", "tabular_summary", serde_json::json!(tabular_desc));
     } else if tabular_desc != "Table modified" || node.summary.is_none() {
         node.summary = Some(tabular_desc);
     }

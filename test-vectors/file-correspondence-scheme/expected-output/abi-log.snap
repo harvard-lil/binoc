@@ -222,5 +222,10 @@ expression: "&abi_log"
         "found": true
       }
     ]
+  },
+  {
+    "method": "transform",
+    "plugin": "binoc.tabular_stats_annotator",
+    "data_ops": []
   }
 ]

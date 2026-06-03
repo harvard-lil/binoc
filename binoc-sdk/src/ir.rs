@@ -61,6 +61,39 @@ impl Diagnostic {
     }
 }
 
+/// Renderer-visible metadata attached to a diff node by a comparator or
+/// transformer.
+///
+/// Annotations are intentionally progressively typed: producers can start with
+/// a string or simple JSON value, and renderers can either display the generic
+/// value shape or add package/key-specific handling later. The package namespace
+/// keeps independently-authored plugins from colliding on common keys.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct Annotation {
+    pub package: String,
+    pub key: String,
+    pub value: serde_json::Value,
+}
+
+impl Annotation {
+    pub fn new(
+        package: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> Self {
+        Self {
+            package: package.into(),
+            key: key.into(),
+            value,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        self.value.as_str()
+    }
+}
+
 /// A node in the diff tree — the central data structure of the system.
 /// Every comparator emits it, every transformer rewrites it, and serializers
 /// or bindings read it.
@@ -107,9 +140,9 @@ pub struct DiffNode {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub detail_blocks: Vec<DetailBlock>,
 
-    /// Transformer-added metadata.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub annotations: BTreeMap<String, serde_json::Value>,
+    /// Renderer-visible annotations supplied by comparators or transformers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<Annotation>,
 
     /// Which comparator produced this node (provenance for extract chain).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -175,7 +208,7 @@ impl DiffNode {
             children: Vec::new(),
             details: BTreeMap::new(),
             detail_blocks: Vec::new(),
-            annotations: BTreeMap::new(),
+            annotations: Vec::new(),
             comparator: None,
             transformed_by: Vec::new(),
             source_items: None,
@@ -210,6 +243,16 @@ impl DiffNode {
         self
     }
 
+    pub fn with_annotation_from(
+        mut self,
+        package: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> Self {
+        self.annotate_from(package, key, value);
+        self
+    }
+
     pub fn with_source_path(mut self, source: impl Into<String>) -> Self {
         self.source_path = Some(source.into());
         self
@@ -237,6 +280,35 @@ impl DiffNode {
             diagnostic
         };
         self.diagnostics.push(diagnostic.normalized());
+    }
+
+    pub fn annotate_from(
+        &mut self,
+        package: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) {
+        let package = package.into();
+        let key = key.into();
+        if let Some(existing) = self
+            .annotations
+            .iter_mut()
+            .find(|annotation| annotation.package == package && annotation.key == key)
+        {
+            existing.value = value;
+        } else {
+            self.annotations.push(Annotation::new(package, key, value));
+        }
+    }
+
+    pub fn annotation(&self, package: &str, key: &str) -> Option<&Annotation> {
+        self.annotations
+            .iter()
+            .find(|annotation| annotation.package == package && annotation.key == key)
+    }
+
+    pub fn binoc_annotation(&self, key: &str) -> Option<&Annotation> {
+        self.annotation("binoc", key)
     }
 
     pub fn node_count(&self) -> usize {
@@ -495,6 +567,7 @@ mod tests {
             .with_tag("binoc.column-reorder")
             .with_tag("binoc.whitespace")
             .with_detail("lines_changed", serde_json::json!(42))
+            .with_annotation_from("binoc", "note", serde_json::json!("check distribution"))
             .with_children(vec![child])
             .with_source_path("old/dir");
 
@@ -505,10 +578,35 @@ mod tests {
             node.details.get("lines_changed"),
             Some(&serde_json::json!(42))
         );
+        assert_eq!(
+            node.binoc_annotation("note")
+                .map(|annotation| &annotation.value),
+            Some(&serde_json::json!("check distribution"))
+        );
         assert!(node.detail_blocks.is_empty());
         assert_eq!(node.children.len(), 1);
         assert_eq!(node.children[0].path, "child.txt");
         assert_eq!(node.source_path.as_deref(), Some("old/dir"));
+    }
+
+    #[test]
+    fn annotations_are_namespaced_and_replace_by_package_key() {
+        let mut node = DiffNode::new("modify", "file", "data.csv");
+        node.annotate_from("binoc", "note", serde_json::json!("first"));
+        node.annotate_from("binoc", "note", serde_json::json!("second"));
+        node.annotate_from("example.plugin", "note", serde_json::json!("external"));
+
+        assert_eq!(node.annotations.len(), 2);
+        assert_eq!(
+            node.binoc_annotation("note")
+                .map(|annotation| &annotation.value),
+            Some(&serde_json::json!("second"))
+        );
+        assert_eq!(
+            node.annotation("example.plugin", "note")
+                .map(|annotation| &annotation.value),
+            Some(&serde_json::json!("external"))
+        );
     }
 
     #[test]

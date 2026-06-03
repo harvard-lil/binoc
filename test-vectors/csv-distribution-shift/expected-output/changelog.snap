@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 4 rows modified by key
+  - Distribution shifts
+    - column 'score': mean 20 -> 35.5, median 20 -> 40, range 10-30 -> 12-50, nulls 1 -> 0, mean abs delta 10.667 across 3 paired rows
+  - Changed cells (showing 3 of 5); use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - key id '1', column 'score': '10' -> '12'
+    - key id '2', column 'label': 'beta' -> 'beta2'
+    - key id '2', column 'score': '20' -> '35'

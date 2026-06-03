@@ -162,6 +162,7 @@ nav:
           # BEGIN-ADR-NAV
           - adr/README.md
           - 'Transformer-Initiated Recompare as a Correspondence Contract': adr/2026-06-03-transformer_initiated_recompare.md
+          - 'Progressive Renderer Annotations': adr/2026-06-03-progressive_renderer_annotations.md
           - 'Error Diagnostics Are Reportable Findings': adr/2026-06-03-error_diagnostics_are_reportable_findings.md
           - 'Markdown Renderer Groups Replace Significance-Map Grouping': adr/2026-06-02-renderer_groups.md
           - 'Unified Dataset Config and Identity Policy': adr/2026-06-01-unified_dataset_config_and_identity.md

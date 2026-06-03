@@ -502,6 +502,58 @@ fn py_dict_to_json_map(dict: &Bound<'_, PyDict>) -> PyResult<BTreeMap<String, se
     Ok(map)
 }
 
+fn annotation_to_py<'py>(py: Python<'py>, annotation: &Annotation) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("package", &annotation.package)?;
+    dict.set_item("key", &annotation.key)?;
+    dict.set_item("value", json_to_py(py, &annotation.value)?)?;
+    Ok(dict)
+}
+
+fn annotations_to_py<'py>(
+    py: Python<'py>,
+    annotations: &[Annotation],
+) -> PyResult<Bound<'py, PyList>> {
+    let items: PyResult<Vec<Bound<'py, PyDict>>> = annotations
+        .iter()
+        .map(|annotation| annotation_to_py(py, annotation))
+        .collect();
+    PyList::new(py, items?)
+}
+
+fn py_annotation_record_to_ir(dict: &Bound<'_, PyDict>) -> PyResult<Annotation> {
+    let package = dict
+        .get_item("package")?
+        .map(|value| value.extract::<String>())
+        .transpose()?
+        .unwrap_or_else(|| "binoc".to_string());
+    let key = dict
+        .get_item("key")?
+        .ok_or_else(|| PyTypeError::new_err("annotation record missing 'key'"))?
+        .extract::<String>()?;
+    let value = dict
+        .get_item("value")?
+        .ok_or_else(|| PyTypeError::new_err("annotation record missing 'value'"))
+        .and_then(|value| py_to_json(&value))?;
+    Ok(Annotation::new(package, key, value))
+}
+
+fn py_annotations_to_ir(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Annotation>> {
+    if let Ok(list) = obj.cast::<PyList>() {
+        let mut annotations = Vec::new();
+        for item in list.iter() {
+            let dict = item
+                .cast::<PyDict>()
+                .map_err(|_| PyTypeError::new_err("annotation list items must be dicts"))?;
+            annotations.push(py_annotation_record_to_ir(dict)?);
+        }
+        return Ok(annotations);
+    }
+    Err(PyTypeError::new_err(
+        "annotations must be a list of annotation dicts",
+    ))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PyDiffNode
 // ═══════════════════════════════════════════════════════════════════════════
@@ -540,7 +592,8 @@ impl PyDiffNode {
     /// :param tags: Optional list or set of open-string tags (used for
     ///     renderer significance classification and transformer dispatch).
     /// :param details: Optional dict of structured JSON-serializable data.
-    /// :param annotations: Optional dict of transient/presentation data.
+    /// :param annotations: Optional list of annotation dicts with explicit
+    ///     ``package``, ``key``, and ``value`` fields.
     /// :param children: Optional list of child ``DiffNode`` s.
     #[new]
     #[pyo3(signature = (action, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
@@ -553,7 +606,7 @@ impl PyDiffNode {
         summary: Option<String>,
         tags: Option<Bound<'_, PyAny>>,
         details: Option<Bound<'_, PyDict>>,
-        annotations: Option<Bound<'_, PyDict>>,
+        annotations: Option<Bound<'_, PyAny>>,
         children: Option<Vec<PyDiffNode>>,
     ) -> PyResult<Self> {
         let mut node = DiffNode::new(action, item_type, path);
@@ -576,7 +629,7 @@ impl PyDiffNode {
             node.details = py_dict_to_json_map(&d)?;
         }
         if let Some(a) = annotations {
-            node.annotations = py_dict_to_json_map(&a)?;
+            node.annotations = py_annotations_to_ir(&a)?;
         }
         if let Some(c) = children {
             node.children = c.into_iter().map(|n| n.inner).collect();
@@ -629,10 +682,11 @@ impl PyDiffNode {
     fn details<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         json_map_to_py(py, &self.inner.details)
     }
-    /// Transient/presentation annotations not part of the persisted IR.
+    /// Renderer-visible annotations as ``{"package", "key", "value"}``
+    /// records.
     #[getter]
-    fn annotations<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        json_map_to_py(py, &self.inner.annotations)
+    fn annotations<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        annotations_to_py(py, &self.inner.annotations)
     }
 
     /// Total number of nodes in the subtree rooted at this node.
@@ -661,7 +715,10 @@ impl PyDiffNode {
             .collect();
         dict.set_item("children", PyList::new(py, children?)?)?;
         dict.set_item("details", json_map_to_py(py, &self.inner.details)?)?;
-        dict.set_item("annotations", json_map_to_py(py, &self.inner.annotations)?)?;
+        dict.set_item(
+            "annotations",
+            annotations_to_py(py, &self.inner.annotations)?,
+        )?;
         Ok(dict)
     }
 
@@ -703,6 +760,31 @@ impl PyDiffNode {
         Ok(Self {
             inner: self.inner.clone().with_detail(key, json_val),
         })
+    }
+    /// Return a clone of this node with a namespaced annotation set.
+    /// ``value`` must be JSON-serializable.
+    fn with_annotation_from(
+        &self,
+        package: String,
+        key: String,
+        value: Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        let json_val = py_to_json(&value)?;
+        Ok(Self {
+            inner: self
+                .inner
+                .clone()
+                .with_annotation_from(package, key, json_val),
+        })
+    }
+    /// Alias for ``with_annotation_from``.
+    fn annotate_from(
+        &self,
+        package: String,
+        key: String,
+        value: Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        self.with_annotation_from(package, key, value)
     }
     /// Recursively search this subtree for a node whose ``path`` matches
     /// ``selector``. Returns ``None`` if no match is found.
