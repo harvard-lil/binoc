@@ -1,0 +1,14 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 4 rows added by key; 4 rows removed by key; 1 row modified by key
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - key id 'b', column 'score': '20' -> '21'
+
+## Warnings
+
+- 2 rows had null configured key values (`data.csv`) [binoc.null-key]
+- 1 configured row key appeared more than once (`data.csv`) [binoc.duplicate-key]

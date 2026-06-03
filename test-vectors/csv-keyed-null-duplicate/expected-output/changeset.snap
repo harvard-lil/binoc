@@ -1,0 +1,161 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "4 rows added by key; 4 rows removed by key; 1 row modified by key",
+        "tags": [
+          "binoc.ambiguous-key",
+          "binoc.cell-change",
+          "binoc.duplicate-key",
+          "binoc.identity-diagnostic",
+          "binoc.null-key",
+          "binoc.row-addition",
+          "binoc.row-identity-ambiguous",
+          "binoc.row-removal"
+        ],
+        "details": {
+          "cells_changed": 1,
+          "columns_added": [],
+          "columns_left": [
+            "id",
+            "name",
+            "score"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "id",
+            "name",
+            "score"
+          ],
+          "hash_left": "a173bd43f55adf4e02c1a6e699cc47012df16ec03877484353b33b02e920a3fc",
+          "hash_right": "2fb4ebc136d454b2da8e6fb5bc09f286b003078e604b18e642c50f795e2b7fc4",
+          "row_identity": {
+            "columns": [
+              "id"
+            ],
+            "matched_rows": 1,
+            "mode": "keyed",
+            "on_duplicate_key": "diagnostic",
+            "on_null_key": "diagnostic"
+          },
+          "rows_added": 4,
+          "rows_added_keys": [
+            {
+              "key": null,
+              "row": 3
+            },
+            {
+              "key": {
+                "id": "c"
+              },
+              "row": 4
+            },
+            {
+              "key": {
+                "id": "dup"
+              },
+              "row": 1
+            },
+            {
+              "key": {
+                "id": "dup"
+              },
+              "row": 2
+            }
+          ],
+          "rows_left": 5,
+          "rows_modified": 1,
+          "rows_removed": 4,
+          "rows_removed_keys": [
+            {
+              "key": null,
+              "row": 1
+            },
+            {
+              "key": {
+                "id": "a"
+              },
+              "row": 0
+            },
+            {
+              "key": {
+                "id": "dup"
+              },
+              "row": 2
+            },
+            {
+              "key": {
+                "id": "dup"
+              },
+              "row": 3
+            }
+          ],
+          "rows_right": 5
+        },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 1,
+            "examples": [
+              {
+                "locator": {
+                  "column": "score",
+                  "key": {
+                    "id": "b"
+                  }
+                },
+                "before": {
+                  "value": "20",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "21",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ]
+          }
+        ],
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  },
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "binoc.null-key",
+      "message": "2 rows had null configured key values",
+      "location": "data.csv"
+    },
+    {
+      "severity": "warning",
+      "code": "binoc.duplicate-key",
+      "message": "1 configured row key appeared more than once",
+      "location": "data.csv"
+    }
+  ]
+}

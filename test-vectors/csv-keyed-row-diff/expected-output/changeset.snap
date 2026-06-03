@@ -1,0 +1,112 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": "1 row added by key; 1 row removed by key; 1 row modified by key",
+        "tags": [
+          "binoc.cell-change",
+          "binoc.row-addition",
+          "binoc.row-removal"
+        ],
+        "details": {
+          "cells_changed": 1,
+          "columns_added": [],
+          "columns_left": [
+            "id",
+            "name",
+            "price",
+            "status"
+          ],
+          "columns_removed": [],
+          "columns_right": [
+            "id",
+            "name",
+            "price",
+            "status"
+          ],
+          "hash_left": "6235797724098915a0a1aceb382bd1b91b206b0d403937299adce5c798dac5ad",
+          "hash_right": "a71e03436c2dd8c967acfa5a190b4fc35ed7b77d7e6260ccaf2dfaba0a4906b8",
+          "row_identity": {
+            "columns": [
+              "id"
+            ],
+            "matched_rows": 2,
+            "mode": "keyed",
+            "on_duplicate_key": "diagnostic",
+            "on_null_key": "diagnostic"
+          },
+          "rows_added": 1,
+          "rows_added_keys": [
+            {
+              "key": {
+                "id": "p4"
+              },
+              "row": 1
+            }
+          ],
+          "rows_left": 3,
+          "rows_modified": 1,
+          "rows_removed": 1,
+          "rows_removed_keys": [
+            {
+              "key": {
+                "id": "p3"
+              },
+              "row": 2
+            }
+          ],
+          "rows_right": 3
+        },
+        "detail_blocks": [
+          {
+            "id": "cells_changed",
+            "kind": "binoc.tabular.cell_changes.v1",
+            "label": "Changed cells",
+            "total_count": 1,
+            "examples": [
+              {
+                "locator": {
+                  "column": "price",
+                  "key": {
+                    "id": "p2"
+                  }
+                },
+                "before": {
+                  "value": "20",
+                  "media_type": "text/plain"
+                },
+                "after": {
+                  "value": "25",
+                  "media_type": "text/plain"
+                }
+              }
+            ],
+            "extract": [
+              {
+                "aspect": "cells_changed",
+                "label": "All changed cells"
+              }
+            ]
+          }
+        ],
+        "comparator": "binoc.csv",
+        "transformed_by": [
+          "binoc.tabular_analyzer"
+        ]
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

@@ -1,3 +1,5 @@
+use binoc_core::config::DatasetConfig;
+use binoc_core::controller::Controller;
 use binoc_core::data_access::LocalDataAccess;
 use binoc_sdk::*;
 
@@ -12,6 +14,134 @@ fn da() -> LocalDataAccess {
 
 fn null_cfg() -> serde_json::Value {
     serde_json::Value::Null
+}
+
+fn controller_with_tabular_row_identity(on_null_key: &str, on_duplicate_key: &str) -> Controller {
+    let registry = binoc_stdlib::default_registry();
+    let mut config = DatasetConfig::default_config();
+    config.transformers = vec!["binoc.tabular_analyzer".into()];
+    config.dataset = serde_json::json!({
+        "tables": {
+            "defaults": {
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": on_null_key,
+                    "on_duplicate_key": on_duplicate_key
+                }
+            }
+        }
+    });
+    let resolved = registry.resolve(&config).unwrap();
+    Controller::new(resolved.comparators, resolved.transformers)
+        .with_transformer_configs(config.transformer_config.as_map())
+        .with_dataset_config(config.dataset.clone())
+}
+
+fn write_file(path: &std::path::Path, contents: &str) {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(path, contents).unwrap();
+}
+
+// ── Tabular row identity failures ─────────────────────────────────────
+
+#[test]
+fn tabular_row_identity_null_key_diagnostic_succeeds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    write_file(&snap_a.join("data.csv"), "id,name\n,Ada\n1,Bob\n");
+    write_file(&snap_b.join("data.csv"), "id,name\n,Ada Lovelace\n1,Bob\n");
+
+    let controller = controller_with_tabular_row_identity("diagnostic", "diagnostic");
+    let changeset = controller
+        .diff(
+            snap_a.to_string_lossy().as_ref(),
+            snap_b.to_string_lossy().as_ref(),
+        )
+        .unwrap();
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.null-key"
+            && diagnostic.severity == DiagnosticSeverity::Warning
+            && diagnostic.location.as_deref() == Some("data.csv")
+    }));
+}
+
+#[test]
+fn tabular_row_identity_null_key_error_is_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    write_file(&snap_a.join("data.csv"), "id,name\n,Ada\n1,Bob\n");
+    write_file(&snap_b.join("data.csv"), "id,name\n,Ada Lovelace\n1,Bob\n");
+
+    let controller = controller_with_tabular_row_identity("error", "diagnostic");
+    let changeset = controller
+        .diff(
+            snap_a.to_string_lossy().as_ref(),
+            snap_b.to_string_lossy().as_ref(),
+        )
+        .unwrap();
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.null-key"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.location.as_deref() == Some("data.csv")
+    }));
+}
+
+#[test]
+fn tabular_row_identity_duplicate_key_diagnostic_succeeds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    write_file(
+        &snap_a.join("data.csv"),
+        "id,name\n1,Ada\n1,Ada Duplicate\n2,Bob\n",
+    );
+    write_file(&snap_b.join("data.csv"), "id,name\n1,Ada Revised\n2,Bob\n");
+
+    let controller = controller_with_tabular_row_identity("diagnostic", "diagnostic");
+    let changeset = controller
+        .diff(
+            snap_a.to_string_lossy().as_ref(),
+            snap_b.to_string_lossy().as_ref(),
+        )
+        .unwrap();
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.duplicate-key"
+            && diagnostic.severity == DiagnosticSeverity::Warning
+            && diagnostic.location.as_deref() == Some("data.csv")
+    }));
+}
+
+#[test]
+fn tabular_row_identity_duplicate_key_error_is_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let snap_a = tmp.path().join("snapshot-a");
+    let snap_b = tmp.path().join("snapshot-b");
+    write_file(
+        &snap_a.join("data.csv"),
+        "id,name\n1,Ada\n1,Ada Duplicate\n2,Bob\n",
+    );
+    write_file(&snap_b.join("data.csv"), "id,name\n1,Ada Revised\n2,Bob\n");
+
+    let controller = controller_with_tabular_row_identity("diagnostic", "error");
+    let changeset = controller
+        .diff(
+            snap_a.to_string_lossy().as_ref(),
+            snap_b.to_string_lossy().as_ref(),
+        )
+        .unwrap();
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.duplicate-key"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.location.as_deref() == Some("data.csv")
+    }));
 }
 
 // ── Correlation detector (leaf-level move + copy) ─────────────────────

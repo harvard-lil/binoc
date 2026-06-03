@@ -1,0 +1,6 @@
+id,name,score
+a,Alice,10
+,BadLeft,99
+dup,First,1
+dup,Second,2
+b,Bob,20

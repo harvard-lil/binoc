@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 1 row added by key; 1 row removed by key; 1 row modified by key
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - key id 'p2', column 'price': '20' -> '25'

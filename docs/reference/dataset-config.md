@@ -195,6 +195,48 @@ dataset:
 `on_duplicate_key` accept `diagnostic`, `error`, or `ignore`; plugins decide how
 to apply those policies for the semantics they implement.
 
+### `dataset.tables`
+
+Tabular row identity is optional. Without it, `binoc.tabular_analyzer`
+keeps the positional fallback: row additions/removals are counted by
+row count differences, and changed cells are compared at the same row
+offset. With `row_identity.columns`, the analyzer builds a table-local
+key and matches rows by that key before reporting row additions,
+removals, and modified cells.
+
+```yaml
+dataset:
+  tables:
+    defaults:
+      row_identity:
+        on_null_key: diagnostic
+        on_duplicate_key: diagnostic
+    entries:
+      applications:
+        match:
+          logical_name: applications
+        row_identity:
+          columns: ['ApplNo']
+      products:
+        match:
+          source:
+            path_regex: '^data/products\.csv$'
+        row_identity:
+          columns: ['BLA Number', 'Product Number']
+```
+
+`match.logical_name` targets logical table children produced by
+multi-table comparators or the CSV table splitter. `match.source.path`
+and `match.source.path_regex` target the tabular node path or its
+source item path, which is useful for single CSV files.
+
+Rows with blank key components are null-key rows. Keys that appear more
+than once on either side are duplicate-key rows. The default
+`diagnostic` policy emits warnings and leaves those rows unmatched so
+normal add/remove counts still reflect them. `error` emits an error-severity
+diagnostic without stopping the comparison. `ignore` suppresses the diagnostic
+while keeping the same conservative matching behavior.
+
 ## `output.<renderer>`
 
 Each renderer gets its own config section, keyed by the renderer's
