@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **32 shared examples** in this gallery.
+Binoc currently ships **33 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -38,6 +38,7 @@ just materialize
 | [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation | data_v2.csv: Moved from data.csv (modified) | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
+| [`csv-stacked-tables`](#csv-stacked-tables) | Detects two logical tables stacked in one messy CSV | data.csv: Table table_2 changed: 1 row added | Default pipeline |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 row) | Default pipeline |
@@ -270,6 +271,28 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: 2 rows removed
+```
+
+## csv-stacked-tables
+
+Detects two logical tables stacked in one messy CSV
+
+- **Browse source:** [csv-stacked-tables](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-stacked-tables)
+- **Tags:** `csv`, `stacked-tables`, `tabular-collection`, `row-addition`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-stacked-tables/snapshot-a \
+  ./test-vectors-materialized/csv-stacked-tables/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: Table table_2 changed: 1 row added
+- **data.csv#table_2**: 1 row added
 ```
 
 ## csv-verbosity-full
