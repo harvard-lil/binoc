@@ -108,6 +108,7 @@ impl DatasetConfig {
                 "binoc.correlation_detector".into(),
                 "binoc.fuzzy_correlation_detector".into(),
                 "binoc.folder_move_detector".into(),
+                "binoc.table_splitter".into(),
                 "binoc.tabular_analyzer".into(),
                 "binoc.column_reorder_detector".into(),
                 "binoc.table_collection_analyzer".into(),

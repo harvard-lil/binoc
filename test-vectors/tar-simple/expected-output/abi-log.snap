@@ -182,6 +182,30 @@ expression: "&abi_log"
   },
   {
     "method": "transform",
+    "plugin": "binoc.table_splitter",
+    "data_ops": [
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      },
+      {
+        "op": "get_artifact",
+        "format": {
+          "package": "binoc",
+          "name": "tabular",
+          "version": 1
+        },
+        "found": true
+      }
+    ]
+  },
+  {
+    "method": "transform",
     "plugin": "binoc.tabular_analyzer",
     "data_ops": [
       {
