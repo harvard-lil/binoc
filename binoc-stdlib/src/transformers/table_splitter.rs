@@ -259,13 +259,9 @@ fn detect_sections(table: &TabularData) -> Detection {
 
     let ambiguous_reason = if sections.len() >= 2 && !wide_unclaimed.is_empty() {
         Some(format!(
-            "The CSV has stacked table-like regions, but row{} {} outside any clear rectangle; leaving it as one table.",
-            if wide_unclaimed.len() == 1 { "" } else { "s" },
-            wide_unclaimed
-                .iter()
-                .map(|row| row.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
+            "The CSV has stacked table-like regions, but {} {} outside any clear rectangle; leaving it as one table.",
+            summarize_unclaimed(&wide_unclaimed),
+            if wide_unclaimed.len() == 1 { "falls" } else { "fall" }
         ))
     } else {
         None
@@ -275,6 +271,32 @@ fn detect_sections(table: &TabularData) -> Detection {
         sections,
         ambiguous_reason,
     }
+}
+
+/// Summarize the unclaimed row indices as a count plus a small sample, rather
+/// than enumerating every index (which bloats the suggestion on large tables).
+fn summarize_unclaimed(rows: &[usize]) -> String {
+    const SAMPLE: usize = 5;
+
+    let count = rows.len();
+    let noun = if count == 1 { "row" } else { "rows" };
+
+    if count <= SAMPLE {
+        let list = rows
+            .iter()
+            .map(|row| row.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return format!("{count} {noun} ({list})");
+    }
+
+    let sample = rows[..SAMPLE]
+        .iter()
+        .map(|row| row.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let remaining = count - SAMPLE;
+    format!("{count} {noun} (e.g. {sample}, … and {remaining} more)")
 }
 
 fn raw_rows(table: &TabularData) -> Vec<Vec<String>> {
@@ -507,5 +529,20 @@ mod tests {
 
         assert_eq!(detection.sections.len(), 2);
         assert!(detection.ambiguous_reason.is_some());
+    }
+
+    #[test]
+    fn summarizes_unclaimed_rows_without_enumerating_all() {
+        let few = summarize_unclaimed(&[1, 2, 3]);
+        assert_eq!(few, "3 rows (1, 2, 3)");
+
+        let one = summarize_unclaimed(&[7]);
+        assert_eq!(one, "1 row (7)");
+
+        let many: Vec<usize> = (1..=10_000).collect();
+        let summary = summarize_unclaimed(&many);
+        assert_eq!(summary, "10000 rows (e.g. 1, 2, 3, 4, 5, … and 9995 more)");
+        // The whole point: the summary stays short regardless of row count.
+        assert!(summary.len() < 80);
     }
 }
