@@ -15,7 +15,17 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "duplicate.txt",
         "source_path": "original.txt",
-        "summary": "Copied from original.txt",
+        "summary": [
+          {
+            "text": "Copied from "
+          },
+          {
+            "path": {
+              "value": "original.txt",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.copy"
         ]

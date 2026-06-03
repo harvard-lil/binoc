@@ -328,10 +328,14 @@
           ]
         },
         "summary": {
-          "description": "Optional human-readable one-liner describing the change.\nSet by comparator or transformer; used by renderers for narrative rendering.",
-          "type": [
-            "string",
-            "null"
+          "description": "Optional structured one-liner describing the change. Set by a\ncomparator or transformer; renderers format each [`Segment`] by its\ntype. Build it with [`Summary`]'s builder, or pass a plain string —\n`impl Into<Summary>` wraps it as a single [`Segment::Text`].",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Summary"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "tags": {
@@ -441,6 +445,100 @@
         "logical_path",
         "is_dir"
       ]
+    },
+    "Segment": {
+      "description": "One piece of a [`Summary`].\n\nEach variant carries a value *and*, implicitly, the render-time policy\nfor it: group an integer, format a float, leave text alone, dereference\na path. Renderers format by variant; they never parse prose to recover\nthe type of a value, because the producer never threw it away. Variants\ntrack *render behavior*, not semantics — a currency or percent is `Text`\nplus a number, never its own variant. See ADR\n2026-06-03-structured-summary-segments.",
+      "oneOf": [
+        {
+          "description": "Verbatim text: connective wording, units, punctuation, and any\nvalue the renderer must not reinterpret. Embedded digits are never\nreformatted — a number that should be grouped is a [`Segment::Uint`],\nand a path that could be linked is a [`Segment::Path`].",
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        },
+        {
+          "description": "A path or locator. Renderers may shorten or hyperlink it; `snapshot`\nsays which side of the diff it resolves in.",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "object",
+              "properties": {
+                "snapshot": {
+                  "$ref": "#/$defs/Side"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "snapshot"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "description": "A non-negative count. Renderers apply digit grouping / locale.",
+          "type": "object",
+          "properties": {
+            "uint": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "uint"
+          ]
+        },
+        {
+          "description": "A real-valued quantity. Renderers apply decimal / precision policy.",
+          "type": "object",
+          "properties": {
+            "float": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "float"
+          ]
+        }
+      ]
+    },
+    "Side": {
+      "description": "Which snapshot a [`Segment::Path`] resolves in.\n\nLets a renderer that can dereference a path — hyperlink it, shorten it\nagainst a tree, show an icon — target the correct side of the diff\nwithout understanding *why* the path appears (rename, copy,\ncross-reference, ...). It is a property of the value, not an encoding of\nany one concept. See ADR 2026-06-03-structured-summary-segments.",
+      "oneOf": [
+        {
+          "description": "The \"before\" snapshot (a source/original path).",
+          "type": "string",
+          "const": "from"
+        },
+        {
+          "description": "The \"after\" snapshot (a destination/current path).",
+          "type": "string",
+          "const": "to"
+        }
+      ]
+    },
+    "Summary": {
+      "description": "A structured, render-ready one-line summary: an ordered list of typed\n[`Segment`]s.\n\nProducers (comparators, transformers, plugins) build it; renderers format\neach segment by its type. This replaces free-text summaries so that\nnumber and path formatting is a render-time decision the renderer makes\nfrom typed values, rather than a fragile reparse of prose. A producer\nthat owns a concept (a rename detector) owns the *wording* — it emits the\nconnective `Text` and the `Path`s — while the renderer owns the\n*typography*. See ADR 2026-06-03-structured-summary-segments.\n\nThe ergonomic shortcut for the common case is `impl Into<Summary>`:\n`with_summary(\"plain text\")` still works and produces a single\n[`Segment::Text`].",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Segment"
+      }
     },
     "ValuePreview": {
       "description": "A bounded preview of one value in a detail example.",

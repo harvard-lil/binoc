@@ -544,7 +544,12 @@ fn correlation_detector_aggregates_one_to_many_copy() {
                 .get("destinations")
                 .expect("destinations present");
             assert_eq!(dests.as_array().unwrap().len(), 2);
-            assert!(copy.summary.as_deref().unwrap().contains("copy_a.bin"));
+            assert!(copy
+                .summary
+                .as_ref()
+                .unwrap()
+                .plain_text()
+                .contains("copy_a.bin"));
         }
         _ => panic!("Expected Replace"),
     }
@@ -808,7 +813,10 @@ fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
         .expect("modified remainder");
     assert_eq!(modified.action, "modify");
     assert_eq!(modified.source_path, None);
-    assert_eq!(modified.summary.as_deref(), Some("2 lines added"));
+    assert_eq!(
+        modified.summary.as_ref().map(|s| s.plain_text()).as_deref(),
+        Some("2 lines added")
+    );
     assert!(!modified.tags.contains("binoc.move"));
 
     let removed = folded
@@ -949,7 +957,12 @@ fn tabular_analyzer_detects_cell_changes() {
         TransformResult::Replace(n) => {
             assert!(n.tags.contains("binoc.cell-change"));
             assert_eq!(n.details["cells_changed"], 2);
-            assert!(n.summary.as_ref().unwrap().contains("2 cells changed"));
+            assert!(n
+                .summary
+                .as_ref()
+                .unwrap()
+                .plain_text()
+                .contains("2 cells changed"));
             assert_eq!(n.detail_blocks.len(), 1);
             let block = &n.detail_blocks[0];
             assert_eq!(block.id, "cells_changed");
@@ -1041,8 +1054,13 @@ fn tabular_analyzer_handles_add_action() {
     match TabularAnalyzer.transform(node, &data, &null_cfg()) {
         TransformResult::Replace(n) => {
             assert!(n.tags.contains("binoc.content-changed"));
-            assert!(n.summary.as_ref().unwrap().contains("2 columns"));
-            assert!(n.summary.as_ref().unwrap().contains("2 rows"));
+            assert!(n
+                .summary
+                .as_ref()
+                .unwrap()
+                .plain_text()
+                .contains("2 columns"));
+            assert!(n.summary.as_ref().unwrap().plain_text().contains("2 rows"));
         }
         _ => panic!("Expected Replace"),
     }
@@ -1065,8 +1083,13 @@ fn tabular_analyzer_handles_remove_action() {
     match TabularAnalyzer.transform(node, &data, &null_cfg()) {
         TransformResult::Replace(n) => {
             assert!(n.tags.contains("binoc.content-changed"));
-            assert!(n.summary.as_ref().unwrap().contains("3 columns"));
-            assert!(n.summary.as_ref().unwrap().contains("1 row"));
+            assert!(n
+                .summary
+                .as_ref()
+                .unwrap()
+                .plain_text()
+                .contains("3 columns"));
+            assert!(n.summary.as_ref().unwrap().plain_text().contains("1 row"));
         }
         _ => panic!("Expected Replace"),
     }

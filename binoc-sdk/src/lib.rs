@@ -10,7 +10,7 @@ pub mod test_support;
 pub use data_access::LocalDataAccess;
 pub use ir::{
     Annotation, Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode,
-    ExtractHint, ValuePreview,
+    ExtractHint, Segment, Side, Summary, ValuePreview,
 };
 pub use traits::*;
 pub use types::*;

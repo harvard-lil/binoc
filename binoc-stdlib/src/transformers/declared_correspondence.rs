@@ -461,7 +461,11 @@ fn build_correspondence_node(
         .with_detail("destination_path", serde_json::json!(add.path));
     if rule.report_path_change {
         node.source_path = Some(remove.path.clone());
-        node.summary = Some(format!("Moved from {}", remove.path));
+        node.summary = Some(
+            Summary::new()
+                .text("Moved from ")
+                .path(&remove.path, binoc_sdk::Side::From),
+        );
         node.tags.insert("binoc.path-change".into());
     }
     node.pending_recompare = Some(ItemPair::both(left, right));

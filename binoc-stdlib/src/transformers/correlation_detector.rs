@@ -136,7 +136,7 @@ fn emit_move(group: &HashGroup, aggregate: bool, plan: &mut RewritePlan) {
             .with_tag("binoc.move");
 
         let summary = aggregated_move_summary(&sorted_removes, &sorted_adds);
-        node.summary = Some(summary);
+        node.summary = Some(summary.into());
 
         if sorted_removes.len() > 1 {
             let sources: Vec<String> = sorted_removes.iter().map(|e| e.path.clone()).collect();
@@ -171,10 +171,11 @@ fn emit_move(group: &HashGroup, aggregate: bool, plan: &mut RewritePlan) {
         let add = sorted_adds[i];
         let rm = sorted_removes[i];
         let node = DiffNode::new("move", &add.item_type, &add.path)
-            .with_summary(format!(
-                "Moved from {}",
-                source_label_for_move(&rm.path, &add.path)
-            ))
+            .with_summary(
+                Summary::new()
+                    .text("Moved from ")
+                    .path(source_label_for_move(&rm.path, &add.path), Side::From),
+            )
             .with_source_path(&rm.path)
             .with_tag("binoc.move");
         plan.schedule_remove(&add.path);
@@ -200,7 +201,7 @@ fn emit_copy(group: &HashGroup, aggregate: bool, plan: &mut RewritePlan) {
             .with_source_path(&source.path)
             .with_tag("binoc.copy");
         let destinations: Vec<String> = sorted_adds.iter().map(|e| e.path.clone()).collect();
-        node.summary = Some(aggregated_copy_summary(&source.path, &sorted_adds));
+        node.summary = Some(aggregated_copy_summary(&source.path, &sorted_adds).into());
         node.details
             .insert("destinations".into(), serde_json::json!(destinations));
         for a in &sorted_adds {
@@ -212,7 +213,11 @@ fn emit_copy(group: &HashGroup, aggregate: bool, plan: &mut RewritePlan) {
 
     for add in sorted_adds {
         let node = DiffNode::new("copy", &add.item_type, &add.path)
-            .with_summary(format!("Copied from {}", file_name_of(&source.path)))
+            .with_summary(
+                Summary::new()
+                    .text("Copied from ")
+                    .path(file_name_of(&source.path), Side::From),
+            )
             .with_source_path(&source.path)
             .with_tag("binoc.copy");
         plan.schedule_remove(&add.path);

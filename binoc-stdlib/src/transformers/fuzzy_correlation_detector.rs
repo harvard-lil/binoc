@@ -299,7 +299,12 @@ fn greedy_assign(mut pairs: Vec<ScoredPair>, threshold: f64) -> Vec<(usize, usiz
 fn build_move_node(rm: &FuzzyLeaf, add: &FuzzyLeaf) -> DiffNode {
     let source_name = source_label_for_move(&rm.path, &add.path);
     let mut node = DiffNode::new("move", &add.item_type, &add.path)
-        .with_summary(format!("Moved from {source_name} (modified)"))
+        .with_summary(
+            Summary::new()
+                .text("Moved from ")
+                .path(source_name, Side::From)
+                .text(" (modified)"),
+        )
         .with_source_path(&rm.path)
         .with_tag("binoc.move")
         .with_tag("binoc.move.modified");

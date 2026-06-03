@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "data.sqlite",
-        "summary": "Content changed (8.0 KB → 8.0 KB)",
+        "summary": [
+          {
+            "text": "Content changed (8.0 KB → 8.0 KB)"
+          }
+        ],
         "tags": [
           "binoc.content-changed"
         ],

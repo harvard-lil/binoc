@@ -1,7 +1,192 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use crate::types::{ArtifactDescriptor, ItemPair};
+
+/// Which snapshot a [`Segment::Path`] resolves in.
+///
+/// Lets a renderer that can dereference a path — hyperlink it, shorten it
+/// against a tree, show an icon — target the correct side of the diff
+/// without understanding *why* the path appears (rename, copy,
+/// cross-reference, ...). It is a property of the value, not an encoding of
+/// any one concept. See ADR 2026-06-03-structured-summary-segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    /// The "before" snapshot (a source/original path).
+    From,
+    /// The "after" snapshot (a destination/current path).
+    To,
+}
+
+/// One piece of a [`Summary`].
+///
+/// Each variant carries a value *and*, implicitly, the render-time policy
+/// for it: group an integer, format a float, leave text alone, dereference
+/// a path. Renderers format by variant; they never parse prose to recover
+/// the type of a value, because the producer never threw it away. Variants
+/// track *render behavior*, not semantics — a currency or percent is `Text`
+/// plus a number, never its own variant. See ADR
+/// 2026-06-03-structured-summary-segments.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum Segment {
+    /// Verbatim text: connective wording, units, punctuation, and any
+    /// value the renderer must not reinterpret. Embedded digits are never
+    /// reformatted — a number that should be grouped is a [`Segment::Uint`],
+    /// and a path that could be linked is a [`Segment::Path`].
+    Text(String),
+    /// A path or locator. Renderers may shorten or hyperlink it; `snapshot`
+    /// says which side of the diff it resolves in.
+    Path { value: String, snapshot: Side },
+    /// A non-negative count. Renderers apply digit grouping / locale.
+    Uint(u64),
+    /// A real-valued quantity. Renderers apply decimal / precision policy.
+    Float(f64),
+}
+
+/// A structured, render-ready one-line summary: an ordered list of typed
+/// [`Segment`]s.
+///
+/// Producers (comparators, transformers, plugins) build it; renderers format
+/// each segment by its type. This replaces free-text summaries so that
+/// number and path formatting is a render-time decision the renderer makes
+/// from typed values, rather than a fragile reparse of prose. A producer
+/// that owns a concept (a rename detector) owns the *wording* — it emits the
+/// connective `Text` and the `Path`s — while the renderer owns the
+/// *typography*. See ADR 2026-06-03-structured-summary-segments.
+///
+/// The ergonomic shortcut for the common case is `impl Into<Summary>`:
+/// `with_summary("plain text")` still works and produces a single
+/// [`Segment::Text`].
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct Summary(pub Vec<Segment>);
+
+impl Summary {
+    pub fn new() -> Self {
+        Summary(Vec::new())
+    }
+
+    /// Append verbatim text, coalescing into a trailing text segment if the
+    /// summary already ends in one. Keeps the serialized form canonical so
+    /// that helpers like [`Summary::count`] which emit a count followed by
+    /// text don't leave redundant adjacent text segments on the wire.
+    pub fn text(mut self, value: impl Into<String>) -> Self {
+        let value = value.into();
+        if let Some(Segment::Text(last)) = self.0.last_mut() {
+            last.push_str(&value);
+        } else {
+            self.0.push(Segment::Text(value));
+        }
+        self
+    }
+
+    /// Append a non-negative count (renderer applies digit grouping).
+    pub fn uint(mut self, value: u64) -> Self {
+        self.0.push(Segment::Uint(value));
+        self
+    }
+
+    /// Append a counted noun: `"{n} {noun}"`, with the count as a
+    /// [`Segment::Uint`] (grouped by the renderer) and the noun pluralized
+    /// with a trailing `s` unless `n == 1`. For irregular plurals, build the
+    /// segments by hand. Example: `.count(5, "row")` -> `5 rows`.
+    pub fn count(self, n: u64, noun: &str) -> Self {
+        let suffix = if n == 1 { "" } else { "s" };
+        self.uint(n).text(format!(" {noun}{suffix}"))
+    }
+
+    /// Append a real-valued quantity (renderer applies decimal policy).
+    pub fn float(mut self, value: f64) -> Self {
+        self.0.push(Segment::Float(value));
+        self
+    }
+
+    /// Append a path/locator that resolves in `snapshot`.
+    pub fn path(mut self, value: impl Into<String>, snapshot: Side) -> Self {
+        self.0.push(Segment::Path {
+            value: value.into(),
+            snapshot,
+        });
+        self
+    }
+
+    /// Append a single segment.
+    pub fn push(&mut self, segment: Segment) {
+        self.0.push(segment);
+    }
+
+    /// Append all segments of another summary (e.g. when joining child
+    /// summaries into a trailer).
+    pub fn extend(&mut self, other: Summary) {
+        self.0.extend(other.0);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn segments(&self) -> &[Segment] {
+        &self.0
+    }
+
+    /// Plain-text rendering with no formatting policy applied: text and path
+    /// values verbatim, numbers in bare decimal form. For consumers without a
+    /// renderer (Python bindings, machine sinks, provenance) and for internal
+    /// bookkeeping such as path-statement detection.
+    pub fn plain_text(&self) -> String {
+        self.to_string()
+    }
+
+    /// Uppercase the first character of the leading text segment, if the
+    /// summary begins with text. No-op when it begins with a number or path.
+    /// Mirrors sentence-casing of prose without scanning a built string.
+    pub fn capitalize_first(mut self) -> Self {
+        if let Some(Segment::Text(text)) = self.0.first_mut() {
+            if let Some(first) = text.get_mut(..1) {
+                first.make_ascii_uppercase();
+            }
+        }
+        self
+    }
+}
+
+impl fmt::Display for Summary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for segment in &self.0 {
+            match segment {
+                Segment::Text(text) => f.write_str(text)?,
+                Segment::Path { value, .. } => f.write_str(value)?,
+                Segment::Uint(value) => write!(f, "{value}")?,
+                Segment::Float(value) => write!(f, "{value}")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+impl From<&str> for Summary {
+    fn from(value: &str) -> Self {
+        Summary(vec![Segment::Text(value.to_string())])
+    }
+}
+
+impl From<String> for Summary {
+    fn from(value: String) -> Self {
+        Summary(vec![Segment::Text(value)])
+    }
+}
+
+impl From<Vec<Segment>> for Summary {
+    fn from(value: Vec<Segment>) -> Self {
+        Summary(value)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -116,10 +301,12 @@ pub struct DiffNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
 
-    /// Optional human-readable one-liner describing the change.
-    /// Set by comparator or transformer; used by renderers for narrative rendering.
+    /// Optional structured one-liner describing the change. Set by a
+    /// comparator or transformer; renderers format each [`Segment`] by its
+    /// type. Build it with [`Summary`]'s builder, or pass a plain string —
+    /// `impl Into<Summary>` wraps it as a single [`Segment::Text`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
+    pub summary: Option<Summary>,
 
     /// Open bag of semantic tags, namespaced by convention.
     /// e.g. "binoc.column-reorder", "biobinoc.gap-change"
@@ -218,7 +405,7 @@ impl DiffNode {
         }
     }
 
-    pub fn with_summary(mut self, summary: impl Into<String>) -> Self {
+    pub fn with_summary(mut self, summary: impl Into<Summary>) -> Self {
         self.summary = Some(summary.into());
         self
     }

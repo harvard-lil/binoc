@@ -14,7 +14,26 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "4 rows added by key; 4 rows removed by key; 1 row modified by key",
+        "summary": [
+          {
+            "uint": 4
+          },
+          {
+            "text": " rows added by key; "
+          },
+          {
+            "uint": 4
+          },
+          {
+            "text": " rows removed by key; "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row modified by key"
+          }
+        ],
         "tags": [
           "binoc.ambiguous-key",
           "binoc.cell-change",

@@ -9,7 +9,20 @@ expression: "&stable_changeset"
     "action": "modify",
     "item_type": "text",
     "path": "story.txt",
-    "summary": "2 lines added, 1 removed",
+    "summary": [
+      {
+        "uint": 2
+      },
+      {
+        "text": " lines added, "
+      },
+      {
+        "uint": 1
+      },
+      {
+        "text": " removed"
+      }
+    ],
     "tags": [
       "binoc.content-changed",
       "binoc.lines-added",

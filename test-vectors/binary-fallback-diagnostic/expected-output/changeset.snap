@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "data.parquet",
-        "summary": "Content changed (7 bytes → 7 bytes)",
+        "summary": [
+          {
+            "text": "Content changed (7 bytes → 7 bytes)"
+          }
+        ],
         "tags": [
           "binoc.content-changed"
         ],

@@ -14,7 +14,17 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular_collection",
         "path": "data.csv",
-        "summary": "Table table_2 changed: 1 row added",
+        "summary": [
+          {
+            "text": "Table table_2 changed: "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row added"
+          }
+        ],
         "tags": [
           "binoc.table-change",
           "binoc.tabular-collection",
@@ -25,7 +35,14 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data.csv#table_2",
-            "summary": "1 row added",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added"
+              }
+            ],
             "tags": [
               "binoc.row-addition",
               "binoc.table-change"

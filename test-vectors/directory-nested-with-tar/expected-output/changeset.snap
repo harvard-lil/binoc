@@ -19,7 +19,14 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data/records.csv",
-            "summary": "1 row added",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added"
+              }
+            ],
             "tags": [
               "binoc.row-addition"
             ],
@@ -64,7 +71,14 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "tabular",
                 "path": "data.tar.gz/records.csv",
-                "summary": "1 cell changed",
+                "summary": [
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " cell changed"
+                  }
+                ],
                 "tags": [
                   "binoc.cell-change"
                 ],

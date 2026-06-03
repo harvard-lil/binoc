@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "Rows reordered (same data, different sort order)",
+        "summary": [
+          {
+            "text": "Rows reordered (same data, different sort order)"
+          }
+        ],
         "tags": [
           "binoc.cell-change",
           "binoc.row-reorder"

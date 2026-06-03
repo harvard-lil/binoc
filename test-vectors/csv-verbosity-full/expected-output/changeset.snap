@@ -14,7 +14,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "5 cells changed",
+        "summary": [
+          {
+            "uint": 5
+          },
+          {
+            "text": " cells changed"
+          }
+        ],
         "tags": [
           "binoc.cell-change"
         ],

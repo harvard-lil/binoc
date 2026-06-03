@@ -15,7 +15,17 @@ expression: "&stable_changeset"
         "item_type": "directory",
         "path": "documentation",
         "source_path": "docs",
-        "summary": "Folder moved from docs",
+        "summary": [
+          {
+            "text": "Folder moved from "
+          },
+          {
+            "path": {
+              "value": "docs",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.folder-move",
           "binoc.move"

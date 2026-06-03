@@ -15,7 +15,17 @@ expression: "&stable_changeset"
         "item_type": "directory",
         "path": "FoodData_Central_csv_2026-04-30",
         "source_path": "FoodData_Central_csv_2025-12-18",
-        "summary": "Folder moved from FoodData_Central_csv_2025-12-18",
+        "summary": [
+          {
+            "text": "Folder moved from "
+          },
+          {
+            "path": {
+              "value": "FoodData_Central_csv_2025-12-18",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.folder-move",
           "binoc.move"
@@ -30,7 +40,23 @@ expression: "&stable_changeset"
                 "action": "add",
                 "item_type": "tabular",
                 "path": "FoodData_Central_csv_2026-04-30/data/new-table.csv",
-                "summary": "New table (2 columns, 1 row)",
+                "summary": [
+                  {
+                    "text": "New table ("
+                  },
+                  {
+                    "uint": 2
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " row)"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed"
                 ],
@@ -72,7 +98,17 @@ expression: "&stable_changeset"
                 "action": "remove",
                 "item_type": "text",
                 "path": "FoodData_Central_csv_2026-04-30/docs/old-table.txt",
-                "summary": "File removed (1 line)",
+                "summary": [
+                  {
+                    "text": "File removed ("
+                  },
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " line)"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed"
                 ],

@@ -19,7 +19,20 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "text",
             "path": "census.txt",
-            "summary": "1 line added, 1 removed",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " line added, "
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " removed"
+              }
+            ],
             "tags": [
               "binoc.content-changed",
               "binoc.lines-added",
@@ -50,7 +63,20 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data.csv",
-            "summary": "1 row added; 1 cell changed",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added; "
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " cell changed"
+              }
+            ],
             "tags": [
               "binoc.cell-change",
               "binoc.row-addition"

@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "Column added: 'email'",
+        "summary": [
+          {
+            "text": "Column added: 'email'"
+          }
+        ],
         "tags": [
           "binoc.column-addition",
           "binoc.schema-change"

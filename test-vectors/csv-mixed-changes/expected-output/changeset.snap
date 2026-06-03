@@ -14,7 +14,20 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "Column added: 'email'; columns reordered; 1 row added",
+        "summary": [
+          {
+            "text": "Column added: 'email'; "
+          },
+          {
+            "text": "columns reordered; "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row added"
+          }
+        ],
         "tags": [
           "binoc.column-addition",
           "binoc.column-reorder",
