@@ -6,6 +6,7 @@ use binoc_sdk::*;
 use binoc_stdlib::comparators::binary::BinaryComparator;
 use binoc_stdlib::comparators::csv_compare::CsvComparator;
 use binoc_stdlib::comparators::directory::DirectoryComparator;
+use binoc_stdlib::comparators::gzip_compare::GzipComparator;
 use binoc_stdlib::comparators::text::TextComparator;
 use binoc_stdlib::comparators::zip_compare::ZipComparator;
 
@@ -433,6 +434,60 @@ fn directory_media_type_none_for_unknown() {
         }
         _ => panic!("Expected Expand"),
     }
+}
+
+// ── Gzip comparator ────────────────────────────────────────────────
+
+#[test]
+fn gzip_expands_to_inner_filename() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_test_gzip(&tmp.path().join("a.csv.gz"), b"id,name\n1,Ada\n", 0);
+    create_test_gzip(&tmp.path().join("b.csv.gz"), b"id,name\n1,Ada\n2,Bob\n", 0);
+
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&tmp.path().join("a.csv.gz"), "data.csv.gz")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv.gz"), "data.csv.gz")
+            .unwrap(),
+    );
+    let result = GzipComparator.compare(&pair, &da).unwrap();
+    match result {
+        CompareResult::Expand(node, children) => {
+            assert_eq!(node.item_type, "gzip_stream");
+            assert_eq!(children.len(), 1);
+            let child = &children[0];
+            assert_eq!(child.left.as_ref().unwrap().logical_path, "data.csv");
+            assert_eq!(child.right.as_ref().unwrap().logical_path, "data.csv");
+        }
+        _ => panic!("Expected Expand"),
+    }
+}
+
+#[test]
+fn gzip_ignores_wrapper_metadata_when_decompressed_bytes_match() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_test_gzip(&tmp.path().join("a.csv.gz"), b"id,name\n1,Ada\n", 0);
+    create_test_gzip(&tmp.path().join("b.csv.gz"), b"id,name\n1,Ada\n", 1);
+
+    let da = data();
+    let pair = ItemPair::both(
+        da.register_local(&tmp.path().join("a.csv.gz"), "data.csv.gz")
+            .unwrap(),
+        da.register_local(&tmp.path().join("b.csv.gz"), "data.csv.gz")
+            .unwrap(),
+    );
+    let result = GzipComparator.compare(&pair, &da).unwrap();
+    assert!(matches!(result, CompareResult::Identical));
+}
+
+fn create_test_gzip(path: &std::path::Path, content: &[u8], mtime: u32) {
+    let file = std::fs::File::create(path).unwrap();
+    let mut encoder = flate2::GzBuilder::new()
+        .mtime(mtime)
+        .write(file, flate2::Compression::fast());
+    encoder.write_all(content).unwrap();
+    encoder.finish().unwrap();
 }
 
 // ── Zip comparator ─────────────────────────────────────────────────

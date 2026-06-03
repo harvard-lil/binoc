@@ -99,7 +99,7 @@ Order matters. The default pipeline (from `DatasetConfig::default_config()`):
 | 2 | `binoc.tar` | `.tar`, `.tar.gz`, `.tgz` extensions |
 | 3 | `binoc.gzip` | `.gz` extension |
 | 4 | `binoc.directory` | `scope: Containers` |
-| 5 | `binoc.csv` | `.csv`, `.tsv` extensions; scoped delimited-text media types |
+| 5 | `binoc.csv` | `.csv`, `.tsv` extensions |
 | 6 | `binoc.text` | `.txt`, `.md`, `.rs`, and other text extensions |
 | 7 | `binoc.binary` | catch-all (no extension/media type filter) |
 

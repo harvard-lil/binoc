@@ -6,10 +6,10 @@
 ## Context
 
 Some datasets ship one logical file inside a single-stream compression wrapper,
-for example `data.csv.gz` or a pipe-delimited `census.txt.gz`. Unlike zip or
-tar, gzip has no member list to fan out. The useful comparison target is the
-decompressed byte stream with the wrapper suffix stripped so existing
-comparators can dispatch on the inner name.
+for example `data.csv.gz` or `census.txt.gz`. Unlike zip or tar, gzip has no
+member list to fan out. The useful comparison target is the decompressed byte
+stream with the wrapper suffix stripped so existing comparators can dispatch on
+the inner name.
 
 The controller must remain type-ignorant, and transformers operate only on the
 completed IR with no raw data access. The input loader should not acquire
@@ -25,10 +25,9 @@ logical path, and returns one child `ItemPair`. The controller then re-dispatche
 that child normally, so `data.csv.gz` is compared as `data.csv`.
 
 Tar remains earlier in the default order so `.tar.gz` continues to use the tar
-fan-out path. For `.txt.gz`, gzip may mark the inner item with a scoped
-delimited-text media type when a small sample has consistent pipe or tab
-columns; the CSV comparator accepts that media type without claiming all
-ordinary `.txt` files.
+fan-out path. Gzip does not sniff or reinterpret decompressed content; for
+example, `data.csv.gz` redispatches as `data.csv`, while `notes.txt.gz`
+redispatches as `notes.txt`.
 
 ## Alternatives Considered
 
@@ -46,7 +45,7 @@ directory-shaped subtree. Gzip has exactly one stream and no stable member path,
 so the correct child identity is the stripped inner filename, not a synthetic
 archive member list.
 
-**Claim all `.txt` files as tabular.** The motivating census files are
-pipe-delimited `.txt`, but broad `.txt` tabular dispatch would steal ordinary
-text documents from the text comparator. Rejected for now; generic `.txt`
-table detection remains a separate follow-up.
+**Sniff delimited `.txt` content.** Some motivating `.txt.gz` files contain
+pipe-delimited tables, but identifying those tables is format-specific parsing,
+not compression acquisition. Rejected for this change; generic text table
+detection remains a separate follow-up.

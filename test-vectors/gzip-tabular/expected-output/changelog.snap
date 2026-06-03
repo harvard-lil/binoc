@@ -1,8 +1,0 @@
----
-source: binoc-stdlib/src/test_vectors.rs
-expression: "&md"
----
-# Changelog: snapshot-a → snapshot-b
-
-- **census.txt**: 1 cell changed
-- **data.csv**: 1 row added; 1 cell changed

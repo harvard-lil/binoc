@@ -3,9 +3,6 @@ use std::path::Path;
 
 use binoc_sdk::*;
 
-pub(crate) const DELIMITED_TEXT_PIPE_MEDIA_TYPE: &str = "text/x-binoc-delimited-pipe";
-pub(crate) const DELIMITED_TEXT_TAB_MEDIA_TYPE: &str = "text/x-binoc-delimited-tab";
-
 /// Thin CSV comparator: parses CSV into [`TabularData`], publishes
 /// [`tabular_v1`] artifacts, and checks logical identity. All semantic
 /// analysis (column changes, row changes, cell diffs) is handled by the
@@ -23,10 +20,8 @@ impl CsvParseOptions {
     fn for_item(item: &ItemRef) -> Self {
         // TODO(#48/#51): move comparator parse options into the dataset-config
         // surface once per-target comparator config lands.
-        let delimiter = match (item.extension().as_deref(), item.media_type.as_deref()) {
-            (_, Some(DELIMITED_TEXT_PIPE_MEDIA_TYPE)) => b'|',
-            (_, Some(DELIMITED_TEXT_TAB_MEDIA_TYPE)) => b'\t',
-            (Some(".tsv"), _) => b'\t',
+        let delimiter = match item.extension().as_deref() {
+            Some(".tsv") => b'\t',
             _ => b',',
         };
         Self { delimiter }
@@ -74,12 +69,7 @@ fn publish_tabular(
 
 impl Comparator for CsvComparator {
     fn descriptor(&self) -> ComparatorDescriptor {
-        ComparatorDescriptor::new("binoc.csv")
-            .with_extensions(vec![".csv".into(), ".tsv".into()])
-            .with_media_types(vec![
-                DELIMITED_TEXT_PIPE_MEDIA_TYPE.into(),
-                DELIMITED_TEXT_TAB_MEDIA_TYPE.into(),
-            ])
+        ComparatorDescriptor::new("binoc.csv").with_extensions(vec![".csv".into(), ".tsv".into()])
     }
 
     fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult> {
@@ -162,16 +152,6 @@ mod tests {
         assert_eq!(
             CsvParseOptions::for_item(&item("table.unknown")),
             CsvParseOptions { delimiter: b',' }
-        );
-    }
-
-    #[test]
-    fn parse_options_use_pipe_for_detected_delimited_text() {
-        let mut item = item("table.txt");
-        item.media_type = Some(DELIMITED_TEXT_PIPE_MEDIA_TYPE.into());
-        assert_eq!(
-            CsvParseOptions::for_item(&item),
-            CsvParseOptions { delimiter: b'|' }
         );
     }
 }

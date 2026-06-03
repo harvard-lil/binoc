@@ -3,10 +3,7 @@ use std::path::{Path, PathBuf};
 
 use binoc_sdk::*;
 
-use super::csv_compare::{DELIMITED_TEXT_PIPE_MEDIA_TYPE, DELIMITED_TEXT_TAB_MEDIA_TYPE};
-
 const MAX_DECOMPRESSED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
-const SAMPLE_LIMIT: usize = 64 * 1024;
 
 /// Expands a single-stream gzip file into one inner item, then re-dispatches
 /// that item through the normal comparator chain.
@@ -37,14 +34,6 @@ fn gzip_error(message: impl Into<String>) -> BinocError {
     BinocError::Gzip(message.into())
 }
 
-fn sample_push(sample: &mut Vec<u8>, bytes: &[u8]) {
-    if sample.len() >= SAMPLE_LIMIT {
-        return;
-    }
-    let remaining = SAMPLE_LIMIT - sample.len();
-    sample.extend_from_slice(&bytes[..bytes.len().min(remaining)]);
-}
-
 fn decompress_side(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Decompressed> {
     let inner_logical = strip_gzip_suffix(&item.logical_path).ok_or_else(|| {
         gzip_error(format!(
@@ -63,7 +52,6 @@ fn decompress_side(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Decompr
     let mut decoder = flate2::read::GzDecoder::new(reader);
     let mut out = std::fs::File::create(&out_path).map_err(BinocError::Io)?;
     let mut hasher = blake3::Hasher::new();
-    let mut sample = Vec::new();
     let mut total = 0_u64;
     let mut buf = [0_u8; 64 * 1024];
 
@@ -83,66 +71,21 @@ fn decompress_side(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Decompr
         }
         out.write_all(&buf[..n]).map_err(BinocError::Io)?;
         hasher.update(&buf[..n]);
-        sample_push(&mut sample, &buf[..n]);
     }
     out.flush().map_err(BinocError::Io)?;
 
     let mut inner = data.register_local(&out_path, &inner_logical)?;
     inner.size = Some(total);
     inner.content_hash = Some(hasher.finalize().to_hex().to_string());
-    inner.media_type = media_type_for_inner(&inner_logical, &sample);
+    inner.media_type = media_type_for_inner(&inner_logical);
 
     Ok(Decompressed { item: inner })
 }
 
-fn media_type_for_inner(logical_path: &str, sample: &[u8]) -> Option<String> {
-    if Path::new(logical_path)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
-    {
-        if let Some(media_type) = detect_delimited_text(sample) {
-            return Some(media_type.to_string());
-        }
-    }
-
+fn media_type_for_inner(logical_path: &str) -> Option<String> {
     mime_guess::from_path(logical_path)
         .first()
         .map(|m| m.essence_str().to_string())
-}
-
-fn detect_delimited_text(sample: &[u8]) -> Option<&'static str> {
-    let text = std::str::from_utf8(sample).ok()?;
-    let lines: Vec<&str> = text
-        .lines()
-        .map(str::trim_end)
-        .filter(|line| !line.trim().is_empty())
-        .take(6)
-        .collect();
-    if lines.len() < 2 {
-        return None;
-    }
-
-    let pipe = consistent_delimiter_count(&lines, '|');
-    let tab = consistent_delimiter_count(&lines, '\t');
-
-    match (pipe, tab) {
-        (Some(pipe_count), Some(tab_count)) if pipe_count >= tab_count => {
-            Some(DELIMITED_TEXT_PIPE_MEDIA_TYPE)
-        }
-        (Some(_), Some(_)) => Some(DELIMITED_TEXT_TAB_MEDIA_TYPE),
-        (Some(_), None) => Some(DELIMITED_TEXT_PIPE_MEDIA_TYPE),
-        (None, Some(_)) => Some(DELIMITED_TEXT_TAB_MEDIA_TYPE),
-        (None, None) => None,
-    }
-}
-
-fn consistent_delimiter_count(lines: &[&str], delimiter: char) -> Option<usize> {
-    let mut counts = lines.iter().map(|line| line.matches(delimiter).count());
-    let first = counts.next()?;
-    if first == 0 {
-        return None;
-    }
-    counts.all(|count| count == first).then_some(first)
 }
 
 fn decompress_pair(pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<Option<ItemPair>> {
@@ -185,6 +128,9 @@ impl Comparator for GzipComparator {
         let Some(inner_pair) = decompress_pair(pair, data)? else {
             return Ok(CompareResult::Identical);
         };
+        if inner_pair.matching_content_hash().is_some() {
+            return Ok(CompareResult::Identical);
+        }
 
         let (action, logical) = match (&pair.left, &pair.right) {
             (Some(_), Some(right)) => ("modify", right.logical_path.as_str()),
@@ -210,18 +156,5 @@ mod tests {
             Some("archive.zip/data.txt".into())
         );
         assert_eq!(strip_gzip_suffix(".gz"), None);
-    }
-
-    #[test]
-    fn detects_consistent_pipe_text() {
-        assert_eq!(
-            detect_delimited_text(b"id|name\n1|Ada\n2|Bob\n"),
-            Some(DELIMITED_TEXT_PIPE_MEDIA_TYPE)
-        );
-    }
-
-    #[test]
-    fn leaves_plain_text_unclaimed() {
-        assert_eq!(detect_delimited_text(b"hello world\nthis is text\n"), None);
     }
 }

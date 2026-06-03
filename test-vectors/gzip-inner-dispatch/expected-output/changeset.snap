@@ -17,37 +17,22 @@ expression: "&stable_changeset"
         "children": [
           {
             "action": "modify",
-            "item_type": "tabular",
+            "item_type": "text",
             "path": "census.txt",
-            "summary": "1 cell changed",
+            "summary": "1 line added, 1 removed",
             "tags": [
-              "binoc.cell-change"
+              "binoc.content-changed",
+              "binoc.lines-added",
+              "binoc.lines-removed"
             ],
             "details": {
-              "cells_changed": 1,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "county",
-                "farms"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "county",
-                "farms"
-              ],
               "hash_left": "4628bf7bfbbff679c16c4bff9e4bf8575313be5ae6daad5598685c49cd2602bd",
               "hash_right": "9d3ee4c62ce450076f31bc515ac6523df3092b7f745a11a8094bcce9e87de139",
-              "rows_added": 0,
-              "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 2
+              "lines_added": 1,
+              "lines_removed": 1,
+              "lines_unchanged": 2
             },
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
+            "comparator": "binoc.text"
           }
         ],
         "details": {
@@ -89,6 +74,36 @@ expression: "&stable_changeset"
               "rows_removed": 0,
               "rows_right": 3
             },
+            "detail_blocks": [
+              {
+                "id": "cells_changed",
+                "kind": "binoc.tabular.cell_changes.v1",
+                "label": "Changed cells",
+                "total_count": 1,
+                "examples": [
+                  {
+                    "locator": {
+                      "column": "name",
+                      "row": 1
+                    },
+                    "before": {
+                      "value": "Bob",
+                      "media_type": "text/plain"
+                    },
+                    "after": {
+                      "value": "Robert",
+                      "media_type": "text/plain"
+                    }
+                  }
+                ],
+                "extract": [
+                  {
+                    "aspect": "cells_changed",
+                    "label": "All changed cells"
+                  }
+                ]
+              }
+            ],
             "comparator": "binoc.csv",
             "transformed_by": [
               "binoc.tabular_analyzer"

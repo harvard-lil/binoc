@@ -102,10 +102,11 @@ Names are opaque strings. Built-in names are namespaced `binoc.*`;
 third-party plugins use their own namespace (for example
 `biobinoc.fasta`, `binoc-sqlite.sqlite`). The defaults, in their
 default order, are shown in the snippet above. Archive comparators
-come before the directory comparator so that `.zip` / `.tar`
-extension matching happens before the extracted contents are walked
-as a directory; CSV comes before text so `.csv` files get the
-column-aware comparator; binary is the catch-all fallback.
+come before the directory comparator so that `.zip`, `.tar`, and
+single-stream `.gz` extension matching happens before the extracted
+contents are walked as ordinary files or directories; CSV comes before
+text so `.csv` files get the column-aware comparator; binary is the
+catch-all fallback.
 
 You can shorten the list to restrict what formats are recognized
 (useful in test vectors that exercise a single comparator) or add
