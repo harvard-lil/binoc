@@ -48,7 +48,7 @@ just materialize
 | [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | states/AL.csv: 1 row added | Default pipeline |
 | [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
-| [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2,025-12-18 | Custom config |
+| [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2025-12-18 | Custom config |
 | [`gzip-inner-dispatch`](#gzip-inner-dispatch) | Gzipped CSV and text are decompressed and redispatched under their inner names | census.txt: 1 line added, 1 removed | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/inventory.csv: 1 row added | Default pipeline |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: New file (1 line) | Default pipeline |
@@ -546,7 +546,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
+- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2025-12-18
 - **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 row)
 - **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
 - **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
