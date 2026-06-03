@@ -3,10 +3,8 @@ name = "csv-keyed-row-diff"
 description = "Configured CSV row keys match reordered rows and report keyed row/cell changes"
 tags = ["csv", "keyed", "row-addition", "row-removal", "cell-change"]
 
-[config.dataset.tables.entries.products.match.source]
+[[config.dataset.tables]]
 path_regex = '^data\.csv$'
-
-[config.dataset.tables.entries.products.row_identity]
 columns = ["id"]
 
 [expected]

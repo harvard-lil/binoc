@@ -680,12 +680,37 @@ struct DatasetSemanticsConfig {
     tables: TableConfig,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default)]
 struct TableConfig {
-    #[serde(default)]
     defaults: TableDefaults,
-    #[serde(default)]
-    entries: BTreeMap<String, TableEntry>,
+    entries: Vec<TableEntry>,
+}
+
+impl<'de> Deserialize<'de> for TableConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Entries(Vec<TableEntry>),
+            Full {
+                #[serde(default)]
+                defaults: TableDefaults,
+                #[serde(default)]
+                entries: Vec<TableEntry>,
+            },
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Entries(entries) => Ok(Self {
+                defaults: TableDefaults::default(),
+                entries,
+            }),
+            Repr::Full { defaults, entries } => Ok(Self { defaults, entries }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -694,12 +719,65 @@ struct TableDefaults {
     row_identity: RowIdentityConfig,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default)]
 struct TableEntry {
-    #[serde(default, rename = "match")]
     match_: TableSelector,
-    #[serde(default)]
     row_identity: RowIdentityConfig,
+}
+
+impl<'de> Deserialize<'de> for TableEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawTableEntry {
+            #[serde(default, rename = "match")]
+            match_: TableSelector,
+            #[serde(default)]
+            row_identity: RowIdentityConfig,
+            #[serde(default)]
+            logical_name: Option<String>,
+            #[serde(default)]
+            path: Option<String>,
+            #[serde(default)]
+            path_regex: Option<String>,
+            #[serde(default)]
+            columns: Vec<String>,
+            #[serde(default)]
+            on_null_key: Option<IdentityFailurePolicy>,
+            #[serde(default)]
+            on_duplicate_key: Option<IdentityFailurePolicy>,
+        }
+
+        let raw = RawTableEntry::deserialize(deserializer)?;
+        let mut match_ = raw.match_;
+        if match_.logical_name.is_none() {
+            match_.logical_name = raw.logical_name;
+        }
+        if match_.source.is_none() && (raw.path.is_some() || raw.path_regex.is_some()) {
+            match_.source = Some(TableSourceSelector {
+                path: raw.path,
+                path_regex: raw.path_regex,
+            });
+        }
+
+        let mut row_identity = raw.row_identity;
+        if row_identity.columns.is_empty() {
+            row_identity.columns = raw.columns;
+        }
+        if raw.on_null_key.is_some() {
+            row_identity.on_null_key = raw.on_null_key;
+        }
+        if raw.on_duplicate_key.is_some() {
+            row_identity.on_duplicate_key = raw.on_duplicate_key;
+        }
+
+        Ok(Self {
+            match_,
+            row_identity,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -739,8 +817,8 @@ fn row_identity_for_node(
     let semantics: DatasetSemanticsConfig = serde_json::from_value(dataset.clone()).ok()?;
     let defaults = semantics.tables.defaults.row_identity;
 
-    for (entry_name, entry) in &semantics.tables.entries {
-        if table_entry_matches(entry_name, entry, node) {
+    for entry in &semantics.tables.entries {
+        if table_entry_matches(entry, node) {
             let columns = if entry.row_identity.columns.is_empty() {
                 defaults.columns.clone()
             } else {
@@ -774,7 +852,7 @@ fn row_identity_for_node(
     }
 }
 
-fn table_entry_matches(entry_name: &str, entry: &TableEntry, node: &DiffNode) -> bool {
+fn table_entry_matches(entry: &TableEntry, node: &DiffNode) -> bool {
     if let Some(expected) = &entry.match_.logical_name {
         return node_logical_name(node).is_some_and(|logical| logical == expected);
     }
@@ -794,12 +872,7 @@ fn table_entry_matches(entry_name: &str, entry: &TableEntry, node: &DiffNode) ->
         return false;
     }
 
-    node_logical_name(node).is_some_and(|logical| logical == entry_name)
-        || node.path == entry_name
-        || std::path::Path::new(&node.path)
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .is_some_and(|stem| stem == entry_name)
+    false
 }
 
 fn node_logical_name(node: &DiffNode) -> Option<&str> {

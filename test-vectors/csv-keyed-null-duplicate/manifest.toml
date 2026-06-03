@@ -7,10 +7,8 @@ tags = ["csv", "keyed", "null-key", "duplicate-key"]
 on_null_key = "diagnostic"
 on_duplicate_key = "diagnostic"
 
-[config.dataset.tables.entries.people.match.source]
+[[config.dataset.tables.entries]]
 path_regex = '^data\.csv$'
-
-[config.dataset.tables.entries.people.row_identity]
 columns = ["id"]
 
 [expected]

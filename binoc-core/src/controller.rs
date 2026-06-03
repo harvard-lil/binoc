@@ -1235,15 +1235,10 @@ mod tests {
         let controller = Controller::new(vec![leaf_comparator()], vec![reader])
             .with_transformer_configs(configs)
             .with_dataset_config(serde_json::json!({
-                "tables": {
-                    "entries": {
-                        "people": {
-                            "row_identity": {
-                                "columns": ["id"]
-                            }
-                        }
-                    }
-                }
+                "tables": [{
+                    "logical_name": "people",
+                    "columns": ["id"]
+                }]
             }));
         let dir = tempfile::tempdir().unwrap();
         controller
@@ -1258,15 +1253,10 @@ mod tests {
             serde_json::json!({
                 "threshold": 0.42,
                 "dataset": {
-                    "tables": {
-                        "entries": {
-                            "people": {
-                                "row_identity": {
-                                    "columns": ["id"]
-                                }
-                            }
-                        }
-                    }
+                    "tables": [{
+                        "logical_name": "people",
+                        "columns": ["id"]
+                    }]
                 }
             })
         );

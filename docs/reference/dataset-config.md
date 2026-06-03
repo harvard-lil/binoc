@@ -59,19 +59,8 @@ dataset:
         on_null_key: diagnostic
         on_duplicate_key: diagnostic
   tables:
-    defaults:
-      parse:
-        header: true
-        delimiter: ','
-      row_identity:
-        on_null_key: diagnostic
-        on_duplicate_key: diagnostic
-    entries:
-      products:
-        match:
-          logical_name: products
-        row_identity:
-          columns: ['BLA Number', 'Product Number']
+    - logical_name: products
+      columns: ['BLA Number', 'Product Number']
 
 output:
   markdown:
@@ -159,10 +148,8 @@ common dataset semantics:
 
 - `dataset.files.correspondences` declares that files with different snapshot
   paths are the same logical file.
-- `dataset.tables.defaults` declares table-wide defaults, such as parse options
-  and row identity failure policy.
-- `dataset.tables.entries` declares per-table selectors, parse options, and row
-  identity keys.
+- `dataset.tables` declares table row keys. It can be a list for the common
+  case, or an object with `defaults` and `entries` when shared policy is useful.
 
 ```yaml
 dataset:
@@ -181,19 +168,10 @@ dataset:
         report_path_change: false
 
   tables:
-    defaults:
-      row_identity:
-        on_null_key: diagnostic
-        on_duplicate_key: diagnostic
-    entries:
-      products:
-        match:
-          logical_name: products
-        parse:
-          header: true
-          delimiter: ','
-        row_identity:
-          columns: ['BLA Number', 'Product Number']
+    - logical_name: products
+      columns: ['BLA Number', 'Product Number']
+    - path: data.csv
+      columns: ['id']
 ```
 
 `cardinality` is currently `one-to-one`. `on_null_key` and
@@ -236,12 +214,27 @@ diagnostics do not stop the snapshot comparison.
 
 ### `dataset.tables`
 
-Tabular row identity is optional. Without it, `binoc.tabular_analyzer`
-keeps the positional fallback: row additions/removals are counted by
-row count differences, and changed cells are compared at the same row
-offset. With `row_identity.columns`, the analyzer builds a table-local
-key and matches rows by that key before reporting row additions,
-removals, and modified cells.
+Tabular row identity is optional. Without it, `binoc.tabular_analyzer` keeps
+the positional fallback: row additions/removals are counted by row count
+differences, and changed cells are compared at the same row offset. With
+`columns`, the analyzer builds a table-local key and matches rows by that key
+before reporting row additions, removals, and modified cells.
+
+```yaml
+dataset:
+  tables:
+    - path: data.csv
+      columns: ['id']
+    - logical_name: products
+      columns: ['BLA Number', 'Product Number']
+```
+
+Use `logical_name` for logical table children produced by multi-table
+comparators or the CSV table splitter. Use `path` or `path_regex` for ordinary
+single-file CSVs.
+
+When several entries should share the same identity failure policy, expand
+`tables` to an object with `defaults` and `entries`:
 
 ```yaml
 dataset:
@@ -249,25 +242,16 @@ dataset:
     defaults:
       row_identity:
         on_null_key: diagnostic
-        on_duplicate_key: diagnostic
+        on_duplicate_key: error
     entries:
-      applications:
-        match:
-          logical_name: applications
-        row_identity:
-          columns: ['ApplNo']
-      products:
-        match:
-          source:
-            path_regex: '^data/products\.csv$'
-        row_identity:
-          columns: ['BLA Number', 'Product Number']
+      - logical_name: applications
+        columns: ['ApplNo']
+      - path_regex: '^data/products\.csv$'
+        columns: ['BLA Number', 'Product Number']
 ```
 
-`match.logical_name` targets logical table children produced by
-multi-table comparators or the CSV table splitter. `match.source.path`
-and `match.source.path_regex` target the tabular node path or its
-source item path, which is useful for single CSV files.
+For unusual cases, entries also accept explicit `match` and `row_identity`
+blocks, but the flat selector and `columns` form above is preferred.
 
 Rows with blank key components are null-key rows. Keys that appear more
 than once on either side are duplicate-key rows. The default
