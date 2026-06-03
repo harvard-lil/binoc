@@ -853,26 +853,43 @@ fn row_identity_for_node(
 }
 
 fn table_entry_matches(entry: &TableEntry, node: &DiffNode) -> bool {
+    let mut has_selector = false;
+
     if let Some(expected) = &entry.match_.logical_name {
-        return node_logical_name(node).is_some_and(|logical| logical == expected);
+        has_selector = true;
+        if node_logical_name(node).is_none_or(|logical| logical != expected) {
+            return false;
+        }
     }
 
     if let Some(source) = &entry.match_.source {
-        let paths = node_source_paths(node);
-        if let Some(expected) = &source.path {
-            if paths.iter().any(|path| path == expected) {
-                return true;
-            }
+        has_selector = true;
+        if !source_selector_matches(source, node) {
+            return false;
         }
-        if let Some(pattern) = &source.path_regex {
-            if let Ok(regex) = regex::Regex::new(pattern) {
-                return paths.iter().any(|path| regex.is_match(path));
-            }
-        }
-        return false;
     }
 
-    false
+    has_selector
+}
+
+fn source_selector_matches(source: &TableSourceSelector, node: &DiffNode) -> bool {
+    if source.path.is_none() && source.path_regex.is_none() {
+        return false;
+    }
+    let regex = match source.path_regex.as_deref() {
+        Some(pattern) => match regex::Regex::new(pattern) {
+            Ok(regex) => Some(regex),
+            Err(_) => return false,
+        },
+        None => None,
+    };
+    node_source_paths(node).iter().any(|path| {
+        source
+            .path
+            .as_deref()
+            .is_none_or(|expected| *path == expected)
+            && regex.as_ref().is_none_or(|regex| regex.is_match(path))
+    })
 }
 
 fn node_logical_name(node: &DiffNode) -> Option<&str> {
@@ -1291,4 +1308,55 @@ fn tabular_columns_in_common_local(left: &TabularData, right: &TabularData) -> V
         .filter(|h| left_set.contains(h.as_str()))
         .cloned()
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(path: &str) -> ItemRef {
+        ItemRef {
+            logical_path: path.into(),
+            is_dir: false,
+            content_hash: None,
+            size: None,
+            media_type: None,
+            handle: String::new(),
+        }
+    }
+
+    fn table_node(source_path: &str, logical_name: &str) -> DiffNode {
+        let left = item(source_path);
+        let right = item(source_path);
+        DiffNode::new("modify", "tabular", format!("{source_path}#{logical_name}"))
+            .with_detail("logical_name", serde_json::json!(logical_name))
+            .with_source_items(ItemPair::both(left, right))
+    }
+
+    #[test]
+    fn table_entry_requires_logical_name_and_source_when_both_are_set() {
+        let node = table_node("workbook.xlsx", "Products");
+        let mismatched_source = serde_json::json!({
+            "tables": [{
+                "logical_name": "Products",
+                "path": "other.xlsx",
+                "columns": ["id"]
+            }]
+        });
+        let matched_source = serde_json::json!({
+            "tables": [{
+                "logical_name": "Products",
+                "path": "workbook.xlsx",
+                "columns": ["id"]
+            }]
+        });
+
+        assert!(row_identity_for_node(&node, &mismatched_source).is_none());
+        assert_eq!(
+            row_identity_for_node(&node, &matched_source)
+                .expect("row identity")
+                .columns,
+            vec!["id"]
+        );
+    }
 }

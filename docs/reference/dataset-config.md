@@ -227,11 +227,16 @@ dataset:
       columns: ['id']
     - logical_name: products
       columns: ['BLA Number', 'Product Number']
+    - path: workbook.xlsx
+      logical_name: Products
+      columns: ['id']
 ```
 
 Use `logical_name` for logical table children produced by multi-table
 comparators or the CSV table splitter. Use `path` or `path_regex` for ordinary
-single-file CSVs.
+single-file CSVs. When an entry includes both a source selector and
+`logical_name`, both must match; for example, the `workbook.xlsx` entry above
+targets the `Products` logical table inside that source item.
 
 When several entries should share the same identity failure policy, expand
 `tables` to an object with `defaults` and `entries`:
