@@ -611,7 +611,7 @@ impl PyDiffNode {
     ) -> PyResult<Self> {
         let mut node = DiffNode::new(action, item_type, path);
         node.source_path = source_path;
-        node.summary = summary;
+        node.summary = summary.map(Into::into);
         if let Some(tags_obj) = tags {
             if let Ok(tag_list) = tags_obj.extract::<Vec<String>>() {
                 node.tags = tag_list.into_iter().collect();
@@ -657,10 +657,10 @@ impl PyDiffNode {
     fn source_path(&self) -> Option<&str> {
         self.inner.source_path.as_deref()
     }
-    /// Optional one-line human summary of the change.
+    /// Optional one-line human summary of the change, as plain text.
     #[getter]
-    fn summary(&self) -> Option<&str> {
-        self.inner.summary.as_deref()
+    fn summary(&self) -> Option<String> {
+        self.inner.summary.as_ref().map(|s| s.plain_text())
     }
     /// Open-string tags attached to this node (used for renderer significance
     /// classification and transformer dispatch).
@@ -705,7 +705,10 @@ impl PyDiffNode {
         dict.set_item("item_type", &self.inner.item_type)?;
         dict.set_item("path", &self.inner.path)?;
         dict.set_item("source_path", self.inner.source_path.as_deref())?;
-        dict.set_item("summary", self.inner.summary.as_deref())?;
+        dict.set_item(
+            "summary",
+            self.inner.summary.as_ref().map(|s| s.plain_text()),
+        )?;
         dict.set_item("tags", self.tags())?;
         let children: PyResult<Vec<Bound<'py, PyDict>>> = self
             .inner

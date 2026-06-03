@@ -14,7 +14,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "states/AL.csv",
-        "summary": "1 row added",
+        "summary": [
+          {
+            "uint": 1
+          },
+          {
+            "text": " row added"
+          }
+        ],
         "tags": [
           "binoc.declared-correspondence",
           "binoc.row-addition"

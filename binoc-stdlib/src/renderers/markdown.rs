@@ -275,11 +275,7 @@ fn format_node(
 
     out.push_str(&format!("- **{path}**: "));
 
-    if let Some(summary) = &node.summary {
-        out.push_str(&humanize_numbers(summary));
-    } else {
-        out.push_str(&humanize_numbers(&fallback_description(node)));
-    }
+    out.push_str(&render_summary(&node_summary(node)));
     out.push('\n');
 
     // For a move with content detail, emit the detail as a second
@@ -289,7 +285,7 @@ fn format_node(
     // inline punctuation or capitalization fixups.
     if should_group_move_children(node) {
         if let Some(detail) = move_trailer(node) {
-            out.push_str(&format!("- **{path}**: {}\n", humanize_numbers(&detail)));
+            out.push_str(&format!("- **{path}**: {}\n", render_summary(&detail)));
         }
     }
 
@@ -310,22 +306,28 @@ fn should_group_move_children(node: &DiffNode) -> bool {
 /// 2. `annotations.content_summary` — generic, captured during the
 ///    controller's re-dispatch merge.
 /// 3. A join of non-identical child summaries.
-fn move_trailer(node: &DiffNode) -> Option<String> {
+fn move_trailer(node: &DiffNode) -> Option<Summary> {
+    // The annotation trailers are carried as plain strings (so transformers
+    // like the folder-move detector can read them with `.as_str()`); they
+    // render verbatim as a single text segment.
     if let Some(s) = annotation_str(node, "tabular_summary") {
-        return Some(s);
+        return Some(s.into());
     }
     if let Some(s) = annotation_str(node, "content_summary") {
-        return Some(s);
+        return Some(s.into());
     }
     if !node.children.is_empty() {
-        let parts: Vec<String> = node
-            .children
-            .iter()
-            .filter(|c| c.action != "identical")
-            .map(|c| c.summary.clone().unwrap_or_else(|| fallback_description(c)))
-            .collect();
-        if !parts.is_empty() {
-            return Some(parts.join("; "));
+        let mut trailer = Summary::new();
+        let mut any = false;
+        for child in node.children.iter().filter(|c| c.action != "identical") {
+            if any {
+                trailer = trailer.text("; ");
+            }
+            trailer.extend(node_summary(child));
+            any = true;
+        }
+        if any {
+            return Some(trailer);
         }
     }
     None
@@ -465,34 +467,77 @@ fn humanize_annotation_key(key: &str) -> String {
     capitalize(&text)
 }
 
-fn fallback_description(node: &DiffNode) -> String {
-    let action = &node.action;
+/// This node's summary, or a generic fallback when the producer supplied none.
+fn node_summary(node: &DiffNode) -> Summary {
+    node.summary
+        .clone()
+        .unwrap_or_else(|| fallback_summary(node))
+}
+
+/// Render a structured summary by formatting each segment according to its
+/// type. The renderer never parses prose: a `Uint` is digit-grouped, a `Float`
+/// gets decimal policy, `Text` is verbatim, and a `Path` is emitted as-is (a
+/// richer renderer could hyperlink it, using `Segment::Path`'s snapshot side to
+/// resolve against the correct tree). See ADR
+/// 2026-06-03-structured-summary-segments.
+fn render_summary(summary: &Summary) -> String {
+    let mut out = String::new();
+    for segment in summary.segments() {
+        match segment {
+            Segment::Text(text) => out.push_str(text),
+            Segment::Path { value, .. } => out.push_str(value),
+            // Reuse the prose grouper on the bare decimal form: a `Uint` is
+            // always a count, so it is always grouped — no context guessing.
+            Segment::Uint(value) => out.push_str(&humanize_numbers(&value.to_string())),
+            Segment::Float(value) => out.push_str(&format_float(*value)),
+        }
+    }
+    out
+}
+
+/// Format a real-valued quantity: trimmed fixed/scientific notation, with the
+/// integer part digit-grouped. (No producer emits `Float` yet; this keeps the
+/// segment type renderable for plugins that do.)
+fn format_float(value: f64) -> String {
+    let raw = if value.abs() < 1_000_000.0 {
+        format!("{value:.3}")
+    } else {
+        format!("{value:.6e}")
+    };
+    let trimmed = raw.trim_end_matches('0').trim_end_matches('.');
+    match trimmed.split_once('.') {
+        Some((int_part, frac)) => format!("{}.{frac}", humanize_numbers(int_part)),
+        None => humanize_numbers(trimmed),
+    }
+}
+
+/// Generic last-resort summary for a node whose producer supplied none.
+///
+/// Producers own the wording of their concepts; this fallback only covers the
+/// built-in actions so a summary-less node still renders something. The
+/// move/copy cases emit a [`Segment::Path`] for the source so the path is typed
+/// (linkable, never digit-grouped) even on this degraded path.
+fn fallback_summary(node: &DiffNode) -> Summary {
     let item_type = if node.item_type.is_empty() {
         "item"
     } else {
         &node.item_type
     };
 
-    match action.as_str() {
-        "add" => format!("New {item_type}"),
-        "remove" => format!("{} removed", capitalize(item_type)),
-        "modify" => format!("{} modified", capitalize(item_type)),
-        "move" => {
-            if let Some(src) = &node.source_path {
-                format!("Moved from {src}")
-            } else {
-                format!("{} moved", capitalize(item_type))
-            }
-        }
-        "copy" => {
-            if let Some(src) = &node.source_path {
-                format!("Copied from {src}")
-            } else {
-                format!("{} copied", capitalize(item_type))
-            }
-        }
-        "reorder" => format!("{} reordered", capitalize(item_type)),
-        _ => format!("{action} ({item_type})"),
+    match node.action.as_str() {
+        "add" => format!("New {item_type}").into(),
+        "remove" => format!("{} removed", capitalize(item_type)).into(),
+        "modify" => format!("{} modified", capitalize(item_type)).into(),
+        "move" => match &node.source_path {
+            Some(src) => Summary::new().text("Moved from ").path(src, Side::From),
+            None => format!("{} moved", capitalize(item_type)).into(),
+        },
+        "copy" => match &node.source_path {
+            Some(src) => Summary::new().text("Copied from ").path(src, Side::From),
+            None => format!("{} copied", capitalize(item_type)).into(),
+        },
+        "reorder" => format!("{} reordered", capitalize(item_type)).into(),
+        action => format!("{action} ({item_type})").into(),
     }
 }
 
@@ -1089,18 +1134,34 @@ mod tests {
     }
 
     #[test]
-    fn humanizes_large_numbers_in_summaries() {
+    fn groups_uint_segments_but_leaves_text_and_paths_verbatim() {
+        // Grouping is a property of the `Uint` segment, not a prose scan: a
+        // `Uint` is always grouped, while digits inside `Text`/`Path` (a year
+        // in a folder name) are never touched.
         let changeset = Changeset::new(
             "v1",
             "v2",
-            Some(
-                DiffNode::new("modify", "csv", "data.csv")
-                    .with_summary("5975 rows added; 18133333 cells changed"),
-            ),
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![
+                DiffNode::new("move", "directory", "FoodData_Central_csv_2026-04-30")
+                    .with_source_path("FoodData_Central_csv_2025-12-18")
+                    .with_summary(
+                        Summary::new()
+                            .text("Folder moved from ")
+                            .path("FoodData_Central_csv_2025-12-18", Side::From),
+                    ),
+                DiffNode::new("modify", "csv", "data.csv").with_summary(
+                    Summary::new()
+                        .uint(5975)
+                        .text(" rows added; ")
+                        .uint(18133333)
+                        .text(" cells changed"),
+                ),
+            ])),
         );
-        let config = MarkdownRendererConfig::default();
-        let md = render_markdown(&[changeset], &config);
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
         assert!(md.contains("5,975 rows added; 18,133,333 cells changed"));
+        assert!(md.contains("Folder moved from FoodData_Central_csv_2025-12-18"));
+        assert!(!md.contains("FoodData_Central_csv_2,025-12-18"));
     }
 
     #[test]

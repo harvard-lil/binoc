@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "data.bin",
-        "summary": "Content changed (4 bytes → 4 bytes)",
+        "summary": [
+          {
+            "text": "Content changed (4 bytes → 4 bytes)"
+          }
+        ],
         "tags": [
           "binoc.content-changed"
         ],

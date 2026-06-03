@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular_collection",
         "path": "data.xpt",
-        "summary": "Table DM changed: 1 row added; Table LB added: new table (2 columns, 1 row)",
+        "summary": [
+          {
+            "text": "Table DM changed: 1 row added; Table LB added: new table (2 columns, 1 row)"
+          }
+        ],
         "tags": [
           "binoc.table-addition",
           "binoc.table-change",
@@ -25,7 +29,14 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data.xpt::DM",
-            "summary": "1 row added",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added"
+              }
+            ],
             "tags": [
               "binoc.row-addition",
               "binoc.table-change"
@@ -140,7 +151,23 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "tabular",
             "path": "data.xpt::LB",
-            "summary": "New table (2 columns, 1 row)",
+            "summary": [
+              {
+                "text": "New table ("
+              },
+              {
+                "uint": 2
+              },
+              {
+                "text": " columns, "
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " row)"
+              }
+            ],
             "tags": [
               "binoc.content-changed",
               "binoc.table-addition"

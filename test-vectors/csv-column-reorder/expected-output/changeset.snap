@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "reorder",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "Columns reordered (content unchanged)",
+        "summary": [
+          {
+            "text": "Columns reordered (content unchanged)"
+          }
+        ],
         "tags": [
           "binoc.column-reorder"
         ],

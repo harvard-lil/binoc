@@ -84,7 +84,7 @@ A node in the diff tree — the central data structure of the system. Every comp
 | `pending_recompare` | [`ItemPair`](#itempair) \| null | no | Request that the controller re-dispatch the given `ItemPair` through the comparator pipeline and merge the result into this semantic wrapper node before the next transformer runs. Set by transformers that have discovered a correspondence (for example, a rename-with-edits or a config-declared logical file pair) but still need normal comparators to parse the paired content. If the recomparison is identical, a plain `modify` wrapper is converted to `identical` so it can be pruned, while semantic wrappers such as moves remain reportable. Session-scoped working data: wire-visible so plugins can set it across the ABI boundary, but cleared by [`DiffNode::strip_transient`] before changeset output. The controller takes (clears) this field as it processes it; nodes in a finalized changeset never carry it. |
 | `source_items` | [`ItemPair`](#itempair) \| null | no | The original item pair that produced this node. Session-scoped working data: available during a live diff/transform session for transformers and extractors that need to re-read source data, and carried across the plugin ABI wire so separately-compiled plugins can access it. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
 | `source_path` | string \| null | no | For moves/renames: the original path. |
-| `summary` | string \| null | no | Optional human-readable one-liner describing the change. Set by comparator or transformer; used by renderers for narrative rendering. |
+| `summary` | [`Summary`](#summary) \| null | no | Optional structured one-liner describing the change. Set by a comparator or transformer; renderers format each [`Segment`] by its type. Build it with [`Summary`]'s builder, or pass a plain string — `impl Into<Summary>` wraps it as a single [`Segment::Text`]. |
 | `tags` | array of string | no | Open bag of semantic tags, namespaced by convention. e.g. "binoc.column-reorder", "biobinoc.gap-change" |
 | `transformed_by` | array of string | no | Transformers that modified this node, in order (provenance for extract chain). |
 
@@ -201,6 +201,18 @@ Pointer to an extract aspect that can return exhaustive content.
 |---|---|---|---|
 | `aspect` | string | yes | Aspect name accepted by `binoc extract`. |
 | `label` | string \| null | no |  |
+
+### `Segment`
+
+*(unrecognised schema shape)*
+
+### `Side`
+
+*(unrecognised schema shape)*
+
+### `Summary`
+
+*(unrecognised schema shape)*
 
 ### `ValuePreview`
 

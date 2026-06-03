@@ -14,7 +14,35 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular_collection",
         "path": "data.sqlite",
-        "summary": "Table users changed: 1 row added; Table orders added: new table (3 columns, 1 row)",
+        "summary": [
+          {
+            "text": "Table users changed: "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row added; "
+          },
+          {
+            "text": "Table orders added: "
+          },
+          {
+            "text": "new table ("
+          },
+          {
+            "uint": 3
+          },
+          {
+            "text": " columns, "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row)"
+          }
+        ],
         "tags": [
           "binoc.table-addition",
           "binoc.table-change",
@@ -25,7 +53,14 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data.sqlite::users",
-            "summary": "1 row added",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added"
+              }
+            ],
             "tags": [
               "binoc-sqlite.row-addition",
               "binoc.row-addition",
@@ -57,7 +92,23 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "tabular",
             "path": "data.sqlite::orders",
-            "summary": "New table (3 columns, 1 row)",
+            "summary": [
+              {
+                "text": "New table ("
+              },
+              {
+                "uint": 3
+              },
+              {
+                "text": " columns, "
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " row)"
+              }
+            ],
             "tags": [
               "binoc-sqlite.table-addition",
               "binoc.content-changed",

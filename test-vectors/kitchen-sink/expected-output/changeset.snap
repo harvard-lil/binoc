@@ -24,7 +24,14 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "tabular",
                 "path": "archive.tar.gz/inventory.csv",
-                "summary": "1 row added",
+                "summary": [
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " row added"
+                  }
+                ],
                 "tags": [
                   "binoc.row-addition"
                 ],
@@ -76,7 +83,20 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "text",
                 "path": "bundle.zip/notes.txt",
-                "summary": "2 lines added, 1 removed",
+                "summary": [
+                  {
+                    "uint": 2
+                  },
+                  {
+                    "text": " lines added, "
+                  },
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " removed"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed",
                   "binoc.lines-added",
@@ -105,7 +125,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
-        "summary": "2 cells changed",
+        "summary": [
+          {
+            "uint": 2
+          },
+          {
+            "text": " cells changed"
+          }
+        ],
         "tags": [
           "binoc.cell-change"
         ],
@@ -188,7 +215,17 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "text",
             "path": "docs/new-file.txt",
-            "summary": "New file (1 line)",
+            "summary": [
+              {
+                "text": "New file ("
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " line)"
+              }
+            ],
             "tags": [
               "binoc.content-changed"
             ],
@@ -202,7 +239,17 @@ expression: "&stable_changeset"
             "action": "remove",
             "item_type": "text",
             "path": "docs/old-notes.txt",
-            "summary": "File removed (1 line)",
+            "summary": [
+              {
+                "text": "File removed ("
+              },
+              {
+                "uint": 1
+              },
+              {
+                "text": " line)"
+              }
+            ],
             "tags": [
               "binoc.content-changed"
             ],
@@ -216,7 +263,20 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "text",
             "path": "docs/readme.txt",
-            "summary": "2 lines added, 2 removed",
+            "summary": [
+              {
+                "uint": 2
+              },
+              {
+                "text": " lines added, "
+              },
+              {
+                "uint": 2
+              },
+              {
+                "text": " removed"
+              }
+            ],
             "tags": [
               "binoc.content-changed",
               "binoc.lines-added",
@@ -238,7 +298,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "icon.bin",
-        "summary": "Content changed (19 bytes → 19 bytes)",
+        "summary": [
+          {
+            "text": "Content changed (19 bytes → 19 bytes)"
+          }
+        ],
         "tags": [
           "binoc.content-changed"
         ],
@@ -255,7 +319,17 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "license-copy.txt",
         "source_path": "license.txt",
-        "summary": "Copied from license.txt",
+        "summary": [
+          {
+            "text": "Copied from "
+          },
+          {
+            "path": {
+              "value": "license.txt",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.copy"
         ]
@@ -264,7 +338,11 @@ expression: "&stable_changeset"
         "action": "reorder",
         "item_type": "tabular",
         "path": "metrics.csv",
-        "summary": "Columns reordered (content unchanged)",
+        "summary": [
+          {
+            "text": "Columns reordered (content unchanged)"
+          }
+        ],
         "tags": [
           "binoc.column-reorder"
         ],
@@ -300,7 +378,17 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "summary.txt",
         "source_path": "report.txt",
-        "summary": "Moved from report.txt",
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "report.txt",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.move"
         ]

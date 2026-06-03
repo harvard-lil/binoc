@@ -60,12 +60,10 @@ fn transform_add(mut node: DiffNode, pair: &TabularDataPair) -> TransformResult 
     let Some(right) = &pair.right else {
         return TransformResult::Unchanged;
     };
-    node.summary = Some(format!(
-        "New table ({} column{}, {} row{})",
-        right.headers.len(),
-        if right.headers.len() == 1 { "" } else { "s" },
-        right.rows.len(),
-        if right.rows.len() == 1 { "" } else { "s" }
+    node.summary = Some(table_shape_summary(
+        "New table",
+        right.headers.len() as u64,
+        right.rows.len() as u64,
     ));
     node.tags.insert("binoc.content-changed".into());
     node.details
@@ -79,12 +77,10 @@ fn transform_remove(mut node: DiffNode, pair: &TabularDataPair) -> TransformResu
     let Some(left) = &pair.left else {
         return TransformResult::Unchanged;
     };
-    node.summary = Some(format!(
-        "Table removed ({} column{}, {} row{})",
-        left.headers.len(),
-        if left.headers.len() == 1 { "" } else { "s" },
-        left.rows.len(),
-        if left.rows.len() == 1 { "" } else { "s" }
+    node.summary = Some(table_shape_summary(
+        "Table removed",
+        left.headers.len() as u64,
+        left.rows.len() as u64,
     ));
     node.tags.insert("binoc.content-changed".into());
     node.details
@@ -278,11 +274,13 @@ fn transform_modify(
     // stash the tabular description as an annotation so renderers can
     // surface it if they want without overwriting "Moved from ...".
     if node.action == "move" {
-        node.annotate_from("binoc", "tabular_summary", serde_json::json!(tabular_desc));
-    } else {
-        if tabular_desc != "Table modified" || node.summary.is_none() {
-            node.summary = Some(tabular_desc);
-        }
+        node.annotate_from(
+            "binoc",
+            "tabular_summary",
+            serde_json::json!(tabular_desc.plain_text()),
+        );
+    } else if tabular_desc.plain_text() != "Table modified" || node.summary.is_none() {
+        node.summary = Some(tabular_desc);
     }
 
     TransformResult::Replace(Box::new(node))
@@ -436,12 +434,41 @@ fn transform_modify_keyed(
     );
 
     if node.action == "move" {
-        node.annotate_from("binoc", "tabular_summary", serde_json::json!(tabular_desc));
-    } else if tabular_desc != "Table modified" || node.summary.is_none() {
+        node.annotate_from(
+            "binoc",
+            "tabular_summary",
+            serde_json::json!(tabular_desc.plain_text()),
+        );
+    } else if tabular_desc.plain_text() != "Table modified" || node.summary.is_none() {
         node.summary = Some(tabular_desc);
     }
 
     TransformResult::Replace(Box::new(node))
+}
+
+/// `New table (N columns, M rows)` / `Table removed (...)` with grouped counts.
+fn table_shape_summary(lead: &str, columns: u64, rows: u64) -> Summary {
+    Summary::new()
+        .text(format!("{lead} ("))
+        .count(columns, "column")
+        .text(", ")
+        .count(rows, "row")
+        .text(")")
+}
+
+/// Join count/clause parts with `; ` into one [`Summary`], sentence-cased.
+fn join_clauses(parts: Vec<Summary>) -> Summary {
+    if parts.is_empty() {
+        return "Table modified".into();
+    }
+    let mut out = Summary::new();
+    for (index, part) in parts.into_iter().enumerate() {
+        if index > 0 {
+            out = out.text("; ");
+        }
+        out.extend(part);
+    }
+    out.capitalize_first()
 }
 
 fn tabular_summary(
@@ -451,56 +478,44 @@ fn tabular_summary(
     rows_added: u64,
     rows_removed: u64,
     cells_changed: u64,
-) -> String {
-    let mut parts = Vec::new();
+) -> Summary {
+    let mut parts: Vec<Summary> = Vec::new();
 
-    if !columns_added.is_empty() {
-        let names: Vec<&str> = columns_added.iter().map(|s| s.as_str()).collect();
-        if names.len() == 1 {
-            parts.push(format!("column added: '{}'", names[0]));
-        } else {
-            parts.push(format!("columns added: {}", fmt_quoted_list(&names)));
-        }
+    if let Some(part) = column_clause("added", columns_added) {
+        parts.push(part);
     }
-    if !columns_removed.is_empty() {
-        let names: Vec<&str> = columns_removed.iter().map(|s| s.as_str()).collect();
-        if names.len() == 1 {
-            parts.push(format!("column removed: '{}'", names[0]));
-        } else {
-            parts.push(format!("columns removed: {}", fmt_quoted_list(&names)));
-        }
+    if let Some(part) = column_clause("removed", columns_removed) {
+        parts.push(part);
     }
     if order_changed {
         parts.push("columns reordered".into());
     }
     if rows_added > 0 {
-        parts.push(format!(
-            "{rows_added} row{} added",
-            if rows_added == 1 { "" } else { "s" }
-        ));
+        parts.push(Summary::new().count(rows_added, "row").text(" added"));
     }
     if rows_removed > 0 {
-        parts.push(format!(
-            "{rows_removed} row{} removed",
-            if rows_removed == 1 { "" } else { "s" }
-        ));
+        parts.push(Summary::new().count(rows_removed, "row").text(" removed"));
     }
     if cells_changed > 0 {
-        parts.push(format!(
-            "{cells_changed} cell{} changed",
-            if cells_changed == 1 { "" } else { "s" }
-        ));
+        parts.push(Summary::new().count(cells_changed, "cell").text(" changed"));
     }
 
-    if parts.is_empty() {
-        "Table modified".into()
-    } else {
-        let mut s = parts.join("; ");
-        if let Some(first) = s.get_mut(..1) {
-            first.make_ascii_uppercase();
-        }
-        s
+    join_clauses(parts)
+}
+
+/// `column added: 'x'` / `columns added: 'x', 'y'` — pure text (column names
+/// are identifiers, never grouped).
+fn column_clause(verb: &str, names: &[String]) -> Option<Summary> {
+    if names.is_empty() {
+        return None;
     }
+    let names: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+    let text = if names.len() == 1 {
+        format!("column {verb}: '{}'", names[0])
+    } else {
+        format!("columns {verb}: {}", fmt_quoted_list(&names))
+    };
+    Some(text.into())
 }
 
 fn fmt_quoted_list(items: &[&str]) -> String {
@@ -599,61 +614,43 @@ fn keyed_tabular_summary(
     rows_removed: u64,
     rows_modified: u64,
     cells_changed: u64,
-) -> String {
-    let mut parts = Vec::new();
+) -> Summary {
+    let mut parts: Vec<Summary> = Vec::new();
 
-    if !columns_added.is_empty() {
-        let names: Vec<&str> = columns_added.iter().map(|s| s.as_str()).collect();
-        if names.len() == 1 {
-            parts.push(format!("column added: '{}'", names[0]));
-        } else {
-            parts.push(format!("columns added: {}", fmt_quoted_list(&names)));
-        }
+    if let Some(part) = column_clause("added", columns_added) {
+        parts.push(part);
     }
-    if !columns_removed.is_empty() {
-        let names: Vec<&str> = columns_removed.iter().map(|s| s.as_str()).collect();
-        if names.len() == 1 {
-            parts.push(format!("column removed: '{}'", names[0]));
-        } else {
-            parts.push(format!("columns removed: {}", fmt_quoted_list(&names)));
-        }
+    if let Some(part) = column_clause("removed", columns_removed) {
+        parts.push(part);
     }
     if order_changed {
         parts.push("columns reordered".into());
     }
     if rows_added > 0 {
-        parts.push(format!(
-            "{rows_added} row{} added by key",
-            if rows_added == 1 { "" } else { "s" }
-        ));
+        parts.push(
+            Summary::new()
+                .count(rows_added, "row")
+                .text(" added by key"),
+        );
     }
     if rows_removed > 0 {
-        parts.push(format!(
-            "{rows_removed} row{} removed by key",
-            if rows_removed == 1 { "" } else { "s" }
-        ));
+        parts.push(
+            Summary::new()
+                .count(rows_removed, "row")
+                .text(" removed by key"),
+        );
     }
     if rows_modified > 0 {
-        parts.push(format!(
-            "{rows_modified} row{} modified by key",
-            if rows_modified == 1 { "" } else { "s" }
-        ));
+        parts.push(
+            Summary::new()
+                .count(rows_modified, "row")
+                .text(" modified by key"),
+        );
     } else if cells_changed > 0 {
-        parts.push(format!(
-            "{cells_changed} cell{} changed",
-            if cells_changed == 1 { "" } else { "s" }
-        ));
+        parts.push(Summary::new().count(cells_changed, "cell").text(" changed"));
     }
 
-    if parts.is_empty() {
-        "Table modified".into()
-    } else {
-        let mut s = parts.join("; ");
-        if let Some(first) = s.get_mut(..1) {
-            first.make_ascii_uppercase();
-        }
-        s
-    }
+    join_clauses(parts)
 }
 
 #[derive(Debug, Clone)]

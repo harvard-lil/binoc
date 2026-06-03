@@ -79,10 +79,12 @@ impl Comparator for TextComparator {
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("add", "text", &right.logical_path)
-                    .with_summary(format!(
-                        "New file ({lines} line{})",
-                        if lines == 1 { "" } else { "s" }
-                    ))
+                    .with_summary(
+                        Summary::new()
+                            .text("New file (")
+                            .count(lines, "line")
+                            .text(")"),
+                    )
                     .with_tag("binoc.content-changed")
                     .with_detail("lines", serde_json::json!(lines));
 
@@ -97,10 +99,12 @@ impl Comparator for TextComparator {
                 let lines = text.lines().count() as u64;
 
                 let node = DiffNode::new("remove", "text", &left.logical_path)
-                    .with_summary(format!(
-                        "File removed ({lines} line{})",
-                        if lines == 1 { "" } else { "s" }
-                    ))
+                    .with_summary(
+                        Summary::new()
+                            .text("File removed (")
+                            .count(lines, "line")
+                            .text(")"),
+                    )
                     .with_tag("binoc.content-changed")
                     .with_detail("lines", serde_json::json!(lines));
 
@@ -111,14 +115,15 @@ impl Comparator for TextComparator {
     }
 }
 
-fn text_modify_summary(lines_added: u64, lines_removed: u64) -> String {
+fn text_modify_summary(lines_added: u64, lines_removed: u64) -> Summary {
     match (lines_added, lines_removed) {
         (0, 0) => "Whitespace changes only".into(),
-        (a, 0) => format!("{a} line{} added", if a == 1 { "" } else { "s" }),
-        (0, r) => format!("{r} line{} removed", if r == 1 { "" } else { "s" }),
-        (a, r) => format!(
-            "{a} line{} added, {r} removed",
-            if a == 1 { "" } else { "s" },
-        ),
+        (a, 0) => Summary::new().count(a, "line").text(" added"),
+        (0, r) => Summary::new().count(r, "line").text(" removed"),
+        (a, r) => Summary::new()
+            .count(a, "line")
+            .text(" added, ")
+            .uint(r)
+            .text(" removed"),
     }
 }

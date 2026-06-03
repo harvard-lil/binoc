@@ -398,7 +398,7 @@ fn diff_table(input: TableDiffInput<'_>) -> Option<DiffNode> {
         ));
     }
 
-    node.summary = Some(capitalize(&parts.join("; ")));
+    node.summary = Some(capitalize(&parts.join("; ")).into());
     Some(node)
 }
 
@@ -831,7 +831,7 @@ mod tests {
                 assert_eq!(node.action, "add");
                 assert_eq!(node.item_type, "tabular_collection");
                 assert_eq!(node.children.len(), 1);
-                assert!(node.summary.unwrap().contains("1 table"));
+                assert!(node.summary.unwrap().plain_text().contains("1 table"));
             }
             _ => panic!("expected Leaf"),
         }
@@ -858,7 +858,7 @@ mod tests {
                 assert_eq!(node.action, "remove");
                 assert_eq!(node.item_type, "tabular_collection");
                 assert_eq!(node.children.len(), 2);
-                assert!(node.summary.unwrap().contains("2 tables"));
+                assert!(node.summary.unwrap().plain_text().contains("2 tables"));
             }
             _ => panic!("expected Leaf"),
         }

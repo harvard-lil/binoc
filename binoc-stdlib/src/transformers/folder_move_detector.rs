@@ -275,12 +275,16 @@ fn apply_rollups(
             RollupKind::Move => (
                 "move",
                 "binoc.move",
-                format!("Folder moved from {}", display_name(&rollup.source_path)),
+                Summary::new()
+                    .text("Folder moved from ")
+                    .path(display_name(&rollup.source_path), Side::From),
             ),
             RollupKind::Copy => (
                 "copy",
                 "binoc.copy",
-                format!("Folder copied from {}", display_name(&rollup.source_path)),
+                Summary::new()
+                    .text("Folder copied from ")
+                    .path(display_name(&rollup.source_path), Side::From),
             ),
         };
         let mut children = rewrite_destination_children(node.children, rollup, source_index);
@@ -412,14 +416,14 @@ fn normalize_rollup_remainder_container(
 
 fn maybe_demote_move_like_remainder(mut node: DiffNode) -> DiffNode {
     if matches!(node.action.as_str(), "move" | "copy") {
-        let detail = node
+        let detail: Option<Summary> = node
             .binoc_annotation("tabular_summary")
             .and_then(Annotation::as_str)
             .or_else(|| {
                 node.binoc_annotation("content_summary")
                     .and_then(Annotation::as_str)
             })
-            .map(str::to_string);
+            .map(Summary::from);
         node.action = "modify".to_string();
         node.source_path = None;
         node.tags.remove("binoc.move");
@@ -427,15 +431,13 @@ fn maybe_demote_move_like_remainder(mut node: DiffNode) -> DiffNode {
         node.tags.remove("binoc.move.modified");
         node.tags.remove("binoc.copy.modified");
         node.summary = detail.or_else(|| {
-            if node
-                .summary
-                .as_deref()
-                .is_some_and(|s| s.starts_with("Moved from "))
-                || node
-                    .summary
-                    .as_deref()
-                    .is_some_and(|s| s.starts_with("Copied from "))
-            {
+            // Drop a bare "Moved from .../Copied from ..." headline (now
+            // demoted to a plain modify); keep any other prior summary.
+            let is_path_statement = node.summary.as_ref().is_some_and(|s| {
+                let text = s.plain_text();
+                text.starts_with("Moved from ") || text.starts_with("Copied from ")
+            });
+            if is_path_statement {
                 None
             } else {
                 node.summary.clone()

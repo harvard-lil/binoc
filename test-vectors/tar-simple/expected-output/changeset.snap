@@ -24,7 +24,14 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "tabular",
                 "path": "archive.tar.gz/data.csv",
-                "summary": "1 row added",
+                "summary": [
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " row added"
+                  }
+                ],
                 "tags": [
                   "binoc.row-addition"
                 ],
@@ -56,7 +63,14 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "text",
                 "path": "archive.tar.gz/hello.txt",
-                "summary": "1 line added",
+                "summary": [
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " line added"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed",
                   "binoc.lines-added"

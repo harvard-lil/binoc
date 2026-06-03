@@ -15,7 +15,20 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "meeting-notes-v2.txt",
         "source_path": "notes.txt",
-        "summary": "Moved from notes.txt (modified)",
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "notes.txt",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " (modified)"
+          }
+        ],
         "tags": [
           "binoc.content-changed",
           "binoc.lines-added",

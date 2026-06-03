@@ -15,7 +15,17 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "gamma-renamed.txt",
         "source_path": "outer.zip/inner.zip/gamma.txt",
-        "summary": "Moved from outer.zip/inner.zip/gamma.txt",
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "outer.zip/inner.zip/gamma.txt",
+              "snapshot": "from"
+            }
+          }
+        ],
         "tags": [
           "binoc.move"
         ]
@@ -25,7 +35,11 @@ expression: "&stable_changeset"
         "item_type": "text",
         "path": "kept-copy.txt",
         "source_path": "kept.txt",
-        "summary": "Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt",
+        "summary": [
+          {
+            "text": "Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt"
+          }
+        ],
         "tags": [
           "binoc.copy"
         ],
@@ -41,7 +55,11 @@ expression: "&stable_changeset"
         "item_type": "file",
         "path": "merged.bin",
         "source_path": "dup.bin",
-        "summary": "Moved from dup.bin and dup-b.bin",
+        "summary": [
+          {
+            "text": "Moved from dup.bin and dup-b.bin"
+          }
+        ],
         "tags": [
           "binoc.move"
         ],
@@ -67,7 +85,17 @@ expression: "&stable_changeset"
                 "item_type": "text",
                 "path": "outer.zip/alpha-renamed.txt",
                 "source_path": "alpha.txt",
-                "summary": "Moved from alpha.txt",
+                "summary": [
+                  {
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "alpha.txt",
+                      "snapshot": "from"
+                    }
+                  }
+                ],
                 "tags": [
                   "binoc.move"
                 ]
@@ -87,7 +115,17 @@ expression: "&stable_changeset"
                         "item_type": "text",
                         "path": "outer.zip/inner.zip/beta-renamed.txt",
                         "source_path": "outer.zip/beta.txt",
-                        "summary": "Moved from outer.zip/beta.txt",
+                        "summary": [
+                          {
+                            "text": "Moved from "
+                          },
+                          {
+                            "path": {
+                              "value": "outer.zip/beta.txt",
+                              "snapshot": "from"
+                            }
+                          }
+                        ],
                         "tags": [
                           "binoc.move"
                         ]

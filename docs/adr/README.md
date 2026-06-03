@@ -7,6 +7,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | Date | Title | Status |
 |---|---|---|
 | 2026-06-03 | [Transformer-Initiated Recompare as a Correspondence Contract](2026-06-03-transformer_initiated_recompare.md) | Implemented |
+| 2026-06-03 | [Structured Summary Segments](2026-06-03-structured-summary-segments.md) | Implemented |
 | 2026-06-03 | [Progressive Renderer Annotations](2026-06-03-progressive_renderer_annotations.md) | Implemented |
 | 2026-06-03 | [Error Diagnostics Are Reportable Findings](2026-06-03-error_diagnostics_are_reportable_findings.md) | Implemented |
 | 2026-06-02 | [Markdown Renderer Groups Replace Significance-Map Grouping](2026-06-02-renderer_groups.md) | Implemented |

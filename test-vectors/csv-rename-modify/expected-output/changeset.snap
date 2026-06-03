@@ -15,7 +15,20 @@ expression: "&stable_changeset"
         "item_type": "tabular",
         "path": "data_v2.csv",
         "source_path": "data.csv",
-        "summary": "Moved from data.csv (modified)",
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "data.csv",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " (modified)"
+          }
+        ],
         "tags": [
           "binoc.column-addition",
           "binoc.move",

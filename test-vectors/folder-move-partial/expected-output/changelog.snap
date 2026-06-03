@@ -4,7 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
+- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2025-12-18
 - **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 row)
 - **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
 - **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)

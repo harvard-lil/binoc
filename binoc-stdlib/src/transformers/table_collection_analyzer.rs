@@ -189,8 +189,8 @@ fn collection_summary(
     children: &[DiffNode],
     left: &BTreeMap<String, &TableMember>,
     right: &BTreeMap<String, &TableMember>,
-) -> String {
-    let mut parts = Vec::new();
+) -> Summary {
+    let mut parts: Vec<Summary> = Vec::new();
     for child in children {
         let Some(logical_name) = logical_name_for_child(child, left, right) else {
             continue;
@@ -200,14 +200,24 @@ fn collection_summary(
             .summary
             .clone()
             .unwrap_or_else(|| fallback_table_summary(child, left, right, &logical_name));
-        parts.push(format!("{label}: {}", lower_first(&detail)));
+        // Compose the per-table clause structurally so the child's typed
+        // counts keep their grouping policy through to the renderer.
+        let mut part = Summary::new().text(format!("{label}: "));
+        part.extend(lower_first_summary(detail));
+        parts.push(part);
     }
 
     if parts.is_empty() {
-        "Table collection changed".into()
-    } else {
-        parts.join("; ")
+        return "Table collection changed".into();
     }
+    let mut out = Summary::new();
+    for (index, part) in parts.into_iter().enumerate() {
+        if index > 0 {
+            out = out.text("; ");
+        }
+        out.extend(part);
+    }
+    out
 }
 
 fn table_label(logical_name: &str, action: &str) -> String {
@@ -223,7 +233,7 @@ fn fallback_table_summary(
     left: &BTreeMap<String, &TableMember>,
     right: &BTreeMap<String, &TableMember>,
     logical_name: &str,
-) -> String {
+) -> Summary {
     let member = match child.action.as_str() {
         "remove" => left.get(logical_name).copied(),
         _ => right
@@ -232,15 +242,12 @@ fn fallback_table_summary(
             .or_else(|| left.get(logical_name).copied()),
     };
     if let Some(member) = member {
-        let columns = member.shape.columns.len();
+        let columns = member.shape.columns.len() as u64;
         let rows = member.shape.row_count.unwrap_or(0);
-        return format!(
-            "{} column{}, {} row{}",
-            columns,
-            if columns == 1 { "" } else { "s" },
-            rows,
-            if rows == 1 { "" } else { "s" }
-        );
+        return Summary::new()
+            .count(columns, "column")
+            .text(", ")
+            .count(rows, "row");
     }
     match child.action.as_str() {
         "add" => "table added".into(),
@@ -249,12 +256,17 @@ fn fallback_table_summary(
     }
 }
 
-fn lower_first(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_lowercase().to_string() + chars.as_str(),
+/// Lowercase the first character of a summary's leading text segment (the
+/// inverse of [`Summary::capitalize_first`]), so a child clause reads
+/// naturally after `Table X changed: `.
+fn lower_first_summary(mut summary: Summary) -> Summary {
+    if let Some(Segment::Text(text)) = summary.0.first_mut() {
+        let mut chars = text.chars();
+        if let Some(first) = chars.next() {
+            *text = first.to_lowercase().to_string() + chars.as_str();
+        }
     }
+    summary
 }
 
 #[cfg(test)]
@@ -327,7 +339,7 @@ mod tests {
         assert!(node.tags.contains("binoc.table-addition"));
         assert!(node.tags.contains("binoc.table-change"));
         assert_eq!(
-            node.summary.as_deref(),
+            node.summary.as_ref().map(|s| s.plain_text()).as_deref(),
             Some("Table users changed: 1 row added; Table posts added: new table (1 columns, 1 rows)")
         );
         assert!(node.children[0].tags.contains("binoc.table-change"));

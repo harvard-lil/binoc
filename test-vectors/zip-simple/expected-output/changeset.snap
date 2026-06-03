@@ -24,7 +24,20 @@ expression: "&stable_changeset"
                 "action": "modify",
                 "item_type": "text",
                 "path": "archive.zip/data.txt",
-                "summary": "1 line added, 1 removed",
+                "summary": [
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " line added, "
+                  },
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " removed"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed",
                   "binoc.lines-added",
@@ -43,7 +56,17 @@ expression: "&stable_changeset"
                 "action": "add",
                 "item_type": "text",
                 "path": "archive.zip/extra.txt",
-                "summary": "New file (1 line)",
+                "summary": [
+                  {
+                    "text": "New file ("
+                  },
+                  {
+                    "uint": 1
+                  },
+                  {
+                    "text": " line)"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed"
                 ],

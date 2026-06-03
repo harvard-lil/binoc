@@ -14,7 +14,17 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular_collection",
         "path": "data.sqlite",
-        "summary": "Table users changed: 1 row added",
+        "summary": [
+          {
+            "text": "Table users changed: "
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " row added"
+          }
+        ],
         "tags": [
           "binoc.table-change",
           "binoc.tabular-collection-change"
@@ -24,7 +34,14 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data.sqlite::users",
-            "summary": "1 row added",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " row added"
+              }
+            ],
             "tags": [
               "binoc-sqlite.row-addition",
               "binoc.row-addition",

@@ -14,7 +14,11 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.dta",
-        "summary": "Column added: 'score'",
+        "summary": [
+          {
+            "text": "Column added: 'score'"
+          }
+        ],
         "tags": [
           "binoc.column-addition",
           "binoc.schema-change"

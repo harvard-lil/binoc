@@ -643,7 +643,13 @@ impl Controller {
                     node.summary = Some(summary.clone());
                 }
                 if node.binoc_annotation("content_summary").is_none() {
-                    node.annotate_from("binoc", "content_summary", serde_json::json!(summary));
+                    // Stash as plain text: the trailer annotation is read with
+                    // `.as_str()` by the folder-move detector and the renderer.
+                    node.annotate_from(
+                        "binoc",
+                        "content_summary",
+                        serde_json::json!(summary.plain_text()),
+                    );
                 }
             }
         }

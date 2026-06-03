@@ -1,5 +1,5 @@
 ---
-source: binoc-stdlib/tests/test_vectors.rs
+source: binoc-stdlib/src/test_vectors.rs
 expression: "&stable_changeset"
 ---
 {
@@ -14,7 +14,17 @@ expression: "&stable_changeset"
         "action": "remove",
         "item_type": "text",
         "path": "removed_file.txt",
-        "summary": "File removed (1 line)",
+        "summary": [
+          {
+            "text": "File removed ("
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " line)"
+          }
+        ],
         "tags": [
           "binoc.content-changed"
         ],
