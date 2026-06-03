@@ -40,7 +40,7 @@ just materialize
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
-| [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 rows) | Default pipeline |
+| [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 row) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2,025-12-18 | Custom config |
@@ -348,7 +348,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data/extra.csv**: New table (2 columns, 1 rows)
+- **data/extra.csv**: New table (2 columns, 1 row)
 - **data/records.csv**: 1 row added
 - **docs/readme.txt**: 2 lines added, 1 removed
 ```
@@ -427,7 +427,7 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2,025-12-18
-- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 rows)
+- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 row)
 - **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
 - **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
 ```
