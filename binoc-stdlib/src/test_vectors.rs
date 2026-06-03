@@ -7,8 +7,9 @@
 //! Test vectors commit *source* trees like `archive.zip.d/` instead of opaque
 //! binary archives. A [`VectorMaterializer`] turns each staging directory into
 //! the real artifact (`.zip`, `.tar.gz`, `.sqlite`, ...). The stdlib ships
-//! [`ZipMaterializer`] and [`TarMaterializer`] ([`stdlib_materializers`]);
-//! plugins contribute their own (see `binoc-sqlite` for SQLite). Both
+//! [`ZipMaterializer`], [`TarMaterializer`], and [`GzipMaterializer`]
+//! ([`stdlib_materializers`]); plugins contribute their own (see
+//! `binoc-sqlite` for SQLite). Both
 //! [`run_vector`] and [`materialize_snapshots`] go through the same walker so
 //! tests and `just materialize` build identical trees.
 
@@ -148,10 +149,15 @@ pub trait VectorMaterializer: Send + Sync {
     fn build(&self, staging_dir: &Path, out_path: &Path, all_staging_suffixes: &[&str]);
 }
 
-/// Stdlib-provided materializers: [`ZipMaterializer`] and [`TarMaterializer`].
+/// Stdlib-provided materializers: [`ZipMaterializer`], [`TarMaterializer`],
+/// and [`GzipMaterializer`].
 /// Plugin materialize binaries should start from this list and push their own.
 pub fn stdlib_materializers() -> Vec<Box<dyn VectorMaterializer>> {
-    vec![Box::new(ZipMaterializer), Box::new(TarMaterializer)]
+    vec![
+        Box::new(ZipMaterializer),
+        Box::new(TarMaterializer),
+        Box::new(GzipMaterializer),
+    ]
 }
 
 /// Materializer for `.zip.d/` → `.zip`. Stored (uncompressed) zip so snapshots
@@ -177,6 +183,19 @@ impl VectorMaterializer for TarMaterializer {
     }
     fn build(&self, staging_dir: &Path, out_path: &Path, all_suffixes: &[&str]) {
         create_tar_from_dir(staging_dir, out_path, all_suffixes);
+    }
+}
+
+/// Materializer for `.gz.d/` -> `.gz`. The staging directory should contain
+/// the uncompressed inner file, usually named like the output without `.gz`.
+pub struct GzipMaterializer;
+
+impl VectorMaterializer for GzipMaterializer {
+    fn suffixes(&self) -> &[&'static str] {
+        &[".gz.d"]
+    }
+    fn build(&self, staging_dir: &Path, out_path: &Path, _all_suffixes: &[&str]) {
+        create_gzip_from_dir(staging_dir, out_path);
     }
 }
 
@@ -302,6 +321,7 @@ pub fn abi_wrapped_default_registry() -> (
 
     wrap_comparator!(zip_compare::ZipComparator);
     wrap_comparator!(tar_compare::TarComparator);
+    wrap_comparator!(gzip_compare::GzipComparator);
     wrap_comparator!(directory::DirectoryComparator);
     wrap_comparator!(csv_compare::CsvComparator);
     wrap_comparator!(text::TextComparator);
@@ -678,6 +698,50 @@ fn add_dir_to_zip(
             zip.write_all(&data).unwrap();
         }
     }
+}
+
+fn create_gzip_from_dir(staging_dir: &Path, gzip_path: &Path) {
+    let source_path = gzip_source_path(staging_dir, gzip_path);
+    let input = std::fs::read(&source_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", source_path.display()));
+    let file = std::fs::File::create(gzip_path)
+        .unwrap_or_else(|e| panic!("Failed to create {}: {e}", gzip_path.display()));
+    let mut encoder = flate2::GzBuilder::new()
+        .mtime(0)
+        .write(file, flate2::Compression::fast());
+    encoder.write_all(&input).unwrap();
+    encoder.finish().unwrap();
+}
+
+fn gzip_source_path(staging_dir: &Path, gzip_path: &Path) -> PathBuf {
+    let Some(output_name) = gzip_path.file_name().and_then(|n| n.to_str()) else {
+        panic!("gzip output path has no filename: {}", gzip_path.display());
+    };
+    let Some(inner_name) = output_name.strip_suffix(".gz") else {
+        panic!("gzip output path must end in .gz: {}", gzip_path.display());
+    };
+
+    let preferred = staging_dir.join(inner_name);
+    if preferred.is_file() {
+        return preferred;
+    }
+
+    let files: Vec<PathBuf> = std::fs::read_dir(staging_dir)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", staging_dir.display()))
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .collect();
+
+    if files.len() == 1 {
+        return files[0].clone();
+    }
+
+    panic!(
+        "{} must contain the inner file '{}' or exactly one regular file",
+        staging_dir.display(),
+        inner_name
+    );
 }
 
 // ── Invariant checker ─────────────────────────────────────────────────

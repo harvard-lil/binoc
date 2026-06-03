@@ -1,0 +1,9 @@
+[vector]
+name = "gzip-inner-dispatch"
+description = "Gzipped CSV and text are decompressed and redispatched under their inner names"
+tags = ["gzip", "csv", "text", "cell-change", "row-addition", "line-change"]
+
+[expected]
+root_action = "modify"
+child_count = 2
+has_tags = ["binoc.cell-change", "binoc.row-addition", "binoc.lines-added"]

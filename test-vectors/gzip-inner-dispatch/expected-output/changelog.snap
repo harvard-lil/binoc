@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **census.txt**: 1 line added, 1 removed
+- **data.csv**: 1 row added; 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 2, column 'name': 'Bob' -> 'Robert'

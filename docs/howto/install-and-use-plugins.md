@@ -73,6 +73,8 @@ available to reference by name in a
 ```yaml
 comparators:
   - binoc.zip
+  - binoc.tar
+  - binoc.gzip
   - binoc.directory
   - binoc-sqlite.sqlite   # provided by binoc-sqlite
   - binoc.csv

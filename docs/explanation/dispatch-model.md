@@ -40,13 +40,15 @@ flowchart TD
     P1 -->|yes| C1[zip.compare]
     P1 -->|no| P2{binoc.tar<br/>matches?}
     P2 -->|yes| C2[tar.compare]
-    P2 -->|no| P3{binoc.directory<br/>matches?}
-    P3 -->|yes| C3[directory.compare]
-    P3 -->|no| P4{binoc.csv<br/>matches?}
-    P4 -->|yes| C4[csv.compare]
-    P4 -->|no| P5{binoc.text<br/>matches?}
-    P5 -->|yes| C5[text.compare]
-    P5 -->|no| C6[binary.compare<br/>catch-all]
+    P2 -->|no| P3{binoc.gzip<br/>matches?}
+    P3 -->|yes| C3[gzip.compare]
+    P3 -->|no| P4{binoc.directory<br/>matches?}
+    P4 -->|yes| C4[directory.compare]
+    P4 -->|no| P5{binoc.csv<br/>matches?}
+    P5 -->|yes| C5[csv.compare]
+    P5 -->|no| P6{binoc.text<br/>matches?}
+    P6 -->|yes| C6[text.compare]
+    P6 -->|no| C7[binary.compare<br/>catch-all]
 ```
 
 ## Why no `can_handle` method?
@@ -95,13 +97,16 @@ Order matters. The default pipeline (from `DatasetConfig::default_config()`):
 |---|---|---|
 | 1 | `binoc.zip` | `.zip` extension |
 | 2 | `binoc.tar` | `.tar`, `.tar.gz`, `.tgz` extensions |
-| 3 | `binoc.directory` | `scope: Containers` |
-| 4 | `binoc.csv` | `.csv`, `.tsv` extensions |
-| 5 | `binoc.text` | `.txt`, `.md`, `.rs`, and other text extensions |
-| 6 | `binoc.binary` | catch-all (no extension/media type filter) |
+| 3 | `binoc.gzip` | `.gz` extension |
+| 4 | `binoc.directory` | `scope: Containers` |
+| 5 | `binoc.csv` | `.csv`, `.tsv` extensions |
+| 6 | `binoc.text` | `.txt`, `.md`, `.rs`, and other text extensions |
+| 7 | `binoc.binary` | catch-all (no extension/media type filter) |
 
 Archive comparators come first because `.zip`/`.tar` extension matching has
-to happen before the directory comparator claims the extracted contents.
+to happen before the directory comparator claims the extracted contents. Tar
+stays before gzip so `.tar.gz` is treated as a tar archive rather than a
+single-stream gzip file.
 CSV comes before text because `.csv` files should use the column-aware
 comparator, not line-level diff. Binary is the catch-all fallback.
 

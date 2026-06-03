@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **31 shared examples** in this gallery.
+Binoc currently ships **32 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -44,6 +44,7 @@ just materialize
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Folder moved from FoodData_Central_csv_2,025-12-18 | Custom config |
+| [`gzip-inner-dispatch`](#gzip-inner-dispatch) | Gzipped CSV and text are decompressed and redispatched under their inner names | census.txt: 1 line added, 1 removed | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/inventory.csv: 1 row added | Default pipeline |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: New file (1 line) | Default pipeline |
 | [`single-file-modify-binary`](#single-file-modify-binary) | Binary file, different hash | data.bin: Content changed (4 bytes → 4 bytes) | Default pipeline |
@@ -429,6 +430,30 @@ Result:
 - **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 rows)
 - **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
 - **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
+```
+
+## gzip-inner-dispatch
+
+Gzipped CSV and text are decompressed and redispatched under their inner names
+
+- **Browse source:** [gzip-inner-dispatch](https://github.com/harvard-lil/binoc/tree/main/test-vectors/gzip-inner-dispatch)
+- **Tags:** `gzip`, `csv`, `text`, `cell-change`, `row-addition`, `line-change`
+- **Snapshots:** `snapshot-a` has 2 files — `census.txt.gz.d/census.txt`, `data.csv.gz.d/data.csv`; `snapshot-b` has 2 files — `census.txt.gz.d/census.txt`, `data.csv.gz.d/data.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/gzip-inner-dispatch/snapshot-a \
+  ./test-vectors-materialized/gzip-inner-dispatch/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **census.txt**: 1 line added, 1 removed
+- **data.csv**: 1 row added; 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
+    - row 2, column 'name': 'Bob' -> 'Robert'
 ```
 
 ## kitchen-sink

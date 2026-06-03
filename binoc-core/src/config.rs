@@ -98,6 +98,7 @@ impl DatasetConfig {
             comparators: vec![
                 "binoc.zip".into(),
                 "binoc.tar".into(),
+                "binoc.gzip".into(),
                 "binoc.directory".into(),
                 "binoc.csv".into(),
                 "binoc.text".into(),

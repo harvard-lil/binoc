@@ -1,0 +1,3 @@
+id|county|farms
+1|Aroostook|121
+2|Franklin|88
