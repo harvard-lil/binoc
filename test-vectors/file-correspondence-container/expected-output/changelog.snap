@@ -1,0 +1,11 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Folder moved from data.zip
+
+## Warnings
+
+- File correspondence rule 'archive-pair' had no effect: the left selector matched only the container 'data.zip' and the right selector matched only the container 'archive.zip'; correspondences between containers are not supported, so consider declaring them for the files inside instead [binoc.declared_correspondence.container_unsupported]

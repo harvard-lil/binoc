@@ -30,7 +30,7 @@ pub enum ArtifactSubject {
 ///   changes. Adding optional fields to an existing version is fine
 ///   and does not require a bump (JSON/serde naturally ignore unknown
 ///   fields and default missing ones).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ArtifactFormat {
     pub package: String,

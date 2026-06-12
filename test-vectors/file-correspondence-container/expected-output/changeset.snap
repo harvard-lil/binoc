@@ -1,0 +1,50 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "zip_archive",
+        "path": "archive.zip",
+        "source_path": "data.zip",
+        "summary": [
+          {
+            "text": "Folder moved from "
+          },
+          {
+            "path": {
+              "value": "data.zip",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.folder-move",
+          "binoc.move"
+        ],
+        "comparator": "binoc.zip"
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.declared_correspondence",
+      "binoc.correlation_detector",
+      "binoc.folder_move_detector"
+    ]
+  },
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "binoc.declared_correspondence.container_unsupported",
+      "message": "File correspondence rule 'archive-pair' had no effect: the left selector matched only the container 'data.zip' and the right selector matched only the container 'archive.zip'; correspondences between containers are not supported, so consider declaring them for the files inside instead"
+    }
+  ]
+}

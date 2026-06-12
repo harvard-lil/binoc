@@ -1,0 +1,142 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "zip_archive",
+        "path": "archive.zip",
+        "source_path": "data.zip",
+        "summary": [
+          {
+            "text": "Folder moved from "
+          },
+          {
+            "path": {
+              "value": "data.zip",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " ("
+          },
+          {
+            "uint": 1
+          },
+          {
+            "text": " file modified within)"
+          }
+        ],
+        "tags": [
+          "binoc.folder-move",
+          "binoc.move"
+        ],
+        "children": [
+          {
+            "action": "move",
+            "item_type": "tabular",
+            "path": "archive.zip/new.csv",
+            "source_path": "data.zip/old.csv",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data.zip/old.csv",
+                  "snapshot": "from"
+                }
+              },
+              {
+                "text": " (modified)"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change",
+              "binoc.move",
+              "binoc.move.modified"
+            ],
+            "details": {
+              "cells_changed": 1,
+              "columns_added": [],
+              "columns_left": [
+                "id",
+                "name",
+                "score",
+                "city"
+              ],
+              "columns_removed": [],
+              "columns_right": [
+                "id",
+                "name",
+                "score",
+                "city"
+              ],
+              "hash_left": "f3e23333354f714e3d5c5086eaeb682a38ebdfc8f35077ba2d12b94f0fc50033",
+              "hash_right": "d9302048fcc2136b20e5d65f10ca1ef75bbdacde95916bd4354378a60c755dd1",
+              "rows_added": 0,
+              "rows_left": 10,
+              "rows_removed": 0,
+              "rows_right": 10
+            },
+            "detail_blocks": [
+              {
+                "id": "cells_changed",
+                "kind": "binoc.tabular.cell_changes.v1",
+                "label": "Changed cells",
+                "total_count": 1,
+                "examples": [
+                  {
+                    "locator": {
+                      "column": "score",
+                      "row": 4
+                    },
+                    "before": {
+                      "value": "60",
+                      "media_type": "text/plain"
+                    },
+                    "after": {
+                      "value": "61",
+                      "media_type": "text/plain"
+                    }
+                  }
+                ],
+                "extract": [
+                  {
+                    "aspect": "cells_changed",
+                    "label": "All changed cells"
+                  }
+                ]
+              }
+            ],
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "tabular_summary",
+                "value": "1 cell changed"
+              }
+            ],
+            "comparator": "binoc.csv",
+            "transformed_by": [
+              "binoc.tabular_analyzer"
+            ]
+          }
+        ],
+        "comparator": "binoc.zip"
+      }
+    ],
+    "comparator": "binoc.directory",
+    "transformed_by": [
+      "binoc.fuzzy_correlation_detector",
+      "binoc.folder_move_detector"
+    ]
+  }
+}

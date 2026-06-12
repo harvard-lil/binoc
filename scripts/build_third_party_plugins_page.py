@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Emit docs/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+"""Emit docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 
 Catalog entries include declarative dispatch metadata (`extensions`, `media_types`,
 and related fields) aligned with `ComparatorDescriptor` / `TransformerDescriptor`
@@ -18,7 +18,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "third_party_plugins.json"
-OUT_PATH = ROOT / "docs" / "reference" / "third-party-plugins.md"
+OUT_PATH = ROOT / "docs" / "users" / "reference" / "third-party-plugins.md"
 
 PACKAGE_LABELS = {"pypi": "PyPI", "crate": "crates.io"}
 
@@ -175,7 +175,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
             "After you install the package (for example from PyPI), binoc picks it up "
             "via the standard entry-point group — see [Install and use plugins]"
             "(../howto/install-and-use-plugins.md) and [Plugin discovery]"
-            "(plugin-discovery.md)."
+            "(../../plugin-developers/reference/plugin-discovery.md)."
         )
         lines.append("")
         lines.append("Published packages declare discovery metadata like this:")
@@ -261,7 +261,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         lines.append("")
         lines.append(
             "Runs on diff nodes when the following transformer dispatch rules match "
-            "(see [Dispatch model](../explanation/dispatch-model.md)):"
+            "(see [Dispatch model](../../plugin-developers/explanation/dispatch-model.md)):"
         )
         lines.append("")
         lines.append(_md_table(_format_transformer_dispatch(dispatch, f"{tp}.dispatch")))
@@ -324,7 +324,7 @@ def main() -> int:
         "",
         "# Third-party plugins",
         "",
-        "Binoc ships a capable [standard library](../explanation/plugin-model.md) "
+        "Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) "
         "(`binoc-stdlib`), but some datasets use formats that need a dedicated "
         "comparator. Install one of the **add-on plugins** below when your "
         "snapshots include those kinds of files.",
@@ -337,7 +337,7 @@ def main() -> int:
         "!!! tip \"Publishing or listing a plugin\"",
         "",
         "    If you maintain a plugin and want it listed here, see "
-        "[Publish a plugin](../howto/publish-a-plugin.md).",
+        "[Publish a plugin](../../plugin-developers/howto/publish-a-plugin.md).",
         "",
         "!!! note \"Generated page\"",
         "",

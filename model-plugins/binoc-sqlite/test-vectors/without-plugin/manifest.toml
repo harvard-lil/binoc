@@ -16,7 +16,6 @@ comparators = [
 transformers = [
     "binoc.correlation_detector",
     "binoc.folder_move_detector",
-    "binoc.column_reorder_detector",
 ]
 
 [expected]

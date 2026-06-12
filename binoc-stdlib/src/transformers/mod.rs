@@ -1,4 +1,3 @@
-pub mod column_reorder;
 pub(crate) mod correlation;
 pub mod correlation_detector;
 pub mod declared_correspondence;

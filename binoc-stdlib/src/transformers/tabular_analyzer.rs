@@ -11,14 +11,35 @@ const MAX_CAPTURED_VALUE_CHARS: usize = 256;
 /// comparator that publishes [`tabular_v1`] artifacts (CSV, Parquet,
 /// Excel, etc.).
 ///
-/// Should run before refinement transformers like `ColumnReorderDetector`
-/// and `RowReorderDetector` so they can build on the tags this sets.
+/// When its single pass shows a pure column reorder (column order changed,
+/// nothing else), it upgrades the action to `reorder` inline. Judgments
+/// that need their own scan over the data (e.g. the out-of-tree
+/// `RowReorderDetector`) remain separate transformers that build on the
+/// tags this sets, so this should still run before them.
 pub struct TabularAnalyzer;
 
 impl Transformer for TabularAnalyzer {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.tabular_analyzer")
             .with_match_artifacts(vec![tabular_v1()])
+            .with_emits_tags(vec![
+                "binoc.content-changed".into(),
+                "binoc.column-addition".into(),
+                "binoc.column-removal".into(),
+                "binoc.column-reorder".into(),
+                "binoc.row-addition".into(),
+                "binoc.row-removal".into(),
+                "binoc.cell-change".into(),
+                "binoc.schema-change".into(),
+                "binoc.identity-diagnostic".into(),
+                "binoc.row-identity-ambiguous".into(),
+                "binoc.null-key".into(),
+                "binoc.duplicate-key".into(),
+                "binoc.ambiguous-key".into(),
+            ])
+            .with_emits_actions(vec!["reorder".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(
@@ -49,6 +70,9 @@ impl Transformer for TabularAnalyzer {
         data: &dyn DataAccess,
     ) -> Option<ExtractResult> {
         let pair = TabularDataPair::from_artifacts(node, data)?;
+        if aspect == "column_order" {
+            return Some(column_order_extract(&pair));
+        }
         if let Some(result) = keyed_tabular_extract(&pair, node, aspect) {
             return Some(result);
         }
@@ -283,7 +307,30 @@ fn transform_modify(
         node.summary = Some(tabular_desc);
     }
 
+    // Pure column reorder: order changed, nothing else. The facts above are
+    // positionally computed, so they are exactly the pure-reorder judgment —
+    // upgrade the action and replace the summary.
+    if order_changed
+        && columns_added.is_empty()
+        && columns_removed.is_empty()
+        && rows_added == 0
+        && rows_removed == 0
+        && cells_changed == 0
+    {
+        apply_pure_reorder(&mut node);
+    }
+
     TransformResult::Replace(Box::new(node))
+}
+
+/// Upgrade a node whose only change is column order: action becomes
+/// `reorder` and the summary states that content is unchanged. The
+/// `binoc.column-reorder` tag is already set (renderer groups dispatch on
+/// it); all other tags are left alone — they are facts owned by whichever
+/// plugin set them.
+fn apply_pure_reorder(node: &mut DiffNode) {
+    node.action = "reorder".into();
+    node.summary = Some("Columns reordered (content unchanged)".into());
 }
 
 struct TabularColumnChange {
@@ -443,7 +490,66 @@ fn transform_modify_keyed(
         node.summary = Some(tabular_desc);
     }
 
+    // The keyed facts above match rows by key, but the pure-reorder
+    // judgment is positional (a re-sorted table is not a pure column
+    // reorder). Verify positionally; the scan only runs when the column
+    // order actually changed with no schema change.
+    if column_change.order_changed
+        && column_change.columns_added.is_empty()
+        && column_change.columns_removed.is_empty()
+        && is_pure_column_reorder(left, right)
+    {
+        apply_pure_reorder(&mut node);
+    }
+
     TransformResult::Replace(Box::new(node))
+}
+
+/// Positional pure-column-reorder check: same row count, same column set,
+/// and every cell equal when rows are compared by position and columns by
+/// name. The unkeyed `transform_modify` facts encode exactly this, so only
+/// the keyed path needs to call it.
+fn is_pure_column_reorder(left: &TabularData, right: &TabularData) -> bool {
+    if left.rows.len() != right.rows.len() {
+        return false;
+    }
+
+    let left_cols: BTreeSet<&str> = left.headers.iter().map(|s| s.as_str()).collect();
+    let right_cols: BTreeSet<&str> = right.headers.iter().map(|s| s.as_str()).collect();
+    if left_cols != right_cols {
+        return false;
+    }
+
+    for (i, left_row) in left.rows.iter().enumerate() {
+        let right_row = &right.rows[i];
+        for col in &left.headers {
+            let li = left.column_index(col).unwrap();
+            let ri = right.column_index(col).unwrap();
+            let lv = left_row.get(li).map(|s| s.as_str()).unwrap_or("");
+            let rv = right_row.get(ri).map(|s| s.as_str()).unwrap_or("");
+            if lv != rv {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+/// `before:`/`after:` header listing for the `column_order` aspect.
+fn column_order_extract(pair: &TabularDataPair) -> ExtractResult {
+    let mut out = String::new();
+    if let Some(left) = &pair.left {
+        out.push_str("before: ");
+        out.push_str(&left.headers.join(", "));
+        out.push('\n');
+    }
+    if let Some(right) = &pair.right {
+        out.push_str("after:  ");
+        out.push_str(&right.headers.join(", "));
+        out.push('\n');
+    }
+    ExtractResult::Text(out)
 }
 
 /// `New table (N columns, M rows)` / `Table removed (...)` with grouped counts.

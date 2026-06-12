@@ -1,7 +1,7 @@
 //! Emits the JSON Schema for the changeset wire format.
 //!
 //! Writes a pretty-printed JSON Schema (draft 2020-12) to the path passed on
-//! argv, or to `docs/reference/changeset-schema.json` by default. The
+//! argv, or to `docs/users/reference/changeset-schema.json` by default. The
 //! resulting file is consumed by `scripts/build_changeset_schema_page.py` to
 //! render the human-readable reference page.
 //!
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_path = std::env::args()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("docs/reference/changeset-schema.json"));
+        .unwrap_or_else(|| PathBuf::from("docs/users/reference/changeset-schema.json"));
 
     let schema = schema_for!(Changeset);
     let mut json = serde_json::to_string_pretty(&schema)?;

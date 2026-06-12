@@ -112,7 +112,6 @@ impl DatasetConfig {
                 "binoc.table_splitter".into(),
                 "binoc.tabular_analyzer".into(),
                 "binoc.tabular_stats_annotator".into(),
-                "binoc.column_reorder_detector".into(),
                 "binoc.table_collection_analyzer".into(),
             ],
             renderers: default_renderers(),

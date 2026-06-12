@@ -1,0 +1,15 @@
+[vector]
+name = "file-correspondence-container"
+description = "Config declares a correspondence between zip containers, which is unsupported; the rule is ignored with a warning diagnostic"
+tags = ["zip", "file-correspondence", "diagnostics"]
+
+[config.dataset.files]
+[[config.dataset.files.correspondences]]
+name = "archive-pair"
+key = "archive"
+
+[config.dataset.files.correspondences.left]
+path_regex = "^data\\.zip$"
+
+[config.dataset.files.correspondences.right]
+path_regex = "^archive\\.zip$"

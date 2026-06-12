@@ -27,7 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
 
 ROOT = Path(__file__).resolve().parent.parent
 VECTORS_ROOT = ROOT / "test-vectors"
-PAGE_PATH = ROOT / "docs" / "explanation" / "test-vectors-gallery.md"
+PAGE_PATH = ROOT / "docs" / "users" / "explanation" / "test-vectors-gallery.md"
 REPO_BASE_URL = "https://github.com/harvard-lil/binoc/tree/main"
 
 SNAPSHOT_SAMPLE_LIMIT = 4

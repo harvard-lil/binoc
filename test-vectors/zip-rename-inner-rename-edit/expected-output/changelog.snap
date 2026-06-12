@@ -1,0 +1,11 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Folder moved from data.zip (1 file modified within)
+- **archive.zip/new.csv**: Moved from data.zip/old.csv (modified)
+- **archive.zip/new.csv**: 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "archive.zip/new.csv" cells_changed` for all changed cells
+    - row 5, column 'score': '60' -> '61'

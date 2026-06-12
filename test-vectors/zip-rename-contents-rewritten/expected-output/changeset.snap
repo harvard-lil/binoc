@@ -1,0 +1,288 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "add",
+        "item_type": "zip_archive",
+        "path": "archive.zip",
+        "children": [
+          {
+            "action": "add",
+            "item_type": "directory",
+            "path": "archive.zip",
+            "children": [
+              {
+                "action": "add",
+                "item_type": "tabular",
+                "path": "archive.zip/p.csv",
+                "summary": [
+                  {
+                    "text": "New table ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "code",
+                    "label",
+                    "price",
+                    "region"
+                  ],
+                  "hash_right": "fdf6f1d78efaf45fce09ff5fd139d691943e711badad7bc751dc49ca3edf5e57",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              },
+              {
+                "action": "add",
+                "item_type": "tabular",
+                "path": "archive.zip/q.csv",
+                "summary": [
+                  {
+                    "text": "New table ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "code",
+                    "label",
+                    "price",
+                    "region"
+                  ],
+                  "hash_right": "a4aac54377acf7a0e4fdf8cd81ed82afdf003ecf32401c34ab99112392a3f231",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              },
+              {
+                "action": "add",
+                "item_type": "tabular",
+                "path": "archive.zip/r.csv",
+                "summary": [
+                  {
+                    "text": "New table ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "code",
+                    "label",
+                    "price",
+                    "region"
+                  ],
+                  "hash_right": "7c42bef7756739cc26b0d231fcf5850cfdaebba5a422eea94bf6bab45ce30f87",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "details": {
+          "hash_right": "c124b40e01a3eb853a4c7e7044f97af4e4ec5f49f7436f136a21e996bb52bf9a"
+        },
+        "comparator": "binoc.zip"
+      },
+      {
+        "action": "remove",
+        "item_type": "zip_archive",
+        "path": "data.zip",
+        "children": [
+          {
+            "action": "remove",
+            "item_type": "directory",
+            "path": "data.zip",
+            "children": [
+              {
+                "action": "remove",
+                "item_type": "tabular",
+                "path": "data.zip/x.csv",
+                "summary": [
+                  {
+                    "text": "Table removed ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "id",
+                    "name",
+                    "score",
+                    "city"
+                  ],
+                  "hash_left": "f3e23333354f714e3d5c5086eaeb682a38ebdfc8f35077ba2d12b94f0fc50033",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              },
+              {
+                "action": "remove",
+                "item_type": "tabular",
+                "path": "data.zip/y.csv",
+                "summary": [
+                  {
+                    "text": "Table removed ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "id",
+                    "bird",
+                    "count",
+                    "state"
+                  ],
+                  "hash_left": "6326bb50cca7c828c70ebe6a0643fc8d58dfa5730d1fa07e72d533ce4a8ac835",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              },
+              {
+                "action": "remove",
+                "item_type": "tabular",
+                "path": "data.zip/z.csv",
+                "summary": [
+                  {
+                    "text": "Table removed ("
+                  },
+                  {
+                    "uint": 4
+                  },
+                  {
+                    "text": " columns, "
+                  },
+                  {
+                    "uint": 10
+                  },
+                  {
+                    "text": " rows)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed"
+                ],
+                "details": {
+                  "columns": [
+                    "id",
+                    "river",
+                    "length",
+                    "mouth"
+                  ],
+                  "hash_left": "9af26f983981e3d91f787bfff3dcec8c82378478b230dea47b2abeb1a876ad28",
+                  "rows": 10
+                },
+                "comparator": "binoc.csv",
+                "transformed_by": [
+                  "binoc.tabular_analyzer"
+                ]
+              }
+            ],
+            "comparator": "binoc.directory"
+          }
+        ],
+        "details": {
+          "hash_left": "89e1f227df5938d8cc78de5180d03b3f16c7edabc5f933c081ecacf9f78e0b81"
+        },
+        "comparator": "binoc.zip"
+      }
+    ],
+    "comparator": "binoc.directory"
+  }
+}

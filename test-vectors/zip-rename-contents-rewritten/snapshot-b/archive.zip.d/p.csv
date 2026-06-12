@@ -1,0 +1,11 @@
+code,label,price,region
+A01,quartz,5101,Northwest
+A02,basalt,5202,Southwest
+A03,gneiss,5303,Midwest
+A04,schist,5404,Northeast
+A05,gabbro,5505,Southeast
+A06,pumice,5606,Mountain
+A07,shale,5707,Plains
+A08,marble,5808,Coastal
+A09,slate,5909,Lakes
+A10,flint,5010,Desert

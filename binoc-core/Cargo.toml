@@ -19,5 +19,6 @@ serde_yaml = "0.9.34"
 tempfile = { workspace = true }
 
 [dev-dependencies]
+binoc-sdk = { workspace = true, features = ["test-support"] }
 insta = "1.46.3"
 toml = "1.0.4"

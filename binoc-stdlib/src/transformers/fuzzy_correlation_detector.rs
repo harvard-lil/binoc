@@ -101,6 +101,10 @@ impl Transformer for FuzzyCorrelationDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.fuzzy_correlation_detector")
             .with_node_shape(NodeShapeFilter::Root)
+            .with_emits_tags(vec!["binoc.move".into(), "binoc.move.modified".into()])
+            .with_emits_actions(vec!["move".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

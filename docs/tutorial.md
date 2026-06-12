@@ -282,14 +282,14 @@ not substantively differ.
 ## Where next
 
 If you want to keep working from the command line, continue with
-[Diff two snapshots](howto/diff-two-snapshots.md),
-[Save and render changesets](howto/save-and-render-changesets.md), and
-[Extract changed data](howto/extract-changed-data.md).
+[Diff two snapshots](users/howto/diff-two-snapshots.md),
+[Save and render changesets](users/howto/save-and-render-changesets.md), and
+[Extract changed data](users/howto/extract-changed-data.md).
 
 If you want to use packaged extensions, go to
-[Install and use plugins](howto/install-and-use-plugins.md). If you
+[Install and use plugins](users/howto/install-and-use-plugins.md). If you
 want to turn the FASTA script into a real plugin, continue with
-[Write a Python comparator](howto/write-a-python-comparator.md).
+[Write a Python comparator](plugin-developers/howto/write-a-python-comparator.md).
 
 If you want to learn more about the design of binoc, start with the
-[Architecture overview](explanation/architecture.md).
+[Architecture overview](plugin-developers/explanation/architecture.md).

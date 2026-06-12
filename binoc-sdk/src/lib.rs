@@ -5,6 +5,8 @@ pub mod traits;
 pub mod types;
 
 #[cfg(feature = "test-support")]
+pub mod lints;
+#[cfg(feature = "test-support")]
 pub mod test_support;
 
 pub use data_access::LocalDataAccess;

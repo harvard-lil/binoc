@@ -1,5 +1,5 @@
 //! Folder-move rollup: when most leaves under a destination directory
-//! are clean `move` (or `copy`) descendants from a consistent source
+//! are `move` (or `copy`) descendants from a consistent source
 //! directory, roll the pair up into one folder-level `move` (or `copy`)
 //! while keeping remainder changes beneath it.
 //!
@@ -10,8 +10,11 @@
 //! ```
 //!
 //! Default threshold is `0.8`: at least 80% of destination leaves must
-//! be clean, consistently sourced moves/copies of the same dominant kind.
-//! The remainder stays attached under the rolled-up destination node as
+//! be consistently sourced moves/copies of the same dominant kind.
+//! Modified moves (`binoc.move.modified`) and renamed children count as
+//! evidence; the rolled-up node notes how many files were modified and
+//! keeps renamed or modified children beneath it as detail. The
+//! remainder stays attached under the rolled-up destination node as
 //! ordinary adds/removes/modifies.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -45,6 +48,14 @@ impl Transformer for FolderMoveDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.folder_move_detector")
             .with_node_shape(NodeShapeFilter::Root)
+            .with_emits_tags(vec![
+                "binoc.move".into(),
+                "binoc.copy".into(),
+                "binoc.folder-move".into(),
+            ])
+            .with_emits_actions(vec!["move".into(), "copy".into(), "modify".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(
@@ -82,6 +93,7 @@ struct Rollup {
     source_path: String,
     kind: RollupKind,
     matched_rel_paths: BTreeSet<String>,
+    modified_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +138,7 @@ fn try_rollup(container: &DiffNode, threshold: f64) -> Option<Rollup> {
     let mut source_prefix: Option<String> = None;
 
     for leaf in &leaves {
-        let Some(candidate) = classify_clean_leaf(leaf, &container.path) else {
+        let Some(candidate) = classify_move_leaf(leaf, &container.path) else {
             continue;
         };
         match &source_prefix {
@@ -148,6 +160,10 @@ fn try_rollup(container: &DiffNode, threshold: f64) -> Option<Rollup> {
     if fraction < threshold {
         return None;
     }
+    let modified_count = candidates
+        .iter()
+        .filter(|c| c.kind == kind && c.modified)
+        .count();
 
     let source_path = source_prefix?;
     // Destination and source must not be the same path (would indicate
@@ -155,11 +171,20 @@ fn try_rollup(container: &DiffNode, threshold: f64) -> Option<Rollup> {
     if source_path == container.path {
         return None;
     }
+    // A non-root source that strictly contains the destination cannot be
+    // a container move: those leaves migrated into a child container, and
+    // folding would delete the destination along with its source ancestor.
+    // Root ("") stays allowed — it is never deleted, so "everything moved
+    // into a subfolder" still folds.
+    if !source_path.is_empty() && strip_prefix_as_child(&container.path, &source_path).is_some() {
+        return None;
+    }
     Some(Rollup {
         dst_path: container.path.clone(),
         source_path,
         kind,
         matched_rel_paths,
+        modified_count,
     })
 }
 
@@ -217,12 +242,27 @@ fn strip_suffix_as_parent<'a>(path: &'a str, suffix: &str) -> Option<&'a str> {
 #[derive(Debug, Clone)]
 struct LeafMatch {
     rel_path: String,
+    source_path: String,
     source_prefix: String,
     kind: RollupKind,
+    modified: bool,
 }
 
-fn classify_clean_leaf(leaf: &DiffNode, dst_prefix: &str) -> Option<LeafMatch> {
-    if !leaf.children.is_empty() || has_modification_detail(leaf) {
+impl LeafMatch {
+    /// A leaf is fully implied by its rollup when its source is exactly
+    /// the rollup source plus its destination-relative path — i.e. it
+    /// was neither renamed nor modified, so dropping it loses nothing.
+    fn implied_source(&self) -> String {
+        if self.source_prefix.is_empty() {
+            self.rel_path.clone()
+        } else {
+            format!("{}/{}", self.source_prefix, self.rel_path)
+        }
+    }
+}
+
+fn classify_move_leaf(leaf: &DiffNode, dst_prefix: &str) -> Option<LeafMatch> {
+    if !leaf.children.is_empty() {
         return None;
     }
 
@@ -236,12 +276,33 @@ fn classify_clean_leaf(leaf: &DiffNode, dst_prefix: &str) -> Option<LeafMatch> {
 
     let src = leaf.source_path.as_deref()?;
     let rel = strip_prefix_as_child(&leaf.path, dst_prefix)?;
-    let prefix = strip_suffix_as_parent(src, rel)?;
+    let prefix = derive_source_prefix(src, rel)?;
     Some(LeafMatch {
         rel_path: rel.to_string(),
+        source_path: src.to_string(),
         source_prefix: prefix.to_string(),
         kind,
+        modified: has_modification_detail(leaf),
     })
+}
+
+/// Infer the source container a moved leaf came from. The leaf's
+/// destination-relative directory structure must match the tail of the
+/// source's directory structure, but the basename is free to differ —
+/// a child that was renamed as part of the move still counts.
+fn derive_source_prefix<'a>(src: &'a str, rel: &str) -> Option<&'a str> {
+    let src_parent = parent_dir_of(src);
+    let rel_parent = parent_dir_of(rel);
+    if rel_parent.is_empty() {
+        Some(src_parent)
+    } else {
+        strip_suffix_as_parent(src_parent, rel_parent)
+    }
+}
+
+/// Parent directory of `path` (`""` for a bare filename).
+fn parent_dir_of(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(parent, _)| parent)
 }
 
 fn has_modification_detail(node: &DiffNode) -> bool {
@@ -271,22 +332,19 @@ fn apply_rollups(
     source_index: &BTreeMap<String, DiffNode>,
 ) -> DiffNode {
     if let Some(rollup) = rollups.get(&node.path) {
-        let (action, tag, summary) = match rollup.kind {
-            RollupKind::Move => (
-                "move",
-                "binoc.move",
-                Summary::new()
-                    .text("Folder moved from ")
-                    .path(display_name(&rollup.source_path), Side::From),
-            ),
-            RollupKind::Copy => (
-                "copy",
-                "binoc.copy",
-                Summary::new()
-                    .text("Folder copied from ")
-                    .path(display_name(&rollup.source_path), Side::From),
-            ),
+        let (action, tag, verb) = match rollup.kind {
+            RollupKind::Move => ("move", "binoc.move", "moved"),
+            RollupKind::Copy => ("copy", "binoc.copy", "copied"),
         };
+        let mut summary = Summary::new()
+            .text(format!("Folder {verb} from "))
+            .path(display_name(&rollup.source_path), Side::From);
+        if rollup.modified_count > 0 {
+            summary = summary
+                .text(" (")
+                .count(rollup.modified_count as u64, "file")
+                .text(" modified within)");
+        }
         let mut children = rewrite_destination_children(node.children, rollup, source_index);
         if let Some(source_node) = source_index.get(&rollup.source_path) {
             children.extend(relocate_source_remainders(source_node, rollup));
@@ -324,12 +382,23 @@ fn rewrite_destination_children(
     rollup: &Rollup,
     source_index: &BTreeMap<String, DiffNode>,
 ) -> Vec<DiffNode> {
-    merge_same_path_nodes(
-        children
-            .into_iter()
-            .filter_map(|child| rewrite_destination_node(child, rollup, source_index))
-            .collect(),
-    )
+    let mut out: Vec<DiffNode> = Vec::new();
+    for child in children {
+        if child.path == rollup.dst_path {
+            // A same-path shell around the rolled-up container (e.g. the
+            // directory node a zip comparator expands into shares the
+            // archive's path). Hoist its children so remainder and
+            // retained detail survive.
+            out.extend(rewrite_destination_children(
+                child.children,
+                rollup,
+                source_index,
+            ));
+        } else if let Some(rewritten) = rewrite_destination_node(child, rollup, source_index) {
+            out.push(rewritten);
+        }
+    }
+    merge_same_path_nodes(out)
 }
 
 fn rewrite_destination_node(
@@ -339,10 +408,7 @@ fn rewrite_destination_node(
 ) -> Option<DiffNode> {
     let rel = strip_prefix_as_child(&node.path, &rollup.dst_path)?.to_string();
     if node.children.is_empty() {
-        if is_clean_matched_leaf(&node, &rel, rollup) {
-            return None;
-        }
-        return Some(normalize_rollup_remainder_leaf(node, rollup));
+        return rewrite_destination_leaf(node, rollup);
     }
 
     let mut new_children = rewrite_destination_children(node.children, rollup, source_index);
@@ -363,22 +429,21 @@ fn rewrite_destination_node(
     ))
 }
 
-fn is_clean_matched_leaf(node: &DiffNode, rel: &str, rollup: &Rollup) -> bool {
-    classify_clean_leaf(node, &rollup.dst_path)
-        .filter(|candidate| candidate.kind == rollup.kind)
-        .is_some_and(|_| rollup.matched_rel_paths.contains(rel))
-}
-
-fn normalize_rollup_remainder_leaf(node: DiffNode, rollup: &Rollup) -> DiffNode {
-    let Some(candidate) = classify_clean_leaf(&node, &rollup.dst_path) else {
-        return maybe_demote_move_like_remainder(node);
-    };
-
-    if candidate.kind == rollup.kind && rollup.matched_rel_paths.contains(&candidate.rel_path) {
-        return node;
+/// Rewrite a leaf beneath a rolled-up destination. Matched leaves whose
+/// move is fully implied by the folder move (same relative path, not
+/// modified) carry no extra information and are dropped; matched leaves
+/// that were renamed or modified stay as detail beneath the folded node.
+/// Everything else is a remainder.
+fn rewrite_destination_leaf(node: DiffNode, rollup: &Rollup) -> Option<DiffNode> {
+    if let Some(candidate) = classify_move_leaf(&node, &rollup.dst_path) {
+        if candidate.kind == rollup.kind && rollup.matched_rel_paths.contains(&candidate.rel_path) {
+            if !candidate.modified && candidate.source_path == candidate.implied_source() {
+                return None;
+            }
+            return Some(node);
+        }
     }
-
-    maybe_demote_move_like_remainder(node)
+    Some(maybe_demote_move_like_remainder(node))
 }
 
 fn normalize_rollup_remainder_container(
@@ -589,5 +654,187 @@ mod tests {
     #[test]
     fn strip_suffix_as_parent_root_when_equal() {
         assert_eq!(strip_suffix_as_parent("a.txt", "a.txt"), Some(""));
+    }
+
+    #[test]
+    fn derive_source_prefix_allows_basename_rename() {
+        assert_eq!(
+            derive_source_prefix("data.zip/old.csv", "new.csv"),
+            Some("data.zip")
+        );
+    }
+
+    #[test]
+    fn derive_source_prefix_nested_requires_matching_dirs() {
+        assert_eq!(
+            derive_source_prefix("old/data/x.csv", "data/y.csv"),
+            Some("old")
+        );
+        assert_eq!(derive_source_prefix("old/other/x.csv", "data/x.csv"), None);
+    }
+
+    fn move_leaf(path: &str, source: &str) -> DiffNode {
+        DiffNode::new("move", "tabular", path)
+            .with_source_path(source)
+            .with_tag("binoc.move")
+    }
+
+    fn modified_move_leaf(path: &str, source: &str) -> DiffNode {
+        move_leaf(path, source).with_tag("binoc.move.modified")
+    }
+
+    fn container(path: &str, action: &str, children: Vec<DiffNode>) -> DiffNode {
+        let mut node = DiffNode::new(action, "directory", path);
+        node.children = children;
+        node
+    }
+
+    #[test]
+    fn renamed_and_modified_single_child_rolls_up() {
+        let c = container(
+            "archive.zip",
+            "add",
+            vec![modified_move_leaf(
+                "archive.zip/new.csv",
+                "data.zip/old.csv",
+            )],
+        );
+        let rollup = try_rollup(&c, 0.8).expect("renamed+modified child should roll up");
+        assert_eq!(rollup.source_path, "data.zip");
+        assert_eq!(rollup.kind, RollupKind::Move);
+        assert_eq!(rollup.modified_count, 1);
+        assert!(rollup.matched_rel_paths.contains("new.csv"));
+    }
+
+    #[test]
+    fn move_from_ancestor_container_into_child_does_not_roll_up() {
+        // outer/beta.txt -> outer/inner/renamed.txt is a file move into a
+        // child container, not a move of `inner` from `outer`.
+        let c = container(
+            "outer.zip/inner.zip",
+            "modify",
+            vec![move_leaf(
+                "outer.zip/inner.zip/renamed.txt",
+                "outer.zip/beta.txt",
+            )],
+        );
+        assert!(try_rollup(&c, 0.8).is_none());
+    }
+
+    #[test]
+    fn children_from_different_source_containers_do_not_roll_up() {
+        let c = container(
+            "dst",
+            "add",
+            vec![
+                move_leaf("dst/a.csv", "src_one/a.csv"),
+                move_leaf("dst/b.csv", "src_two/b.csv"),
+            ],
+        );
+        assert!(try_rollup(&c, 0.8).is_none());
+    }
+
+    #[test]
+    fn copy_children_roll_up_as_copy() {
+        let c = container(
+            "dst",
+            "add",
+            vec![
+                DiffNode::new("copy", "tabular", "dst/a.csv")
+                    .with_source_path("src/a.csv")
+                    .with_tag("binoc.copy"),
+                DiffNode::new("copy", "tabular", "dst/b.csv")
+                    .with_source_path("src/b.csv")
+                    .with_tag("binoc.copy"),
+            ],
+        );
+        let rollup = try_rollup(&c, 0.8).expect("clean copies should roll up");
+        assert_eq!(rollup.kind, RollupKind::Copy);
+        assert_eq!(rollup.modified_count, 0);
+    }
+
+    #[test]
+    fn mixed_clean_and_modified_children_roll_up_with_modifications_surfaced() {
+        let dst = container(
+            "dst",
+            "add",
+            vec![
+                move_leaf("dst/a.csv", "src/a.csv"),
+                modified_move_leaf("dst/b.csv", "src/b.csv"),
+            ],
+        );
+        let src = container("src", "remove", vec![]);
+        let mut root = DiffNode::new("modify", "directory", "");
+        root.children = vec![dst, src];
+
+        let mut rollups = BTreeMap::new();
+        collect_rollups(&root, 0.8, &mut rollups);
+        let rollup = rollups.get("dst").expect("dst should roll up");
+        assert_eq!(rollup.modified_count, 1);
+
+        let source_paths: BTreeSet<String> =
+            rollups.values().map(|r| r.source_path.clone()).collect();
+        let mut source_index = BTreeMap::new();
+        index_nodes_by_path(&root, &mut source_index);
+        let rewritten = apply_rollups(root, &rollups, &source_paths, &source_index);
+
+        // The dangling source container is gone; only the folded move remains.
+        assert_eq!(rewritten.children.len(), 1);
+        let folded = &rewritten.children[0];
+        assert_eq!(folded.action, "move");
+        assert_eq!(folded.source_path.as_deref(), Some("src"));
+        let summary = folded
+            .summary
+            .as_ref()
+            .expect("folded summary")
+            .plain_text();
+        assert!(
+            summary.contains("1 file modified within"),
+            "summary should surface the modification: {summary}"
+        );
+        // The clean, fully-implied child is dropped; the modified child
+        // stays beneath the folded node as detail.
+        assert_eq!(folded.children.len(), 1);
+        assert_eq!(folded.children[0].path, "dst/b.csv");
+        assert!(folded.children[0].tags.contains("binoc.move.modified"));
+    }
+
+    #[test]
+    fn clean_renamed_child_rolls_up_and_keeps_rename_detail() {
+        let dst = container(
+            "dst",
+            "add",
+            vec![
+                move_leaf("dst/a.csv", "src/a.csv"),
+                move_leaf("dst/renamed.csv", "src/original.csv"),
+            ],
+        );
+        let mut root = DiffNode::new("modify", "directory", "");
+        root.children = vec![dst];
+
+        let mut rollups = BTreeMap::new();
+        collect_rollups(&root, 0.8, &mut rollups);
+        let rollup = rollups
+            .get("dst")
+            .expect("renamed child should still roll up");
+        assert_eq!(rollup.source_path, "src");
+        assert_eq!(rollup.modified_count, 0);
+
+        let source_paths: BTreeSet<String> =
+            rollups.values().map(|r| r.source_path.clone()).collect();
+        let mut source_index = BTreeMap::new();
+        index_nodes_by_path(&root, &mut source_index);
+        let rewritten = apply_rollups(root, &rollups, &source_paths, &source_index);
+
+        let folded = &rewritten.children[0];
+        assert_eq!(folded.action, "move");
+        // The same-name child is implied and dropped; the renamed child
+        // keeps its move node so the rename stays visible.
+        assert_eq!(folded.children.len(), 1);
+        assert_eq!(folded.children[0].path, "dst/renamed.csv");
+        assert_eq!(
+            folded.children[0].source_path.as_deref(),
+            Some("src/original.csv")
+        );
     }
 }
