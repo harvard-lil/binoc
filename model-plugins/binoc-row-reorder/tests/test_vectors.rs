@@ -28,7 +28,7 @@ fn vectors_dir() -> PathBuf {
 /// model out-of-tree artifact consumer.
 #[test]
 fn cell_change_tag_handoff_is_known_and_allowlisted() {
-    use binoc_sdk::test_support::single_producer_single_consumer_tags;
+    use binoc_sdk::lints::single_producer_single_consumer_tags;
     use binoc_sdk::Transformer;
 
     let registry = binoc_stdlib::default_registry();

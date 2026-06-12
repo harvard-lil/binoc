@@ -488,59 +488,6 @@ pub fn undeclared_emissions(
     violations
 }
 
-/// Lint: flag tags that exactly one transformer declares in `emits_tags`
-/// and exactly one *other* transformer lists in `match_tags`.
-///
-/// Such a tag is a single-producer/single-consumer dispatch channel — a
-/// function call drawn slowly. Consider inlining the consumer's judgment
-/// into the producer, or documenting why it stays separate (e.g. the tag
-/// is also consumed outside transformer dispatch, such as by renderer
-/// group configs — pass those tags in `allowlist`).
-///
-/// Returns one warning string per flagged tag. Callers decide whether to
-/// fail or just print; undeclared (`None`) emits_tags are skipped.
-pub fn single_producer_single_consumer_tags(
-    descriptors: &[TransformerDescriptor],
-    allowlist: &[&str],
-) -> Vec<String> {
-    use std::collections::BTreeMap;
-
-    let mut producers: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    let mut consumers: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for desc in descriptors {
-        if let Some(tags) = &desc.emits_tags {
-            for tag in tags {
-                producers.entry(tag).or_default().push(&desc.name);
-            }
-        }
-        for tag in &desc.match_tags {
-            consumers.entry(tag).or_default().push(&desc.name);
-        }
-    }
-
-    let mut warnings = Vec::new();
-    for (tag, tag_producers) in &producers {
-        if allowlist.contains(tag) {
-            continue;
-        }
-        let Some(tag_consumers) = consumers.get(tag) else {
-            continue;
-        };
-        if tag_producers.len() == 1
-            && tag_consumers.len() == 1
-            && tag_producers[0] != tag_consumers[0]
-        {
-            warnings.push(format!(
-                "tag '{tag}' is produced only by '{}' and consumed only by '{}' — \
-                 single-producer/single-consumer tag; consider inlining the judgment \
-                 or documenting why it stays separate",
-                tag_producers[0], tag_consumers[0]
-            ));
-        }
-    }
-    warnings
-}
-
 // ── AbiTransformer ────────────────────────────────────────────────────
 
 /// Wraps a `Transformer` and forces every call through the JSON wire format.

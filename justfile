@@ -27,6 +27,13 @@ check:
     uvx ruff check binoc-python/ model-plugins/
     uvx ruff format --check binoc-python/ model-plugins/
 
+# Run the mechanical lint tests with warnings visible. Lint errors already
+# fail `just test`; this surfaces the advisory warnings that passing tests
+# hide. See binoc_sdk::lints for the invariant/lint tier scheme and
+# .agents/skills/lint-plugin/SKILL.md for the judgment-level checklist.
+lint:
+    cargo test -p binoc-core -p binoc-stdlib -p binoc-sqlite -p binoc-row-reorder --test lints -- --nocapture
+
 # Run all tests: Rust crates + Python binding tests.
 # Note: no --all-features here. The test-vectors feature is already activated via
 # dev-dependencies, and --all-features would enable binoc-sqlite's "python" feature,

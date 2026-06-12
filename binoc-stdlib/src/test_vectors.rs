@@ -381,7 +381,7 @@ pub fn run_vector(
         .diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap())
         .unwrap_or_else(|e| panic!("Diff failed for {}: {e}", manifest.vector.name));
 
-    check_invariants(&manifest.vector.name, &changeset);
+    check_changeset_invariants(&manifest.vector.name, &changeset);
 
     if let Some(expected) = &manifest.expected {
         check_assertions(&manifest.vector.name, &changeset, expected, &config);
@@ -484,7 +484,7 @@ pub fn run_vector_with_abi_log(
     // Use the ABI run as the canonical changeset for downstream checks and
     // snapshots — parity with the direct run is already asserted.
     let changeset = abi_changeset;
-    check_invariants(&manifest.vector.name, &changeset);
+    check_changeset_invariants(&manifest.vector.name, &changeset);
 
     if let Some(expected) = &manifest.expected {
         check_assertions(&manifest.vector.name, &changeset, expected, &config);
@@ -753,7 +753,14 @@ fn gzip_source_path(staging_dir: &Path, gzip_path: &Path) -> PathBuf {
 /// regardless of which vector produced it. Runs after diff+transform
 /// and before snapshot comparison so that buggy output is caught even
 /// when the snapshot would silently enshrine it.
-fn check_invariants(name: &str, changeset: &Changeset) {
+///
+/// This is the canonical home for cheap changeset invariants (tier 1 of
+/// the lint scheme — see `binoc_sdk::lints` for the tier overview).
+/// Invariants added here run on every vector of every crate that uses
+/// this harness, stdlib and plugins alike. Plugins with domain-specific
+/// invariants should call this plus their own checks on changesets they
+/// build in their own tests. `name` is only used to label failures.
+pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
     let Some(root) = &changeset.root else {
         return;
     };

@@ -6,9 +6,8 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
-use binoc_sdk::test_support::{
-    single_producer_single_consumer_tags, undeclared_emissions, AbiTransformer, WriteFacts,
-};
+use binoc_sdk::lints::single_producer_single_consumer_tags;
+use binoc_sdk::test_support::{undeclared_emissions, AbiTransformer, WriteFacts};
 use binoc_sdk::*;
 
 fn stdlib_descriptors() -> Vec<TransformerDescriptor> {
