@@ -63,14 +63,14 @@ paths. Read the `transform()`/`compare()` implementation and confirm:
 
 - Tags-as-facts: a transformer may remove a tag only when it is changing
   the fact's truth (e.g. demoting move→modify removes `binoc.move`).
-  Removing or clearing tags it doesn't own is the
-  `ColumnReorderDetector tags.clear()` bug class — tier 2 catches the
+  Removing or clearing tags it doesn't own is a bug — tier 2 catches the
   wholesale form; you check targeted `tags.remove(...)` calls.
 - Keyed vs positional: any tabular judgment must state which pairing it
   uses and not silently mix them (a re-sorted keyed table is not a pure
   positional reorder).
-- Every behavior the plugin claims has a vector named for *what* it tests;
-  every gold-file diff in the change is explained in the commit message.
+- Every major behavior the plugin claims has a vector named for *what* it tests;
+  minor behaviors have unit tests.
+  Every gold-file diff in the change is intentional.
   An unexplained gold diff means the change is wrong or undertested.
 - New judgments derivable from an existing analyzer's single pass should
   be inlined there, not added as a tag-handoff transformer (see the
@@ -103,6 +103,8 @@ paths. Read the `transform()`/`compare()` implementation and confirm:
   (truncated, like `capture_value_preview`), not whole file contents.
 - `unsafe` only at the generated ABI boundary (`export_plugin!`), never in
   plugin logic.
+- Plugins wrapping format handlers (like sqlite) include consideration of
+  implementation quality, supply chain security, and sandboxing.
 
 ## 6. Docs and ADR hygiene
 
@@ -113,3 +115,10 @@ paths. Read the `transform()`/`compare()` implementation and confirm:
   not a rewrite.
 - Generated docs are regenerated, not hand-edited (`just docs-adr-index`,
   `just docs-vectors`, etc.).
+
+## 7. General quality
+
+- In reviewing specific lints, consider whether the plugin effectively serves
+  its purpose.
+- If predictable issues emerge not listed in this skill, suggest updates to the
+  skill.
