@@ -63,16 +63,16 @@ docs-tutorial: materialize
         echo "${TARGET} updated."
     fi
 
-# Regenerate docs/reference/cli.md from the binoc-cli clap Command tree.
+# Regenerate docs/users/reference/cli.md from the binoc-cli clap Command tree.
 # Inputs: binoc-cli/** (every .rs file under binoc-cli/ contributes to the
 # Command tree). The emitter only rewrites the region between the BEGIN/END
-# markers in docs/reference/cli.md, leaving the authored framing intact.
+# markers in docs/users/reference/cli.md, leaving the authored framing intact.
 # Cargo's incremental build makes the no-change case cheap; the emitter
 # itself skips the write when the regenerated region already matches.
 docs-cli:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo run --quiet -p binoc-cli --bin emit-cli-markdown -- docs/reference/cli.md
+    cargo run --quiet -p binoc-cli --bin emit-cli-markdown -- docs/users/reference/cli.md
 
 # Regenerate docs/adr/README.md from front matter of docs/adr/*.md.
 docs-adr-index:
@@ -101,7 +101,7 @@ adr title:
     subprocess.run(['just', 'docs-adr-index'], check=True)
     print('Next: edit the file. The ADR is already wired into the index and mkdocs nav.')
 
-# Regenerate docs/explanation/test-vectors-gallery.md from the shared workspace
+# Regenerate docs/users/explanation/test-vectors-gallery.md from the shared workspace
 # vectors under test-vectors/. This first pass is manifest-only: it summarizes
 # metadata, assertions, and committed snapshot layouts without materializing
 # archives or running diffs.
@@ -110,13 +110,13 @@ docs-vectors:
     set -euo pipefail
     uv run --quiet --script scripts/build_test_vector_gallery.py
 
-# Regenerate docs/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+# Regenerate docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 docs-plugin-catalog:
     #!/usr/bin/env bash
     set -euo pipefail
     uv run --quiet --script scripts/build_third_party_plugins_page.py
 
-# Regenerate docs/reference/changeset-schema.{json,md} from the binoc-sdk IR
+# Regenerate docs/users/reference/changeset-schema.{json,md} from the binoc-sdk IR
 # types. Inputs: binoc-sdk/src/ir.rs, binoc-sdk/src/types.rs (the types that
 # carry `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]`), and
 # scripts/build_changeset_schema_page.py. The Rust binary lives behind the
@@ -128,13 +128,13 @@ docs-schema:
     #!/usr/bin/env bash
     set -euo pipefail
     cargo run --quiet -p binoc-sdk --features schema --bin gen-changeset-schema -- \
-        docs/reference/changeset-schema.json
+        docs/users/reference/changeset-schema.json
     uv run --quiet --script scripts/build_changeset_schema_page.py
 
 # Regenerate docs/sdk/ by running `cargo doc` for binoc-sdk and copying the
 # rendered rustdoc HTML into the docs tree so mkdocs serves it as a static
 # subpath at /sdk/. Cargo's own incremental cache keeps reruns cheap. Output
-# under docs/sdk/ is gitignored. See docs/reference/sdk.md for the landing page.
+# under docs/sdk/ is gitignored. See docs/plugin-developers/reference/sdk.md for the landing page.
 docs-sdk:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -150,7 +150,7 @@ mkdocs *ARGS:
 
 # Build the docs site (with --strict to fail on broken links / missing files).
 # Runs `just docs` first to refresh generated inputs. `mkdocstrings[python]`
-# imports the installed `binoc` package to render `docs/reference/python.md`
+# imports the installed `binoc` package to render `docs/plugin-developers/reference/python.md`
 # from its docstrings, so `./binoc-python` is installed into the docs env
 # (requires a Rust toolchain via maturin).
 docs-build: docs
@@ -184,10 +184,10 @@ docs-serve:
         -w Cargo.toml \
         -i docs/tutorial.md \
         -i docs/adr/README.md \
-        -i docs/explanation/test-vectors-gallery.md \
-        -i docs/reference/third-party-plugins.md \
-        -i docs/reference/changeset-schema.json \
-        -i docs/reference/changeset-schema.md \
+        -i docs/users/explanation/test-vectors-gallery.md \
+        -i docs/users/reference/third-party-plugins.md \
+        -i docs/users/reference/changeset-schema.json \
+        -i docs/users/reference/changeset-schema.md \
         -i 'docs/sdk/**' \
         -- bash -c 'just docs-build && exec just mkdocs serve'
 

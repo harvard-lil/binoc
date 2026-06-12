@@ -70,7 +70,7 @@ Or run without installing:
 uvx binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-See [diff two snapshots](howto/diff-two-snapshots.md) for the full first-run
+See [diff two snapshots](users/howto/diff-two-snapshots.md) for the full first-run
 walkthrough.
 
 ## Plugins
@@ -83,9 +83,9 @@ pip install binoc-sqlite
 binoc diff snapshots/v1 snapshots/v2    # .sqlite/.db files now get semantic diffs
 ```
 
-See [install and use plugins](howto/install-and-use-plugins.md) to manage
-plugins, [write a Python comparator](howto/write-a-python-comparator.md) or
-[write a Rust comparator](howto/write-a-rust-comparator.md) to build your own.
+See [install and use plugins](users/howto/install-and-use-plugins.md) to manage
+plugins, [write a Python comparator](plugin-developers/howto/write-a-python-comparator.md) or
+[write a Rust comparator](plugin-developers/howto/write-a-rust-comparator.md) to build your own.
 
 ## Project status
 

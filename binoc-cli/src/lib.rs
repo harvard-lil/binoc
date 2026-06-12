@@ -245,7 +245,7 @@ fn write_outputs(
 }
 
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the
-/// `emit-cli-markdown` binary that regenerates `docs/reference/cli.md`) can
+/// `emit-cli-markdown` binary that regenerates `docs/users/reference/cli.md`) can
 /// walk it without depending on private types.
 pub fn command() -> clap::Command {
     Cli::command()
