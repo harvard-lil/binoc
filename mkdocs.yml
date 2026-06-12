@@ -161,6 +161,7 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Invariant and Lint Tiers: Harness, Mechanical, Agent': adr/2026-06-12-invariant_and_lint_tiers.md
           - 'Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering': adr/2026-06-11-inline_pure_reorder_judgment.md
           - 'Declared Write-Sets on TransformerDescriptor': adr/2026-06-11-declared_write_sets_on_transformer_descriptor.md
           - 'Transformer-Initiated Recompare as a Correspondence Contract': adr/2026-06-03-transformer_initiated_recompare.md

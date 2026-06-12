@@ -56,6 +56,10 @@ Each vector in `test-vectors/` has a `manifest.toml` declaring what it tests and
 
 Plugins (including those in a separate repo) can run test vectors without duplicating harness code: depend on `binoc-stdlib` with the default `test-vectors` feature and call `binoc_stdlib::test_vectors::{discover_vectors, run_vector}` with a registry that includes the plugin and a `&[&dyn VectorMaterializer]` slice. See `model-plugins/binoc-sqlite/tests/test_vectors.rs` and its sibling `src/bin/materialize_test_vectors.rs`. `just test` runs all workspace crates’ tests, including the demo plugin binoc-sqlite; no auto-discovery is required.
 
+## Invariants and Lints
+
+Invariant checks live in three tiers (see [the ADR](docs/adr/2026-06-12-invariant_and_lint_tiers.md)): (1) changeset invariants run on every test vector — add always-properties to `binoc_stdlib::test_vectors::check_changeset_invariants`; (2) mechanical lints in `binoc_sdk::lints`, called from each crate's `tests/lints.rs` (copy `model-plugins/binoc-sqlite/tests/lints.rs`); errors fail `just test`, warnings surface via `just lint`; (3) judgment-level checks for reviewing plugins — behavioral write-set completeness, performance, security, layering — documented in [.agents/skills/lint-plugin/SKILL.md](.agents/skills/lint-plugin/SKILL.md). When reviewing or adding a plugin, run that checklist.
+
 ## Performance Expectations
 
 Rust core, parallel subtrees (rayon), streaming I/O, BLAKE3 hashing, arena-allocated IR nodes. Plugins should be computationally lean—streaming I/O, minimal allocations, no unnecessary re-parsing.
