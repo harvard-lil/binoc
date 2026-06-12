@@ -1,0 +1,9 @@
+[vector]
+name = "zip-rename-contents-rewritten"
+description = "Documents a known gap — a renamed zip whose children were all renamed AND rewritten (no content similarity) yields unpaired add/remove trees; no mechanism pairs containers whose children cannot be paired individually; ideal output would state the zip rename. Acceptance test target for future top-down container pairing."
+tags = ["zip", "archive", "known-gap"]
+
+[expected]
+root_kind = "modify"
+child_count = 2
+has_tags = ["binoc.content-changed"]

@@ -1,0 +1,12 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip/p.csv**: New table (4 columns, 10 rows)
+- **archive.zip/q.csv**: New table (4 columns, 10 rows)
+- **archive.zip/r.csv**: New table (4 columns, 10 rows)
+- **data.zip/x.csv**: Table removed (4 columns, 10 rows)
+- **data.zip/y.csv**: Table removed (4 columns, 10 rows)
+- **data.zip/z.csv**: Table removed (4 columns, 10 rows)

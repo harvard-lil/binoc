@@ -1,0 +1,9 @@
+[vector]
+name = "zip-rename-identical"
+description = "Zip archive renamed with identical contents; bottom-up roll-up of the inner clean file moves compacts the pair into a single folder-move node. Documents that bottom-up roll-up is the acyclic path to container-rename compaction."
+tags = ["zip", "archive", "folder-move"]
+
+[expected]
+root_kind = "modify"
+child_count = 1
+has_tags = ["binoc.folder-move", "binoc.move"]

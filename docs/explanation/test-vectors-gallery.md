@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **39 shared examples** in this gallery.
+Binoc currently ships **42 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -67,6 +67,9 @@ just materialize
 | [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | No changes detected. | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`zip-nested`](#zip-nested) | Nested zip containing CSV | outer.zip/inner.zip/data.csv: 1 row added | Default pipeline |
+| [`zip-rename-contents-rewritten`](#zip-rename-contents-rewritten) | Documents a known gap — a renamed zip whose children were all renamed AND rewritten (no content similarity) yields unpa… | archive.zip/p.csv: New table (4 columns, 10 rows) | Default pipeline |
+| [`zip-rename-identical`](#zip-rename-identical) | Zip archive renamed with identical contents; bottom-up roll-up of the inner clean file moves compacts the pair into a s… | archive.zip: Folder moved from data.zip | Default pipeline |
+| [`zip-rename-inner-rename-edit`](#zip-rename-inner-rename-edit) | Zip archive renamed while its only child was renamed and had one cell edited; the modified move counts as roll-up evide… | archive.zip: Folder moved from data.zip (1 file modified within) | Default pipeline |
 | [`zip-simple`](#zip-simple) | Zipped files with changes inside | archive.zip/data.txt: 1 line added, 1 removed | Default pipeline |
 
 ## binary-fallback-diagnostic
@@ -1070,6 +1073,78 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **outer.zip/inner.zip/data.csv**: 1 row added
+```
+
+## zip-rename-contents-rewritten
+
+Documents a known gap — a renamed zip whose children were all renamed AND rewritten (no content similarity) yields unpa…
+
+- **Browse source:** [zip-rename-contents-rewritten](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-contents-rewritten)
+- **Tags:** `zip`, `archive`, `known-gap`
+- **Snapshots:** `snapshot-a` has 3 files — `data.zip.d/x.csv`, `data.zip.d/y.csv`, `data.zip.d/z.csv`; `snapshot-b` has 3 files — `archive.zip.d/p.csv`, `archive.zip.d/q.csv`, `archive.zip.d/r.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/zip-rename-contents-rewritten/snapshot-a \
+  ./test-vectors-materialized/zip-rename-contents-rewritten/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip/p.csv**: New table (4 columns, 10 rows)
+- **archive.zip/q.csv**: New table (4 columns, 10 rows)
+- **archive.zip/r.csv**: New table (4 columns, 10 rows)
+- **data.zip/x.csv**: Table removed (4 columns, 10 rows)
+- **data.zip/y.csv**: Table removed (4 columns, 10 rows)
+- **data.zip/z.csv**: Table removed (4 columns, 10 rows)
+```
+
+## zip-rename-identical
+
+Zip archive renamed with identical contents; bottom-up roll-up of the inner clean file moves compacts the pair into a s…
+
+- **Browse source:** [zip-rename-identical](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-identical)
+- **Tags:** `zip`, `archive`, `folder-move`
+- **Snapshots:** `snapshot-a` has 3 files — `data.zip.d/x.csv`, `data.zip.d/y.csv`, `data.zip.d/z.csv`; `snapshot-b` has 3 files — `archive.zip.d/x.csv`, `archive.zip.d/y.csv`, `archive.zip.d/z.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/zip-rename-identical/snapshot-a \
+  ./test-vectors-materialized/zip-rename-identical/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Folder moved from data.zip
+```
+
+## zip-rename-inner-rename-edit
+
+Zip archive renamed while its only child was renamed and had one cell edited; the modified move counts as roll-up evide…
+
+- **Browse source:** [zip-rename-inner-rename-edit](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-inner-rename-edit)
+- **Tags:** `zip`, `archive`, `folder-move`, `fuzzy-correlation`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip.d/old.csv`; `snapshot-b` has 1 file — `archive.zip.d/new.csv`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/zip-rename-inner-rename-edit/snapshot-a \
+  ./test-vectors-materialized/zip-rename-inner-rename-edit/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Folder moved from data.zip (1 file modified within)
+- **archive.zip/new.csv**: Moved from data.zip/old.csv (modified)
+- **archive.zip/new.csv**: 1 cell changed
+  - Changed cells; use `binoc extract CHANGESET "archive.zip/new.csv" cells_changed` for all changed cells
+    - row 5, column 'score': '60' -> '61'
 ```
 
 ## zip-simple
