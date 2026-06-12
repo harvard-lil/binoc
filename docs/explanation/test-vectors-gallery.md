@@ -176,7 +176,6 @@ comparators:
   - binoc.csv
 transformers:
   - binoc.tabular_analyzer
-  - binoc.column_reorder_detector
 ```
 
 

@@ -48,9 +48,8 @@ library:
 
 | Node type | Aspects |
 |---|---|
-| Tabular (CSV today; any comparator publishing `tabular_v1`) | `rows_added`, `rows_removed`, `cells_changed`, `columns_added`, `columns_removed`, `content` |
+| Tabular (CSV today; any comparator publishing `tabular_v1`) | `rows_added`, `rows_removed`, `cells_changed`, `columns_added`, `columns_removed`, `column_order`, `content` |
 | Text | `diff`, `content_left`, `content_right`, `content` |
-| Column reorder | `column_order` |
 
 A plugin-authored comparator or transformer can define its own
 aspects. Unknown aspects produce an error listing what's supported

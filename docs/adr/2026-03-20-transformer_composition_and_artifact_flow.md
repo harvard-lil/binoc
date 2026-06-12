@@ -38,6 +38,13 @@ The CSV comparator implements this pattern. A future Parquet or Excel comparator
 
 ### Two-layer transformer pipeline
 
+> **Superseded in part (2026-06-11):** the in-tree layer split described
+> below was collapsed — `ColumnReorderDetector` is gone and
+> `TabularAnalyzer` performs the pure-reorder upgrade inline. The
+> refinement layer survives as the extension point for judgments that need
+> their own scan (e.g. the out-of-tree `RowReorderDetector`). See
+> [Inline Pure-Reorder Judgment](2026-06-11-inline_pure_reorder_judgment.md).
+
 Tabular analysis uses two layers of transformers:
 
 1. **`TabularAnalyzer`** — matches any node with `tabular_v1` artifacts. Detects column additions/removals/reorder, row additions/removals, cell changes. Sets tags (`binoc.column-addition`, `binoc.row-addition`, `binoc.cell-change`, etc.), details, and summary text. Handles add/remove nodes as well as modify.

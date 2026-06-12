@@ -70,7 +70,7 @@ tags = ["csv", "column-reorder", "clerical"]
 
 [config]
 comparators = ["binoc.directory", "binoc.csv"]
-transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]
+transformers = ["binoc.tabular_analyzer"]
 
 [expected]
 root_kind = "modify"

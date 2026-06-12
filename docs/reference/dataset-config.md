@@ -43,7 +43,6 @@ transformers:
   - binoc.folder_move_detector
   - binoc.table_splitter
   - binoc.tabular_analyzer
-  - binoc.column_reorder_detector
   - binoc.table_collection_analyzer
 
 dataset:
@@ -117,9 +116,8 @@ add/remove leaves first. `binoc.correlation_detector`,
 collapse inferred per-file moves, rename-and-modify cases, and folder renames
 before the tabular pipeline adds cell-level details. `binoc.table_splitter`
 separates stacked logical tables before `binoc.tabular_analyzer` reads
-`tabular_v1` artifacts and attaches tags and summaries;
-`binoc.column_reorder_detector` downgrades pure column reorders to
-`action: "reorder"` after the analyzer has labeled them.
+`tabular_v1` artifacts and attaches tags and summaries, downgrading pure
+column reorders to `action: "reorder"` along the way.
 
 See [Artifacts and composition](../explanation/artifacts-and-composition.md)
 for why the order matters and how to slot a third-party transformer

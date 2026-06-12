@@ -63,16 +63,22 @@ Typical transformer jobs:
   [`CorrelationDetector`](https://github.com/harvard-lil/binoc/blob/main/binoc-stdlib/src/transformers/correlation.rs)
   notices an `add` and a `remove` with matching content hashes and rewrites
   them as a single `move` leaf.
-- **Pattern detection within a node.** The
-  [`ColumnReorderDetector`](https://github.com/harvard-lil/binoc/blob/main/binoc-stdlib/src/transformers/column_reorder.rs)
-  notices a tabular `modify` whose only change is column ordering and
-  rewrites the action to `reorder`.
+- **Pattern detection within a node.** The out-of-tree
+  [`RowReorderDetector`](https://github.com/harvard-lil/binoc/blob/main/model-plugins/binoc-row-reorder/src/row_reorder.rs)
+  notices a tabular `modify` whose rows are the same multiset in a
+  different order and tags it `binoc.row-reorder`.
 - **Cross-plugin enrichment.** The
   [`TabularAnalyzer`](https://github.com/harvard-lil/binoc/blob/main/binoc-stdlib/src/transformers/tabular_analyzer.rs)
   reads `tabular_v1` artifacts published by *any* tabular comparator and
   attaches semantic tags, summary text, and details. This is how Parquet or
   Excel comparators (today they don't exist; tomorrow they might) will get
   tabular analysis without writing it again.
+
+The split between these two examples is deliberate: judgments that are
+derivable from the analyzer's single pass (like upgrading a pure column
+reorder to `action: "reorder"`) live inline in `TabularAnalyzer`, while
+patterns that need their own scan over the data (like row-reorder's
+multiset comparison) are separate transformers.
 
 ### Renderers serialize and classify
 

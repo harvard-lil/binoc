@@ -92,10 +92,9 @@ understands:
 
 | Node type | Common aspects |
 |---|---|
-| `tabular` (CSV, future Parquet, …) | `rows_added`, `rows_removed`, `cells_changed`, `columns_added`, `columns_removed`, `content` |
+| `tabular` (CSV, future Parquet, …) | `rows_added`, `rows_removed`, `cells_changed`, `columns_added`, `columns_removed`, `column_order`, `content` |
 | `text` | `diff` (unified diff), `content_left`, `content_right`, `content` |
 | `binary` | `content` |
-| `column-reorder` (transformer-emitted) | `column_order` |
 
 A plugin can define new aspects for its own item types. Extract is
 deliberately under-specified about what aspects must exist — it is up to
