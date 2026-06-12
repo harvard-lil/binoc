@@ -36,9 +36,6 @@ pub fn register_stdlib(registry: &mut PluginRegistry) {
         transformers::tabular_stats_annotator::TabularStatsAnnotator,
     )));
     r(registry.register_transformer(Arc::new(
-        transformers::column_reorder::ColumnReorderDetector,
-    )));
-    r(registry.register_transformer(Arc::new(
         transformers::table_collection_analyzer::TableCollectionAnalyzer,
     )));
 

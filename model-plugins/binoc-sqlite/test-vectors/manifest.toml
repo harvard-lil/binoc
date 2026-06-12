@@ -14,6 +14,5 @@ transformers = [
     "binoc.correlation_detector",
     "binoc.folder_move_detector",
     "binoc.tabular_analyzer",
-    "binoc.column_reorder_detector",
     "binoc.table_collection_analyzer",
 ]

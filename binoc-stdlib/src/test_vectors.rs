@@ -334,7 +334,6 @@ pub fn abi_wrapped_default_registry() -> (
     wrap_transformer!(table_splitter::TableSplitter);
     wrap_transformer!(tabular_analyzer::TabularAnalyzer);
     wrap_transformer!(tabular_stats_annotator::TabularStatsAnnotator);
-    wrap_transformer!(column_reorder::ColumnReorderDetector);
     wrap_transformer!(table_collection_analyzer::TableCollectionAnalyzer);
 
     registry

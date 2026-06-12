@@ -218,7 +218,7 @@ fn test_csv_column_reorder_only() {
         .find(|c| c.item_type == "tabular")
         .expect("should have tabular node");
 
-    // The column_reorder_detector transformer should have converted this to "reorder"
+    // The tabular_analyzer transformer should have converted this to "reorder"
     assert_eq!(csv_node.action, "reorder");
     assert!(csv_node.tags.contains("binoc.column-reorder"));
 }

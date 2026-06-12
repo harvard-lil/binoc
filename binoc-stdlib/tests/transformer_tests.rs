@@ -3,7 +3,6 @@ use binoc_core::controller::Controller;
 use binoc_core::data_access::LocalDataAccess;
 use binoc_sdk::*;
 
-use binoc_stdlib::transformers::column_reorder::ColumnReorderDetector;
 use binoc_stdlib::transformers::correlation_detector::CorrelationDetector;
 use binoc_stdlib::transformers::folder_move_detector::FolderMoveDetector;
 use binoc_stdlib::transformers::tabular_analyzer::TabularAnalyzer;
@@ -885,24 +884,6 @@ fn folder_move_descriptor() {
     assert_eq!(desc.node_shape, NodeShapeFilter::Root);
 }
 
-// ── Column reorder detector ────────────────────────────────────────────
-
-#[test]
-fn column_reorder_unchanged_without_artifacts() {
-    let node = DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.column-reorder");
-
-    let result = ColumnReorderDetector.transform(node, &da(), &null_cfg());
-    assert!(matches!(result, TransformResult::Unchanged));
-}
-
-#[test]
-fn column_reorder_descriptor() {
-    let desc = ColumnReorderDetector.descriptor();
-    assert!(desc.match_types.is_empty());
-    assert_eq!(desc.match_tags, vec!["binoc.column-reorder".to_string()]);
-    assert_eq!(desc.match_artifacts, vec![tabular_v1()]);
-}
-
 // ── Tabular analyzer ───────────────────────────────────────────────────
 
 fn publish_and_attach(
@@ -1093,6 +1074,167 @@ fn tabular_analyzer_handles_remove_action() {
         }
         _ => panic!("Expected Replace"),
     }
+}
+
+#[test]
+fn tabular_analyzer_upgrades_pure_column_reorder() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "age".into(), "city".into()],
+        rows: vec![
+            vec!["Alice".into(), "30".into(), "NYC".into()],
+            vec!["Bob".into(), "25".into(), "LA".into()],
+        ],
+    };
+    let right = TabularData {
+        headers: vec!["city".into(), "name".into(), "age".into()],
+        rows: vec![
+            vec!["NYC".into(), "Alice".into(), "30".into()],
+            vec!["LA".into(), "Bob".into(), "25".into()],
+        ],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv").with_tag("binoc.path-change"),
+        Some(&left),
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data, &null_cfg()) {
+        TransformResult::Replace(n) => {
+            assert_eq!(n.action, "reorder");
+            assert_eq!(
+                n.summary.as_ref().unwrap().plain_text(),
+                "Columns reordered (content unchanged)"
+            );
+            assert!(n.tags.contains("binoc.column-reorder"));
+            // Tags owned by other plugins survive the upgrade.
+            assert!(n.tags.contains("binoc.path-change"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_keeps_modify_when_reorder_is_not_pure() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![vec!["Alice".into(), "30".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["age".into(), "name".into()],
+        rows: vec![vec!["31".into(), "Alice".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+
+    match TabularAnalyzer.transform(node, &data, &null_cfg()) {
+        TransformResult::Replace(n) => {
+            assert_eq!(n.action, "modify");
+            assert!(n.tags.contains("binoc.column-reorder"));
+            assert!(n.tags.contains("binoc.cell-change"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_upgrades_pure_column_reorder_keyed() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["id".into(), "score".into()],
+        rows: vec![vec!["1".into(), "85".into()], vec!["2".into(), "90".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["score".into(), "id".into()],
+        rows: vec![vec!["85".into(), "1".into()], vec!["90".into(), "2".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+    let cfg = serde_json::json!({
+        "tables": { "defaults": { "row_identity": { "columns": ["id"] } } }
+    });
+
+    match TabularAnalyzer.transform(node, &data, &cfg) {
+        TransformResult::Replace(n) => {
+            assert_eq!(n.action, "reorder");
+            assert_eq!(
+                n.summary.as_ref().unwrap().plain_text(),
+                "Columns reordered (content unchanged)"
+            );
+            // Keyed analysis details are still recorded.
+            assert!(n.details.contains_key("row_identity"));
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_keyed_resort_plus_column_reorder_is_not_pure() {
+    // Rows re-sorted AND columns reordered: keyed matching sees no changes
+    // by key, but the pure-reorder judgment is positional, so the action
+    // stays "modify".
+    let data = da();
+    let left = TabularData {
+        headers: vec!["id".into(), "score".into()],
+        rows: vec![vec!["1".into(), "85".into()], vec!["2".into(), "90".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["score".into(), "id".into()],
+        rows: vec![vec!["90".into(), "2".into()], vec!["85".into(), "1".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("modify", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+    let cfg = serde_json::json!({
+        "tables": { "defaults": { "row_identity": { "columns": ["id"] } } }
+    });
+
+    match TabularAnalyzer.transform(node, &data, &cfg) {
+        TransformResult::Replace(n) => {
+            assert_eq!(n.action, "modify");
+            assert!(n.tags.contains("binoc.column-reorder"));
+            assert_eq!(n.details["cells_changed"], 0);
+        }
+        _ => panic!("Expected Replace"),
+    }
+}
+
+#[test]
+fn tabular_analyzer_extracts_column_order() {
+    let data = da();
+    let left = TabularData {
+        headers: vec!["name".into(), "age".into()],
+        rows: vec![vec!["Alice".into(), "30".into()]],
+    };
+    let right = TabularData {
+        headers: vec!["age".into(), "name".into()],
+        rows: vec![vec!["30".into(), "Alice".into()]],
+    };
+    let node = publish_and_attach(
+        &data,
+        DiffNode::new("reorder", "tabular", "data.csv"),
+        Some(&left),
+        Some(&right),
+    );
+
+    let Some(ExtractResult::Text(text)) = TabularAnalyzer.extract(&node, "column_order", &data)
+    else {
+        panic!("Expected text extract");
+    };
+    assert_eq!(text, "before: name, age\nafter:  age, name\n");
 }
 
 #[test]

@@ -94,29 +94,5 @@ expression: "&abi_log"
         "found": true
       }
     ]
-  },
-  {
-    "method": "transform",
-    "plugin": "binoc.column_reorder_detector",
-    "data_ops": [
-      {
-        "op": "get_artifact",
-        "format": {
-          "package": "binoc",
-          "name": "tabular",
-          "version": 1
-        },
-        "found": true
-      },
-      {
-        "op": "get_artifact",
-        "format": {
-          "package": "binoc",
-          "name": "tabular",
-          "version": 1
-        },
-        "found": true
-      }
-    ]
   }
 ]
