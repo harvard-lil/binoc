@@ -7,6 +7,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | Date | Title | Status |
 |---|---|---|
 | 2026-06-11 | [Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering](2026-06-11-inline_pure_reorder_judgment.md) | Implemented |
+| 2026-06-11 | [Declared Write-Sets on TransformerDescriptor](2026-06-11-declared_write_sets_on_transformer_descriptor.md) | Implemented |
 | 2026-06-03 | [Transformer-Initiated Recompare as a Correspondence Contract](2026-06-03-transformer_initiated_recompare.md) | Implemented |
 | 2026-06-03 | [Structured Summary Segments](2026-06-03-structured-summary-segments.md) | Implemented |
 | 2026-06-03 | [Progressive Renderer Annotations](2026-06-03-progressive_renderer_annotations.md) | Implemented |
