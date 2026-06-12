@@ -180,6 +180,13 @@ fn apply_rule(rule: &FileCorrespondenceRule, ctx: &mut RuleContext<'_>) {
         return;
     };
 
+    let left_coverage = selector_coverage(&left_selector, ctx.removes, ctx.container_paths);
+    let right_coverage = selector_coverage(&right_selector, ctx.adds, ctx.container_paths);
+    if !left_coverage.matched_file || !right_coverage.matched_file {
+        report_unmatched_rule(rule, &left_coverage, &right_coverage, ctx.diagnostics_node);
+        return;
+    }
+
     let left = build_index(
         rule,
         Side::Left,
@@ -262,6 +269,84 @@ impl Side {
             Side::Right => "right",
         }
     }
+}
+
+/// What a side's selector matched among residual leaves, used to warn when a
+/// rule is ineffective. `container` is only probed when no leaf matched, so a
+/// rule whose regex targets an archive (which Phase 1 always expands) gets a
+/// pointed "containers are unsupported" message instead of a generic one.
+struct SelectorCoverage {
+    matched_file: bool,
+    container: Option<String>,
+}
+
+fn selector_coverage(
+    selector: &CompiledSelector,
+    leaves: &[FileLeaf],
+    container_paths: &BTreeSet<String>,
+) -> SelectorCoverage {
+    let matched_file = leaves
+        .iter()
+        .any(|leaf| match_path(selector, &leaf.path).is_some());
+    let container = if matched_file {
+        None
+    } else {
+        container_paths
+            .iter()
+            .find(|path| !path.is_empty() && match_path(selector, path).is_some())
+            .cloned()
+    };
+    SelectorCoverage {
+        matched_file,
+        container,
+    }
+}
+
+fn report_unmatched_rule(
+    rule: &FileCorrespondenceRule,
+    left: &SelectorCoverage,
+    right: &SelectorCoverage,
+    diagnostics_node: &mut DiffNode,
+) {
+    let mut clauses = Vec::new();
+    let mut matched_container = false;
+    for (side, coverage, kind) in [(Side::Left, left, "removed"), (Side::Right, right, "added")] {
+        if coverage.matched_file {
+            continue;
+        }
+        match &coverage.container {
+            Some(path) => {
+                matched_container = true;
+                clauses.push(format!(
+                    "the {} selector matched only the container '{}'",
+                    side.label(),
+                    path
+                ));
+            }
+            None => clauses.push(format!(
+                "the {} selector matched no {} files",
+                side.label(),
+                kind
+            )),
+        }
+    }
+    let (code, hint) = if matched_container {
+        (
+            "binoc.declared_correspondence.container_unsupported",
+            "; correspondences between containers are not supported, so consider declaring them for the files inside instead",
+        )
+    } else {
+        ("binoc.declared_correspondence.no_matching_files", "")
+    };
+    diagnostics_node.push_diagnostic(Diagnostic::warning(
+        code,
+        format!(
+            "File correspondence rule '{}' had no effect: {}{}",
+            rule.name,
+            clauses.join(" and "),
+            hint
+        ),
+    ));
 }
 
 #[derive(Debug, Clone)]
@@ -488,6 +573,121 @@ fn insertion_parent<'a>(container_paths: &'a BTreeSet<String>, parent: &'a str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use binoc_core::data_access::LocalDataAccess;
+
+    fn file_item(path: &str) -> ItemRef {
+        ItemRef {
+            logical_path: path.to_string(),
+            is_dir: false,
+            content_hash: None,
+            size: None,
+            media_type: None,
+            handle: String::new(),
+        }
+    }
+
+    /// Root tree with two one-sided, already-expanded archives: data.zip
+    /// removed and archive.zip added, each holding one CSV leaf.
+    fn expanded_archive_fixture() -> DiffNode {
+        let mut removed_csv = DiffNode::new("remove", "file", "data.zip/file.csv");
+        removed_csv.source_items = Some(ItemPair::removed(file_item("data.zip/file.csv")));
+        let mut removed_zip = DiffNode::new("remove", "zip_archive", "data.zip");
+        removed_zip.source_items = Some(ItemPair::removed(file_item("data.zip")));
+        removed_zip.children.push(removed_csv);
+
+        let mut added_csv = DiffNode::new("add", "file", "archive.zip/file.csv");
+        added_csv.source_items = Some(ItemPair::added(file_item("archive.zip/file.csv")));
+        let mut added_zip = DiffNode::new("add", "zip_archive", "archive.zip");
+        added_zip.source_items = Some(ItemPair::added(file_item("archive.zip")));
+        added_zip.children.push(added_csv);
+
+        let mut root = DiffNode::new("modify", "directory", "");
+        root.children.push(removed_zip);
+        root.children.push(added_zip);
+        root
+    }
+
+    fn correspondence_config(left_regex: &str, right_regex: &str) -> serde_json::Value {
+        serde_json::json!({
+            "dataset": {
+                "files": {
+                    "correspondences": [{
+                        "name": "archive-pair",
+                        "key": "archive",
+                        "left": { "path_regex": left_regex },
+                        "right": { "path_regex": right_regex }
+                    }]
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn rule_matching_only_containers_warns_unsupported() {
+        let data = LocalDataAccess::new();
+        let config = correspondence_config("^data\\.zip$", "^archive\\.zip$");
+
+        let result = DeclaredCorrespondence.transform(expanded_archive_fixture(), &data, &config);
+
+        let TransformResult::Replace(node) = result else {
+            panic!("expected node replacement carrying diagnostics");
+        };
+        assert_eq!(node.children.len(), 2, "tree should be left untouched");
+        assert_eq!(node.diagnostics.len(), 1);
+        let diagnostic = &node.diagnostics[0];
+        assert_eq!(
+            diagnostic.code,
+            "binoc.declared_correspondence.container_unsupported"
+        );
+        assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
+        assert!(
+            diagnostic.message.contains("'data.zip'")
+                && diagnostic.message.contains("'archive.zip'"),
+            "message should name both containers: {}",
+            diagnostic.message
+        );
+    }
+
+    #[test]
+    fn rule_matching_nothing_warns_no_matching_files() {
+        let data = LocalDataAccess::new();
+        let config = correspondence_config("^missing\\.csv$", "^archive\\.zip/file\\.csv$");
+
+        let result = DeclaredCorrespondence.transform(expanded_archive_fixture(), &data, &config);
+
+        let TransformResult::Replace(node) = result else {
+            panic!("expected node replacement carrying diagnostics");
+        };
+        assert_eq!(node.diagnostics.len(), 1);
+        let diagnostic = &node.diagnostics[0];
+        assert_eq!(
+            diagnostic.code,
+            "binoc.declared_correspondence.no_matching_files"
+        );
+        assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
+        assert!(
+            diagnostic.message.contains("no removed files"),
+            "message should say the left side matched nothing: {}",
+            diagnostic.message
+        );
+    }
+
+    #[test]
+    fn rule_matching_leaves_on_both_sides_does_not_warn() {
+        let data = LocalDataAccess::new();
+        let config = correspondence_config("^data\\.zip/file\\.csv$", "^archive\\.zip/file\\.csv$");
+
+        let result = DeclaredCorrespondence.transform(expanded_archive_fixture(), &data, &config);
+
+        let TransformResult::Replace(node) = result else {
+            panic!("expected node replacement with the paired leaves");
+        };
+        assert!(
+            node.diagnostics.is_empty(),
+            "effective rule should not warn: {:?}",
+            node.diagnostics
+        );
+    }
 
     #[test]
     fn template_expands_named_captures() {

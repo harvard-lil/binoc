@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **38 shared examples** in this gallery.
+Binoc currently ships **39 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -46,6 +46,7 @@ just materialize
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/extra.csv: New table (2 columns, 1 row) | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data/records.csv: 1 row added | Default pipeline |
+| [`file-correspondence-container`](#file-correspondence-container) | Config declares a correspondence between zip containers, which is unsupported; the rule is ignored with a warning diagn… | archive.zip: Folder moved from data.zip | Custom config |
 | [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | states/AL.csv: 1 row added | Custom config |
 | [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list.csv: 1 row added | Custom config |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Folder moved from docs | Default pipeline |
@@ -526,6 +527,47 @@ Result:
 - **data.tar.gz/records.csv**: 1 cell changed
   - Changed cells; use `binoc extract CHANGESET "data.tar.gz/records.csv" cells_changed` for all changed cells
     - row 2, column 'count': '20' -> '25'
+```
+
+## file-correspondence-container
+
+Config declares a correspondence between zip containers, which is unsupported; the rule is ignored with a warning diagn…
+
+- **Browse source:** [file-correspondence-container](https://github.com/harvard-lil/binoc/tree/main/test-vectors/file-correspondence-container)
+- **Tags:** `zip`, `file-correspondence`, `diagnostics`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip.d/file.csv`; `snapshot-b` has 1 file — `archive.zip.d/file.csv`
+- **Setup:** This example uses a custom dataset config to narrow the pipeline to the comparators and transformers that make the behavior obvious.
+Save this dataset config as `/tmp/file-correspondence-container.yaml`:
+
+```yaml
+dataset:
+  files:
+    correspondences:
+      - name: archive-pair
+        key: archive
+        left:
+          path_regex: ^data\.zip$
+        right:
+          path_regex: ^archive\.zip$
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/file-correspondence-container/snapshot-a \
+  ./test-vectors-materialized/file-correspondence-container/snapshot-b \
+  --config /tmp/file-correspondence-container.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Folder moved from data.zip
+
+## Warnings
+
+- File correspondence rule 'archive-pair' had no effect: the left selector matched only the container 'data.zip' and the right selector matched only the container 'archive.zip'; correspondences between containers are not supported, so consider declaring them for the files inside instead [binoc.declared_correspondence.container_unsupported]
 ```
 
 ## file-correspondence-scheme
