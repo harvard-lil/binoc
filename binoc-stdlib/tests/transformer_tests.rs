@@ -796,7 +796,15 @@ fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
     assert_eq!(folded.action, "move");
     assert_eq!(folded.path, "newdir");
     assert_eq!(folded.source_path.as_deref(), Some("olddir"));
-    assert_eq!(folded.children.len(), 3, "only remainder nodes survive");
+    assert_eq!(
+        folded.summary.as_ref().map(|s| s.plain_text()).as_deref(),
+        Some("Folder moved from olddir (1 file modified within)")
+    );
+    assert_eq!(
+        folded.children.len(),
+        3,
+        "remainders and modified detail survive"
+    );
 
     let added = folded
         .children
@@ -809,14 +817,10 @@ fn folder_move_rolls_up_partial_rename_and_keeps_remainders() {
         .children
         .iter()
         .find(|c| c.path == "newdir/changed.txt")
-        .expect("modified remainder");
-    assert_eq!(modified.action, "modify");
-    assert_eq!(modified.source_path, None);
-    assert_eq!(
-        modified.summary.as_ref().map(|s| s.plain_text()).as_deref(),
-        Some("2 lines added")
-    );
-    assert!(!modified.tags.contains("binoc.move"));
+        .expect("modified move detail");
+    assert_eq!(modified.action, "move");
+    assert_eq!(modified.source_path.as_deref(), Some("olddir/changed.txt"));
+    assert!(modified.tags.contains("binoc.move.modified"));
 
     let removed = folded
         .children
