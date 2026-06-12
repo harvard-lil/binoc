@@ -23,7 +23,7 @@ class TestPluginRegistry:
         transformers = registry.list_transformers()
         assert 'binoc.correlation_detector' in transformers
         assert 'binoc.folder_move_detector' in transformers
-        assert 'binoc.column_reorder_detector' in transformers
+        assert 'binoc.tabular_analyzer' in transformers
 
     def test_default_registry_has_stdlib_renderers(self):
         registry = binoc.PluginRegistry.default()
