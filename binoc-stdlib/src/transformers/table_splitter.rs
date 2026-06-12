@@ -25,7 +25,12 @@ struct Detection {
 
 impl Transformer for TableSplitter {
     fn descriptor(&self) -> TransformerDescriptor {
-        TransformerDescriptor::new(PRODUCER).with_match_artifacts(vec![tabular_v1()])
+        TransformerDescriptor::new(PRODUCER)
+            .with_match_artifacts(vec![tabular_v1()])
+            .with_emits_tags(vec!["binoc.tabular-collection".into()])
+            .with_emits_actions(vec!["add".into(), "remove".into(), "modify".into()])
+            .with_emits_item_types(vec!["tabular_collection".into(), "tabular".into()])
+            .with_publishes_artifacts(vec![tabular_v1(), tabular_collection_v1()])
     }
 
     fn transform(

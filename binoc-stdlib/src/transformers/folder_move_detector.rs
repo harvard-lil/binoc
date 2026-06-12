@@ -45,6 +45,14 @@ impl Transformer for FolderMoveDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.folder_move_detector")
             .with_node_shape(NodeShapeFilter::Root)
+            .with_emits_tags(vec![
+                "binoc.move".into(),
+                "binoc.copy".into(),
+                "binoc.folder-move".into(),
+            ])
+            .with_emits_actions(vec!["move".into(), "copy".into(), "modify".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

@@ -25,6 +25,11 @@ impl Transformer for TabularStatsAnnotator {
         TransformerDescriptor::new("binoc.tabular_stats_annotator")
             .with_match_artifacts(vec![tabular_v1()])
             .with_match_actions(vec!["modify".into(), "move".into()])
+            // Writes only annotations, which are outside the write-set model.
+            .with_emits_tags(vec![])
+            .with_emits_actions(vec![])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

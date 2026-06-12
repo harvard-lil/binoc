@@ -22,6 +22,24 @@ impl Transformer for TabularAnalyzer {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.tabular_analyzer")
             .with_match_artifacts(vec![tabular_v1()])
+            .with_emits_tags(vec![
+                "binoc.content-changed".into(),
+                "binoc.column-addition".into(),
+                "binoc.column-removal".into(),
+                "binoc.column-reorder".into(),
+                "binoc.row-addition".into(),
+                "binoc.row-removal".into(),
+                "binoc.cell-change".into(),
+                "binoc.schema-change".into(),
+                "binoc.identity-diagnostic".into(),
+                "binoc.row-identity-ambiguous".into(),
+                "binoc.null-key".into(),
+                "binoc.duplicate-key".into(),
+                "binoc.ambiguous-key".into(),
+            ])
+            .with_emits_actions(vec!["reorder".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

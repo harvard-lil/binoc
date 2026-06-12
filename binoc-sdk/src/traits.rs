@@ -143,6 +143,33 @@ impl ComparatorDescriptor {
 /// and within each list field any single value satisfying it is enough
 /// (OR). Empty/default fields are unconstrained. A descriptor with
 /// every field empty/default matches nothing.
+///
+/// # Read declarations vs. write declarations
+///
+/// The `match_*` fields declare what a transformer READS (dispatch
+/// filters); the `emits_*`/`publishes_*` fields declare what it WRITES.
+/// The two families have **opposite empty semantics**:
+///
+/// - READ (`match_*`): an empty list means *unconstrained* — match
+///   anything.
+/// - WRITE (`emits_*`, `publishes_*`): `Some(vec![])` means *writes
+///   nothing* and is enforced; `None` means the plugin predates write-set
+///   declarations ("legacy, nothing declared") and is exempt from
+///   enforcement.
+///
+/// Write-sets exist for verification (the test-vector harness asserts
+/// every new tag/action/item-type/artifact-format a transformer produces
+/// is declared), lint, and future capability negotiation. They MUST NOT
+/// be used for scheduling or dispatch — see the write-sets ADR for the
+/// MLIR/LLVM history behind that constraint.
+///
+/// Future direction: this shape is expected to unify with
+/// [`ComparatorDescriptor`] into a shared reads/writes structure —
+/// roughly `reads: { types, tags, actions, artifacts, node_shape }` /
+/// `writes: { tags, actions, item_types, artifacts }` — since
+/// comparators also publish artifacts and emit actions in principle.
+/// Comparator dispatch is not being reworked yet, so the flat fields
+/// stay for now.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct TransformerDescriptor {
@@ -165,6 +192,25 @@ pub struct TransformerDescriptor {
     /// default) is unconstrained.
     #[serde(default)]
     pub node_shape: NodeShapeFilter,
+    /// Complete set of tags this transformer may add to nodes.
+    /// `None` = legacy/undeclared (unenforced); `Some(vec![])` = "adds no
+    /// tags" (enforced). See the type-level docs for the READ/WRITE
+    /// empty-semantics asymmetry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emits_tags: Option<Vec<String>>,
+    /// Complete set of action values this transformer may write
+    /// (on the matched node or any node it creates). Same `None`/empty
+    /// semantics as [`Self::emits_tags`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emits_actions: Option<Vec<String>>,
+    /// Complete set of item types this transformer may write. Same
+    /// `None`/empty semantics as [`Self::emits_tags`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emits_item_types: Option<Vec<String>>,
+    /// Complete set of artifact formats this transformer may publish.
+    /// Same `None`/empty semantics as [`Self::emits_tags`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publishes_artifacts: Option<Vec<ArtifactFormat>>,
 }
 
 fn default_phase() -> String {
@@ -182,6 +228,10 @@ impl TransformerDescriptor {
             suggested_phase: "default".into(),
             match_artifacts: Vec::new(),
             node_shape: NodeShapeFilter::Any,
+            emits_tags: None,
+            emits_actions: None,
+            emits_item_types: None,
+            publishes_artifacts: None,
         }
     }
 
@@ -207,6 +257,32 @@ impl TransformerDescriptor {
 
     pub fn with_node_shape(mut self, shape: NodeShapeFilter) -> Self {
         self.node_shape = shape;
+        self
+    }
+
+    /// Declare the complete set of tags this transformer may add.
+    /// Pass an empty vec to declare "adds no tags" (enforced) — distinct
+    /// from never calling this (legacy/undeclared, unenforced).
+    pub fn with_emits_tags(mut self, tags: Vec<String>) -> Self {
+        self.emits_tags = Some(tags);
+        self
+    }
+
+    /// Declare the complete set of action values this transformer may write.
+    pub fn with_emits_actions(mut self, actions: Vec<String>) -> Self {
+        self.emits_actions = Some(actions);
+        self
+    }
+
+    /// Declare the complete set of item types this transformer may write.
+    pub fn with_emits_item_types(mut self, item_types: Vec<String>) -> Self {
+        self.emits_item_types = Some(item_types);
+        self
+    }
+
+    /// Declare the complete set of artifact formats this transformer may publish.
+    pub fn with_publishes_artifacts(mut self, formats: Vec<ArtifactFormat>) -> Self {
+        self.publishes_artifacts = Some(formats);
         self
     }
 }

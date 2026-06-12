@@ -17,6 +17,13 @@ impl Transformer for DeclaredCorrespondence {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.declared_correspondence")
             .with_node_shape(NodeShapeFilter::Root)
+            .with_emits_tags(vec![
+                "binoc.declared-correspondence".into(),
+                "binoc.path-change".into(),
+            ])
+            .with_emits_actions(vec!["move".into(), "modify".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

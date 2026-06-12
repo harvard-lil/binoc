@@ -19,6 +19,34 @@ fn vectors_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-vectors")
 }
 
+/// With this plugin registered, `binoc.cell-change` is produced only by
+/// `binoc.tabular_analyzer` and matched only by us — which the
+/// single-producer/single-consumer lint flags. That is acceptable here
+/// and allowlisted: the tag is not a private dispatch channel (renderer
+/// group configs consume it too), and this plugin needs its own multiset
+/// scan that the analyzer's single pass does not subsume — it is the
+/// model out-of-tree artifact consumer.
+#[test]
+fn cell_change_tag_handoff_is_known_and_allowlisted() {
+    use binoc_sdk::test_support::single_producer_single_consumer_tags;
+    use binoc_sdk::Transformer;
+
+    let registry = binoc_stdlib::default_registry();
+    let mut descriptors: Vec<_> = registry
+        .transformer_names()
+        .into_iter()
+        .map(|name| registry.get_transformer(&name).unwrap().descriptor())
+        .collect();
+    descriptors.push(RowReorderDetector.descriptor());
+
+    let warnings = single_producer_single_consumer_tags(&descriptors, &[]);
+    assert_eq!(warnings.len(), 1, "warnings: {warnings:?}");
+    assert!(warnings[0].contains("binoc.cell-change"));
+
+    let allowlisted = single_producer_single_consumer_tags(&descriptors, &["binoc.cell-change"]);
+    assert!(allowlisted.is_empty(), "warnings: {allowlisted:?}");
+}
+
 #[test]
 fn test_all_vectors() {
     let vectors = discover_vectors(&vectors_dir());

@@ -10,6 +10,16 @@ impl Transformer for TableCollectionAnalyzer {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.table_collection_analyzer")
             .with_match_artifacts(vec![tabular_collection_v1()])
+            .with_emits_tags(vec![
+                "binoc.tabular-collection-change".into(),
+                "binoc.table-addition".into(),
+                "binoc.table-removal".into(),
+                "binoc.table-change".into(),
+                "binoc.table-identity-ambiguous".into(),
+            ])
+            .with_emits_actions(vec![])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(

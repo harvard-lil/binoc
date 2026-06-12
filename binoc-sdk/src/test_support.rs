@@ -384,6 +384,163 @@ impl<C: Comparator> Comparator for AbiComparator<C> {
     }
 }
 
+// ── Write-set enforcement ─────────────────────────────────────────────
+
+/// Everything write-set enforcement cares about in a (sub)tree: the set of
+/// tags, actions, item types, and artifact formats present on any node.
+#[derive(Debug, Default)]
+pub struct WriteFacts {
+    pub tags: std::collections::BTreeSet<String>,
+    pub actions: std::collections::BTreeSet<String>,
+    pub item_types: std::collections::BTreeSet<String>,
+    pub artifact_formats: std::collections::BTreeSet<ArtifactFormat>,
+}
+
+impl WriteFacts {
+    /// Collect facts from `node` and all its descendants.
+    pub fn from_tree(node: &DiffNode) -> Self {
+        let mut facts = Self::default();
+        facts.add_tree(node);
+        facts
+    }
+
+    fn add_tree(&mut self, node: &DiffNode) {
+        self.tags.extend(node.tags.iter().cloned());
+        self.actions.insert(node.action.clone());
+        self.item_types.insert(node.item_type.clone());
+        self.artifact_formats
+            .extend(node.artifacts.iter().map(|a| a.format.clone()));
+        for child in &node.children {
+            self.add_tree(child);
+        }
+    }
+}
+
+/// Check a transform call against the transformer's declared write-sets.
+///
+/// `input` is the subtree the transformer received; `outputs` are the
+/// node(s) it returned. Anything present in an output tree but not in the
+/// input tree counts as *emitted by this transformer* and must appear in
+/// the corresponding declared write-set. Categories whose declaration is
+/// `None` (legacy/undeclared plugin) are skipped — enforcement is opt-in
+/// by declaring.
+///
+/// Returns one human-readable violation per undeclared emission, each
+/// naming the transformer and the emission. Empty means compliant.
+///
+/// Write-sets are for verification like this (and lint, and future
+/// capability negotiation) — never for scheduling or dispatch.
+pub fn undeclared_emissions(
+    desc: &TransformerDescriptor,
+    input: &WriteFacts,
+    outputs: &[&DiffNode],
+) -> Vec<String> {
+    let mut violations = Vec::new();
+    let mut output_facts = WriteFacts::default();
+    for output in outputs {
+        output_facts.add_tree(output);
+    }
+
+    if let Some(declared) = &desc.emits_tags {
+        for tag in output_facts.tags.difference(&input.tags) {
+            if !declared.contains(tag) {
+                violations.push(format!(
+                    "transformer '{}' emitted tag '{tag}' not in its declared emits_tags",
+                    desc.name
+                ));
+            }
+        }
+    }
+    if let Some(declared) = &desc.emits_actions {
+        for action in output_facts.actions.difference(&input.actions) {
+            if !declared.contains(action) {
+                violations.push(format!(
+                    "transformer '{}' emitted action '{action}' not in its declared emits_actions",
+                    desc.name
+                ));
+            }
+        }
+    }
+    if let Some(declared) = &desc.emits_item_types {
+        for item_type in output_facts.item_types.difference(&input.item_types) {
+            if !declared.contains(item_type) {
+                violations.push(format!(
+                    "transformer '{}' emitted item_type '{item_type}' not in its declared emits_item_types",
+                    desc.name
+                ));
+            }
+        }
+    }
+    if let Some(declared) = &desc.publishes_artifacts {
+        for format in output_facts
+            .artifact_formats
+            .difference(&input.artifact_formats)
+        {
+            if !declared.contains(format) {
+                violations.push(format!(
+                    "transformer '{}' attached artifact format '{format}' not in its declared publishes_artifacts",
+                    desc.name
+                ));
+            }
+        }
+    }
+
+    violations
+}
+
+/// Lint: flag tags that exactly one transformer declares in `emits_tags`
+/// and exactly one *other* transformer lists in `match_tags`.
+///
+/// Such a tag is a single-producer/single-consumer dispatch channel — a
+/// function call drawn slowly. Consider inlining the consumer's judgment
+/// into the producer, or documenting why it stays separate (e.g. the tag
+/// is also consumed outside transformer dispatch, such as by renderer
+/// group configs — pass those tags in `allowlist`).
+///
+/// Returns one warning string per flagged tag. Callers decide whether to
+/// fail or just print; undeclared (`None`) emits_tags are skipped.
+pub fn single_producer_single_consumer_tags(
+    descriptors: &[TransformerDescriptor],
+    allowlist: &[&str],
+) -> Vec<String> {
+    use std::collections::BTreeMap;
+
+    let mut producers: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut consumers: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for desc in descriptors {
+        if let Some(tags) = &desc.emits_tags {
+            for tag in tags {
+                producers.entry(tag).or_default().push(&desc.name);
+            }
+        }
+        for tag in &desc.match_tags {
+            consumers.entry(tag).or_default().push(&desc.name);
+        }
+    }
+
+    let mut warnings = Vec::new();
+    for (tag, tag_producers) in &producers {
+        if allowlist.contains(tag) {
+            continue;
+        }
+        let Some(tag_consumers) = consumers.get(tag) else {
+            continue;
+        };
+        if tag_producers.len() == 1
+            && tag_consumers.len() == 1
+            && tag_producers[0] != tag_consumers[0]
+        {
+            warnings.push(format!(
+                "tag '{tag}' is produced only by '{}' and consumed only by '{}' — \
+                 single-producer/single-consumer tag; consider inlining the judgment \
+                 or documenting why it stays separate",
+                tag_producers[0], tag_consumers[0]
+            ));
+        }
+    }
+    warnings
+}
+
 // ── AbiTransformer ────────────────────────────────────────────────────
 
 /// Wraps a `Transformer` and forces every call through the JSON wire format.
@@ -447,7 +604,31 @@ impl<T: Transformer> Transformer for AbiTransformer<T> {
             &req2.data_root,
         )));
 
+        // Write-set enforcement (harness-only): snapshot the input facts so
+        // anything new on the output can be checked against the declared
+        // write-sets after the call.
+        let desc = self.inner.descriptor();
+        let declares_writes = desc.emits_tags.is_some()
+            || desc.emits_actions.is_some()
+            || desc.emits_item_types.is_some()
+            || desc.publishes_artifacts.is_some();
+        let input_facts = declares_writes.then(|| WriteFacts::from_tree(&req2.node));
+
         let result = self.inner.transform(req2.node, &plugin_data, &req2.config);
+
+        if let Some(input_facts) = &input_facts {
+            let outputs: Vec<&DiffNode> = match &result {
+                TransformResult::Replace(node) => vec![node.as_ref()],
+                TransformResult::ReplaceMany(nodes) => nodes.iter().collect(),
+                _ => Vec::new(),
+            };
+            let violations = undeclared_emissions(&desc, input_facts, &outputs);
+            assert!(
+                violations.is_empty(),
+                "write-set violation:\n  {}",
+                violations.join("\n  ")
+            );
+        }
 
         let data_ops = plugin_data.take_log();
 

@@ -54,6 +54,10 @@ impl Transformer for CorrelationDetector {
     fn descriptor(&self) -> TransformerDescriptor {
         TransformerDescriptor::new("binoc.correlation_detector")
             .with_node_shape(NodeShapeFilter::Root)
+            .with_emits_tags(vec!["binoc.move".into(), "binoc.copy".into()])
+            .with_emits_actions(vec!["move".into(), "copy".into()])
+            .with_emits_item_types(vec![])
+            .with_publishes_artifacts(vec![])
     }
 
     fn transform(
