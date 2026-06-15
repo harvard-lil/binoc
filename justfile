@@ -53,7 +53,7 @@ test:
 
 # Aggregate docs generators. Each sub-recipe is cache-aware and skips work when
 # inputs are unchanged. See docs/adr/2026-04-17-documentation_platform_and_info_design.md §6.
-docs: docs-tutorial docs-cli docs-adr-index docs-plugin-catalog docs-schema docs-sdk docs-vectors docs-replays
+docs: docs-tutorial docs-cli docs-adr-index docs-plugin-catalog docs-schema docs-sdk docs-vectors docs-replays docs-browser-demo
 
 # Regenerate docs/tutorial.md by re-running all embedded code blocks. Showboat
 # runs in a uv tool env that includes ./binoc-python, so visible `binoc`
@@ -125,6 +125,31 @@ docs-replays: materialize
     #!/usr/bin/env bash
     set -euo pipefail
     uv run --quiet --script scripts/build_replays.py
+
+# Build the browser-demo WASI binary served by docs/users/explanation/browser-demo.md.
+# Generated output is gitignored; CI docs builds regenerate it, but ordinary tests
+# do not pay this cost.
+docs-browser-demo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v rustup >/dev/null 2>&1; then
+        rustup target add wasm32-wasip1 >/dev/null
+        CARGO_BIN="$(rustup which cargo)"
+        RUSTC_BIN="$(rustup which rustc)"
+    else
+        CARGO_BIN="${CARGO:-cargo}"
+        RUSTC_BIN="${RUSTC:-rustc}"
+    fi
+    RUSTC="${RUSTC_BIN}" "${CARGO_BIN}" build --quiet -p binoc-cli --target wasm32-wasip1 --release
+    mkdir -p docs/assets/browser-demo/wasm
+    INPUT="target/wasm32-wasip1/release/binoc-cli.wasm"
+    OUTPUT="docs/assets/browser-demo/wasm/binoc-cli.wasm"
+    if command -v wasm-opt >/dev/null 2>&1; then
+        wasm-opt -Oz "${INPUT}" -o "${OUTPUT}"
+    else
+        cp "${INPUT}" "${OUTPUT}"
+    fi
+    ls -lh "${OUTPUT}"
 
 # Regenerate docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 docs-plugin-catalog:

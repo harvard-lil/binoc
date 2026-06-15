@@ -39,8 +39,6 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.container-reshape",
-          "binoc.folder-move",
-          "binoc.move",
           "binoc.serialization-change"
         ],
         "children": [

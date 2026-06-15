@@ -1,0 +1,13 @@
+[vector]
+name = "observations-repartition-equal-arity"
+description = """
+Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped \
+by year, every row preserved exactly but the grouping boundary shifts so no \
+single output is the clean disjoint union of inputs (and vice versa). Partition \
+declines on BOTH directions — each candidate whole picks up foreign atoms from \
+the cross-cutting partition — so the engine emits binoc.possible_split and \
+degrades to honest add/remove rather than mis-claiming a split or merge. Pins the \
+conservative equal-arity boundary of disjoint_cover (CFM-72): no \
+binoc.tabular_split / binoc.tabular_merge tag, no tabular_split root action.
+"""
+tags = ["csv", "partition", "possible-split", "equal-arity"]

@@ -2,6 +2,7 @@
 /site
 /docs/sdk/
 /docs/users/explanation/replays/
+/docs/assets/browser-demo/wasm/
 test-vectors-materialized/
 *.snap.new
 *.swp

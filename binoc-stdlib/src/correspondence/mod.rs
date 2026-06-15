@@ -11,7 +11,7 @@ use binoc_sdk::{
     BinocResult, CoreRule, CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig,
     DataAccess, DatasetSemanticsV1, Diagnostic, Edit, FileSelector, ItemRef,
     ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPolicies,
+    RowIdentityPolicies, Summary,
 };
 use regex::Regex;
 
@@ -123,7 +123,9 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
             Err(err) => {
                 return Ok(vec![Diagnostic::warning(
                     "binoc.dataset_config.invalid",
-                    format!("Ignored malformed dataset semantics config: {err}"),
+                    Summary::new()
+                        .text("Ignored malformed dataset semantics config: ")
+                        .text(err.to_string()),
                 )]);
             }
         };
@@ -229,6 +231,12 @@ fn container_reshape_hint(ctx: &ProjectionAnnotationContext<'_>) -> Option<Proje
         .action("container_representation_change")
         .tag("binoc.container-reshape")
         .tag("binoc.serialization-change")
+        // A reshape supersedes the pair-time move framing: the container did not
+        // simply move, its representation changed. Retract the now-stale move-family
+        // tags so the IR's tag set is coherent, not just the rendering.
+        .retract_tag("binoc.move")
+        .retract_tag("binoc.move.modified")
+        .retract_tag("binoc.folder-move")
         .summary(summary);
     if !ctx.edits.is_empty() {
         hint = hint.tag("binoc.content-changed");

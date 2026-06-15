@@ -67,7 +67,6 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.container-reshape",
-          "binoc.move",
           "binoc.serialization-change"
         ]
       },

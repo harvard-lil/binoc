@@ -341,20 +341,24 @@ fn declared_rule_diagnostics(
         if let Some(err) = validate_selector_regex(&rule.left) {
             diagnostics.push(Diagnostic::warning(
                 "binoc.declared_correspondence.invalid_left_regex",
-                format!(
-                    "File correspondence rule '{}' has an invalid left path_regex: {err}",
-                    rule.name
-                ),
+                Summary::new()
+                    .text(format!(
+                        "File correspondence rule '{}' has an invalid left path_regex: ",
+                        rule.name
+                    ))
+                    .text(err.to_string()),
             ));
             continue;
         }
         if let Some(err) = validate_selector_regex(&rule.right) {
             diagnostics.push(Diagnostic::warning(
                 "binoc.declared_correspondence.invalid_right_regex",
-                format!(
-                    "File correspondence rule '{}' has an invalid right path_regex: {err}",
-                    rule.name
-                ),
+                Summary::new()
+                    .text(format!(
+                        "File correspondence rule '{}' has an invalid right path_regex: ",
+                        rule.name
+                    ))
+                    .text(err.to_string()),
             ));
             continue;
         }
@@ -381,22 +385,30 @@ fn declared_rule_diagnostics(
         }) {
             diagnostics.push(Diagnostic::warning(
                 "binoc.declared_correspondence.duplicate_key",
-                format!(
-                    "File correspondence rule '{}' has ambiguous key '{}' (left matches: {}, right matches: {})",
-                    rule.name, key, left_count, right_count
-                ),
+                Summary::new()
+                    .text(format!(
+                        "File correspondence rule '{}' has ambiguous key '{key}' (left matches: ",
+                        rule.name
+                    ))
+                    .uint(left_count as u64)
+                    .text(", right matches: ")
+                    .uint(right_count as u64)
+                    .text(")"),
             ));
             continue;
         }
 
         diagnostics.push(Diagnostic::warning(
             "binoc.declared_correspondence.no_matching_files",
-            format!(
-                "File correspondence rule '{}' had no effect: the left selector matched {} items and the right selector matched {} items",
-                rule.name,
-                left.values().map(Vec::len).sum::<usize>(),
-                right.values().map(Vec::len).sum::<usize>()
-            ),
+            Summary::new()
+                .text(format!(
+                    "File correspondence rule '{}' had no effect: the left selector matched ",
+                    rule.name
+                ))
+                .uint(left.values().map(Vec::len).sum::<usize>() as u64)
+                .text(" items and the right selector matched ")
+                .uint(right.values().map(Vec::len).sum::<usize>() as u64)
+                .text(" items"),
         ));
     }
     diagnostics
@@ -564,10 +576,11 @@ impl PairRule for FuzzyPair {
                 proposals: Vec::new(),
                 diagnostics: vec![Diagnostic::suggestion(
                     "binoc.fuzzy_pair_limit",
-                    format!(
-                        "Skipped fuzzy rename detection for {candidate_count} candidate pairs over limit {}",
-                        self.rename_limit
-                    ),
+                    Summary::new()
+                        .text("Skipped fuzzy rename detection for ")
+                        .uint(candidate_count as u64)
+                        .text(" candidate pairs over limit ")
+                        .uint(self.rename_limit as u64),
                 )],
             });
         }
@@ -742,10 +755,11 @@ impl PairRule for TabularPair {
                 proposals: Vec::new(),
                 diagnostics: vec![Diagnostic::suggestion(
                     "binoc.tabular_pair_limit",
-                    format!(
-                        "Skipped tabular reformat detection for {candidate_count} candidate pairs over limit {}",
-                        self.candidate_limit
-                    ),
+                    Summary::new()
+                        .text("Skipped tabular reformat detection for ")
+                        .uint(candidate_count as u64)
+                        .text(" candidate pairs over limit ")
+                        .uint(self.candidate_limit as u64),
                 )],
             });
         }
@@ -1038,10 +1052,10 @@ fn read_fuzzy_bytes(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Option
 fn fuzzy_size_diagnostic(item: &ItemRef) -> Diagnostic {
     Diagnostic::suggestion(
         "binoc.fuzzy_pair_bytes_limit",
-        format!(
-            "Skipped fuzzy content scoring for item over {} bytes",
-            FUZZY_MAX_BYTES
-        ),
+        Summary::new()
+            .text("Skipped fuzzy content scoring for item over ")
+            .uint(FUZZY_MAX_BYTES)
+            .text(" bytes"),
     )
     .with_location(item.logical_path.clone())
 }
@@ -1198,12 +1212,13 @@ impl PairRule for PartitionPair {
                 proposals: Vec::new(),
                 diagnostics: vec![Diagnostic::suggestion(
                     "binoc.partition_limit",
-                    format!(
-                        "Skipped split/merge detection: residue {}×{} exceeds limit {}",
-                        left.len(),
-                        right.len(),
-                        self.residue_cap
-                    ),
+                    Summary::new()
+                        .text("Skipped split/merge detection: residue ")
+                        .uint(left.len() as u64)
+                        .text("×")
+                        .uint(right.len() as u64)
+                        .text(" exceeds limit ")
+                        .uint(self.residue_cap as u64),
                 )],
             });
         }
@@ -1213,7 +1228,7 @@ impl PairRule for PartitionPair {
         // scan ultimately claims — a merge *part* looks like a split near miss
         // (it is a subset of the merged whole), so warning before both scans
         // finish would be misleading.
-        let mut near_misses: BTreeMap<NodeId, String> = BTreeMap::new();
+        let mut near_misses: BTreeMap<NodeId, (String, Side)> = BTreeMap::new();
         let mut used_left: BTreeSet<u32> = BTreeSet::new();
         let mut used_right: BTreeSet<u32> = BTreeSet::new();
 
@@ -1261,7 +1276,10 @@ impl PairRule for PartitionPair {
                     }
                 }
                 Coverage::NearMiss => {
-                    near_misses.insert(whole.id, view.item(whole.id).logical_path.clone());
+                    near_misses.insert(
+                        whole.id,
+                        (view.item(whole.id).logical_path.clone(), Side::From),
+                    );
                 }
                 Coverage::None => {}
             }
@@ -1305,7 +1323,10 @@ impl PairRule for PartitionPair {
                     }
                 }
                 Coverage::NearMiss => {
-                    near_misses.insert(whole.id, view.item(whole.id).logical_path.clone());
+                    near_misses.insert(
+                        whole.id,
+                        (view.item(whole.id).logical_path.clone(), Side::To),
+                    );
                 }
                 Coverage::None => {}
             }
@@ -1318,7 +1339,7 @@ impl PairRule for PartitionPair {
                 TreeSide::Left => !used_left.contains(&id.index),
                 TreeSide::Right => !used_right.contains(&id.index),
             })
-            .map(|(_, path)| possible_split_diagnostic(&path))
+            .map(|(_, (path, side))| possible_split_diagnostic(&path, side))
             .collect();
 
         Ok(PairOutput {
@@ -1388,12 +1409,12 @@ impl PairRule for PartitionPair {
     }
 }
 
-fn possible_split_diagnostic(path: &str) -> Diagnostic {
+fn possible_split_diagnostic(path: &str, side: Side) -> Diagnostic {
     Diagnostic::suggestion(
         "binoc.possible_split",
-        format!(
-            "'{path}' shares rows with other unmatched tables but the relationship \
-             is not a clean partition (residual, shared, or extra rows); left as add/remove"
+        Summary::new().text("'").path(path.to_string(), side).text(
+            "' shares rows with other unmatched tables but the relationship \
+                 is not a clean partition (residual, shared, or extra rows); left as add/remove",
         ),
     )
 }

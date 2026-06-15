@@ -197,12 +197,12 @@ pub enum DiagnosticSeverity {
     Suggestion,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Diagnostic {
     pub severity: DiagnosticSeverity,
     pub code: String,
-    pub message: String,
+    pub message: Summary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
 }
@@ -211,7 +211,7 @@ impl Diagnostic {
     pub fn new(
         severity: DiagnosticSeverity,
         code: impl Into<String>,
-        message: impl Into<String>,
+        message: impl Into<Summary>,
     ) -> Self {
         Self {
             severity,
@@ -221,15 +221,15 @@ impl Diagnostic {
         }
     }
 
-    pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn warning(code: impl Into<String>, message: impl Into<Summary>) -> Self {
         Self::new(DiagnosticSeverity::Warning, code, message)
     }
 
-    pub fn error(code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn error(code: impl Into<String>, message: impl Into<Summary>) -> Self {
         Self::new(DiagnosticSeverity::Error, code, message)
     }
 
-    pub fn suggestion(code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn suggestion(code: impl Into<String>, message: impl Into<Summary>) -> Self {
         Self::new(DiagnosticSeverity::Suggestion, code, message)
     }
 

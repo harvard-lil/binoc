@@ -7,7 +7,7 @@ use binoc_sdk::{
     ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig,
     DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule, ExtractResult, GlobalClaim,
     IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef, NodeId, ParseGroup, ParseOutput,
-    ParseRule, ProjectionAnnotator, ShapeFilter, TreeSide, WriterDescriptor,
+    ParseRule, ProjectionAnnotator, ShapeFilter, Side, Summary, TreeSide, WriterDescriptor,
 };
 use rayon::prelude::*;
 
@@ -1185,7 +1185,13 @@ fn should_parallelize_parse(job_count: usize) -> bool {
 /// lower-cased by `ItemRef::extension`.
 fn stem_key(logical_path: &str) -> String {
     let name = binoc_sdk::file_name(logical_path);
-    let stem = name.split('.').next().unwrap_or(name);
+    // Correlate by basename with only the *final* extension removed. A sidecar set
+    // shares its full base name and differs only in the last extension
+    // (`roads.v2.shp` ↔ `roads.v2.dbf`), so each member binds to its most-specific
+    // anchor. Stripping at the *first* dot instead would collapse versioned
+    // siblings (`roads.*` and `roads.v2.*`) onto one stem and let two `.shp`
+    // anchors fight over the same `.dbf` — silent cross-contamination (CFM-83(e)).
+    let stem = name.rsplit_once('.').map_or(name, |(base, _ext)| base);
     stem.to_lowercase()
 }
 
@@ -1285,9 +1291,19 @@ fn rule_failure_diagnostic(
     if matches!(err, BinocError::PathPolicy(_)) {
         return Err(err);
     }
+    let path_side = match side {
+        TreeSide::Left => Side::From,
+        TreeSide::Right => Side::To,
+    };
     Ok(Diagnostic::error(
         format!("binoc.rule.{kind}_failed"),
-        format!("{kind} rule '{rule_name}' failed for {side:?} node '{path}': {err}"),
+        Summary::new()
+            .text(format!(
+                "{kind} rule '{rule_name}' failed for {side:?} node '"
+            ))
+            .path(path.to_string(), path_side)
+            .text("': ")
+            .text(err.to_string()),
     )
     .with_location(format!("{}:{path}", side.label())))
 }
@@ -2080,13 +2096,17 @@ mod tests {
     }
 
     #[test]
-    fn stem_key_groups_by_first_dot_case_insensitively() {
+    fn stem_key_strips_only_final_extension_case_insensitively() {
         assert_eq!(stem_key("dir/roads.shp"), "roads");
         assert_eq!(stem_key("dir/roads.dbf"), "roads");
         assert_eq!(stem_key("dir/ROADS.SHX"), "roads");
         assert_ne!(stem_key("dir/rivers.shp"), stem_key("dir/roads.shp"));
-        // First-dot stem so multi-dot sidecars still group with the anchor.
-        assert_eq!(stem_key("a/roads.tar.gz"), "roads");
+        // Only the final extension is stripped, so a versioned sibling keeps its
+        // distinct stem and never collides with the unversioned set (CFM-83(e)).
+        assert_eq!(stem_key("dir/roads.v2.shp"), "roads.v2");
+        assert_eq!(stem_key("dir/roads.v2.dbf"), "roads.v2");
+        assert_ne!(stem_key("dir/roads.v2.shp"), stem_key("dir/roads.shp"));
+        assert_eq!(stem_key("a/roads.tar.gz"), "roads.tar");
     }
 
     #[test]

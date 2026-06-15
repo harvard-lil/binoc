@@ -111,7 +111,20 @@ expression: "&stable_changeset"
     {
       "severity": "suggestion",
       "code": "binoc.possible_split",
-      "message": "'observations.csv' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove",
+      "message": [
+        {
+          "text": "'"
+        },
+        {
+          "path": {
+            "value": "observations.csv",
+            "snapshot": "from"
+          }
+        },
+        {
+          "text": "' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove"
+        }
+      ],
       "location": "binoc.pair.partition"
     }
   ]

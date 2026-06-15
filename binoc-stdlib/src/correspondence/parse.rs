@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use binoc_sdk::{
     decompose_child, structured_document_v1, tabular_v1, BinocError, BinocResult, DataAccess,
     Diagnostic, ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact,
-    ParsedChild, ProjectionHint, StructuredDocument, TabularData,
+    ParsedChild, ProjectionHint, StructuredDocument, Summary, TabularData,
 };
 use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 
@@ -740,7 +740,7 @@ struct StackedSection {
 #[derive(Debug, Clone)]
 struct StackedDetection {
     sections: Vec<StackedSection>,
-    ambiguous_reason: Option<String>,
+    ambiguous_reason: Option<Summary>,
 }
 
 fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
@@ -816,11 +816,12 @@ fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
     let looks_genuinely_stacked =
         sections.len() >= 2 && sections.iter().any(|section| section.title.is_some());
     let ambiguous_reason = if looks_genuinely_stacked && !wide_unclaimed.is_empty() {
-        Some(format!(
-            "The CSV has stacked table-like regions, but row{} {} outside any clear rectangle; leaving it as one table.",
-            if wide_unclaimed.len() == 1 { "" } else { "s" },
-            bounded_index_list(&wide_unclaimed),
-        ))
+        let plural = if wide_unclaimed.len() == 1 { "" } else { "s" };
+        let mut summary = Summary::new().text(format!(
+            "The CSV has stacked table-like regions, but row{plural} "
+        ));
+        summary.extend(bounded_index_list(&wide_unclaimed));
+        Some(summary.text(" outside any clear rectangle; leaving it as one table."))
     } else {
         None
     };
@@ -836,21 +837,25 @@ fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
 /// input can never produce an unbounded message string.
 const MAX_INLINE_INDICES: usize = 5;
 
-/// Render a list of 1-based row indices for inline use in a diagnostic message,
-/// capped at [`MAX_INLINE_INDICES`] concrete entries plus an `and N more`
-/// suffix. Keeps per-row diagnostic messages bounded on large inputs.
-fn bounded_index_list(indices: &[usize]) -> String {
-    let shown = indices
-        .iter()
-        .take(MAX_INLINE_INDICES)
-        .map(|index| index.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    if indices.len() > MAX_INLINE_INDICES {
-        format!("{shown}, and {} more", indices.len() - MAX_INLINE_INDICES)
-    } else {
-        shown
+/// Render a list of 1-based row indices as typed [`Summary`] segments for inline
+/// use in a diagnostic message, capped at [`MAX_INLINE_INDICES`] concrete
+/// entries (each a digit-grouped [`Segment::Uint`]) plus an `and N more` suffix.
+/// Keeps per-row diagnostic messages bounded on large inputs.
+fn bounded_index_list(indices: &[usize]) -> Summary {
+    let mut summary = Summary::new();
+    for (position, index) in indices.iter().take(MAX_INLINE_INDICES).enumerate() {
+        if position > 0 {
+            summary = summary.text(", ");
+        }
+        summary = summary.uint(*index as u64);
     }
+    if indices.len() > MAX_INLINE_INDICES {
+        summary = summary
+            .text(", and ")
+            .uint((indices.len() - MAX_INLINE_INDICES) as u64)
+            .text(" more");
+    }
+    summary
 }
 
 /// Build one `tabular_v1` child node per detected stacked section.
@@ -1036,20 +1041,27 @@ mod tests {
         let reason = detection
             .ambiguous_reason
             .expect("genuinely stacked CSV should stay ambiguous");
-        assert!(reason.contains("outside any clear rectangle"), "{reason}");
+        assert!(
+            reason.plain_text().contains("outside any clear rectangle"),
+            "{reason}"
+        );
     }
 
     #[test]
     fn bounded_index_list_caps_inline_indices() {
-        assert_eq!(bounded_index_list(&[3]), "3");
-        assert_eq!(bounded_index_list(&[3, 4, 5]), "3, 4, 5");
+        assert_eq!(bounded_index_list(&[3]).plain_text(), "3");
+        assert_eq!(bounded_index_list(&[3, 4, 5]).plain_text(), "3, 4, 5");
         // More than the cap collapses the tail into a remaining count so the
         // message can never grow unbounded on large inputs.
         let many: Vec<usize> = (1..=12).collect();
         assert_eq!(
-            bounded_index_list(&many),
+            bounded_index_list(&many).plain_text(),
             "1, 2, 3, 4, 5, and 7 more",
             "expected a capped list with a remaining count"
         );
+        // Indices are typed `Uint` segments, so a renderer digit-groups them
+        // rather than reparsing prose — a five-digit row index stays a count.
+        let big = bounded_index_list(&[12345]);
+        assert_eq!(big.segments(), &[binoc_sdk::Segment::Uint(12345)]);
     }
 }

@@ -1,0 +1,11 @@
+{
+  "columns": [
+    { "name": "name", "type": "character", "width": 16 },
+    { "name": "lanes", "type": "numeric", "width": 4, "decimals": 0 }
+  ],
+  "rows": [
+    ["Main St", 2],
+    ["Oak Ave", 2],
+    ["Pine Rd", 1]
+  ]
+}

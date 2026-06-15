@@ -467,6 +467,7 @@ fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_li
         node.sources = line.sources.clone();
         node.summary = Some(line.summary.clone());
         node.tags.extend(line.projection.tags.iter().cloned());
+        retain_unretracted(&mut node.tags, &line.projection.retract_tags);
         if !line.edits.is_empty() {
             node.details.insert("edits".into(), edits_json(&line.edits));
         }
@@ -480,8 +481,19 @@ fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_li
     }
     merge_sources(node, &line.sources);
     node.tags.extend(line.projection.tags.iter().cloned());
+    retain_unretracted(&mut node.tags, &line.projection.retract_tags);
     append_visible_edits(node, &line.edits);
     node.summary = Some(merged_summary(&node.sources));
+}
+
+/// Drop any tag named in `retract_tags` from `tags`, keeping the node's tag set
+/// coherent when a reconciled line retracts a framing an earlier line stamped
+/// (e.g. a CFM-71 reshape dropping a pair-time `binoc.move`). No-op when nothing
+/// is retracted, which is the common case.
+fn retain_unretracted(tags: &mut BTreeSet<String>, retract_tags: &[String]) {
+    if !retract_tags.is_empty() {
+        tags.retain(|tag| !retract_tags.contains(tag));
+    }
 }
 
 fn reconciled_item_type(line: &ActionLine) -> String {

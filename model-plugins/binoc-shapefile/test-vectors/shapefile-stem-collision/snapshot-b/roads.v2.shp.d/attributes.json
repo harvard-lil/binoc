@@ -1,0 +1,10 @@
+{
+  "columns": [
+    { "name": "road", "type": "character", "width": 16 },
+    { "name": "surface", "type": "character", "width": 12 }
+  ],
+  "rows": [
+    ["Hwy 1", "paved"],
+    ["County 5", "paved"]
+  ]
+}

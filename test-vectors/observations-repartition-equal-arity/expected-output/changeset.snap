@@ -1,0 +1,147 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "observations_2024.csv",
+        "sources": [
+          {
+            "path": "observations_north.csv",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "3 cells changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.content-changed",
+          "binoc.move",
+          "binoc.move.modified"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "year",
+                "from": "2025",
+                "row": 1,
+                "to": "2024"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "region",
+                "from": "north",
+                "row": 1,
+                "to": "south"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "count",
+                "from": "15",
+                "row": 1,
+                "to": "12"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      },
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "observations_2025.csv",
+        "sources": [
+          {
+            "path": "observations_south.csv",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "3 cells changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.content-changed",
+          "binoc.move",
+          "binoc.move.modified"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "year",
+                "from": "2024",
+                "row": 0,
+                "to": "2025"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "region",
+                "from": "south",
+                "row": 0,
+                "to": "north"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "count",
+                "from": "12",
+                "row": 0,
+                "to": "15"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "severity": "suggestion",
+      "code": "binoc.possible_split",
+      "message": [
+        {
+          "text": "'"
+        },
+        {
+          "path": {
+            "value": "observations_north.csv",
+            "snapshot": "from"
+          }
+        },
+        {
+          "text": "' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove"
+        }
+      ],
+      "location": "binoc.pair.partition"
+    }
+  ]
+}

@@ -23,6 +23,16 @@ The serious "don't reimplement" arguments are all per-layer.*
 
 ## The field — overlapping tools (the build-vs-buy evidence)
 
+!!! tip "Companion survey"
+    For a format-by-format catalog of the tools below (CSV, JSON, XML, YAML,
+    code, images, PDF, fonts, databases, geospatial, scientific…) with verified
+    maintenance status, a go-to tool per format, and a column noting which
+    formats binoc currently handles, see
+    [Format-aware diff tools: a field survey](format-aware-diff-tools.md). This
+    section keeps the build-vs-buy framing tied to binoc's claims; that page is
+    the broader landscape.
+
+
 **Container recursion (Moves 0–2).**
 
 - **[diffoscope](https://diffoscope.org/)** (Reproducible Builds; GPL-3,

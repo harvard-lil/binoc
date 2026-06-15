@@ -846,7 +846,10 @@ fn ambiguous_stacked_csv_surfaces_splitter_suggestion_and_falls_back_to_tabular(
         changeset.diagnostics.iter().any(|diagnostic| {
             diagnostic.code == "binoc.table_splitter.ambiguous"
                 && diagnostic.severity == DiagnosticSeverity::Suggestion
-                && diagnostic.message.contains("outside any clear rectangle")
+                && diagnostic
+                    .message
+                    .plain_text()
+                    .contains("outside any clear rectangle")
         }),
         "diagnostics: {:?}",
         changeset.diagnostics

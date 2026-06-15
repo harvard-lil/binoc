@@ -1,0 +1,19 @@
+[vector]
+name = "shapefile-stem-collision"
+description = """
+Two versioned shapefile layers, roads.{shp,shx,dbf} and roads.v2.{shp,shx,dbf}, \
+share a parent directory. They differ only by a `.v2` infix, so the correlation \
+key must keep them apart. `stem_key` strips only the *final* extension, giving \
+distinct basenames `roads` and `roads.v2`, so each .shp anchor fuses with its own \
+sidecars and nothing else: roads.shp binds roads.dbf/roads.shx, roads.v2.shp binds \
+roads.v2.dbf/roads.v2.shx. Each layer's attribute table reflects its own data \
+(roads → lanes, roads.v2 → surface) with no cross-contamination, and no sidecar \
+orphans as a loose node. Pins the fix for CFM-83(e): a first-dot stem key would \
+collapse both sets onto stem 'roads' and let the two anchors fight over roads.dbf, \
+silently misattributing one layer's attributes and orphaning the other's sidecars.
+"""
+tags = ["shapefile", "fusion", "multi-input", "stem-collision", "correlation", "versioned-siblings"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

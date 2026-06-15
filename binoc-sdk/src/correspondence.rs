@@ -44,6 +44,15 @@ pub struct ProjectionHint {
     pub item_type: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// Tags this hint *removes* from the accumulated projection. Tag overlay is
+    /// union-only, so an annotator that supersedes an earlier framing (e.g. a
+    /// CFM-71 container reshape replacing a pair-time `binoc.move`) needs a way to
+    /// drop the now-stale tag — otherwise the IR carries contradictory tags
+    /// (inert in rendering, but incoherent in JSON). A retraction is honored
+    /// whenever tags are merged: the named tags are removed from the result and
+    /// can never be re-introduced by the *same* hint.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retract_tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Summary>,
 }
@@ -68,6 +77,14 @@ impl ProjectionHint {
         self
     }
 
+    /// Declare that this hint retracts `tag` from the accumulated projection —
+    /// used to drop a superseded framing (e.g. a reshape annotator dropping the
+    /// pair-time `binoc.move`). See [`ProjectionHint::retract_tags`].
+    pub fn retract_tag(mut self, tag: impl Into<String>) -> Self {
+        self.retract_tags.push(tag.into());
+        self
+    }
+
     pub fn summary(mut self, summary: impl Into<Summary>) -> Self {
         self.summary = Some(summary.into());
         self
@@ -83,9 +100,22 @@ impl ProjectionHint {
         if self.summary.is_none() {
             self.summary = other.summary.clone();
         }
+        self.merge_tags(other);
+    }
+
+    /// Union `other`'s tags and retractions into `self`, then honor the combined
+    /// retraction set so the result never carries a retracted tag. Shared by
+    /// `merge_from` and `overlay_from` — the single point where tag sets combine.
+    fn merge_tags(&mut self, other: &ProjectionHint) {
         self.tags.extend(other.tags.iter().cloned());
         self.tags.sort();
         self.tags.dedup();
+        self.retract_tags.extend(other.retract_tags.iter().cloned());
+        self.retract_tags.sort();
+        self.retract_tags.dedup();
+        if !self.retract_tags.is_empty() {
+            self.tags.retain(|tag| !self.retract_tags.contains(tag));
+        }
     }
 
     /// Overlay `other` onto `self`: every field `other` sets wins (unlike
@@ -100,9 +130,7 @@ impl ProjectionHint {
         if other.summary.is_some() {
             self.summary = other.summary.clone();
         }
-        self.tags.extend(other.tags.iter().cloned());
-        self.tags.sort();
-        self.tags.dedup();
+        self.merge_tags(other);
     }
 }
 
@@ -311,12 +339,14 @@ impl From<NodeMatch> for MemberMatch {
 /// How the engine groups candidate sibling nodes into one parse-claim input.
 ///
 /// `SharedStem` (the default) groups a container's children by *shared basename
-/// stem under the same parent* — the only generic, format-agnostic grouping
-/// knowledge core needs. The capture/template generalization (for sidecars named
-/// off an anchor stem rather than by exact stem equality, e.g. `data.tif` +
-/// `data.tif.aux.xml`) is a deferred seam; it reuses `DeclaredPair`'s
-/// `selector_captures`/`expand_template` vocabulary. Until a real format needs
-/// it, only `SharedStem` is implemented.
+/// under the same parent*, where the basename is the file name with only its
+/// final extension removed (`roads.v2.shp` and `roads.v2.dbf` share `roads.v2`;
+/// `roads.shp` stays `roads`). This is the only generic, format-agnostic grouping
+/// knowledge core needs, and it keeps versioned sibling sets distinct. The
+/// capture/template generalization (for suffix sidecars named *off* an anchor
+/// stem rather than sharing it, e.g. `data.tif` + `data.tif.aux.xml`) is a
+/// deferred seam; it reuses `DeclaredPair`'s `selector_captures`/`expand_template`
+/// vocabulary. Until a real format needs it, only `SharedStem` is implemented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -779,4 +809,38 @@ pub fn edit_count_summary(edit_count: usize) -> Summary {
         Segment::Uint(edit_count as u64),
         Segment::Text(format!(" edit{}", if edit_count == 1 { "" } else { "s" })),
     ])
+}
+
+#[cfg(test)]
+mod projection_hint_tests {
+    use super::*;
+
+    #[test]
+    fn overlay_retracts_a_superseded_tag() {
+        // A reshape framing supersedes a pair-time move: the move tag must not
+        // survive into the accumulated projection, even though overlay is
+        // otherwise union-only.
+        let mut acc = ProjectionHint::default()
+            .tag("binoc.move")
+            .tag("binoc.keep");
+        let reshape = ProjectionHint::default()
+            .tag("binoc.container-reshape")
+            .retract_tag("binoc.move");
+        acc.overlay_from(&reshape);
+        assert!(acc.tags.contains(&"binoc.container-reshape".to_string()));
+        assert!(acc.tags.contains(&"binoc.keep".to_string()));
+        assert!(!acc.tags.contains(&"binoc.move".to_string()));
+    }
+
+    #[test]
+    fn retraction_holds_regardless_of_union_order() {
+        // Retracting and adding the same tag in one hint: the retraction wins, so
+        // a hint can never both assert and drop a tag.
+        let mut acc = ProjectionHint::default();
+        let hint = ProjectionHint::default()
+            .tag("binoc.move")
+            .retract_tag("binoc.move");
+        acc.merge_from(&hint);
+        assert!(!acc.tags.contains(&"binoc.move".to_string()));
+    }
 }

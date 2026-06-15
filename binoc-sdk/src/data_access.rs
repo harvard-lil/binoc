@@ -18,12 +18,21 @@ use crate::{BinocError, BinocResult, DataAccess, ItemRef};
 /// - [`Self::with_data_root`] — shares an existing `data_root` for artifact
 ///   reads only (no expansion workspace).
 pub struct LocalDataAccess {
+    #[cfg(not(target_family = "wasm"))]
     _session_dir: Option<tempfile::TempDir>,
+    #[cfg(target_family = "wasm")]
+    _session_dir: Option<PathBuf>,
     data_root: PathBuf,
     external_root: Option<PathBuf>,
     workspace_counter: AtomicU32,
+    #[cfg(not(target_family = "wasm"))]
     workspaces: Mutex<Vec<tempfile::TempDir>>,
+    #[cfg(target_family = "wasm")]
+    workspaces: Mutex<Vec<PathBuf>>,
+    #[cfg(not(target_family = "wasm"))]
     provide_dir: Mutex<Option<tempfile::TempDir>>,
+    #[cfg(target_family = "wasm")]
+    provide_dir: Mutex<Option<PathBuf>>,
     path_policy: PathPolicy,
 }
 
@@ -60,6 +69,44 @@ fn subject_dir_name(subject: ArtifactSubject) -> &'static str {
     }
 }
 
+#[cfg(target_family = "wasm")]
+fn policy_path(path: &Path) -> BinocResult<PathBuf> {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Prefix(_) => {}
+            std::path::Component::RootDir => {}
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::Normal(part) => out.push(part),
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn policy_path(path: &Path) -> BinocResult<PathBuf> {
+    std::fs::canonicalize(path).map_err(BinocError::Io)
+}
+
+#[cfg(target_family = "wasm")]
+fn wasm_session_dir(prefix: &str) -> PathBuf {
+    let id: u64 = rand::random();
+    PathBuf::from(".binoc-tmp").join(format!("{prefix}-{id:016x}"))
+}
+
+#[cfg(target_family = "wasm")]
+fn temp_path(dir: &Path) -> &Path {
+    dir
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn temp_path(dir: &tempfile::TempDir) -> &Path {
+    dir.path()
+}
+
 /// True when `path` is `root` or a descendant (component-wise).
 fn path_is_within(path: &Path, root: &Path) -> bool {
     path.starts_with(root)
@@ -78,6 +125,7 @@ fn item_ref_from_physical(physical: &Path, logical: &str) -> ItemRef {
 }
 
 impl LocalDataAccess {
+    #[cfg(not(target_family = "wasm"))]
     pub fn new() -> Self {
         let session = tempfile::tempdir().expect("failed to create session temp dir");
         let data_root = session.path().to_path_buf();
@@ -92,9 +140,25 @@ impl LocalDataAccess {
         }
     }
 
+    #[cfg(target_family = "wasm")]
+    pub fn new() -> Self {
+        let data_root = wasm_session_dir("session");
+        std::fs::create_dir_all(&data_root).expect("failed to create session temp dir");
+        Self {
+            _session_dir: Some(data_root.clone()),
+            data_root,
+            external_root: None,
+            workspace_counter: AtomicU32::new(0),
+            workspaces: Mutex::new(Vec::new()),
+            provide_dir: Mutex::new(None),
+            path_policy: PathPolicy::Unrestricted,
+        }
+    }
+
     /// Session-backed access with path confinement: filesystem reads and
     /// `register_local` targets must lie under the snapshot roots, the session
     /// `data_root`, or a workspace / provide directory created by this instance.
+    #[cfg(not(target_family = "wasm"))]
     pub fn new_for_diff(snapshot_a: &Path, snapshot_b: &Path) -> BinocResult<Self> {
         let session = tempfile::tempdir().map_err(BinocError::Io)?;
         let data_root = session.path().to_path_buf();
@@ -104,6 +168,28 @@ impl LocalDataAccess {
         Ok(Self {
             _session_dir: Some(session),
             data_root,
+            external_root: None,
+            workspace_counter: AtomicU32::new(0),
+            workspaces: Mutex::new(Vec::new()),
+            provide_dir: Mutex::new(None),
+            path_policy: PathPolicy::Restricted {
+                snapshot_a: snap_a,
+                snapshot_b: snap_b,
+                extra_allowed: Mutex::new(vec![data_root_canon]),
+            },
+        })
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub fn new_for_diff(snapshot_a: &Path, snapshot_b: &Path) -> BinocResult<Self> {
+        let data_root = wasm_session_dir("session");
+        std::fs::create_dir_all(&data_root).map_err(BinocError::Io)?;
+        let snap_a = policy_path(snapshot_a)?;
+        let snap_b = policy_path(snapshot_b)?;
+        let data_root_canon = policy_path(&data_root)?;
+        Ok(Self {
+            _session_dir: Some(data_root),
+            data_root: data_root_canon.clone(),
             external_root: None,
             workspace_counter: AtomicU32::new(0),
             workspaces: Mutex::new(Vec::new()),
@@ -147,7 +233,7 @@ impl LocalDataAccess {
 
     fn record_allowed_if_restricted(&self, path: &Path) -> BinocResult<()> {
         if let PathPolicy::Restricted { extra_allowed, .. } = &self.path_policy {
-            let c = std::fs::canonicalize(path).map_err(BinocError::Io)?;
+            let c = policy_path(path)?;
             extra_allowed.lock().unwrap().push(c);
         }
         Ok(())
@@ -180,11 +266,12 @@ impl LocalDataAccess {
 
     /// Enforce policy for a path that must already exist on disk (e.g. `register_local`).
     fn enforce_path_policy(&self, physical: &Path) -> BinocResult<()> {
-        let resolved = std::fs::canonicalize(physical).map_err(BinocError::Io)?;
+        let resolved = policy_path(physical)?;
         self.enforce_path_policy_resolved(&resolved)
     }
 
     /// Enforce policy before reading; allows missing leaf paths under an allowed directory.
+    #[cfg(not(target_family = "wasm"))]
     fn enforce_policy_for_read_path(&self, path: &Path) -> BinocResult<()> {
         match &self.path_policy {
             PathPolicy::Unrestricted => Ok(()),
@@ -212,6 +299,14 @@ impl LocalDataAccess {
         }
     }
 
+    #[cfg(target_family = "wasm")]
+    fn enforce_policy_for_read_path(&self, path: &Path) -> BinocResult<()> {
+        match &self.path_policy {
+            PathPolicy::Unrestricted => Ok(()),
+            PathPolicy::Restricted { .. } => self.enforce_path_policy_resolved(&policy_path(path)?),
+        }
+    }
+
     fn ensure_provide_dir(&self) -> BinocResult<PathBuf> {
         if let Some(root) = &self.external_root {
             let d = root.join("_provide");
@@ -221,11 +316,18 @@ impl LocalDataAccess {
         }
         let mut guard = self.provide_dir.lock().unwrap();
         if guard.is_none() {
+            #[cfg(not(target_family = "wasm"))]
             let dir = tempfile::tempdir().map_err(BinocError::Io)?;
-            self.record_allowed_if_restricted(dir.path())?;
+            #[cfg(target_family = "wasm")]
+            let dir = {
+                let dir = wasm_session_dir("provide");
+                std::fs::create_dir_all(&dir).map_err(BinocError::Io)?;
+                dir
+            };
+            self.record_allowed_if_restricted(temp_path(&dir))?;
             *guard = Some(dir);
         }
-        Ok(guard.as_ref().unwrap().path().to_path_buf())
+        Ok(temp_path(guard.as_ref().unwrap()).to_path_buf())
     }
 }
 
@@ -272,8 +374,15 @@ impl DataAccess for LocalDataAccess {
             self.record_allowed_if_restricted(&subdir)?;
             return Ok(subdir);
         }
+        #[cfg(not(target_family = "wasm"))]
         let dir = tempfile::tempdir().map_err(BinocError::Io)?;
-        let path = dir.path().to_path_buf();
+        #[cfg(target_family = "wasm")]
+        let dir = {
+            let dir = wasm_session_dir("workspace");
+            std::fs::create_dir_all(&dir).map_err(BinocError::Io)?;
+            dir
+        };
+        let path = temp_path(&dir).to_path_buf();
         self.record_allowed_if_restricted(&path)?;
         self.workspaces.lock().unwrap().push(dir);
         Ok(path)

@@ -1,0 +1,17 @@
+[vector]
+name = "shapefile-fusion-equal-arity-tiebreak"
+description = """
+Two equal-arity (5-member) fusing shapefile claims in one directory: roads.{shp,\
+shx,dbf,prj} and rivers.{shp,shx,dbf,prj}, distinct stems. The fusing parser \
+fires once per .shp anchor; shared-stem correlation partitions each member set to \
+its own anchor with no contention, so the two layers fuse independently. roads \
+grows a feature (geometry + attribute row) while rivers keeps its geometry and \
+flips one attribute cell — and each change lands under its own layer with no \
+cross-contamination of members. Pins the equal-arity multi-layer boundary: two \
+arity-5 claims coexist, each subsuming only its own sidecars.
+"""
+tags = ["shapefile", "fusion", "multi-input", "equal-arity", "tiebreak", "subsume"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

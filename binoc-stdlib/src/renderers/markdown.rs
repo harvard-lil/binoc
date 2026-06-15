@@ -198,7 +198,7 @@ fn format_diagnostics_section(
     out.push_str(&format!("## {title}\n\n"));
     for diagnostic in matching {
         out.push_str("- ");
-        out.push_str(&humanize_numbers(&diagnostic.message));
+        out.push_str(&render_summary(&diagnostic.message));
         if let Some(location) = &diagnostic.location {
             out.push_str(&format!(" (`{location}`)"));
         }
@@ -1255,15 +1255,15 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+/// Insert US-style thousands separators into every run of more than three
+/// digits in `input`. Called only on bare numeric strings produced by the typed
+/// render path (`render_summary`'s `Uint` arm and `format_float`), so no
+/// identifier/filename guarding is needed — `Path`/`Text` segments are rendered
+/// verbatim and never reach this function.
 fn humanize_numbers(input: &str) -> String {
     // Locale-aware formatting is intentionally out of scope for now; this is US-style grouping.
     let chars: Vec<char> = input.chars().collect();
     let mut out = String::with_capacity(input.len() + input.len() / 3);
-
-    // A digit run that abuts a letter, underscore, or filename-style `.ext` is
-    // part of an identifier (e.g. `actions_2023.csv`), not a quantity — grouping
-    // it would corrupt the token. Only group standalone numbers.
-    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
 
     let mut idx = 0;
     while idx < chars.len() {
@@ -1272,18 +1272,8 @@ fn humanize_numbers(input: &str) -> String {
             while idx < chars.len() && chars[idx].is_ascii_digit() {
                 idx += 1;
             }
-            let before_ident = start > 0 && is_ident(chars[start - 1]);
-            let after = chars.get(idx).copied();
-            let after_ident = match after {
-                Some(c) if is_ident(c) => true,
-                // A `.` followed by an alphanumeric reads as a file extension.
-                Some('.') => chars
-                    .get(idx + 1)
-                    .is_some_and(|c| c.is_ascii_alphanumeric()),
-                _ => false,
-            };
             let digits: String = chars[start..idx].iter().collect();
-            if digits.len() > 3 && !before_ident && !after_ident {
+            if digits.len() > 3 {
                 out.push_str(&group_thousands(&digits));
             } else {
                 out.push_str(&digits);
@@ -1324,17 +1314,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn humanize_numbers_groups_only_standalone_quantities() {
-        // Standalone quantities are grouped...
-        assert_eq!(humanize_numbers("12345 rows"), "12,345 rows");
-        assert_eq!(humanize_numbers("row 1234 of 56789"), "row 1,234 of 56,789");
-        // ...but identifier- and filename-embedded digit runs are left intact.
-        assert_eq!(
-            humanize_numbers("'actions_2023.csv' shares rows"),
-            "'actions_2023.csv' shares rows"
+    fn humanize_numbers_groups_runs_over_three_digits() {
+        assert_eq!(humanize_numbers("12345"), "12,345");
+        assert_eq!(humanize_numbers("1234 56789"), "1,234 56,789");
+        assert_eq!(humanize_numbers("123"), "123");
+    }
+
+    #[test]
+    fn diagnostic_summary_renders_filename_safely_with_grouped_count() {
+        // A diagnostic that embeds a year-bearing filename (as a typed `Path`)
+        // alongside a genuine standalone count (a `Uint`): the filename's digits
+        // must survive verbatim while the count is digit-grouped. This is the
+        // case the old `humanize_numbers` identifier-guard existed to handle;
+        // typing the channel makes it structural rather than a prose-scan rule.
+        let diagnostic = Diagnostic::warning(
+            "binoc.possible_split",
+            Summary::new()
+                .text("'")
+                .path("actions_2023.csv", Side::From)
+                .text("' shares ")
+                .count(12345, "row")
+                .text(" with the split"),
         );
-        assert_eq!(humanize_numbers("2023.csv"), "2023.csv");
-        assert_eq!(humanize_numbers("col12345"), "col12345");
+        let rendered = render_summary(&diagnostic.message);
+        assert_eq!(
+            rendered,
+            "'actions_2023.csv' shares 12,345 rows with the split"
+        );
+        // The filename's 2023 is untouched; only the standalone count is grouped.
+        assert!(rendered.contains("actions_2023.csv"));
+        assert!(!rendered.contains("2,023"));
+        assert!(rendered.contains("12,345 rows"));
     }
 
     #[test]

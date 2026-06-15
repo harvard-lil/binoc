@@ -295,7 +295,9 @@ class TestChangeset:
                 {
                     'severity': 'suggestion',
                     'code': 'binoc.binary-fallback',
-                    'message': 'Compared as binary; a plugin may provide a more semantic diff.',
+                    'message': [
+                        {'text': 'Compared as binary; a plugin may provide a more semantic diff.'}
+                    ],
                     'location': 'data.bin',
                 }
             ],

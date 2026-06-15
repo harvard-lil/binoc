@@ -1,0 +1,210 @@
+.browser-demo {
+  width: min(1180px, 100%);
+  margin: 1.5rem auto;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--md-default-bg-color);
+}
+
+body:has([data-browser-demo]) .md-main__inner.md-grid {
+  max-width: 88rem;
+}
+
+body:has([data-browser-demo]) .md-sidebar--secondary {
+  display: none;
+}
+
+body:has([data-browser-demo]) .md-content__inner {
+  max-width: none;
+}
+
+.browser-demo__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  background: color-mix(in srgb, var(--md-default-bg-color) 88%, var(--md-primary-fg-color) 12%);
+}
+
+.browser-demo__select {
+  min-width: 18rem;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 4px;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  font: inherit;
+}
+
+.browser-demo__status {
+  min-width: 10rem;
+  text-align: right;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+}
+
+.browser-demo__grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(260px, 1fr) minmax(320px, 1.2fr);
+  min-height: 560px;
+}
+
+.browser-demo__pane {
+  min-width: 0;
+  border-right: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.browser-demo__pane:last-child {
+  border-right: 0;
+}
+
+.browser-demo__pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  font-weight: 700;
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+
+.browser-demo__tree {
+  height: 522px;
+  overflow: auto;
+  padding: 0.45rem;
+}
+
+.browser-demo__tree button {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: 4px;
+  color: var(--md-default-fg-color);
+  background: transparent;
+  font-family: var(--md-code-font-family);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.browser-demo__tree button:hover,
+.browser-demo__tree button[aria-current="true"] {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 14%, transparent);
+}
+
+.browser-demo__content {
+  height: 522px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--md-code-bg-color) 80%, var(--md-default-bg-color) 20%);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.browser-demo__terminal {
+  display: flex;
+  flex-direction: column;
+  height: 522px;
+  background: #101418;
+  color: #d7e1ea;
+}
+
+.browser-demo__terminal-output {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  color: #d7e1ea !important;
+  background: transparent;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.browser-demo__terminal-form {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem;
+  border-top: 1px solid #26313b;
+}
+
+.browser-demo__prompt {
+  color: #7ed7a5;
+  font-family: var(--md-code-font-family);
+  font-size: 0.75rem;
+}
+
+.browser-demo__input {
+  min-width: 0;
+  border: 1px solid #3a4652;
+  border-radius: 4px;
+  padding: 0.35rem 0.45rem;
+  color: #f4f7fa;
+  background: #171d23;
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+}
+
+.browser-demo__run {
+  min-width: 3.5rem;
+  min-height: 32px;
+  border: 1px solid #5e7282;
+  border-radius: 4px;
+  color: #f4f7fa;
+  background: #26313b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.browser-demo__run:disabled,
+.browser-demo__input:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+@media (max-width: 1040px) {
+  .browser-demo__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .browser-demo__pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  }
+
+  .browser-demo__tree,
+  .browser-demo__content,
+  .browser-demo__terminal {
+    height: 360px;
+  }
+}
+
+@media (max-width: 640px) {
+  .browser-demo__bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .browser-demo__select {
+    min-width: 0;
+  }
+
+  .browser-demo__status {
+    min-width: 0;
+    text-align: left;
+  }
+}

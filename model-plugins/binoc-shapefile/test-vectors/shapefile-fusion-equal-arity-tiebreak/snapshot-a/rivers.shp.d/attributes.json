@@ -1,0 +1,10 @@
+{
+  "columns": [
+    { "name": "name", "type": "character", "width": 16 },
+    { "name": "navigable", "type": "logical" }
+  ],
+  "rows": [
+    ["Blue Creek", true],
+    ["Green Brook", false]
+  ]
+}

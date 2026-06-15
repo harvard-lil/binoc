@@ -172,7 +172,11 @@ expression: "&stable_changeset"
     {
       "severity": "warning",
       "code": "binoc.keyed_row_identity_degraded",
-      "message": "configured row keys had null values; fell back to positional row comparison",
+      "message": [
+        {
+          "text": "configured row keys had null values; fell back to positional row comparison"
+        }
+      ],
       "location": "binoc.write.tabular"
     }
   ]

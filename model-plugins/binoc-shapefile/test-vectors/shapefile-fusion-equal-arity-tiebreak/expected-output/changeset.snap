@@ -1,0 +1,207 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "Shapefile layer",
+        "path": "rivers.shp",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "rivers.shp/>attributes",
+            "sources": [
+              {
+                "path": "rivers.shp/>attributes",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 cell changed"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "column": "navigable",
+                    "from": false,
+                    "row": 1,
+                    "to": true
+                  },
+                  "verb": "tabular.edit_cell"
+                }
+              ]
+            }
+          },
+          {
+            "action": "modify",
+            "item_type": "shapefile",
+            "path": "rivers.shp/>geometry",
+            "sources": [
+              {
+                "path": "rivers.shp/>geometry",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Document values changed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed",
+              "binoc.document-value-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "changes": [
+                      {
+                        "from": "11.0",
+                        "kind": "replace",
+                        "path": "$.bbox.max_x",
+                        "to": "12.0"
+                      },
+                      {
+                        "from": "11.0",
+                        "kind": "replace",
+                        "path": "$.bbox.max_y",
+                        "to": "12.0"
+                      },
+                      {
+                        "from": "2",
+                        "kind": "replace",
+                        "path": "$.feature_count",
+                        "to": "3"
+                      }
+                    ],
+                    "examples_truncated": false
+                  },
+                  "verb": "document.value_change"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "action": "modify",
+        "item_type": "Shapefile layer",
+        "path": "roads.shp",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "roads.shp/>attributes",
+            "sources": [
+              {
+                "path": "roads.shp/>attributes",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added"
+              }
+            ],
+            "tags": [
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "Pine Rd",
+                        1.0
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          },
+          {
+            "action": "modify",
+            "item_type": "shapefile",
+            "path": "roads.shp/>geometry",
+            "sources": [
+              {
+                "path": "roads.shp/>geometry",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Document values changed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed",
+              "binoc.document-value-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "changes": [
+                      {
+                        "from": "1.0",
+                        "kind": "replace",
+                        "path": "$.bbox.max_x",
+                        "to": "2.0"
+                      },
+                      {
+                        "from": "1.0",
+                        "kind": "replace",
+                        "path": "$.bbox.max_y",
+                        "to": "2.0"
+                      },
+                      {
+                        "from": "2",
+                        "kind": "replace",
+                        "path": "$.feature_count",
+                        "to": "3"
+                      }
+                    ],
+                    "examples_truncated": false
+                  },
+                  "verb": "document.value_change"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
