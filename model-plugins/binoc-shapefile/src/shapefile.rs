@@ -68,17 +68,17 @@ impl ParseRule for ShapefileParseRule {
 /// structured-document writer reports changes by path (`$.feature_count`,
 /// `$.geometry_type`, `$.bbox.min_x`, ...), so these names are the diff surface.
 #[derive(Debug, serde::Serialize)]
-struct ShapefileSummary {
+pub(crate) struct ShapefileSummary {
     /// Number of features (shape records) in the `.shp`.
-    feature_count: usize,
+    pub(crate) feature_count: usize,
     /// The single geometry type of the file (shapefiles cannot mix types).
-    geometry_type: &'static str,
+    pub(crate) geometry_type: &'static str,
     /// Overall 2-D bounding box from the `.shp` header.
-    bbox: BBox,
+    pub(crate) bbox: BBox,
 }
 
 #[derive(Debug, serde::Serialize)]
-struct BBox {
+pub(crate) struct BBox {
     min_x: f64,
     min_y: f64,
     max_x: f64,
@@ -91,7 +91,7 @@ struct BBox {
 /// requires neither the `.shx` index nor the `.dbf` attribute table. The
 /// geometry type and bounding box come from the file header (no full scan
 /// needed for those); the feature count comes from counting the shape records.
-fn read_shp_summary(bytes: &[u8]) -> BinocResult<ShapefileSummary> {
+pub(crate) fn read_shp_summary(bytes: &[u8]) -> BinocResult<ShapefileSummary> {
     let mut reader = ShapeReader::new(Cursor::new(bytes))
         .map_err(|e| BinocError::Other(format!("open shapefile geometry: {e}")))?;
 

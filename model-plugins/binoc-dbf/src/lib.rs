@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use binoc_sdk::{CoreRule, CorrespondenceEngineConfig};
 
-pub use dbf::DbfParseRule;
+pub use dbf::{read_dbf_tabular, DbfParseRule};
 
 /// Register this pack's parse rules and writers into an engine config.
 pub fn register_correspondence_rules(config: &mut CorrespondenceEngineConfig) {

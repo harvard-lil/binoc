@@ -5,9 +5,9 @@ use std::time::Instant;
 
 use binoc_sdk::{
     ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig,
-    DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule, ExtractResult, ItemRef,
-    LinkCtx, LinkRef, NodeId, ParseOutput, ParseRule, ProjectionAnnotator, ShapeFilter, TreeSide,
-    WriterDescriptor,
+    DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule, ExtractResult, GlobalClaim,
+    IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef, NodeId, ParseGroup, ParseOutput,
+    ParseRule, ProjectionAnnotator, ShapeFilter, TreeSide, WriterDescriptor,
 };
 use rayon::prelude::*;
 
@@ -99,6 +99,10 @@ pub struct CorrespondenceRunResult {
     pub edit_lists: BTreeMap<usize, Vec<Edit>>,
     pub annotators: Vec<Arc<dyn ProjectionAnnotator>>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Global, non-tree claims asserted about the final link graph (CFM-72) —
+    /// e.g. a tabular split/merge. Collected from each pair rule's `final_claims`
+    /// and hoisted onto `Changeset.claims` by the controller.
+    pub claims: Vec<GlobalClaim>,
     pub stats: RunStats,
 }
 
@@ -319,7 +323,14 @@ fn run_inner(
         .collect();
 
     let mut expanded: BTreeSet<(u8, u32)> = BTreeSet::new();
+    // A *successful* parse memoizes per (node, output format): first claim wins
+    // for that format on that node, so no other same-format rule re-parses it.
     let mut parsed: BTreeSet<(u8, u32, binoc_sdk::ArtifactFormat)> = BTreeSet::new();
+    // A *declined* parse memoizes per (node, output format, RULE) so the same
+    // rule is not retried, while leaving the format free for a different rule.
+    // This is what lets a fusing claim decline a bare/invalid group and still
+    // have the single-input parser (same output format) claim the node (CFM-83).
+    let mut declined: BTreeSet<(u8, u32, binoc_sdk::ArtifactFormat, String)> = BTreeSet::new();
 
     fn key(side: TreeSide, index: u32) -> (u8, u32) {
         (
@@ -331,6 +342,38 @@ fn run_inner(
         )
     }
 
+    // Per-round rule processing order (CFM-83). Parse rules are attempted
+    // arity-descending so the *largest* claim is offered a member first; a
+    // successful claim subsumes its members before any smaller claim's dispatch
+    // scan runs in the same round, and a decline releases them to the next.
+    // Registration order is the stable tiebreak within an arity. Expand and Pair
+    // rules keep their original positions — subsumption only orders parse↔parse.
+    let rule_order: Vec<usize> = {
+        let mut parse_indices: Vec<usize> = config
+            .rules
+            .iter()
+            .enumerate()
+            .filter_map(|(i, rule)| matches!(rule, CoreRule::Parse(_)).then_some(i))
+            .collect();
+        parse_indices.sort_by(|&a, &b| {
+            let arity = |i: usize| match &config.rules[i] {
+                CoreRule::Parse(rule) => binoc_sdk::parse_arity(rule.as_ref()),
+                _ => 0,
+            };
+            arity(b).cmp(&arity(a)).then(a.cmp(&b))
+        });
+        let mut parse_iter = parse_indices.into_iter();
+        config
+            .rules
+            .iter()
+            .enumerate()
+            .map(|(i, rule)| match rule {
+                CoreRule::Parse(_) => parse_iter.next().expect("parse index"),
+                _ => i,
+            })
+            .collect()
+    };
+
     loop {
         stats.rounds += 1;
         let round = stats.rounds;
@@ -341,7 +384,8 @@ fn run_inner(
             TreeSide::Right => frontier[1],
         };
 
-        for (rule_index, rule) in config.rules.iter().enumerate() {
+        for &rule_index in &rule_order {
+            let rule = &config.rules[rule_index];
             match rule {
                 CoreRule::Expand(rule) => {
                     let descriptor = rule.descriptor();
@@ -349,6 +393,11 @@ fn run_inner(
                     for side in [TreeSide::Left, TreeSide::Right] {
                         for index in 0..frontier_of(side) {
                             if expanded.contains(&key(side, index)) {
+                                continue;
+                            }
+                            // A subsumed member is folded into a fusing result
+                            // node; it leaves the dispatch frontier entirely.
+                            if store.tree(side).is_subsumed(index) {
                                 continue;
                             }
                             let item = &store.tree(side).node(index).item;
@@ -436,11 +485,28 @@ fn run_inner(
                 }
                 CoreRule::Parse(rule) => {
                     let descriptor = rule.descriptor();
+                    let extra_members = rule.extra_members();
                     let mut jobs = Vec::new();
                     for side in [TreeSide::Left, TreeSide::Right] {
                         for index in 0..frontier_of(side) {
                             let parsed_key = (key(side, index).0, index, descriptor.output.clone());
                             if parsed.contains(&parsed_key) {
+                                continue;
+                            }
+                            // This rule already declined this node — don't retry
+                            // it (but a different same-format rule still may).
+                            let declined_key = (
+                                parsed_key.0,
+                                parsed_key.1,
+                                parsed_key.2.clone(),
+                                descriptor.name.clone(),
+                            );
+                            if declined.contains(&declined_key) {
+                                continue;
+                            }
+                            // A node already folded into a fusing result node is
+                            // off the frontier — never the anchor of a new claim.
+                            if store.tree(side).is_subsumed(index) {
                                 continue;
                             }
                             let id = NodeId { side, index };
@@ -455,6 +521,22 @@ fn run_inner(
                             {
                                 continue;
                             }
+                            // Assemble the correlated member group. For a
+                            // single-input rule this is just the anchor; for a
+                            // fusing rule, gather same-parent siblings sharing the
+                            // anchor's stem and fill each declared slot by its
+                            // NodeMatch. A missing *required* member means no group
+                            // forms — the anchor is not offered to this claim this
+                            // round (it may form once the sibling appears, or fall
+                            // through to a smaller claim).
+                            let (group, member_indices) = if extra_members.is_empty() {
+                                (ParseGroup::single(item.clone()), Vec::new())
+                            } else {
+                                match assemble_group(&store, side, index, &extra_members) {
+                                    Some(group) => group,
+                                    None => continue,
+                                }
+                            };
                             RunStats::bump(&mut stats.invocations, &descriptor.name);
                             let beneath = store.beneath_settled(side, index, true);
                             if beneath && !descriptor.fires_beneath_settled {
@@ -465,7 +547,8 @@ fn run_inner(
                                 id,
                                 parsed_key,
                                 beneath,
-                                item: item.clone(),
+                                group,
+                                member_indices,
                             });
                         }
                     }
@@ -489,7 +572,14 @@ fn run_inner(
                                     &descriptor.name,
                                     vec![diagnostic],
                                 );
-                                parsed.insert(result.parsed_key);
+                                // Rule-scoped: an erroring rule does not block a
+                                // different same-format rule from trying the node.
+                                declined.insert((
+                                    result.parsed_key.0,
+                                    result.parsed_key.1,
+                                    result.parsed_key.2.clone(),
+                                    descriptor.name.clone(),
+                                ));
                                 continue;
                             }
                         };
@@ -498,14 +588,22 @@ fn run_inner(
                             &descriptor.name,
                             output.diagnostics,
                         );
-                        // A parse rule may decline a node by returning empty bytes
-                        // and no children — a content self-filter. This publishes
-                        // no artifact (freeing the output format) but memoizes the
-                        // decision so the rule is not retried. Used, e.g., by the
-                        // JSON parsers to split record collections (-> tabular)
-                        // from everything else (-> structured_document).
+                        // A parse rule may decline a node (or a fusing group) by
+                        // returning empty bytes and no children — a content
+                        // self-filter. This publishes no artifact, leaving the
+                        // output format free for another rule, but rule-scopes the
+                        // decision so this rule is not retried. Used by the JSON
+                        // parsers to split record collections (-> tabular) from
+                        // everything else (-> structured_document), and by the
+                        // shapefile fusing claim to release a bare/invalid group to
+                        // the single-input parser (CFM-83).
                         if output.bytes.is_empty() && output.children.is_empty() {
-                            parsed.insert(result.parsed_key);
+                            declined.insert((
+                                result.parsed_key.0,
+                                result.parsed_key.1,
+                                result.parsed_key.2.clone(),
+                                descriptor.name.clone(),
+                            ));
                             continue;
                         }
                         // Let the parse rule name the node it just decomposed
@@ -572,6 +670,17 @@ fn run_inner(
                                 store.add_artifact(child_id, artifact);
                             }
                         }
+                        // The claim validated: fold its non-anchor members into
+                        // this result node (CFM-83 subsume). A flag, not a
+                        // deletion — members keep their NodeIds and survive as the
+                        // result node's provenance, but leave the dispatch frontier
+                        // and the sibling projection. Two-phase: we only reach here
+                        // after a non-empty parse, so a declined group never folds.
+                        for &member_index in &result.member_indices {
+                            store
+                                .tree_mut(result.id.side)
+                                .subsume(member_index, result.id.index);
+                        }
                         parsed.insert(result.parsed_key);
                         RunStats::bump(&mut stats.fires, &descriptor.name);
                         if result.beneath {
@@ -604,7 +713,11 @@ fn run_inner(
                     RunStats::bump(&mut stats.invocations, &descriptor.name);
                     let started = Instant::now();
                     let output = {
-                        let view = CoreEngineView::new(&store, descriptor.sees_beneath_settled);
+                        let view = CoreEngineView::with_identity(
+                            &store,
+                            descriptor.sees_beneath_settled,
+                            &config.identity_extractors,
+                        );
                         rule.propose(&view, data)?
                     };
                     append_rule_diagnostics(&mut diagnostics, &descriptor.name, output.diagnostics);
@@ -715,8 +828,9 @@ fn run_inner(
         }
     }
 
+    let mut claims = Vec::new();
     {
-        let view = CoreEngineView::new(&store, false);
+        let view = CoreEngineView::with_identity(&store, false, &config.identity_extractors);
         for rule in &config.rules {
             if let CoreRule::Pair(pair_rule) = rule {
                 let descriptor = pair_rule.descriptor();
@@ -725,6 +839,7 @@ fn run_inner(
                     &descriptor.name,
                     pair_rule.final_diagnostics(&view, data)?,
                 );
+                claims.extend(pair_rule.final_claims(&view, data)?);
             }
         }
     }
@@ -748,6 +863,14 @@ fn run_inner(
                 index: link.right,
             };
             if !view.visible(left_id) || !view.visible(right_id) {
+                edit_lists.insert(index, Vec::new());
+                continue;
+            }
+            // A subsumed member is folded into a fusing result node; its own link
+            // (e.g. a `roads.dbf` ↔ `roads.dbf` name pairing that formed before
+            // the shapefile claim subsumed it) contributes no edits and is not
+            // dispatched to per-artifact writers (CFM-81 + CFM-83).
+            if store.is_subsumed(left_id) || store.is_subsumed(right_id) {
                 edit_lists.insert(index, Vec::new());
                 continue;
             }
@@ -957,6 +1080,7 @@ fn run_inner(
         edit_lists,
         annotators: config.annotators.clone(),
         diagnostics,
+        claims,
         stats,
     })
 }
@@ -998,10 +1122,17 @@ fn run_expand_jobs(
 
 #[derive(Debug, Clone)]
 struct ParseJob {
+    /// The anchor node (the required, defining member — e.g. the `.shp`). The
+    /// parse result, artifacts, and any subsumption all attribute to this node.
     id: NodeId,
     parsed_key: (u8, u32, ArtifactFormat),
     beneath: bool,
-    item: ItemRef,
+    /// The resolved member group handed to `parse_group`. For a single-input
+    /// rule this is just the anchor (`ParseGroup::single`).
+    group: ParseGroup,
+    /// Non-anchor member node indices (same side as the anchor) to subsume when
+    /// the claim succeeds. Empty for a single-input claim.
+    member_indices: Vec<u32>,
 }
 
 struct ParseJobResult {
@@ -1009,6 +1140,7 @@ struct ParseJobResult {
     parsed_key: (u8, u32, ArtifactFormat),
     beneath: bool,
     item: ItemRef,
+    member_indices: Vec<u32>,
     output: BinocResult<ParseOutput>,
 }
 
@@ -1022,8 +1154,9 @@ fn run_parse_jobs(
         id: job.id,
         parsed_key: job.parsed_key.clone(),
         beneath: job.beneath,
-        item: job.item.clone(),
-        output: rule.parse(&job.item, data),
+        item: job.group.anchor.clone(),
+        member_indices: job.member_indices.clone(),
+        output: rule.parse_group(&job.group, data),
     };
     match execution {
         ExecutionMode::Serial => jobs.iter().map(run_one).collect(),
@@ -1036,6 +1169,91 @@ fn run_parse_jobs(
 
 fn should_parallelize_parse(job_count: usize) -> bool {
     (PARALLEL_PARSE_MIN_JOBS..=PARALLEL_PARSE_MAX_JOBS).contains(&job_count)
+}
+
+/// The shared-stem grouping key for a logical path (CFM-83 default correlation).
+///
+/// The stem is the file name up to (but not including) its first `.`, compared
+/// case-insensitively. So `roads.shp`, `roads.shx`, `roads.dbf`, `roads.prj`
+/// share stem `roads` and group together, while `rivers.shp` does not. Using the
+/// *first* dot (rather than the last) is what lets a `.shp` bind to a `.dbf`
+/// without either extension being special-cased here — the engine stays
+/// format-agnostic (see the ADR's Open Question on correlation precision).
+///
+/// Lower-cased for case-insensitive correlation (`.SHP` groups with `.dbf`); the
+/// per-slot `NodeMatch` still owns extension matching, which is itself
+/// lower-cased by `ItemRef::extension`.
+fn stem_key(logical_path: &str) -> String {
+    let name = binoc_sdk::file_name(logical_path);
+    let stem = name.split('.').next().unwrap_or(name);
+    stem.to_lowercase()
+}
+
+/// Assemble the correlated member group anchored at `(side, anchor)` for a
+/// multi-input claim (CFM-83 default `SharedStem` correlation).
+///
+/// Walks the anchor's parent container's children once (O(n)), keeping siblings
+/// whose stem matches the anchor's, and fills each declared `extra_member` slot
+/// with the first such sibling that satisfies the slot's `NodeMatch` and is not
+/// already used by an earlier slot or subsumed. Returns the assembled
+/// [`ParseGroup`] (anchor + filled/empty slots, in descriptor order) plus the
+/// non-anchor member node indices to subsume on success. Returns `None` when a
+/// **required** non-anchor slot cannot be filled — no group forms.
+fn assemble_group(
+    store: &Store,
+    side: TreeSide,
+    anchor: u32,
+    extra_members: &[binoc_sdk::MemberMatch],
+) -> Option<(ParseGroup, Vec<u32>)> {
+    let tree = store.tree(side);
+    let anchor_node = tree.node(anchor);
+    let anchor_stem = stem_key(&anchor_node.item.logical_path);
+
+    // Candidate siblings: same parent container, shared stem, not the anchor,
+    // not already subsumed. The anchor has a parent in every real scenario (a
+    // file set lives inside a directory/archive); a parentless anchor simply has
+    // no candidates, so a required extra member fails the group cleanly.
+    let candidates: Vec<u32> = match anchor_node.parent {
+        Some(parent) => tree
+            .node(parent)
+            .children
+            .iter()
+            .copied()
+            .filter(|&child| {
+                child != anchor
+                    && !tree.is_subsumed(child)
+                    && stem_key(&tree.node(child).item.logical_path) == anchor_stem
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+
+    let mut members: Vec<Option<ItemRef>> = vec![Some(anchor_node.item.clone())];
+    let mut member_indices: Vec<u32> = Vec::new();
+    let mut used: Vec<u32> = Vec::new();
+
+    for slot in extra_members {
+        let filled = candidates.iter().copied().find(|&candidate| {
+            !used.contains(&candidate) && slot.matcher.matches(&tree.node(candidate).item)
+        });
+        match filled {
+            Some(candidate) => {
+                used.push(candidate);
+                member_indices.push(candidate);
+                members.push(Some(tree.node(candidate).item.clone()));
+            }
+            None if slot.required => return None,
+            None => members.push(None),
+        }
+    }
+
+    Some((
+        ParseGroup {
+            anchor: anchor_node.item.clone(),
+            members,
+        },
+        member_indices,
+    ))
 }
 
 fn append_rule_diagnostics(
@@ -1177,6 +1395,7 @@ fn writer_matches(
 struct CoreEngineView<'a> {
     store: &'a Store,
     sees_beneath_settled: bool,
+    identity_extractors: &'a [Arc<dyn IdentityExtractor>],
 }
 
 impl<'a> CoreEngineView<'a> {
@@ -1184,6 +1403,22 @@ impl<'a> CoreEngineView<'a> {
         Self {
             store,
             sees_beneath_settled,
+            identity_extractors: &[],
+        }
+    }
+
+    /// As [`new`](Self::new), but with the partition-identity extractors wired in
+    /// so [`EngineView::identity_tokens`] can dispatch (CFM-72). Used for the
+    /// pair-propose and final-claims views; other views need no identity.
+    fn with_identity(
+        store: &'a Store,
+        sees_beneath_settled: bool,
+        identity_extractors: &'a [Arc<dyn IdentityExtractor>],
+    ) -> Self {
+        Self {
+            store,
+            sees_beneath_settled,
+            identity_extractors,
         }
     }
 
@@ -1294,6 +1529,23 @@ impl EngineView for CoreEngineView<'_> {
             None => Ok(None),
         }
     }
+
+    fn identity_tokens(
+        &self,
+        id: NodeId,
+        data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<IdentityToken>>> {
+        // First registered extractor whose format the node carries wins. Core
+        // owns the dispatch and stays type-ignorant; the format-keyed extractor
+        // owns what an identity token means.
+        for extractor in self.identity_extractors {
+            let format = extractor.descriptor().format;
+            if let Some(bytes) = self.artifact_bytes(id, &format, data)? {
+                return Ok(Some(extractor.extract(&bytes)?));
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[cfg(test)]
@@ -1381,6 +1633,7 @@ mod tests {
             writers: vec![],
             compaction: vec![],
             annotators: vec![],
+            identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
@@ -1645,6 +1898,7 @@ mod tests {
                 format: format_a.clone(),
             })],
             annotators: vec![],
+            identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
@@ -1734,6 +1988,7 @@ mod tests {
             writers: vec![Arc::new(StructuralEditWriter), Arc::new(ClaimingFallback)],
             compaction: vec![],
             annotators: vec![],
+            identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
@@ -1753,6 +2008,7 @@ mod tests {
             writers: vec![Arc::new(ClaimingFallback)],
             compaction: vec![],
             annotators: vec![],
+            identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
@@ -1781,6 +2037,7 @@ mod tests {
             writers: vec![Arc::new(OneEditWriter)],
             compaction: vec![Arc::new(NonDecreasingCompaction)],
             annotators: vec![],
+            identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
@@ -1796,5 +2053,138 @@ mod tests {
         let edits = result.edit_lists.values().next().expect("edit list");
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].verb, "test.same_cost");
+    }
+
+    // ── CFM-83 grouping / subsume fixtures ───────────────────────────────
+
+    use binoc_sdk::{MemberMatch, NodeMatch};
+
+    fn leaf_item(path: &str) -> ItemRef {
+        ItemRef {
+            logical_path: path.into(),
+            is_dir: false,
+            content_hash: None,
+            size: None,
+            media_type: None,
+            projection_hint: ProjectionHint::default().item_type("leaf"),
+            handle: path.into(),
+        }
+    }
+
+    fn ext_match(ext: &str) -> NodeMatch {
+        NodeMatch {
+            is_dir: Some(false),
+            extensions: vec![ext.into()],
+            media_types: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn stem_key_groups_by_first_dot_case_insensitively() {
+        assert_eq!(stem_key("dir/roads.shp"), "roads");
+        assert_eq!(stem_key("dir/roads.dbf"), "roads");
+        assert_eq!(stem_key("dir/ROADS.SHX"), "roads");
+        assert_ne!(stem_key("dir/rivers.shp"), stem_key("dir/roads.shp"));
+        // First-dot stem so multi-dot sidecars still group with the anchor.
+        assert_eq!(stem_key("a/roads.tar.gz"), "roads");
+    }
+
+    #[test]
+    fn assemble_group_fills_optional_slots_and_skips_other_stems() {
+        let mut store = Store::new(
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ProjectionHint::default(),
+        );
+        // Children under the root container: a roads file set plus an unrelated
+        // rivers.shp that must not be pulled into the roads group.
+        let shp = store
+            .left
+            .add_child(0, leaf_item("roads.shp"), ProjectionHint::default());
+        let dbf = store
+            .left
+            .add_child(0, leaf_item("roads.dbf"), ProjectionHint::default());
+        let _rivers = store
+            .left
+            .add_child(0, leaf_item("rivers.shp"), ProjectionHint::default());
+
+        let extras = vec![
+            MemberMatch::optional(ext_match(".shx")),
+            MemberMatch::optional(ext_match(".dbf")),
+        ];
+        let (group, members) =
+            assemble_group(&store, TreeSide::Left, shp, &extras).expect("group forms");
+
+        assert_eq!(group.anchor.logical_path, "roads.shp");
+        // Slot 0 = anchor, slot 1 = .shx (absent), slot 2 = .dbf (present).
+        assert!(group.member(1).is_none(), "no .shx sibling");
+        assert_eq!(
+            group.member(2).map(|i| i.logical_path.as_str()),
+            Some("roads.dbf")
+        );
+        assert_eq!(members, vec![dbf]);
+    }
+
+    #[test]
+    fn assemble_group_declines_when_required_member_missing() {
+        let mut store = Store::new(
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ProjectionHint::default(),
+        );
+        let shp = store
+            .left
+            .add_child(0, leaf_item("roads.shp"), ProjectionHint::default());
+
+        // A required .dbf with no matching sibling → no group forms.
+        let extras = vec![MemberMatch::required(ext_match(".dbf"))];
+        assert!(assemble_group(&store, TreeSide::Left, shp, &extras).is_none());
+    }
+
+    #[test]
+    fn subsumed_members_leave_group_assembly() {
+        let mut store = Store::new(
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ItemRef {
+                is_dir: true,
+                ..leaf_item("")
+            },
+            ProjectionHint::default(),
+        );
+        let shp = store
+            .left
+            .add_child(0, leaf_item("roads.shp"), ProjectionHint::default());
+        let dbf = store
+            .left
+            .add_child(0, leaf_item("roads.dbf"), ProjectionHint::default());
+
+        // Once the .dbf is subsumed by some result node, it is no longer a
+        // candidate sibling (it has left the frontier).
+        store.left.subsume(dbf, shp);
+        assert!(store.is_subsumed(NodeId {
+            side: TreeSide::Left,
+            index: dbf
+        }));
+
+        let extras = vec![MemberMatch::optional(ext_match(".dbf"))];
+        let (group, members) =
+            assemble_group(&store, TreeSide::Left, shp, &extras).expect("anchor-only group");
+        assert!(group.member(1).is_none(), "subsumed .dbf excluded");
+        assert!(members.is_empty());
     }
 }

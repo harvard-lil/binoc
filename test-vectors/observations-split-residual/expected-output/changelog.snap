@@ -1,0 +1,15 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **observations_2024.csv**: 2 rows removed
+  - Rows removed
+    - row 3: '2025', 'north', '15'
+    - row 4: '2025', 'south', '9'
+- **observations_2025.csv**: Added
+
+## Suggestions
+
+- 'observations.csv' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove (`binoc.pair.partition`) [binoc.possible_split]

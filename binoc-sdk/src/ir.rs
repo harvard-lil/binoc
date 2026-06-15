@@ -593,6 +593,16 @@ impl GlobalClaim {
             summary: None,
         }
     }
+
+    pub fn with_param(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
+        self.params.insert(key.into(), value);
+        self
+    }
+
+    pub fn with_summary(mut self, summary: impl Into<Summary>) -> Self {
+        self.summary = Some(summary.into());
+        self
+    }
 }
 
 /// Renderer-visible, bounded evidence attached to a diff node.

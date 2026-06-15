@@ -1,0 +1,110 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [
+    {
+      "verb": "binoc.tabular_split",
+      "params": {
+        "covered": 4,
+        "from": "observations.csv",
+        "parts": 2,
+        "residual": 0,
+        "to": [
+          "observations_2024.csv",
+          "observations_2025.csv"
+        ]
+      },
+      "summary": [
+        {
+          "path": {
+            "value": "observations.csv",
+            "snapshot": "from"
+          }
+        },
+        {
+          "text": " split into "
+        },
+        {
+          "path": {
+            "value": "observations_2024.csv",
+            "snapshot": "to"
+          }
+        },
+        {
+          "text": ", "
+        },
+        {
+          "path": {
+            "value": "observations_2025.csv",
+            "snapshot": "to"
+          }
+        }
+      ]
+    }
+  ],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "tabular_split",
+        "item_type": "tabular",
+        "path": "observations_2024.csv",
+        "sources": [
+          {
+            "path": "observations.csv",
+            "side": "from",
+            "evidence": "binoc.pair.partition",
+            "action": "tabular_split"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Split from "
+          },
+          {
+            "path": {
+              "value": "observations.csv",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.tabular_split"
+        ]
+      },
+      {
+        "action": "tabular_split",
+        "item_type": "tabular",
+        "path": "observations_2025.csv",
+        "sources": [
+          {
+            "path": "observations.csv",
+            "side": "from",
+            "evidence": "binoc.pair.partition",
+            "action": "tabular_split"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Split from "
+          },
+          {
+            "path": {
+              "value": "observations.csv",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.tabular_split"
+        ]
+      }
+    ]
+  }
+}

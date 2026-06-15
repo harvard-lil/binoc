@@ -13,6 +13,35 @@ back-compat effort (AGENTS.md rule 9). Every change keeps
 `just fmt && just check && just test` green and names the vector/test that proves
 it.
 
+## Handoff (working state — for a fresh session)
+
+- **Branch `pre-refactor`, all green** (`just check` + `just test`). Last shepherd
+  run landed CFM-72 (split/merge); prior runs landed CFM-78/80/81/82/83/71 +
+  path-boundary-escape. The working tree has a few **untracked** files from a
+  separate trace-visualizer effort (`docs/users/explanation/replays*`,
+  `scripts/build_replays.py`) — leave them.
+- **Shepherding workflow (full autopilot on git):** hand each item to a subagent
+  in an isolated worktree; merge the branch into `pre-refactor`; run
+  `just fmt && just check && just test`; regenerate gold via the justfile
+  `INSTA_UPDATE=always cargo test -p <crate> --test test_vectors` bless recipe;
+  update this tracker (move item to Landed, renumber); delete the merged worktree
+  + branch.
+- **Worktree gotcha:** agent worktrees may be created from `main` (an outdated
+  layout). Every worktree agent must `git reset --hard pre-refactor` *first* and
+  confirm `git log` shows recent CFM commits before working.
+- **Concurrent sessions** share this checkout — stage by explicit path
+  (`git add <file>`), never `git add -A`. A foreman worktree at
+  `.foreman/worktrees/path-boundary-escape` exists; its work is already
+  cherry-picked in — leave it.
+- **Next up:** **CFM-84** (item 1) — migrate the diagnostics channel to structured
+  `Summary` segments. This is now also the **immediate cleanup for CFM-72**: that
+  run shipped an interim `humanize_numbers` identifier-guard rider that this
+  tracker's own diagnostic-rendering note says not to do — CFM-84 should delete
+  that guard (and its `humanize_numbers_groups_only_standalone_quantities` unit
+  test in `binoc-stdlib/src/renderers/markdown.rs`) once `Diagnostic.message`
+  becomes a `Summary`. Items carry per-item carry-overs/follow-ups inline; the
+  parked `retract_tags` question is the one small open IR-coherence decision.
+
 ## Landed
 
 - **Migration foundation.** CFM-42 parsimony instrumentation · CFM-60 public IR
@@ -75,17 +104,109 @@ it.
   helpers (`escape_segment`), so `dir/>q1.csv` is unambiguously a decompose
   boundary while a real file `>q1.csv` is written `dir/\>q1.csv`. Resolves the
   previously-parked `/>` ambiguity; documented in the parsed-children ADR.
+- **CFM-83 multi-input claims (file-set fusion; `subsume`).** A parse claim can
+  span a **correlated set of nodes**: extra members + correlation live on the
+  `ParseRule` trait (defaults + `From<NodeMatch>` keep single-input ergonomic;
+  blast radius = core + shapefile only). Default correlation = same-parent
+  first-dot lowercased stem; arity-descending precedence, registration tiebreak,
+  decline releases members. New store primitive **`subsume`** (a `subsumed_by`
+  flag, not deletion): subsumed members are excluded from expand/parse dispatch,
+  per-artifact dispatch, and sibling projection, but retained as result-node
+  provenance. Shapefile fusing parser fuses `{.shp,.shx,.dbf,.prj,.cpg}` into one
+  "Shapefile layer" node with the `.dbf` as a `tabular_v1` child + CRS as carried
+  `parser_metadata_v1`; declines cleanly (standalone `.dbf` stays a plain table;
+  bare `.shp` served by the single-input parser). Proven by
+  `shapefile-fusion-roads` / `shapefile-fusion-decline`. (ADR: multi-input claims.)
+  *Follow-ups (minor, not blocking):* (a) decline memoization is now rule-scoped
+  (node+format+rule) rather than format-scoped — necessary for decline-and-release,
+  JSON-split unaffected, but a core-dispatch invariant change to keep in mind;
+  (b) an invalid anchor declines via the *error* channel, not the clean
+  empty-output decline channel; (c) `parse`/`parse_group` boilerplate on every
+  fusing rule; (d) no equal-arity-overlap test yet (only 5-vs-1 shapefile/dbf);
+  (e) `roads.v2.shp` vs `roads.shp` collide on stem `roads` — capture/template
+  correlation seam left but not built.
+- **CFM-71 container reshape + parent reconciliation.** `merge_projected_collision`
+  is generalized into one reconciliation pass in `project.rs` (same-path "Merged
+  from" N→1 kept as the degenerate case); linked containers of *differing kind*
+  now render as a representation change, not move+add/remove. Wording stays in
+  stdlib: a `container_reshape_hint` annotator reads both endpoints' `item_type`
+  (core passes `source_item_type` but never inspects it), emits action
+  `container_representation_change` + tags `binoc.container-reshape`/
+  `.serialization-change` ("Reshaped from `data` (directory → SQLite database)").
+  No new pair rule needed — `TabularPair` + `ContainerFromChildEvidence` already
+  link members and parents. Proven by `csv-dir-to-sqlite-reshape`. *Follow-up:*
+  the reconciled node still carries inert `binoc.move`/`folder-move` tags stamped
+  at pair time (overlay unions tags, can't retract); harmless in rendering but
+  incoherent in JSON — see the open `retract_tags` question.
+- **CFM-72 split/merge via partition identities.** Verbatim row-partition
+  splits/merges are now representable and claimed only when exact, instead of the
+  fuzzy rule mis-linking a split as a 1:1 move. SDK ships an opaque `IdentityToken`
+  + format-keyed `IdentityExtractor` (`tabular_v1` token = row cell-values),
+  registered on `CorrespondenceEngineConfig.identity_extractors`, plus a generic
+  `disjoint_cover` coverage query (`Clean`/`NearMiss`/`None`). Core dispatches it
+  JIT through `EngineView::identity_tokens` over the unmatched residue (stays
+  type-ignorant; tokens opaque, never stored). Stdlib `PartitionPair` (registered
+  before the fuzzy tabular/file rules) claims a split/merge **iff** complete +
+  disjoint + unambiguous — emitting a settled 1→N/N→1 link fan + a
+  `binoc.tabular_split`/`_merge` `Changeset.claims` entry (the first concrete claim
+  producer, via a new `PairRule::final_claims` hook collected post-saturation) —
+  else declines with `binoc.possible_split`. Splits render "Split from `X`";
+  merges reuse the CFM-71 "Merged from" reconciliation. Proven by
+  `observations-split-by-year`, `enforcement-actions-merge-years`,
+  `observations-split-residual` (near-miss decline), and `stacked-csv-broken-out`
+  (confirms whole-table rehoming stays reshape, not split). (ADR: partition
+  identities — now Implemented, with realization notes.) *Follow-ups:* (a) **CFM-84
+  must remove** the interim `humanize_numbers` identifier-guard rider this run
+  shipped (see Next up); (b) identity tokens are recomputed over the residue each
+  saturation round (residue-capped; per-run caching is the next optimization);
+  (c) residue admits unsettled *cross-path* links so a clean claim outranks a
+  premature fuzzy link, while excluding settled and *same-path* links; (d) a single
+  participant covering the whole returns `None` (1:1 move), never a near miss;
+  (e) the `stacked-csv-broken-out` baseline declines correctly but the underlying
+  CFM-71 reshape pairs only one child cleanly and orphans the other as a
+  child-remove — a pre-existing reshape/child-pairing rough edge, not a partition
+  bug; (f) the ADR/this tracker named a split vector `enforcement-actions-split-by-
+  year`; the landed merge vector is `enforcement-actions-merge-years` and the
+  near-miss is `observations-split-residual` (whose diagnostic path carries no
+  digits, so CFM-84 needs a year-bearing-filename near-miss vector to prove the
+  diagnostic-segment fix).
 
 ## Open work, in order
 
-Orienting frame — the **arity matrix** ties several items together. Node
-operations come in fan-out / fan-in / 1:1, on two axes (within-snapshot
-structure, across-snapshot correspondence):
+1. **CFM-84 — diagnostics as structured `Summary` segments (hygiene + CFM-72
+   cleanup; independent of the arity arc below).** The structured-summary-segments migration
+   (ADR `2026-06-03-structured-summary-segments`, commit `43844d1`) retired the
+   `humanize_numbers` prose scan for `DiffNode.summary` by giving it typed
+   `Segment`s (`Text`/`Path`/`Uint`/`Float`): a `Uint` is always digit-grouped,
+   `Text`/`Path` are verbatim, so years in filenames are never mangled. The
+   **diagnostics channel was never migrated** — `Diagnostic.message` is still a bare
+   `String` (`binoc-sdk/src/ir.rs:205`), and the Markdown renderer still runs the
+   old prose scan on it (`humanize_numbers(&diagnostic.message)`,
+   `binoc-stdlib/src/renderers/markdown.rs:201`). That call is the **last** free-text
+   caller of `humanize_numbers`; the other three operate on bare `Uint`/`Float`
+   strings. The reparse mangles embedded filenames (e.g. CFM-72 split/merge
+   diagnostics turn `actions_2023.csv` into `actions_2,023.csv`). **Fix:** migrate
+   `Diagnostic.message: String → Summary`, update the `Diagnostic` constructors and
+   the `markdown.rs:201` call site to `render_summary`, and have producers that embed
+   paths/counts in diagnostic text build segments (`.path(..)`, `.count(..)`) instead
+   of `format!`. Then `humanize_numbers` only ever sees bare numeric values and no
+   identifier-digit-skipping guard is needed. Greenfield, no back-compat (rule 9).
+   **First delete CFM-72's interim rider** (the identifier-guard in
+   `humanize_numbers` + its `humanize_numbers_groups_only_standalone_quantities`
+   unit test) as part of this migration. Prove with a vector whose diagnostic
+   embeds a year-bearing filename: CFM-72 landed only `observations-split-residual`
+   (a near-miss whose diagnostic path carries no digits), so **add** a year-bearing
+   near-miss vector (e.g. an `actions_2023.csv`-style `binoc.possible_split`) to
+   demonstrate the fix. **Self-contained:** touches the diagnostics type + renderer
+   + diagnostic producers, not the partition/arity machinery.
+
+The remaining items form the engine **arity** arc. The **arity matrix** — split
+and merge now landed (CFM-72):
 
 | | within-snapshot (structure) | across-snapshot (correspondence) |
 |---|---|---|
-| **1 → N** | expand / parsed children (done, CFM-69/70) | split (CFM-72) |
-| **N → 1** | **multi-input claims / `subsume`** (CFM-83) | merge (CFM-72) · reconciliation (CFM-71) |
+| **1 → N** | expand / parsed children (done, CFM-69/70) | split (done, CFM-72) |
+| **N → 1** | multi-input claims / `subsume` (done, CFM-83) | merge (done, CFM-72) · reconciliation (done, CFM-71) |
 | **1 → 1** | parse leaf (done) | move / modify (done) |
 
 The engine has had unfold (`add_child`) since day one and never had fold;
@@ -94,59 +215,20 @@ The engine has had unfold (`add_child`) since day one and never had fold;
 the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
 (output: the *artifact* is the render unit).
 
-1. **CFM-83 — multi-input claims (file-set fusion; `subsume`).** Generalize the
-   parse claim from one node to a **correlated set of nodes**: `ParseDescriptor`
-   input becomes an ordered member-match list (single-file = size-1 degenerate)
-   with a correlation key (default: same container + shared basename stem;
-   escalates to `DeclaredPair`'s capture/template form when a format needs it).
-   The engine enumerates candidate sibling groups by the key; the parser's
-   ordinary parse-or-**decline** is the authority (one source of truth — no
-   separate grouping registry). Precedence is **arity-descending, largest
-   *successful* claim wins, decline releases members to smaller claims**. The one
-   new core primitive is **`subsume`** — mark member nodes claimed-by (a flag,
-   not a deletion: `NodeId`s are index-stable, and subsumed members survive as
-   result-node provenance); it is the structural N→1 fold dual to `add_child`.
-   The fused node is an ordinary CFM-69/80/81 node (named `item_type`, e.g.
-   "Shapefile layer"; `tabular_v1` `.dbf` child; `parser_metadata_v1` CRS).
-   *Rendering needs CFM-81* (a shapefile carries geometry + attributes + CRS at
-   once). Reduces pressure on CFM-72 (a file set is one node per side, so 1:1
-   pairing suffices). Proof: `roads.{shp,shx,dbf,prj}` whose CRS changes while
-   geometry is unchanged; a standalone `.dbf` sharing a stem must still parse
-   alone (decline path). (ADR: multi-input claims.) *CFM-81 carry-overs:* under
-   the new dispatch multiple structural writers now COMPOSE (no first-match
-   break), so any structural writer this adds must check overlaps; and `subsume`
-   must exclude subsumed members from the per-artifact dispatch as well as from
-   projection.
-
-2. **CFM-71 — container-type-change projection + parent reconciliation.** Linked
-   containers whose representation changed (directory↔SQLite, file↔section dir)
-   render as a container/serialization change, not move+add/remove; reconcile
-   linked parents before projecting children. Direction (from the parsed-children
-   ADR): **generalize `merge_projected_collision` into one parent-reconciliation
-   pass**, with the existing same-path "Merged from" collision as its degenerate
-   case — not a second code path. Named container `item_type` already flows
-   (CFM-70), so a reshaped container can render with an honest kind. Benefits
-   directly from CFM-81 (a container node carrying both structural and metadata
-   edits); shares member-attribution provenance with CFM-83.
-
-3. **CFM-72 / CFM-73 — split/merge correspondence.** Pair rule over `tabular_v1`
-   children proposing one-to-many / many-to-one when row sets partition cleanly;
-   split/merge claim with residual edits; gate fuzzy one-to-one when a stronger
-   split explanation exists; prove via description cost. CFM-73 extends to text
-   sections if the parser stays conservative. Now unblocked: parsed children are
-   linkable endpoints with content hashes, so `HashPair`/`CopyPair` can already
-   match a verbatim table moved between containers. Open design question to settle
-   first: what the split/merge rule owns vs. what already falls out of generic
-   hash/name pairing, and whether the generic pair rules *should* reach into
-   parsed children at all. Vectors: `*-split-by-year`,
-   `report-split-into-section-files`.
-
-4. **CFM-74 / CFM-75 / CFM-76 — replayable claims.** Finalize the
+2. **CFM-74 / CFM-75 / CFM-76 — replayable claims.** Finalize the
    `Changeset.claims` payload (scope/verb/params/covered/evidence/residual) with
    replay verification; numeric unit-conversion and precision-rounding claims;
    bounded near-duplicate row hints. Build on the cost ratchet, not render hacks.
+   *Builds on CFM-72:* the `binoc.tabular_split`/`_merge` claims (verb/params
+   from/to/covered/residual, no replay verification yet) are the first concrete
+   `Changeset.claims` producer to generalize from.
 
-5. **CFM-77+ — domain format plugins.** FASTQ, VCF, TIFF/image equality,
+3. **CFM-73 — text-section split.** Deferred from CFM-72: needs conservative
+   section children from the parser first. The partition machinery (opaque tokens,
+   `disjoint_cover`, the `IdentityExtractor` seam) is format-generic and ready — a
+   text-section format would register its own extractor and get split/merge free.
+
+4. **CFM-77+ — domain format plugins.** FASTQ, VCF, TIFF/image equality,
    XBRL-like JSON — after the generic machinery is coherent, unless a user needs
    one first. (Shapefile geometry already shipped as `binoc-shapefile`; its
    fusion is CFM-83, not here.)
@@ -160,6 +242,11 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
 - **True graph output** — a renderer option, not an engine change.
 - **N-snapshot / k-tree lineages** — future product feature, not a correctness gap.
 - **Arrow IPC `tabular_v2`** — only when extraction/interchange justifies it.
+- **`ProjectionHint::retract_tags`** — overlay only *unions* tags, so an annotator
+  that supersedes an earlier framing (e.g. CFM-71 reshape over a pair-time
+  `binoc.move`) can't drop the stale tag. Inert in rendering today; build a
+  retraction channel only if a consumer needs coherent JSON tag sets. (Open
+  question raised by CFM-71.)
 
 ## References
 
@@ -167,4 +254,5 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
   history; report at `binoc-fuzz-vectors.KujG6V/REPORT.md`.
 - ADRs (`docs/adr/`): correspondence-first engine · parsed children and decompose
   boundaries · typed records · tiered artifact metadata · composable per-artifact
-  writers · multi-input claims.
+  writers · multi-input claims · partition identities (CFM-72) · structured summary
+  segments (the typed-`Segment` model CFM-84 extends to diagnostics).

@@ -1,0 +1,98 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [
+    {
+      "verb": "binoc.tabular_merge",
+      "params": {
+        "covered": 4,
+        "from": [
+          "actions_2023.csv",
+          "actions_2024.csv"
+        ],
+        "parts": 2,
+        "residual": 0,
+        "to": "actions.csv"
+      },
+      "summary": [
+        {
+          "path": {
+            "value": "actions_2023.csv",
+            "snapshot": "from"
+          }
+        },
+        {
+          "text": ", "
+        },
+        {
+          "path": {
+            "value": "actions_2024.csv",
+            "snapshot": "from"
+          }
+        },
+        {
+          "text": " merged into "
+        },
+        {
+          "path": {
+            "value": "actions.csv",
+            "snapshot": "to"
+          }
+        }
+      ]
+    }
+  ],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "actions.csv",
+        "sources": [
+          {
+            "path": "actions_2023.csv",
+            "side": "from",
+            "evidence": "binoc.pair.partition",
+            "action": "move"
+          },
+          {
+            "path": "actions_2024.csv",
+            "side": "from",
+            "evidence": "binoc.pair.partition",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Merged from "
+          },
+          {
+            "path": {
+              "value": "actions_2023.csv",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": ", "
+          },
+          {
+            "path": {
+              "value": "actions_2024.csv",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.tabular_merge"
+        ]
+      }
+    ]
+  }
+}

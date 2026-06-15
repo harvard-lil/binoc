@@ -1,0 +1,8 @@
+[vector]
+name = "observations-split-by-year"
+description = "One CSV split row-wise into per-year files; detected as a clean partition split (CFM-72)"
+tags = ["csv", "partition", "split"]
+
+[expected]
+root_action = "tabular_split"
+has_tags = ["binoc.tabular_split"]

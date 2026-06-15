@@ -103,7 +103,12 @@ pub fn project(
     annotators: &[Arc<dyn ProjectionAnnotator>],
 ) -> Projection {
     let mut lines = Vec::new();
-    let hidden = |id: NodeId| store.beneath_settled(id.side, id.index, false);
+    // A node is hidden from projection if it is beneath a settled link OR has
+    // been subsumed (folded into a fusing result node, CFM-83). A subsumed member
+    // does not surface as a loose sibling — the fused result node represents it —
+    // but it survives in the tree as the result node's provenance.
+    let hidden =
+        |id: NodeId| store.beneath_settled(id.side, id.index, false) || store.is_subsumed(id);
 
     let mut link_lines: Vec<(String, Option<String>, ActionLine)> = Vec::new();
     for (index, link) in store.links.iter() {
@@ -127,6 +132,13 @@ pub fn project(
             .filter(|edit| edit.projection.visible)
             .cloned()
             .collect();
+        // Grab each endpoint's own `item_type` BEFORE merging the two
+        // projections together — the merge collapses them into one, which would
+        // hide the fact that the representation changed across the link. These
+        // raw strings flow to the annotator so stdlib/plugin rules can decide
+        // whether a container reshaped (e.g. "directory" -> "SQLite database");
+        // core never interprets them.
+        let source_item_type = store.projection(left_id).item_type.clone();
         let mut projection = store.projection(right_id).clone();
         projection.merge_from(store.projection(left_id));
         overlay_projection(&mut projection, &link.projection);
@@ -153,7 +165,10 @@ pub fn project(
             (false, false, true) => "modify",
             (false, false, false) => "identical",
         };
-        let action = projection
+        // Action seen by annotators, before any annotator override. An annotator
+        // (e.g. the stdlib reshape rule) may replace it via the projection hint;
+        // we re-resolve the final action below.
+        let pre_action = projection
             .action
             .clone()
             .unwrap_or_else(|| derived_action.to_string());
@@ -169,7 +184,7 @@ pub fn project(
             &mut projection,
             annotators,
             &ProjectionAnnotationContext {
-                action: &action,
+                action: &pre_action,
                 item_type: &item_type,
                 path: right_path,
                 source_path: if moved || copied {
@@ -177,12 +192,16 @@ pub fn project(
                 } else {
                     None
                 },
+                source_item_type: source_item_type.as_deref(),
                 evidence: Some(&link.evidence),
                 edits: &visible_edits,
                 container: line_is_container,
                 unlinked_side: None,
             },
         );
+        // Final action: an annotator overlay may have set a more specific verb
+        // (reshape) onto the projection; otherwise keep the pre-annotation value.
+        let action = projection.action.clone().unwrap_or(pre_action);
 
         let summary = projection
             .summary
@@ -232,6 +251,7 @@ pub fn project(
                     item_type: &item_type,
                     path: &path,
                     source_path: None,
+                    source_item_type: None,
                     evidence: None,
                     edits: &[],
                     container,
@@ -420,46 +440,62 @@ fn insert_segments(
     }
 }
 
+/// Reconcile one projected line into the node that owns its path.
+///
+/// This is the single parent-reconciliation pass (CFM-71). One coherent
+/// projected node is built from however many linked endpoints land on a path:
+///
+/// - **First line (`had_projected_line == false`).** Establish the node from the
+///   line's own action / item_type / summary / tags / edits. A container-type
+///   change (directory ↔ SQLite database) is already carried on the line as a
+///   `container_representation_change` action with a reshape summary — emitted by
+///   the stdlib annotator from the two endpoints' kinds — so it lands here as one
+///   reshaped container with its members projected underneath, NOT as a move plus
+///   add/remove of the members.
+///
+/// - **Subsequent lines (`had_projected_line == true`).** The degenerate N→1
+///   case: several sources reconcile onto one target path (the historic
+///   "Merged from a.txt, b.txt" same-path collision). Fold the extra line's
+///   action / sources / tags / edits in and switch to the merged summary.
+///
+/// Both are the same operation — reconcile linked endpoints into one node — at
+/// different fan-in, rather than two parallel code paths.
 fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_line: bool) {
-    if had_projected_line {
-        merge_projected_collision(node, line);
+    if !had_projected_line {
+        node.action = line.action.clone();
+        node.item_type = reconciled_item_type(line);
+        node.sources = line.sources.clone();
+        node.summary = Some(line.summary.clone());
+        node.tags.extend(line.projection.tags.iter().cloned());
+        if !line.edits.is_empty() {
+            node.details.insert("edits".into(), edits_json(&line.edits));
+        }
         return;
     }
 
-    node.action = line.action.clone();
-    node.item_type = line
-        .projection
-        .item_type
-        .clone()
-        .unwrap_or_else(|| if line.container { "container" } else { "item" }.into());
-    node.sources = line.sources.clone();
-    node.summary = Some(line.summary.clone());
-    node.tags.extend(line.projection.tags.iter().cloned());
-    if !line.edits.is_empty() {
-        node.details.insert(
-            "edits".into(),
-            json!(line
-                .edits
-                .iter()
-                .map(|edit| json!({ "verb": edit.verb, "params": edit.params }))
-                .collect::<Vec<_>>()),
-        );
-    }
-}
-
-fn merge_projected_collision(node: &mut DiffNode, line: &ActionLine) {
+    // Fold an additional reconciled source onto an already-established node.
     node.action = merge_action(&node.action, &line.action).to_string();
     if node.item_type == "item" {
-        node.item_type = line
-            .projection
-            .item_type
-            .clone()
-            .unwrap_or_else(|| if line.container { "container" } else { "item" }.into());
+        node.item_type = reconciled_item_type(line);
     }
     merge_sources(node, &line.sources);
     node.tags.extend(line.projection.tags.iter().cloned());
     append_visible_edits(node, &line.edits);
     node.summary = Some(merged_summary(&node.sources));
+}
+
+fn reconciled_item_type(line: &ActionLine) -> String {
+    line.projection
+        .item_type
+        .clone()
+        .unwrap_or_else(|| if line.container { "container" } else { "item" }.into())
+}
+
+fn edits_json(edits: &[Edit]) -> serde_json::Value {
+    json!(edits
+        .iter()
+        .map(|edit| json!({ "verb": edit.verb, "params": edit.params }))
+        .collect::<Vec<_>>())
 }
 
 fn merge_action(left: &str, right: &str) -> &'static str {

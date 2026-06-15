@@ -16,6 +16,12 @@ pub struct SideNode {
 pub struct SideTree {
     pub side: TreeSide,
     nodes: Vec<SideNode>,
+    /// Subsumption (CFM-83): a member node folded into a fusing result node. A
+    /// *flag*, never a deletion — `NodeId`s are index-stable and subsumed members
+    /// survive as the result node's provenance. The value is the result node that
+    /// claimed the member. A subsumed node is excluded from dispatch and from
+    /// projection as a loose sibling, but is still reachable via the tree.
+    subsumed_by: BTreeMap<u32, u32>,
 }
 
 impl SideTree {
@@ -28,7 +34,34 @@ impl SideTree {
                 children: Vec::new(),
                 projection,
             }],
+            subsumed_by: BTreeMap::new(),
         }
+    }
+
+    /// Mark `member` as subsumed by `result` (the fused node that claimed it).
+    /// Idempotent; the first claimant wins (arity-descending precedence means the
+    /// largest successful claim is offered the member first).
+    pub fn subsume(&mut self, member: u32, result: u32) {
+        self.subsumed_by.entry(member).or_insert(result);
+    }
+
+    /// Whether `index` has been folded into a fusing result node.
+    pub fn is_subsumed(&self, index: u32) -> bool {
+        self.subsumed_by.contains_key(&index)
+    }
+
+    /// The result node that subsumed `index`, if any (member-level provenance).
+    pub fn subsumer(&self, index: u32) -> Option<u32> {
+        self.subsumed_by.get(&index).copied()
+    }
+
+    /// The members subsumed by `result`, in index order (result-node provenance).
+    pub fn subsumed_members(&self, result: u32) -> Vec<u32> {
+        self.subsumed_by
+            .iter()
+            .filter(|&(_, &r)| r == result)
+            .map(|(&m, _)| m)
+            .collect()
     }
 
     pub fn root(&self) -> u32 {
@@ -253,6 +286,12 @@ impl Store {
         self.artifacts_of(id)
             .iter()
             .find(|artifact| &artifact.format == format)
+    }
+
+    /// Whether `id` is subsumed (folded into a fusing result node), and thus
+    /// excluded from dispatch and from sibling projection.
+    pub fn is_subsumed(&self, id: NodeId) -> bool {
+        self.tree(id.side).is_subsumed(id.index)
     }
 
     pub fn is_settled_endpoint(&self, side: TreeSide, index: u32) -> bool {

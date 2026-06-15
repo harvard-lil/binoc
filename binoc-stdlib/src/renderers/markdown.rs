@@ -1257,49 +1257,85 @@ fn capitalize(s: &str) -> String {
 
 fn humanize_numbers(input: &str) -> String {
     // Locale-aware formatting is intentionally out of scope for now; this is US-style grouping.
+    let chars: Vec<char> = input.chars().collect();
     let mut out = String::with_capacity(input.len() + input.len() / 3);
-    let mut digits = String::new();
 
-    let flush_digits = |out: &mut String, digits: &mut String| {
-        if digits.len() > 3 {
-            let first_group = digits.len() % 3;
-            let mut idx = 0;
-            if first_group != 0 {
-                out.push_str(&digits[..first_group]);
-                idx = first_group;
-                if idx < digits.len() {
-                    out.push(',');
-                }
+    // A digit run that abuts a letter, underscore, or filename-style `.ext` is
+    // part of an identifier (e.g. `actions_2023.csv`), not a quantity — grouping
+    // it would corrupt the token. Only group standalone numbers.
+    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+
+    let mut idx = 0;
+    while idx < chars.len() {
+        if chars[idx].is_ascii_digit() {
+            let start = idx;
+            while idx < chars.len() && chars[idx].is_ascii_digit() {
+                idx += 1;
             }
-            while idx < digits.len() {
-                let end = (idx + 3).min(digits.len());
-                out.push_str(&digits[idx..end]);
-                idx = end;
-                if idx < digits.len() {
-                    out.push(',');
-                }
+            let before_ident = start > 0 && is_ident(chars[start - 1]);
+            let after = chars.get(idx).copied();
+            let after_ident = match after {
+                Some(c) if is_ident(c) => true,
+                // A `.` followed by an alphanumeric reads as a file extension.
+                Some('.') => chars
+                    .get(idx + 1)
+                    .is_some_and(|c| c.is_ascii_alphanumeric()),
+                _ => false,
+            };
+            let digits: String = chars[start..idx].iter().collect();
+            if digits.len() > 3 && !before_ident && !after_ident {
+                out.push_str(&group_thousands(&digits));
+            } else {
+                out.push_str(&digits);
             }
         } else {
-            out.push_str(digits);
-        }
-        digits.clear();
-    };
-
-    for ch in input.chars() {
-        if ch.is_ascii_digit() {
-            digits.push(ch);
-        } else {
-            flush_digits(&mut out, &mut digits);
-            out.push(ch);
+            out.push(chars[idx]);
+            idx += 1;
         }
     }
-    flush_digits(&mut out, &mut digits);
+    out
+}
+
+/// Insert US-style thousands separators into a run of ASCII digits.
+fn group_thousands(digits: &str) -> String {
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    let first_group = digits.len() % 3;
+    let mut idx = 0;
+    if first_group != 0 {
+        out.push_str(&digits[..first_group]);
+        idx = first_group;
+        if idx < digits.len() {
+            out.push(',');
+        }
+    }
+    while idx < digits.len() {
+        let end = (idx + 3).min(digits.len());
+        out.push_str(&digits[idx..end]);
+        idx = end;
+        if idx < digits.len() {
+            out.push(',');
+        }
+    }
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn humanize_numbers_groups_only_standalone_quantities() {
+        // Standalone quantities are grouped...
+        assert_eq!(humanize_numbers("12345 rows"), "12,345 rows");
+        assert_eq!(humanize_numbers("row 1234 of 56789"), "row 1,234 of 56,789");
+        // ...but identifier- and filename-embedded digit runs are left intact.
+        assert_eq!(
+            humanize_numbers("'actions_2023.csv' shares rows"),
+            "'actions_2023.csv' shares rows"
+        );
+        assert_eq!(humanize_numbers("2023.csv"), "2023.csv");
+        assert_eq!(humanize_numbers("col12345"), "col12345");
+    }
 
     #[test]
     fn to_markdown_default_is_flat_list() {

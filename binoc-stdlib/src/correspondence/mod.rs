@@ -57,6 +57,10 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             CoreRule::Pair(Arc::new(pair::CopyPair)),
             CoreRule::Pair(Arc::new(pair::DeclaredPair::default())),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+            // Partition (split/merge) runs on the residue the exact rules leave,
+            // and *before* the fuzzy tabular/file rules so a clean partition is
+            // claimed before `TabularPair` can mis-link a split as a 1:1 move.
+            CoreRule::Pair(Arc::new(pair::PartitionPair::default())),
             CoreRule::Pair(Arc::new(pair::TabularPair::default())),
             CoreRule::Pair(Arc::new(pair::FuzzyPair::default())),
             CoreRule::Pair(Arc::new(pair::ContainerFromChildEvidence::default())),
@@ -90,6 +94,9 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             Arc::new(compact::RowAdditionConsolidation),
         ],
         annotators: vec![Arc::new(StdlibProjectionAnnotator)],
+        // The `tabular_v1` identity extractor gives all six tabular producers
+        // partition (split/merge) capability for free (CFM-72).
+        identity_extractors: vec![Arc::new(binoc_sdk::TabularIdentityExtractor)],
         row_keys: BTreeMap::new(),
         row_identity_policies: BTreeMap::new(),
         root_projection: ProjectionHint::default().item_type("directory"),
@@ -162,6 +169,17 @@ impl ProjectionAnnotator for StdlibProjectionAnnotator {
 
     fn annotate(&self, ctx: &ProjectionAnnotationContext<'_>) -> ProjectionHint {
         let mut hint = ProjectionHint::default();
+        // Container reshape (CFM-71): a linked container whose representation
+        // changed across the snapshot — e.g. a directory of CSVs serialized into a
+        // SQLite database. Core hands us the two endpoints' raw item_type strings
+        // and the source path; we (stdlib, the format-aware layer) decide that a
+        // differing container kind reads as a reshape rather than a bare move, and
+        // own all the wording. The reconciled members already render underneath
+        // this node via ordinary projection, so this stays a single coherent
+        // container change instead of move + add/remove of the members.
+        if let Some(reshape) = container_reshape_hint(ctx) {
+            return reshape;
+        }
         if ctx.action == "move" && !ctx.edits.is_empty() {
             hint = hint.tag("binoc.move.modified").tag("binoc.content-changed");
         }
@@ -173,6 +191,56 @@ impl ProjectionAnnotator for StdlibProjectionAnnotator {
         }
         hint
     }
+}
+
+/// Recognize a container whose *representation* changed across the snapshot and
+/// describe it as a single reshape. Returns `None` for every line that is not
+/// such a reshape, so ordinary moves/modifies fall through untouched.
+///
+/// Decision inputs (all supplied by core, none format-specific in core):
+/// - `container`: the line has children on at least one side.
+/// - `source_item_type` vs `item_type`: the two endpoints' named kinds. A reshape
+///   is exactly the case where a container's kind differs across the link
+///   (e.g. "directory" -> "SQLite database"). Equal kinds, or a missing source
+///   kind (an unlinked add/remove), are not reshapes.
+///
+/// The wording and tags live here in stdlib; core stays type-ignorant.
+fn container_reshape_hint(ctx: &ProjectionAnnotationContext<'_>) -> Option<ProjectionHint> {
+    if !ctx.container {
+        return None;
+    }
+    let from_kind = ctx.source_item_type?;
+    let to_kind = ctx.item_type;
+    // A reshape needs two *distinct, specific* container kinds. Treat the generic
+    // placeholders as "no opinion": if neither endpoint names a real kind, or the
+    // kinds match, this is an ordinary move/modify, not a representation change.
+    if from_kind == to_kind || is_generic_kind(from_kind) && is_generic_kind(to_kind) {
+        return None;
+    }
+    let source_path = ctx.source_path?;
+    let mut summary = binoc_sdk::Summary::new()
+        .text("Reshaped from ")
+        .path(source_path.to_string(), binoc_sdk::Side::From)
+        .text(format!(" ({from_kind} → {to_kind})"));
+    if let Some(detail) = summarize_known_edits(ctx.edits) {
+        summary = summary.text(format!("; {detail}"));
+    }
+    let mut hint = ProjectionHint::default()
+        .action("container_representation_change")
+        .tag("binoc.container-reshape")
+        .tag("binoc.serialization-change")
+        .summary(summary);
+    if !ctx.edits.is_empty() {
+        hint = hint.tag("binoc.content-changed");
+    }
+    Some(hint)
+}
+
+/// A container kind carrying no real format identity. These come from core's
+/// fallbacks when a node set no explicit `item_type`, so a change between two of
+/// them is not a meaningful representation change.
+fn is_generic_kind(kind: &str) -> bool {
+    matches!(kind, "container" | "directory" | "tree" | "item" | "")
 }
 
 fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
@@ -472,4 +540,95 @@ fn selector_captures(selector: &FileSelector, path: &str) -> Option<BTreeMap<Str
 
 fn is_tabular_path(path: &str) -> bool {
     path.ends_with(".csv") || path.ends_with(".tsv")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx<'a>(
+        container: bool,
+        source_item_type: Option<&'a str>,
+        item_type: &'a str,
+        source_path: Option<&'a str>,
+    ) -> ProjectionAnnotationContext<'a> {
+        ProjectionAnnotationContext {
+            action: "move",
+            item_type,
+            path: "data.sqlite",
+            source_path,
+            source_item_type,
+            evidence: Some("binoc.pair.container_from_children"),
+            edits: &[],
+            container,
+            unlinked_side: None,
+        }
+    }
+
+    #[test]
+    fn reshape_fires_on_differing_container_kinds_and_names_them_verbatim() {
+        // Wording is derived ONLY from the two endpoint kind strings core hands
+        // us — no format knowledge, no path sniffing. Swap in any kinds and the
+        // summary echoes them.
+        let hint = container_reshape_hint(&ctx(
+            true,
+            Some("directory"),
+            "SQLite database",
+            Some("data"),
+        ))
+        .expect("differing container kinds should reshape");
+        assert_eq!(
+            hint.action.as_deref(),
+            Some("container_representation_change")
+        );
+        assert!(hint.tags.contains(&"binoc.container-reshape".to_string()));
+        assert!(hint
+            .tags
+            .contains(&"binoc.serialization-change".to_string()));
+        let summary = hint.summary.expect("reshape summary").plain_text();
+        assert!(
+            summary.contains("Reshaped from")
+                && summary.contains("directory")
+                && summary.contains("SQLite database"),
+            "summary should name both kinds verbatim: {summary:?}"
+        );
+    }
+
+    #[test]
+    fn reshape_does_not_fire_on_same_kind() {
+        // A plain directory rename stays an ordinary move, not a reshape.
+        assert!(
+            container_reshape_hint(&ctx(true, Some("directory"), "directory", Some("old")))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn reshape_does_not_fire_when_both_kinds_are_generic() {
+        // "container" vs "directory" are both core fallbacks: no real
+        // representation change to report.
+        assert!(
+            container_reshape_hint(&ctx(true, Some("container"), "directory", Some("old")))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn reshape_requires_a_container() {
+        // A leaf with differing kinds (e.g. a parsed file) is not a container
+        // reshape; only nodes with members reconcile this way.
+        assert!(container_reshape_hint(&ctx(
+            false,
+            Some("CSV file"),
+            "SQLite database",
+            Some("x")
+        ))
+        .is_none());
+    }
+
+    #[test]
+    fn reshape_requires_a_known_source_kind() {
+        // An unlinked add/remove carries no source kind, so it never reshapes.
+        assert!(container_reshape_hint(&ctx(true, None, "SQLite database", None)).is_none());
+    }
 }

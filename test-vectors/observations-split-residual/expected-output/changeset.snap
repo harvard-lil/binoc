@@ -1,0 +1,118 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "sources": [
+      {
+        "path": "",
+        "side": "from",
+        "evidence": "binoc.pair.root",
+        "action": "modify"
+      }
+    ],
+    "summary": [
+      {
+        "uint": 0
+      },
+      {
+        "text": " edits"
+      }
+    ],
+    "children": [
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "observations_2024.csv",
+        "sources": [
+          {
+            "path": "observations.csv",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "2 rows removed"
+          }
+        ],
+        "tags": [
+          "binoc.content-changed",
+          "binoc.move",
+          "binoc.move.modified",
+          "binoc.row-removal"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "2025",
+                    "north",
+                    "15"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_row"
+            },
+            {
+              "params": {
+                "index": 3,
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "2025",
+                    "south",
+                    "9"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_row"
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "item_type": "tabular",
+        "path": "observations_2025.csv",
+        "sources": [
+          {
+            "path": "observations_2025.csv",
+            "side": "to",
+            "action": "add"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Added"
+          }
+        ],
+        "tags": [
+          "binoc.content-changed"
+        ]
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "severity": "suggestion",
+      "code": "binoc.possible_split",
+      "message": "'observations.csv' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove",
+      "location": "binoc.pair.partition"
+    }
+  ]
+}

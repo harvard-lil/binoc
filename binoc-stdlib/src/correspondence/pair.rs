@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::Read;
 
 use binoc_sdk::{
-    file_name, tabular_v1, BinocError, BinocResult, DataAccess, Diagnostic, EngineView,
-    FileCorrespondenceRule, FileSelector, ItemRef, LinkProposal, NodeId, PairDescriptor,
-    PairOutput, PairRule, ProjectionHint, TabularData, TreeSide,
+    disjoint_cover, file_name, tabular_v1, BinocError, BinocResult, Candidate, Coverage,
+    DataAccess, Diagnostic, EngineView, FileCorrespondenceRule, FileSelector, GlobalClaim,
+    IdentityToken, ItemRef, LinkProposal, NodeId, PairDescriptor, PairOutput, PairRule,
+    ProjectionHint, Side, Summary, TabularData, TreeSide,
 };
 use regex::Regex;
 
@@ -1084,4 +1085,360 @@ fn token_set_similarity(left: &[u8], right: &[u8]) -> f64 {
     } else {
         intersection as f64 / union as f64
     }
+}
+
+// ── Partition split/merge (CFM-72) ──────────────────────────────────────────
+
+/// Evidence/verb/tag vocabulary for partition claims.
+const PARTITION_EVIDENCE: &str = "binoc.pair.partition";
+const TAG_SPLIT: &str = "binoc.tabular_split";
+const TAG_MERGE: &str = "binoc.tabular_merge";
+
+/// Conservative split/merge detector over partition identities (CFM-72).
+///
+/// Runs on the *residue* the exact and (registration-order) earlier rules leave
+/// unlinked. For each unmatched, partition-capable node it asks the SDK coverage
+/// query whether that node's identity tokens are the clean disjoint union of a
+/// set of unmatched nodes on the other side. When they are — complete (residual
+/// 0), disjoint, unambiguous, and not a whole-artifact 1:1 — it claims a 1→N
+/// split (or N→1 merge) as a settled link fan; otherwise it declines, emitting a
+/// `binoc.possible_split` suggestion for the near miss and leaving the nodes to
+/// honest add/remove. There are no similarity dials: it is the exact-tier analog
+/// of [`HashPair`].
+pub struct PartitionPair {
+    /// Upper bound on residue nodes considered per side before the O(n·m)
+    /// coverage scan is skipped (with a diagnostic).
+    pub residue_cap: usize,
+}
+
+impl Default for PartitionPair {
+    fn default() -> Self {
+        Self { residue_cap: 256 }
+    }
+}
+
+/// An unmatched, partition-capable node and its identity tokens.
+struct Residue {
+    id: NodeId,
+    tokens: Vec<IdentityToken>,
+}
+
+impl PartitionPair {
+    /// Unlinked, non-container leaves on `side` that carry partition identities,
+    /// sorted by logical path for deterministic claims.
+    fn residue(
+        &self,
+        view: &dyn EngineView,
+        data: &dyn DataAccess,
+        side: TreeSide,
+    ) -> BinocResult<Vec<Residue>> {
+        let mut out = Vec::new();
+        for id in view.nodes(side) {
+            let item = view.item(id);
+            if item.is_dir || view.has_children(id) {
+                continue;
+            }
+            // Two kinds of existing link disqualify a node from being a split/merge
+            // candidate:
+            //   * a *settled* link — a confirmed 1:1 (exact move/copy); and
+            //   * a *same-path* link — an in-place modify (`data.csv` ↔ `data.csv`),
+            //     a strong 1:1 that an unchanged shared row must not turn into a
+            //     spurious partition near miss.
+            // A node carrying only an unsettled *cross-path* link (a fuzzy rename)
+            // is still fair game: partition outranks the fuzzy rules, so a clean
+            // claim upgrades that link rather than being blocked by it — the fuzzy
+            // rule often fires a round before the parsed artifacts partition needs
+            // are materialized.
+            let path = &item.logical_path;
+            let disqualified = view.links_of(id).iter().any(|link| {
+                link.settled
+                    || view.item(link.left).logical_path == *path
+                        && view.item(link.right).logical_path == *path
+            });
+            if disqualified {
+                continue;
+            }
+            let Some(tokens) = view.identity_tokens(id, data)? else {
+                continue;
+            };
+            if tokens.is_empty() {
+                continue;
+            }
+            out.push(Residue { id, tokens });
+        }
+        out.sort_by(|a, b| {
+            view.item(a.id)
+                .logical_path
+                .cmp(&view.item(b.id).logical_path)
+        });
+        Ok(out)
+    }
+}
+
+impl PairRule for PartitionPair {
+    fn descriptor(&self) -> PairDescriptor {
+        PairDescriptor {
+            name: "binoc.pair.partition".into(),
+            emits: vec![PARTITION_EVIDENCE.into()],
+            // Partition needs each candidate's parsed content materialized on the
+            // unlinked node, exactly like the fuzzy tabular rule.
+            reads: vec![tabular_v1()],
+            sees_beneath_settled: false,
+        }
+    }
+
+    fn propose(&self, view: &dyn EngineView, data: &dyn DataAccess) -> BinocResult<PairOutput> {
+        let left = self.residue(view, data, TreeSide::Left)?;
+        let right = self.residue(view, data, TreeSide::Right)?;
+        if left.is_empty() || right.is_empty() {
+            return Ok(PairOutput::default());
+        }
+        if left.len() > self.residue_cap || right.len() > self.residue_cap {
+            return Ok(PairOutput {
+                proposals: Vec::new(),
+                diagnostics: vec![Diagnostic::suggestion(
+                    "binoc.partition_limit",
+                    format!(
+                        "Skipped split/merge detection: residue {}×{} exceeds limit {}",
+                        left.len(),
+                        right.len(),
+                        self.residue_cap
+                    ),
+                )],
+            });
+        }
+
+        let mut proposals = Vec::new();
+        // Near misses are recorded by node, then emitted only for nodes neither
+        // scan ultimately claims — a merge *part* looks like a split near miss
+        // (it is a subset of the merged whole), so warning before both scans
+        // finish would be misleading.
+        let mut near_misses: BTreeMap<NodeId, String> = BTreeMap::new();
+        let mut used_left: BTreeSet<u32> = BTreeSet::new();
+        let mut used_right: BTreeSet<u32> = BTreeSet::new();
+
+        // Splits: one left whole reconstructed by several right parts.
+        let right_pool: Vec<Candidate<NodeId>> = right
+            .iter()
+            .map(|r| Candidate {
+                node: r.id,
+                tokens: r.tokens.clone(),
+            })
+            .collect();
+        for whole in &left {
+            let candidate = Candidate {
+                node: whole.id,
+                tokens: whole.tokens.clone(),
+            };
+            match disjoint_cover(&candidate, &right_pool) {
+                Coverage::Clean(m) => {
+                    if used_left.contains(&m.whole.index)
+                        || m.parts.iter().any(|p| used_right.contains(&p.index))
+                    {
+                        continue;
+                    }
+                    used_left.insert(m.whole.index);
+                    let from_path = view.item(m.whole).logical_path.clone();
+                    for part in &m.parts {
+                        used_right.insert(part.index);
+                        proposals.push(LinkProposal {
+                            left: m.whole.index,
+                            right: part.index,
+                            evidence: PARTITION_EVIDENCE.into(),
+                            // A clean partition is exact and complete: settle the
+                            // link so no spurious content diff is written between
+                            // the whole and its part.
+                            settled: true,
+                            projection: ProjectionHint::default()
+                                .action("tabular_split")
+                                .tag(TAG_SPLIT)
+                                .summary(
+                                    Summary::new()
+                                        .text("Split from ")
+                                        .path(from_path.clone(), Side::From),
+                                ),
+                        });
+                    }
+                }
+                Coverage::NearMiss => {
+                    near_misses.insert(whole.id, view.item(whole.id).logical_path.clone());
+                }
+                Coverage::None => {}
+            }
+        }
+
+        // Merges: one right whole reconstructed by several left parts. Skip nodes
+        // already claimed by a split so the two directions never contest.
+        let left_pool: Vec<Candidate<NodeId>> = left
+            .iter()
+            .filter(|l| !used_left.contains(&l.id.index))
+            .map(|l| Candidate {
+                node: l.id,
+                tokens: l.tokens.clone(),
+            })
+            .collect();
+        for whole in &right {
+            if used_right.contains(&whole.id.index) {
+                continue;
+            }
+            let candidate = Candidate {
+                node: whole.id,
+                tokens: whole.tokens.clone(),
+            };
+            match disjoint_cover(&candidate, &left_pool) {
+                Coverage::Clean(m) => {
+                    if used_right.contains(&m.whole.index)
+                        || m.parts.iter().any(|p| used_left.contains(&p.index))
+                    {
+                        continue;
+                    }
+                    used_right.insert(m.whole.index);
+                    for part in &m.parts {
+                        used_left.insert(part.index);
+                        proposals.push(LinkProposal {
+                            left: part.index,
+                            right: m.whole.index,
+                            evidence: PARTITION_EVIDENCE.into(),
+                            settled: true,
+                            projection: ProjectionHint::default().tag(TAG_MERGE),
+                        });
+                    }
+                }
+                Coverage::NearMiss => {
+                    near_misses.insert(whole.id, view.item(whole.id).logical_path.clone());
+                }
+                Coverage::None => {}
+            }
+        }
+
+        // Emit a `possible_split` suggestion only for nodes neither scan claimed.
+        let diagnostics = near_misses
+            .into_iter()
+            .filter(|(id, _)| match id.side {
+                TreeSide::Left => !used_left.contains(&id.index),
+                TreeSide::Right => !used_right.contains(&id.index),
+            })
+            .map(|(_, path)| possible_split_diagnostic(&path))
+            .collect();
+
+        Ok(PairOutput {
+            proposals,
+            diagnostics,
+        })
+    }
+
+    fn final_claims(
+        &self,
+        view: &dyn EngineView,
+        data: &dyn DataAccess,
+    ) -> BinocResult<Vec<GlobalClaim>> {
+        let mut by_left: BTreeMap<u32, Vec<(NodeId, NodeId)>> = BTreeMap::new();
+        let mut by_right: BTreeMap<u32, Vec<(NodeId, NodeId)>> = BTreeMap::new();
+        for link in view.links() {
+            if link.evidence != PARTITION_EVIDENCE {
+                continue;
+            }
+            if link.projection.tags.iter().any(|t| t == TAG_SPLIT) {
+                by_left
+                    .entry(link.left.index)
+                    .or_default()
+                    .push((link.left, link.right));
+            } else if link.projection.tags.iter().any(|t| t == TAG_MERGE) {
+                by_right
+                    .entry(link.right.index)
+                    .or_default()
+                    .push((link.left, link.right));
+            }
+        }
+
+        let mut claims = Vec::new();
+        for group in by_left.values() {
+            if group.len() < 2 {
+                continue;
+            }
+            let from = view.item(group[0].0).logical_path.clone();
+            let mut to: Vec<String> = group
+                .iter()
+                .map(|(_, right)| view.item(*right).logical_path.clone())
+                .collect();
+            to.sort();
+            let covered = view
+                .identity_tokens(group[0].0, data)?
+                .map(|t| t.len())
+                .unwrap_or(0);
+            claims.push(partition_claim(TAG_SPLIT, &from, &to, covered, true));
+        }
+        for group in by_right.values() {
+            if group.len() < 2 {
+                continue;
+            }
+            let to = view.item(group[0].1).logical_path.clone();
+            let mut from: Vec<String> = group
+                .iter()
+                .map(|(left, _)| view.item(*left).logical_path.clone())
+                .collect();
+            from.sort();
+            let covered = view
+                .identity_tokens(group[0].1, data)?
+                .map(|t| t.len())
+                .unwrap_or(0);
+            claims.push(partition_claim(TAG_MERGE, &to, &from, covered, false));
+        }
+        Ok(claims)
+    }
+}
+
+fn possible_split_diagnostic(path: &str) -> Diagnostic {
+    Diagnostic::suggestion(
+        "binoc.possible_split",
+        format!(
+            "'{path}' shares rows with other unmatched tables but the relationship \
+             is not a clean partition (residual, shared, or extra rows); left as add/remove"
+        ),
+    )
+}
+
+/// Build a split or merge [`GlobalClaim`]. For a split, `whole` is the one input
+/// and `members` the outputs; for a merge the roles invert (one output,
+/// several inputs).
+fn partition_claim(
+    tag: &str,
+    whole: &str,
+    members: &[String],
+    covered: usize,
+    is_split: bool,
+) -> GlobalClaim {
+    let summary = if is_split {
+        let mut s = Summary::new()
+            .path(whole.to_string(), Side::From)
+            .text(" split into ");
+        for (index, member) in members.iter().enumerate() {
+            if index > 0 {
+                s = s.text(", ");
+            }
+            s = s.path(member.clone(), Side::To);
+        }
+        s
+    } else {
+        let mut s = Summary::new();
+        for (index, member) in members.iter().enumerate() {
+            if index > 0 {
+                s = s.text(", ");
+            }
+            s = s.path(member.clone(), Side::From);
+        }
+        s.text(" merged into ").path(whole.to_string(), Side::To)
+    };
+    let (from, to): (serde_json::Value, serde_json::Value) = if is_split {
+        (whole.into(), members.to_vec().into())
+    } else {
+        (members.to_vec().into(), whole.into())
+    };
+    GlobalClaim::new(tag)
+        .with_param("from", from)
+        .with_param("to", to)
+        .with_param("parts", members.len().into())
+        .with_param("covered", covered.into())
+        .with_param("residual", 0.into())
+        .with_summary(summary)
 }

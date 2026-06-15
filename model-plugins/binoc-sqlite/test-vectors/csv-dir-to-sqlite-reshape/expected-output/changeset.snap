@@ -1,0 +1,197 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "container_representation_change",
+        "item_type": "SQLite database",
+        "path": "data.sqlite",
+        "sources": [
+          {
+            "path": "data",
+            "side": "from",
+            "evidence": "binoc.pair.container_from_children",
+            "action": "container_representation_change"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Reshaped from "
+          },
+          {
+            "path": {
+              "value": "data",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " (directory → SQLite database)"
+          }
+        ],
+        "tags": [
+          "binoc.container-reshape",
+          "binoc.folder-move",
+          "binoc.move",
+          "binoc.serialization-change"
+        ],
+        "children": [
+          {
+            "action": "move",
+            "item_type": "tabular",
+            "path": "data.sqlite/>customers",
+            "sources": [
+              {
+                "path": "data/customers.csv",
+                "side": "from",
+                "evidence": "binoc.pair.tabular",
+                "action": "move"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added; 2 cells changed"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change",
+              "binoc.content-changed",
+              "binoc.move",
+              "binoc.move.modified",
+              "binoc.row-addition",
+              "binoc.serialization-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "column": "id",
+                    "from": "1",
+                    "row": 0,
+                    "to": 1
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "id",
+                    "from": "2",
+                    "row": 1,
+                    "to": 2
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 3,
+                      "truncated": false,
+                      "values": [
+                        3,
+                        "Carol",
+                        "NY"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          },
+          {
+            "action": "move",
+            "item_type": "tabular",
+            "path": "data.sqlite/>orders",
+            "sources": [
+              {
+                "path": "data/orders.csv",
+                "side": "from",
+                "evidence": "binoc.pair.tabular",
+                "action": "move"
+              }
+            ],
+            "summary": [
+              {
+                "text": "6 cells changed"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change",
+              "binoc.content-changed",
+              "binoc.move",
+              "binoc.move.modified",
+              "binoc.serialization-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "column": "id",
+                    "from": "100",
+                    "row": 0,
+                    "to": 100
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "customer_id",
+                    "from": "1",
+                    "row": 0,
+                    "to": 1
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "total",
+                    "from": "42",
+                    "row": 0,
+                    "to": 42
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "id",
+                    "from": "101",
+                    "row": 1,
+                    "to": 101
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "customer_id",
+                    "from": "2",
+                    "row": 1,
+                    "to": 2
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "column": "total",
+                    "from": "17",
+                    "row": 1,
+                    "to": 99
+                  },
+                  "verb": "tabular.edit_cell"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

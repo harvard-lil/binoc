@@ -1,7 +1,7 @@
 # Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact
 
 **Date:** 2026-06-15
-**Status:** Implemented (channels + producers; rendering deferred)
+**Status:** Implemented (channels + producers in CFM-80; rendering + significance in CFM-82)
 
 ## Context
 

@@ -48,6 +48,7 @@ binoc-sdk = { path = "binoc-sdk" }
 binoc-core = { path = "binoc-core" }
 binoc-stdlib = { path = "binoc-stdlib" }
 binoc-cli = { path = "binoc-cli" }
+binoc-dbf = { path = "model-plugins/binoc-dbf" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"

@@ -1,7 +1,7 @@
 # Multi-Input Claims: Grouping Sibling Files into One Logical Dataset
 
 **Date:** 2026-06-15
-**Status:** Proposed (supersedes the earlier registry/composite-node framing of this ADR)
+**Status:** Implemented (CFM-83; supersedes the earlier registry/composite-node framing of this ADR)
 
 ## Context
 

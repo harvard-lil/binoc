@@ -221,6 +221,7 @@ snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-parquet --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-avro --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-dbf --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-shapefile --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-binformats --test test_vectors
 
 # Materialize test-vectors/ into test-vectors-materialized/ for every workspace

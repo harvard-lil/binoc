@@ -1,0 +1,10 @@
+{
+  "fields": [
+    {"name": "id", "type": "Numeric"},
+    {"name": "label", "type": "Character"}
+  ],
+  "rows": [
+    [1, "draft"],
+    [2, "draft"]
+  ]
+}

@@ -1,7 +1,7 @@
 # Composable Per-Artifact Writers: the Artifact Is the Rendering Unit
 
 **Date:** 2026-06-15
-**Status:** Proposed
+**Status:** Implemented (CFM-81)
 
 ## Context
 

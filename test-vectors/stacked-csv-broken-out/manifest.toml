@@ -1,0 +1,4 @@
+[vector]
+name = "stacked-csv-broken-out"
+description = "Stacked-CSV tables broken out into one file per table; whole-table rehoming (reshape + 1:1), NOT a partition split (CFM-72 prerequisite confirmation)"
+tags = ["csv", "stacked-tables", "reshape"]

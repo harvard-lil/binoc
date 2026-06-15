@@ -6,9 +6,10 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
-| 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers; rendering deferred) |
-| 2026-06-15 | [Multi-Input Claims: Grouping Sibling Files into One Logical Dataset](2026-06-15-multi_input_file_sets_and_shapefile_fusion.md) | Proposed |
-| 2026-06-15 | [Composable Per-Artifact Writers: the Artifact Is the Rendering Unit](2026-06-15-composable_per_artifact_writers.md) | Proposed |
+| 2026-06-15 | [Partition Identities: a JIT, Format-Owned Capability for N↔M Correspondence (CFM-72)](2026-06-15-partition_identities_jit_format_capability.md) | Implemented |
+| 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented |
+| 2026-06-15 | [Multi-Input Claims: Grouping Sibling Files into One Logical Dataset](2026-06-15-multi_input_file_sets_and_shapefile_fusion.md) | Implemented (CFM-83) |
+| 2026-06-15 | [Composable Per-Artifact Writers: the Artifact Is the Rendering Unit](2026-06-15-composable_per_artifact_writers.md) | Implemented (CFM-81) |
 | 2026-06-14 | [Typed Records: a Greenfield `tabular` Artifact and a Generic `structured_document`](2026-06-14-typed_record_tabular_and_structured_document.md) | Accepted |
 | 2026-06-14 | [Parsed Children and Decompose Boundaries (CFM-69)](2026-06-14-parsed_children_and_decompose_boundaries.md) | Accepted |
 | 2026-06-14 | [Default Markdown Is A Changelog, Not An IR Dump](2026-06-14-default_markdown_changelog_policy.md) | Implemented |

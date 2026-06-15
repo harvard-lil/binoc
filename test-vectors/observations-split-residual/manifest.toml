@@ -1,0 +1,4 @@
+[vector]
+name = "observations-split-residual"
+description = "A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest add/remove (CFM-72 near-miss)"
+tags = ["csv", "partition", "possible-split"]

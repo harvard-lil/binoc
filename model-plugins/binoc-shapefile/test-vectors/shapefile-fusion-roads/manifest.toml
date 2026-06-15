@@ -1,0 +1,7 @@
+[vector]
+name = "shapefile-fusion-roads"
+description = "A roads.{shp,shx,dbf,prj} file set fuses into one 'Shapefile layer' node: a new feature grows the geometry summary and bounding box while the .dbf attribute table gains a row. The .shx/.dbf/.prj members are subsumed and do not appear as loose sibling changes."
+tags = ["shapefile", "fusion", "multi-input", "subsume", "tabular"]
+
+[expected]
+root_action = "modify"

@@ -598,9 +598,12 @@ name = "binoc-shapefile"
 version = "0.2.0"
 dependencies = [
  "binoc-core",
+ "binoc-dbf",
  "binoc-sdk",
  "binoc-shapefile",
  "binoc-stdlib",
+ "blake3",
+ "dbase",
  "serde",
  "serde_json",
  "shapefile",

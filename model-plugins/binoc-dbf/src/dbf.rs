@@ -39,7 +39,11 @@ impl ParseRule for DbfParseRule {
 /// declared dBASE types); each record becomes a row. Records are read in field
 /// declaration order via [`Reader::fields`], so cells stay aligned to the
 /// headers regardless of the order the decoder yields them.
-fn read_dbf_tabular(bytes: &[u8]) -> BinocResult<TabularData> {
+///
+/// Public so a fusing parser (e.g. the shapefile layer in `binoc-shapefile`) can
+/// surface a shapefile's sibling `.dbf` attribute table as a `tabular_v1` child
+/// using the exact same producer a standalone `.dbf` uses (CFM-83).
+pub fn read_dbf_tabular(bytes: &[u8]) -> BinocResult<TabularData> {
     let mut reader = Reader::new(std::io::Cursor::new(bytes))
         .map_err(|e| BinocError::Other(format!("dbf: {e}")))?;
 

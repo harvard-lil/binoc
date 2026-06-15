@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **changes.csv**: Moved from report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations
+- **products.csv**: Reshaped from report.csv (stacked tables → tabular)
+- **report.csv/>table_2**: Removed

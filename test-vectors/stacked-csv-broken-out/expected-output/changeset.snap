@@ -1,0 +1,103 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "changes.csv",
+        "sources": [
+          {
+            "path": "report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations",
+            "side": "from",
+            "evidence": "binoc.pair.tabular",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.move",
+          "binoc.serialization-change"
+        ]
+      },
+      {
+        "action": "container_representation_change",
+        "item_type": "tabular",
+        "path": "products.csv",
+        "sources": [
+          {
+            "path": "report.csv",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "container_representation_change"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Reshaped from "
+          },
+          {
+            "path": {
+              "value": "report.csv",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " (stacked tables → tabular)"
+          }
+        ],
+        "tags": [
+          "binoc.container-reshape",
+          "binoc.move",
+          "binoc.serialization-change"
+        ]
+      },
+      {
+        "action": "modify",
+        "item_type": "stacked tables",
+        "path": "report.csv",
+        "children": [
+          {
+            "action": "remove",
+            "item_type": "tabular",
+            "path": "report.csv/>table_2",
+            "sources": [
+              {
+                "path": "report.csv/>table_2",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

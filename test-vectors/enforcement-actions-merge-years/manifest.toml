@@ -1,0 +1,7 @@
+[vector]
+name = "enforcement-actions-merge-years"
+description = "Per-year CSVs merged row-wise into one file; detected as a clean partition merge (CFM-72)"
+tags = ["csv", "partition", "merge"]
+
+[expected]
+has_tags = ["binoc.tabular_merge"]

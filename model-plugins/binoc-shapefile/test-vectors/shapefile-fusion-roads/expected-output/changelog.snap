@@ -1,0 +1,12 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **roads.shp/>attributes**: 1 row added; 1 cell changed
+  - Changed cells
+    - row 2, column 'lanes': 2.0 -> 4.0
+  - Rows added
+    - row 3: 'Pine Rd', 1.0
+- **roads.shp/>geometry**: Document values changed

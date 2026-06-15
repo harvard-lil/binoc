@@ -1,0 +1,16 @@
+[vector]
+name = "csv-dir-to-sqlite-reshape"
+description = "A directory of CSV files (data/) is serialized into a single SQLite database (data.sqlite). CFM-71: this renders as one container representation change with the customers.csv<->customers and orders.csv<->orders table correspondences shown underneath the reconciled container, NOT as data/ removed + data.sqlite added."
+tags = ["sqlite", "container-reshape", "reconciliation", "csv"]
+
+[expected]
+root_action = "modify"
+# The container endpoints (data/ directory <-> data.sqlite database) are linked by
+# ContainerFromChildEvidence from the table-level child links, and the stdlib
+# reshape annotator labels the differing kinds as a container representation
+# change rather than a folder move. Member tables are projected as children of the
+# reconciled container.
+has_tags = [
+    "binoc.container-reshape",
+    "binoc.serialization-change",
+]

@@ -84,6 +84,7 @@ impl Controller {
         let mut changeset = run.project().to_changeset(from_path, to_path);
         changeset.diagnostics.extend(setup_diagnostics);
         changeset.diagnostics.extend(run.diagnostics);
+        changeset.claims.extend(run.claims);
         changeset.hoist_node_diagnostics();
         changeset.dedupe_and_cap_diagnostics(MAX_CHANGESET_DIAGNOSTICS);
         changeset.strip_transient();
@@ -129,6 +130,7 @@ impl Controller {
         let mut changeset = run.project().to_changeset(from_path, to_path);
         changeset.diagnostics.extend(setup_diagnostics);
         changeset.diagnostics.extend(run.diagnostics);
+        changeset.claims.extend(run.claims);
         changeset.hoist_node_diagnostics();
         changeset.dedupe_and_cap_diagnostics(MAX_CHANGESET_DIAGNOSTICS);
         changeset.strip_transient();

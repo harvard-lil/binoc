@@ -4,8 +4,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ArtifactFormat, BinocResult, DataAccess, Diagnostic, ExtractResult, IdentityFailurePolicy,
-    ItemRef, Segment, Summary,
+    ArtifactFormat, BinocResult, DataAccess, Diagnostic, ExtractResult, GlobalClaim,
+    IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment, Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
@@ -111,6 +111,13 @@ pub struct ProjectionAnnotationContext<'a> {
     pub item_type: &'a str,
     pub path: &'a str,
     pub source_path: Option<&'a str>,
+    /// `item_type` of the *source* (left/from) endpoint of a link, when this line
+    /// is a reconciled correspondence. Lets an annotator notice that a container's
+    /// representation changed (e.g. "directory" -> "SQLite database") and render a
+    /// reshape instead of a bare move. `None` for unlinked add/remove lines and
+    /// when the source carried no explicit item_type. Core supplies the raw
+    /// strings; it never interprets them — the annotator owns the wording.
+    pub source_item_type: Option<&'a str>,
     pub evidence: Option<&'a str>,
     pub edits: &'a [Edit],
     pub container: bool,
@@ -151,6 +158,12 @@ pub struct CorrespondenceEngineConfig {
     pub writers: Vec<Arc<dyn EditListWriter>>,
     pub compaction: Vec<Arc<dyn CompactionRule>>,
     pub annotators: Vec<Arc<dyn ProjectionAnnotator>>,
+    /// Partition-identity extractors, keyed by artifact format (CFM-72). The
+    /// engine dispatches these JIT over the *unmatched* residue when a
+    /// partition-capable pair rule asks for a node's identity tokens; they are
+    /// never stored in the IR or gold. A format with no extractor here is simply
+    /// not partition-capable.
+    pub identity_extractors: Vec<Arc<dyn IdentityExtractor>>,
     pub row_keys: BTreeMap<String, Vec<String>>,
     pub row_identity_policies: BTreeMap<String, RowIdentityPolicies>,
     pub root_projection: ProjectionHint,
@@ -252,19 +265,164 @@ impl From<Vec<ItemRef>> for ExpandOutput {
     }
 }
 
+/// One slot in a parse rule's correlated input member-set (CFM-83).
+///
+/// A member-match is a [`NodeMatch`] plus whether the slot must be filled for a
+/// group to form. The ordered member list of a [`ParseDescriptor`] is its
+/// `input` anchor (always a required size-1 member) followed by any
+/// `extra_members`. A single-input parser declares no extra members, so its
+/// member-set is exactly `[{ input, required: true }]` — the size-1 degenerate
+/// case the engine still drives through the same enumeration path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct MemberMatch {
+    #[serde(rename = "match")]
+    pub matcher: NodeMatch,
+    #[serde(default)]
+    pub required: bool,
+}
+
+impl MemberMatch {
+    /// A required member slot.
+    pub fn required(matcher: NodeMatch) -> Self {
+        Self {
+            matcher,
+            required: true,
+        }
+    }
+
+    /// An optional member slot — a group may form without it.
+    pub fn optional(matcher: NodeMatch) -> Self {
+        Self {
+            matcher,
+            required: false,
+        }
+    }
+}
+
+/// A plain `NodeMatch` is the size-1 required member: the ergonomic single-input
+/// case promised by CFM-83's ADR.
+impl From<NodeMatch> for MemberMatch {
+    fn from(matcher: NodeMatch) -> Self {
+        MemberMatch::required(matcher)
+    }
+}
+
+/// How the engine groups candidate sibling nodes into one parse-claim input.
+///
+/// `SharedStem` (the default) groups a container's children by *shared basename
+/// stem under the same parent* — the only generic, format-agnostic grouping
+/// knowledge core needs. The capture/template generalization (for sidecars named
+/// off an anchor stem rather than by exact stem equality, e.g. `data.tif` +
+/// `data.tif.aux.xml`) is a deferred seam; it reuses `DeclaredPair`'s
+/// `selector_captures`/`expand_template` vocabulary. Until a real format needs
+/// it, only `SharedStem` is implemented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum Correlation {
+    /// Same parent container + shared basename stem.
+    #[default]
+    SharedStem,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ParseDescriptor {
     pub name: String,
+    /// The anchor member: the required, defining node of the claim (e.g. the
+    /// `.shp`). This stays a plain [`NodeMatch`] so the 1-input case — the
+    /// overwhelming majority of parse rules — is unchanged. Additional members
+    /// and the correlation key for a fusing (multi-input) claim are declared on
+    /// the [`ParseRule`] trait ([`ParseRule::extra_members`] /
+    /// [`ParseRule::correlation`]), keeping the blast radius of CFM-83 off every
+    /// single-input descriptor literal.
     pub input: NodeMatch,
     pub output: ArtifactFormat,
     #[serde(default)]
     pub fires_beneath_settled: bool,
 }
 
+/// A resolved group of member nodes handed to a multi-input [`ParseRule`].
+///
+/// The `anchor` is the required defining node (always present). `members` holds
+/// the resolved [`ItemRef`] for every slot in descriptor order, `None` for an
+/// unfilled optional slot. Index 0 is always the anchor (`Some`). A single-input
+/// parse sees a group with just the anchor.
+#[derive(Debug, Clone)]
+pub struct ParseGroup {
+    pub anchor: ItemRef,
+    pub members: Vec<Option<ItemRef>>,
+}
+
+impl ParseGroup {
+    /// A trivial size-1 group wrapping a single anchor node.
+    pub fn single(anchor: ItemRef) -> Self {
+        Self {
+            members: vec![Some(anchor.clone())],
+            anchor,
+        }
+    }
+
+    /// The resolved member at slot `index` (descriptor order), if filled.
+    pub fn member(&self, index: usize) -> Option<&ItemRef> {
+        self.members.get(index).and_then(Option::as_ref)
+    }
+
+    /// All filled members (anchor + present optionals), in slot order.
+    pub fn present(&self) -> impl Iterator<Item = &ItemRef> {
+        self.members.iter().filter_map(Option::as_ref)
+    }
+}
+
 pub trait ParseRule: Send + Sync {
     fn descriptor(&self) -> ParseDescriptor;
+
+    /// Parse a single anchor node. This is the single-input entry point every
+    /// ordinary parser implements; the member-set generalization (CFM-83) does
+    /// not touch it.
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput>;
+
+    /// Additional member slots beyond the anchor (`descriptor().input`), in
+    /// order — e.g. `.shx`, `.dbf`, `.prj`, `.cpg` for a fusing shapefile claim.
+    /// The default is empty: a single-input claim. The full ordered member-set
+    /// is the anchor (always a required size-1 member) followed by these; see
+    /// [`member_set`].
+    fn extra_members(&self) -> Vec<MemberMatch> {
+        Vec::new()
+    }
+
+    /// How candidate sibling groups are enumerated for a multi-input claim.
+    /// Ignored when [`extra_members`](Self::extra_members) is empty.
+    fn correlation(&self) -> Correlation {
+        Correlation::SharedStem
+    }
+
+    /// Parse a resolved correlated member group. The default delegates to
+    /// [`parse`](Self::parse) on the anchor, so single-input rules need not
+    /// implement it. A fusing rule (e.g. the shapefile layer) overrides this to
+    /// read its `.shp`/`.dbf`/`.prj` members together and emit one fused node;
+    /// it returns an empty [`ParseOutput`] to **decline** when the group is not a
+    /// real instance of its format, releasing the members to smaller claims.
+    fn parse_group(&self, group: &ParseGroup, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        self.parse(&group.anchor, data)
+    }
+}
+
+/// The full ordered member-set of a parse rule: the anchor (always a required
+/// size-1 member) followed by the rule's [`extra_members`](ParseRule::extra_members).
+/// This is the list the engine fills by [`NodeMatch`] when enumerating candidate
+/// sibling groups; index 0 is always the required anchor.
+pub fn member_set(rule: &dyn ParseRule) -> Vec<MemberMatch> {
+    let mut members = vec![MemberMatch::required(rule.descriptor().input)];
+    members.extend(rule.extra_members());
+    members
+}
+
+/// A parse claim's arity: the number of declared member slots (anchor + extras).
+/// Drives arity-descending precedence — larger claims are attempted first.
+pub fn parse_arity(rule: &dyn ParseRule) -> usize {
+    1 + rule.extra_members().len()
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -361,6 +519,20 @@ pub trait PairRule: Send + Sync {
     ) -> BinocResult<Vec<Diagnostic>> {
         Ok(Vec::new())
     }
+
+    /// Global, non-tree claims this rule asserts about the *final* settled link
+    /// graph (CFM-72). Called once after saturation, like
+    /// [`final_diagnostics`](Self::final_diagnostics); the engine collects the
+    /// result into `Changeset.claims`. A rule that reshapes the link set into a
+    /// split/merge fan-out reports the claim here so the assertion is produced
+    /// once, from the converged state, rather than re-emitted every round.
+    fn final_claims(
+        &self,
+        _view: &dyn EngineView,
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Vec<GlobalClaim>> {
+        Ok(Vec::new())
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -411,6 +583,23 @@ pub trait EngineView {
         format: &ArtifactFormat,
         data: &dyn DataAccess,
     ) -> BinocResult<Option<Vec<u8>>>;
+
+    /// Partition-identity tokens for a node (CFM-72), or `None` when no
+    /// registered [`IdentityExtractor`] matches an artifact the node carries.
+    ///
+    /// The engine owns the dispatch: it tries each registered extractor's format
+    /// against the node's artifacts and runs the first match. The rule stays
+    /// format-ignorant — it sees only opaque, globally-comparable tokens — so the
+    /// same partition rule serves every partition-capable format. Computed JIT
+    /// over whatever node the caller asks about (intended: the unmatched
+    /// residue); never stored.
+    fn identity_tokens(
+        &self,
+        _id: NodeId,
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<IdentityToken>>> {
+        Ok(None)
+    }
 }
 
 /// One open-vocabulary edit in a link's edit list.

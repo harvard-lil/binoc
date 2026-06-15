@@ -1,0 +1,8 @@
+[vector]
+name = "shapefile-fusion-decline"
+description = "Negative case: a standalone notes.dbf shares a stem with notes.shp, but notes.shp is not valid shapefile geometry. The fusing claim assembles the {shp, dbf} group, reads the .shp, fails to validate, and DECLINES — releasing the .dbf to the size-1 binoc-dbf parser, which renders it as an ordinary table. So a cell change in the lone .dbf still surfaces as a tabular edit, never folded into a phantom layer."
+tags = ["shapefile", "fusion", "decline", "negative", "tabular"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

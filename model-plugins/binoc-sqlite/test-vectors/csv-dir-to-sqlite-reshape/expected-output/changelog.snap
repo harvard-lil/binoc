@@ -1,0 +1,18 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.sqlite**: Reshaped from data (directory → SQLite database)
+- **data.sqlite/>customers**: 1 row added; 2 cells changed
+  - Changed cells
+    - row 1, column 'id': '1' -> 1
+    - row 2, column 'id': '2' -> 2
+  - Rows added
+    - row 3: 3, 'Carol', 'NY'
+- **data.sqlite/>orders**: 6 cells changed
+  - Changed cells (showing 3 of 6)
+    - row 1, column 'id': '100' -> 100
+    - row 1, column 'customer_id': '1' -> 1
+    - row 1, column 'total': '42' -> 42
