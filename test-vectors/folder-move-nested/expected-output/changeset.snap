@@ -17,7 +17,7 @@ expression: "&stable_changeset"
         "source_path": "docs",
         "summary": [
           {
-            "text": "Folder moved from "
+            "text": "Moved from "
           },
           {
             "path": {
@@ -29,14 +29,8 @@ expression: "&stable_changeset"
         "tags": [
           "binoc.folder-move",
           "binoc.move"
-        ],
-        "comparator": "binoc.directory"
+        ]
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.correlation_detector",
-      "binoc.folder_move_detector"
     ]
   }
 }

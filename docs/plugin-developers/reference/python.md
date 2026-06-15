@@ -1,0 +1,48 @@
+---
+audience: Python plugin author, Python API consumer
+---
+
+# Python API
+
+The public Python API lives in the top-level `binoc` package. Every symbol
+on this page is reachable as `binoc.<name>` and is listed in
+`binoc.__all__`; private names (anything starting with `_`) are
+deliberately omitted. The page below is rendered directly from the
+installed package's docstrings by
+[`mkdocstrings[python]`](https://mkdocstrings.github.io/python/) — see the
+[Documentation platform ADR](../../adr/2026-04-17-documentation_platform_and_info_design.md#4-reference-is-generated-not-written).
+
+## Limitations of the Python surface
+
+!!! warning "Rule authoring"
+    Python can embed binoc, configure dataset semantics, discover plugins, and
+    author renderers. Correspondence rule authoring is currently Rust-only and
+    in-process until the stable ABI tier lands.
+
+For plugins that need those capabilities, write Rust correspondence rules. See
+[Plugin model](../explanation/plugin-model.md) and the [Rust SDK reference](sdk.md).
+
+For worked Python examples, see:
+
+- [Write a Python renderer](../howto/write-a-python-renderer.md)
+
+## `binoc`
+
+::: binoc
+    options:
+      show_root_heading: true
+      show_root_full_path: false
+      show_if_no_docstring: false
+      members_order: source
+
+## `binoc.testing`
+
+Test-vector helpers for plugin authors. Separate submodule; import as
+`from binoc.testing import discover_vectors, run_vector`.
+
+::: binoc.testing
+    options:
+      show_root_heading: true
+      show_root_full_path: false
+      show_if_no_docstring: false
+      members_order: source

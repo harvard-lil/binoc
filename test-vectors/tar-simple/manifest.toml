@@ -4,4 +4,4 @@ description = "Tar.gz archive with changes inside"
 tags = ["tar", "archive"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"

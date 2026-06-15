@@ -51,7 +51,7 @@ pub enum Segment {
 /// A structured, render-ready one-line summary: an ordered list of typed
 /// [`Segment`]s.
 ///
-/// Producers (comparators, transformers, plugins) build it; renderers format
+/// Rule packs build it; renderers format
 /// each segment by its type. This replaces free-text summaries so that
 /// number and path formatting is a render-time decision the renderer makes
 /// from typed values, rather than a fragile reparse of prose. A producer
@@ -246,8 +246,7 @@ impl Diagnostic {
     }
 }
 
-/// Renderer-visible metadata attached to a diff node by a comparator or
-/// transformer.
+/// Renderer-visible metadata attached to a projected diff node by a rule pack.
 ///
 /// Annotations are intentionally progressively typed: producers can start with
 /// a string or simple JSON value, and renderers can either display the generic
@@ -279,9 +278,8 @@ impl Annotation {
     }
 }
 
-/// A node in the diff tree — the central data structure of the system.
-/// Every comparator emits it, every transformer rewrites it, and serializers
-/// or bindings read it.
+/// A node in the projected diff tree — the durable changeset structure
+/// consumed by renderers, serializers, and bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct DiffNode {
@@ -301,8 +299,8 @@ pub struct DiffNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
 
-    /// Optional structured one-liner describing the change. Set by a
-    /// comparator or transformer; renderers format each [`Segment`] by its
+    /// Optional structured one-liner describing the change. Set during
+    /// projection; renderers format each [`Segment`] by its
     /// type. Build it with [`Summary`]'s builder, or pass a plain string —
     /// `impl Into<Summary>` wraps it as a single [`Segment::Text`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -317,38 +315,29 @@ pub struct DiffNode {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<DiffNode>,
 
-    /// Comparator-specific payload, schema determined by item_type convention.
+    /// Structured payload, schema determined by item_type/action convention.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub details: BTreeMap<String, serde_json::Value>,
 
-    /// Renderer-visible, structured evidence blocks. Comparators and
-    /// transformers populate these with bounded examples while they still have
-    /// domain knowledge; renderers decide how much to display.
+    /// Renderer-visible, structured evidence blocks. Rule packs populate
+    /// these with bounded examples while they still have domain knowledge;
+    /// renderers decide how much to display.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub detail_blocks: Vec<DetailBlock>,
 
-    /// Renderer-visible annotations supplied by comparators or transformers.
+    /// Renderer-visible annotations supplied by rule packs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<Annotation>,
 
-    /// Which comparator produced this node (provenance for extract chain).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub comparator: Option<String>,
-
-    /// Transformers that modified this node, in order (provenance for extract chain).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub transformed_by: Vec<String>,
-
-    /// The original item pair that produced this node. Session-scoped working
-    /// data: available during a live diff/transform session for transformers
-    /// and extractors that need to re-read source data, and carried across the
-    /// plugin ABI wire so separately-compiled plugins can access it. Callers
-    /// writing changeset output must strip this via
+    /// The original item pair associated with this projected node when one is
+    /// available. Session-scoped working data: available during a live run for
+    /// rules and extractors that need to re-read source data. Callers writing
+    /// changeset output must strip this via
     /// [`DiffNode::strip_transient`] before serializing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_items: Option<ItemPair>,
 
-    /// Node-scoped diagnostics emitted during comparison or transform.
+    /// Node-scoped diagnostics emitted during a run.
     /// Transient: the controller hoists them into [`Changeset::diagnostics`]
     /// at the end of the diff, then clears this field so the output shape
     /// stays as one durable top-level diagnostics list.
@@ -362,21 +351,6 @@ pub struct DiffNode {
     /// [`DiffNode::strip_transient`] before serializing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<ArtifactDescriptor>,
-
-    /// Request that the controller re-dispatch the given `ItemPair` through
-    /// the comparator pipeline and merge the result into this semantic wrapper
-    /// node before the next transformer runs. Set by transformers that have
-    /// discovered a correspondence (for example, a rename-with-edits or a
-    /// config-declared logical file pair) but still need normal comparators to
-    /// parse the paired content. If the recomparison is identical, a plain
-    /// `modify` wrapper is converted to `identical` so it can be pruned, while
-    /// semantic wrappers such as moves remain reportable. Session-scoped
-    /// working data: wire-visible so plugins can set it across the ABI
-    /// boundary, but cleared by [`DiffNode::strip_transient`] before changeset
-    /// output. The controller takes (clears) this field as it processes it;
-    /// nodes in a finalized changeset never carry it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pending_recompare: Option<ItemPair>,
 }
 
 impl DiffNode {
@@ -396,12 +370,9 @@ impl DiffNode {
             details: BTreeMap::new(),
             detail_blocks: Vec::new(),
             annotations: Vec::new(),
-            comparator: None,
-            transformed_by: Vec::new(),
             source_items: None,
             diagnostics: Vec::new(),
             artifacts: Vec::new(),
-            pending_recompare: None,
         }
     }
 
@@ -518,8 +489,7 @@ impl DiffNode {
     }
 
     /// Recursively clear session-scoped transient fields (`source_items`,
-    /// `diagnostics`, `artifacts`, `pending_recompare`) on this node and all
-    /// descendants.
+    /// `diagnostics`, `artifacts`) on this node and all descendants.
     ///
     /// These fields are wire-visible so the plugin ABI can move them across
     /// process-ready boundaries, but they are not meaningful outside a live
@@ -529,7 +499,6 @@ impl DiffNode {
         self.source_items = None;
         self.diagnostics.clear();
         self.artifacts.clear();
-        self.pending_recompare = None;
         for child in &mut self.children {
             child.strip_transient();
         }
@@ -910,6 +879,7 @@ mod tests {
                 content_hash: None,
                 size: None,
                 media_type: None,
+                projection_hint: Default::default(),
                 handle: "/tmp/a/data.csv".into(),
             },
             ItemRef {
@@ -918,6 +888,7 @@ mod tests {
                 content_hash: None,
                 size: None,
                 media_type: None,
+                projection_hint: Default::default(),
                 handle: "/tmp/b/data.csv".into(),
             },
         );
@@ -973,37 +944,16 @@ mod tests {
 
     #[test]
     fn strip_transient_clears_every_descendant() {
-        use crate::types::{
-            ArtifactDescriptor, ArtifactFormat, ArtifactSubject, ItemPair, ItemRef,
-        };
+        use crate::types::{ArtifactDescriptor, ArtifactFormat, ArtifactSubject};
         let artifact = ArtifactDescriptor {
             format: ArtifactFormat::new("binoc", "tabular", 1),
             subject: ArtifactSubject::Pair,
             producer: "binoc.csv".into(),
             handle: "h".into(),
         };
-        let pair = ItemPair::both(
-            ItemRef {
-                logical_path: "x".into(),
-                is_dir: false,
-                content_hash: None,
-                size: None,
-                media_type: None,
-                handle: "/tmp/a".into(),
-            },
-            ItemRef {
-                logical_path: "x".into(),
-                is_dir: false,
-                content_hash: None,
-                size: None,
-                media_type: None,
-                handle: "/tmp/b".into(),
-            },
-        );
-        let mut grandchild = DiffNode::new("modify", "tabular", "a/b/c.csv")
+        let grandchild = DiffNode::new("modify", "tabular", "a/b/c.csv")
             .with_artifact(artifact)
             .with_diagnostic(Diagnostic::warning("binoc.test", "test"));
-        grandchild.pending_recompare = Some(pair);
         let child = DiffNode::new("modify", "directory", "a/b").with_children(vec![grandchild]);
         let mut root = DiffNode::new("modify", "directory", "a").with_children(vec![child]);
         root.strip_transient();
@@ -1011,7 +961,6 @@ mod tests {
             n.artifacts.is_empty()
                 && n.diagnostics.is_empty()
                 && n.source_items.is_none()
-                && n.pending_recompare.is_none()
                 && n.children.iter().all(all_empty)
         }
         assert!(all_empty(&root));

@@ -1,6 +1,9 @@
 # binoc-sqlite
 
-SQLite comparator plugin for [Binoc](https://github.com/example/binoc). Diffs `.sqlite` / `.sqlite3` / `.db` files as standard tabular collections: a database is a table set, and each SQLite table publishes normal Binoc tabular data for row, column, and cell analysis.
+SQLite correspondence rule pack for [Binoc](https://github.com/example/binoc).
+Diffs `.sqlite` / `.sqlite3` / `.db` files as standard tabular collections: a
+database is a table set, and each SQLite table publishes normal Binoc tabular
+data for row, column, and cell analysis.
 
 ## Install
 
@@ -36,7 +39,7 @@ Example output:
 - **data.sqlite::t**: 1 row added
 ```
 
-Without the plugin, the same files would be reported as “Content changed” by the binary comparator.
+Without the plugin, the same files are reported through the byte-level fallback.
 
 ## What it compares
 
@@ -44,7 +47,10 @@ Without the plugin, the same files would be reported as “Content changed” by
 - **Schema**: columns added/removed, SQLite column type changes.
 - **Table content**: row count and cell changes via per-table `binoc.tabular.v1`.
 
-Tags emitted include `binoc-sqlite.row-addition`, `binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure significance (e.g. clerical vs substantive) in your dataset config; see [Writing Binoc Plugins](../docs/writing_plugins.md).
+Tags emitted include `binoc-sqlite.row-addition`,
+`binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure
+renderer grouping in your dataset config; see the main docs'
+[Plugin model](../../docs/plugin-developers/explanation/plugin-model.md).
 
 ## Development
 
@@ -61,4 +67,6 @@ just snapshot-update
 
 (Run from `binoc-sqlite/`; the justfile runs the insta update from the workspace root.)
 
-For writing your own Binoc plugins (Rust or Python), see the main repo’s [Writing Binoc Plugins](../docs/writing_plugins.md).
+For writing your own Binoc plugins, see the main repo's
+[Write a Rust rule pack](../../docs/plugin-developers/howto/write-a-rust-rule-pack.md)
+and [Write a Python renderer](../../docs/plugin-developers/howto/write-a-python-renderer.md).

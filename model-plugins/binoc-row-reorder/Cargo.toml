@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Row reorder transformer plugin for Binoc"
+description = "Row reorder correspondence writer for Binoc"
 publish = false
 
 [lib]

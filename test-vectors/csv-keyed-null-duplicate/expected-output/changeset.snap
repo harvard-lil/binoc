@@ -16,165 +16,158 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "uint": 4
+            "uint": 14
           },
           {
-            "text": " rows added by key; "
-          },
-          {
-            "uint": 4
-          },
-          {
-            "text": " rows removed by key; "
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " row modified by key"
+            "text": " edits"
           }
         ],
         "tags": [
-          "binoc.ambiguous-key",
           "binoc.cell-change",
           "binoc.duplicate-key",
           "binoc.identity-diagnostic",
           "binoc.null-key",
-          "binoc.row-addition",
-          "binoc.row-identity-ambiguous",
-          "binoc.row-removal"
+          "binoc.row-identity-ambiguous"
         ],
         "details": {
-          "cells_changed": 1,
-          "columns_added": [],
-          "columns_left": [
-            "id",
-            "name",
-            "score"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "name",
-            "score"
-          ],
-          "hash_left": "a173bd43f55adf4e02c1a6e699cc47012df16ec03877484353b33b02e920a3fc",
-          "hash_right": "2fb4ebc136d454b2da8e6fb5bc09f286b003078e604b18e642c50f795e2b7fc4",
-          "row_identity": {
-            "columns": [
-              "id"
-            ],
-            "matched_rows": 1,
-            "mode": "keyed",
-            "on_duplicate_key": "diagnostic",
-            "on_null_key": "diagnostic"
-          },
-          "rows_added": 4,
-          "rows_added_keys": [
+          "edits": [
             {
-              "key": null,
-              "row": 3
+              "params": {
+                "column": "id",
+                "from": "a",
+                "row": 0,
+                "to": "b"
+              },
+              "verb": "tabular.edit_cell"
             },
             {
-              "key": {
-                "id": "c"
+              "params": {
+                "column": "name",
+                "from": "Alice",
+                "row": 0,
+                "to": "Bob"
               },
-              "row": 4
+              "verb": "tabular.edit_cell"
             },
             {
-              "key": {
-                "id": "dup"
+              "params": {
+                "column": "score",
+                "from": "10",
+                "row": 0,
+                "to": "21"
               },
-              "row": 1
+              "verb": "tabular.edit_cell"
             },
             {
-              "key": {
-                "id": "dup"
+              "params": {
+                "column": "id",
+                "from": "",
+                "row": 1,
+                "to": "dup"
               },
-              "row": 2
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "name",
+                "from": "BadLeft",
+                "row": 1,
+                "to": "First"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "99",
+                "row": 1,
+                "to": "1"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "name",
+                "from": "First",
+                "row": 2,
+                "to": "Second changed"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "1",
+                "row": 2,
+                "to": "3"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "id",
+                "from": "dup",
+                "row": 3,
+                "to": ""
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "name",
+                "from": "Second",
+                "row": 3,
+                "to": "MissingRight"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "2",
+                "row": 3,
+                "to": "100"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "id",
+                "from": "b",
+                "row": 4,
+                "to": "c"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "name",
+                "from": "Bob",
+                "row": 4,
+                "to": "Carol"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "20",
+                "row": 4,
+                "to": "30"
+              },
+              "verb": "tabular.edit_cell"
             }
-          ],
-          "rows_left": 5,
-          "rows_modified": 1,
-          "rows_removed": 4,
-          "rows_removed_keys": [
-            {
-              "key": null,
-              "row": 1
-            },
-            {
-              "key": {
-                "id": "a"
-              },
-              "row": 0
-            },
-            {
-              "key": {
-                "id": "dup"
-              },
-              "row": 2
-            },
-            {
-              "key": {
-                "id": "dup"
-              },
-              "row": 3
-            }
-          ],
-          "rows_right": 5
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 1,
-            "examples": [
-              {
-                "locator": {
-                  "column": "score",
-                  "key": {
-                    "id": "b"
-                  }
-                },
-                "before": {
-                  "value": "20",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "21",
-                  "media_type": "text/plain"
-                }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ]
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   },
   "diagnostics": [
     {
       "severity": "warning",
-      "code": "binoc.null-key",
-      "message": "2 rows had null configured key values",
-      "location": "data.csv"
-    },
-    {
-      "severity": "warning",
-      "code": "binoc.duplicate-key",
-      "message": "1 configured row key appeared more than once",
-      "location": "data.csv"
+      "code": "binoc.keyed_row_identity_degraded",
+      "message": "configured row keys had null values; fell back to positional row comparison",
+      "location": "binoc.write.tabular"
     }
   ]
 }

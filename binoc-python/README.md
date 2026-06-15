@@ -7,7 +7,7 @@ It provides:
 - the `binoc` CLI
 - Python bindings over the core diff engine
 - native plugin discovery and loading
-- the standard library comparators, transformers, and Markdown renderer
+- the standard correspondence rule pack and Markdown renderer
 
 Install it with:
 

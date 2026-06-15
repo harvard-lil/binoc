@@ -8,31 +8,48 @@ expression: "&stable_changeset"
   "root": {
     "action": "modify",
     "item_type": "text",
-    "path": "story.txt",
-    "summary": [
+    "path": "",
+    "children": [
       {
-        "uint": 2
-      },
-      {
-        "text": " lines added, "
-      },
-      {
-        "uint": 1
-      },
-      {
-        "text": " removed"
+        "action": "modify",
+        "item_type": "text",
+        "path": "story.txt",
+        "summary": [
+          {
+            "uint": 1
+          },
+          {
+            "text": " edit"
+          }
+        ],
+        "tags": [
+          "binoc.content-changed",
+          "binoc.lines-added",
+          "binoc.lines-removed",
+          "binoc.move"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "examples": [
+                  {
+                    "from": "Line 2",
+                    "line": 2,
+                    "to": "Line 2 revised"
+                  }
+                ],
+                "examples_truncated": false,
+                "left_line_count": 5,
+                "lines_added": 2,
+                "lines_removed": 1,
+                "right_line_count": 6
+              },
+              "verb": "text.replace_lines"
+            }
+          ]
+        }
       }
-    ],
-    "tags": [
-      "binoc.content-changed",
-      "binoc.lines-added",
-      "binoc.lines-removed"
-    ],
-    "details": {
-      "lines_added": 2,
-      "lines_removed": 1,
-      "lines_unchanged": 4
-    },
-    "comparator": "binoc.text"
+    ]
   }
 }

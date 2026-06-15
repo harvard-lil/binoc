@@ -1,0 +1,8 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **archive.zip**: Moved from data.zip
+- **archive.zip/new.csv**: Moved from data.zip/old.csv (modified)

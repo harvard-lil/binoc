@@ -27,7 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10 only
 
 ROOT = Path(__file__).resolve().parent.parent
 VECTORS_ROOT = ROOT / "test-vectors"
-PAGE_PATH = ROOT / "docs" / "explanation" / "test-vectors-gallery.md"
+PAGE_PATH = ROOT / "docs" / "users" / "explanation" / "test-vectors-gallery.md"
 REPO_BASE_URL = "https://github.com/harvard-lil/binoc/tree/main"
 
 SNAPSHOT_SAMPLE_LIMIT = 4
@@ -58,24 +58,12 @@ class DocsMeta:
 
 @dataclass
 class ManifestConfig:
-    comparators: list[str] | None = None
-    transformers: list[str] | None = None
     dataset: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
-    transformer_config: dict[str, Any] | None = None
 
     @property
     def has_customization(self) -> bool:
-        return any(
-            value
-            for value in (
-                self.comparators,
-                self.transformers,
-                self.dataset,
-                self.output,
-                self.transformer_config,
-            )
-        )
+        return bool(self.dataset or self.output)
 
 
 @dataclass
@@ -172,33 +160,20 @@ def _parse_config(manifest_path: Path, raw: Any) -> ManifestConfig:
     if not isinstance(raw, dict):
         _die(f"{manifest_path}: [config] must be a table")
 
-    comparators = raw.get("comparators")
-    transformers = raw.get("transformers")
     dataset = raw.get("dataset")
     output = raw.get("output")
-    transformer_config = raw.get("transformer_config")
 
-    if comparators is not None:
-        comparators = _validate_str_list(
-            comparators, f"{manifest_path}: [config].comparators"
-        )
-    if transformers is not None:
-        transformers = _validate_str_list(
-            transformers, f"{manifest_path}: [config].transformers"
-        )
     if dataset is not None and not isinstance(dataset, dict):
         _die(f"{manifest_path}: [config].dataset must be a table")
     if output is not None and not isinstance(output, dict):
         _die(f"{manifest_path}: [config].output must be a table")
-    if transformer_config is not None and not isinstance(transformer_config, dict):
-        _die(f"{manifest_path}: [config].transformer_config must be a table")
+    for key in raw:
+        if key not in {"dataset", "output"}:
+            _die(f"{manifest_path}: [config] unknown key {key!r}")
 
     return ManifestConfig(
-        comparators=comparators,
-        transformers=transformers,
         dataset=dataset,
         output=output,
-        transformer_config=transformer_config,
     )
 
 
@@ -252,14 +227,8 @@ def _yaml_lines(value: Any, indent: int = 0) -> list[str]:
 
 def _render_config_yaml(config: ManifestConfig) -> str | None:
     data: dict[str, Any] = {}
-    if config.comparators:
-        data["comparators"] = config.comparators
-    if config.transformers:
-        data["transformers"] = config.transformers
     if config.dataset:
         data["dataset"] = config.dataset
-    if config.transformer_config:
-        data["transformer_config"] = config.transformer_config
     if config.output:
         data["output"] = config.output
     if not data:
@@ -303,8 +272,8 @@ def _setup_note(config: ManifestConfig, docs: DocsMeta) -> str:
         return docs.setup.strip()
     if config.has_customization:
         return (
-            "This example uses a custom dataset config to narrow the pipeline to the "
-            "comparators and transformers that make the behavior obvious."
+            "This example uses a custom dataset config to make the relevant "
+            "correspondence behavior obvious."
         )
     return DEFAULT_PIPELINE_SETUP_NOTE
 

@@ -30,7 +30,7 @@ pub enum ArtifactSubject {
 ///   changes. Adding optional fields to an existing version is fine
 ///   and does not require a bump (JSON/serde naturally ignore unknown
 ///   fields and default missing ones).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ArtifactFormat {
     pub package: String,
@@ -57,8 +57,8 @@ impl std::fmt::Display for ArtifactFormat {
 /// Descriptor for a published artifact attached to a node.
 ///
 /// Artifacts are the unified mechanism for both private reuse and
-/// cross-plugin composition. A comparator or transformer publishes
-/// zero or more artifacts; downstream plugins consume them by format.
+/// cross-plugin composition. Parse rules publish artifacts; downstream rules
+/// consume them by format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ArtifactDescriptor {
@@ -74,9 +74,9 @@ pub struct ArtifactDescriptor {
 
 /// Standard format for tabular data artifacts.
 ///
-/// Any comparator that parses a tabular source format (CSV, TSV, Excel,
-/// Parquet, …) should publish artifacts with this format so that
-/// generic tabular transformers and extractors can consume them without
+/// Any parser for a tabular source format (CSV, TSV, Excel, Parquet, ...)
+/// should publish artifacts with this format so that generic tabular writers,
+/// compaction rules, and extractors can consume them without
 /// knowing the source format.
 pub fn tabular_v1() -> ArtifactFormat {
     ArtifactFormat::new("binoc", "tabular", 1)
@@ -93,8 +93,9 @@ pub fn tabular_collection_v1() -> ArtifactFormat {
 
 // ── Format-neutral data types ───────────────────────────────────────
 
-/// Format-neutral tabular data. Produced by CSV, Excel, Parquet comparators;
-/// consumed by tabular transformers and extractors.
+/// Format-neutral tabular data. Produced by CSV, Excel, Parquet, and other
+/// tabular parsers; consumed by tabular writers, compaction rules, and
+/// extractors.
 ///
 /// This is the codec type for the [`tabular_v1`] artifact format.
 /// Serialize with `serde_json::to_vec`, deserialize with `serde_json::from_slice`.
@@ -220,6 +221,14 @@ pub struct DatasetSemanticsV1 {
     pub files: FileIdentityConfig,
     #[serde(default)]
     pub tables: TableConfig,
+    #[serde(default)]
+    pub correspondence: CorrespondenceConfig,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CorrespondenceConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expand_renamed_unchanged_collections: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -435,7 +444,7 @@ impl TabularDataPair {
     /// Build a `TabularDataPair` from [`tabular_v1`] artifacts on a node.
     ///
     /// Returns `None` if neither left nor right artifact is present.
-    /// This is the standard way for transformers and extractors to obtain
+    /// This is the standard way for rules and extractors to obtain
     /// tabular data without knowing the source format.
     pub fn from_artifacts(
         node: &crate::ir::DiffNode,
@@ -467,7 +476,7 @@ impl TabularDataPair {
 ///
 /// Given a `TabularDataPair` and an aspect name, produces the
 /// corresponding `ExtractResult`. This is format-neutral — any
-/// comparator or transformer that works with tabular artifacts can
+/// writer or compatibility plugin that works with tabular artifacts can
 /// delegate extraction here.
 pub fn tabular_extract(
     pair: &TabularDataPair,
@@ -605,7 +614,7 @@ fn tabular_columns_in_common(left: &TabularData, right: &TabularData) -> Vec<Str
 /// # Metadata invariants
 ///
 /// `content_hash`, `size`, and `media_type` are **opportunistic hints**.
-/// Producers (expanding comparators like directory/zip, or data backends)
+/// Producers (expand rules like directory/zip, or data backends)
 /// populate them when doing so is cheap — typically as a byproduct of work
 /// they were already performing. Consumers **must not assume presence**, but
 /// **may trust presence**: when a field is set, the value accurately reflects
@@ -627,6 +636,11 @@ pub struct ItemRef {
     pub size: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
+    /// Optional projection metadata supplied by rule packs while they still
+    /// know the vocabulary. Core carries this through but does not interpret
+    /// file names, media types, or plugin-specific tags.
+    #[serde(default, skip_serializing_if = "crate::projection_hint_is_default")]
+    pub projection_hint: crate::ProjectionHint,
     /// Opaque identifier used by DataAccess implementations to locate data.
     /// Plugin authors should not create or interpret this value directly.
     #[serde(default)]
@@ -646,8 +660,10 @@ impl ItemRef {
         if let Some(hash) = &self.content_hash {
             return Ok(hash.clone());
         }
-        let bytes = data.read_bytes(self)?;
-        Ok(blake3::hash(&bytes).to_hex().to_string())
+        let mut reader = data.open_read(self)?;
+        let mut hasher = blake3::Hasher::new();
+        std::io::copy(&mut reader, &mut hasher)?;
+        Ok(hasher.finalize().to_hex().to_string())
     }
 
     /// Return the item's byte length, reading from the backend if not already
@@ -729,64 +745,6 @@ impl ItemPair {
     }
 }
 
-// ── Result enums ────────────────────────────────────────────────────
-
-/// Result of a comparator's compare operation.
-#[derive(Debug, Serialize, Deserialize)]
-#[non_exhaustive]
-pub enum CompareResult {
-    /// Items are identical — no diff node produced.
-    Identical,
-    /// Terminal diff — no further expansion needed.
-    Leaf(DiffNode),
-    /// Container node with children to recursively process.
-    Expand(DiffNode, Vec<ItemPair>),
-    /// Comparator cannot handle this item after all — try the next one.
-    Skip,
-}
-
-/// Result of a transformer's transform operation.
-#[non_exhaustive]
-pub enum TransformResult {
-    /// Node unchanged — zero cost.
-    Unchanged,
-    /// Replace this node with a new one.
-    Replace(Box<DiffNode>),
-    /// Replace this node with multiple sibling nodes.
-    ReplaceMany(Vec<DiffNode>),
-    /// Remove this node entirely.
-    Remove,
-}
-
-/// Dispatch filter on node shape for transformer matching.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum NodeShapeFilter {
-    /// Match any node regardless of children.
-    #[default]
-    Any,
-    /// Match only container nodes (those with children).
-    Container,
-    /// Match only leaf nodes (those without children).
-    Leaf,
-    /// Match only the tree root. Intended for tree-wide walkers
-    /// (correlation detectors, roll-ups) that need to see the entire
-    /// changeset at once and do their own traversal. Called exactly
-    /// once per diff.
-    Root,
-}
-
-/// Whether a comparator handles files, containers (directories), or both.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ItemScope {
-    /// Non-directory items only (most comparators).
-    #[default]
-    Files,
-    /// Directories only (directory comparator).
-    Containers,
-    /// Both files and directories.
-    Any,
-}
-
 /// Result of an extract (on-demand detail retrieval) operation.
 pub enum ExtractResult {
     Text(String),
@@ -804,6 +762,7 @@ mod tests {
             content_hash: None,
             size: None,
             media_type: None,
+            projection_hint: Default::default(),
             handle: String::new(),
         }
     }

@@ -1,0 +1,125 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "summary": [
+      {
+        "uint": 0
+      },
+      {
+        "text": " edits"
+      }
+    ],
+    "children": [
+      {
+        "action": "remove",
+        "item_type": "file",
+        "path": "data.zip",
+        "summary": [
+          {
+            "text": "Removed"
+          }
+        ],
+        "children": [
+          {
+            "action": "remove",
+            "item_type": "tabular",
+            "path": "data.zip/x.csv",
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          },
+          {
+            "action": "remove",
+            "item_type": "tabular",
+            "path": "data.zip/y.csv",
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          },
+          {
+            "action": "remove",
+            "item_type": "tabular",
+            "path": "data.zip/z.csv",
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
+      },
+      {
+        "action": "add",
+        "item_type": "file",
+        "path": "archive.zip",
+        "summary": [
+          {
+            "text": "Added"
+          }
+        ],
+        "children": [
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "archive.zip/p.csv",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "archive.zip/q.csv",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "archive.zip/r.csv",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

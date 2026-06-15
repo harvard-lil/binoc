@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "SQLite comparator plugin for Binoc"
+description = "SQLite correspondence rule pack for Binoc"
 publish = false
 
 [lib]

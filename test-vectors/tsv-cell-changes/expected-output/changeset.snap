@@ -19,83 +19,35 @@ expression: "&stable_changeset"
             "uint": 2
           },
           {
-            "text": " cells changed"
+            "text": " edits"
           }
         ],
         "tags": [
           "binoc.cell-change"
         ],
         "details": {
-          "cells_changed": 2,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "age",
-            "city"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age",
-            "city"
-          ],
-          "hash_left": "40846706232f796351507ce4380e8cafda832f555b7aac181579f9d971dd91bb",
-          "hash_right": "c29e4ffe02763e0ba8581e7a44731f58d50f614a30166f78e936aac9e7025914",
-          "rows_added": 0,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 2
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 2,
-            "examples": [
-              {
-                "locator": {
-                  "column": "age",
-                  "row": 0
-                },
-                "before": {
-                  "value": "30",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "31",
-                  "media_type": "text/plain"
-                }
+          "edits": [
+            {
+              "params": {
+                "column": "age",
+                "from": "30",
+                "row": 0,
+                "to": "31"
               },
-              {
-                "locator": {
-                  "column": "city",
-                  "row": 1
-                },
-                "before": {
-                  "value": "Boston",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "Cambridge",
-                  "media_type": "text/plain"
-                }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ]
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "city",
+                "from": "Boston",
+                "row": 1,
+                "to": "Cambridge"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **running_list.csv**: 1 row added
+- **running_list_as_of_2023.csv**: Moved from running_list_as_of_2022.csv (modified)

@@ -4,4 +4,5 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **removed_file.txt**: File removed (1 line)
+- **(root)**: 0 edits
+- **removed_file.txt**: Removed

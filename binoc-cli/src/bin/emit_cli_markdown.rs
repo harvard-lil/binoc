@@ -1,8 +1,8 @@
-//! Regenerate `docs/reference/cli.md` from the clap `Command` tree.
+//! Regenerate `docs/users/reference/cli.md` from the clap `Command` tree.
 //!
 //! Usage: `emit-cli-markdown [PATH]`
 //!
-//! PATH defaults to `docs/reference/cli.md` resolved relative to the workspace
+//! PATH defaults to `docs/users/reference/cli.md` resolved relative to the workspace
 //! root. The file must already exist and contain the begin/end marker pair
 //! declared below; only the content between the markers is rewritten, so the
 //! authored frontmatter and intro above the generated block survive.
@@ -21,7 +21,7 @@ fn default_output_path() -> PathBuf {
     manifest_dir
         .parent()
         .unwrap_or(manifest_dir)
-        .join("docs/reference/cli.md")
+        .join("docs/users/reference/cli.md")
 }
 
 fn strip_generator_preamble(generated: &str) -> &str {

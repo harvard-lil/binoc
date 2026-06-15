@@ -130,20 +130,11 @@ class TestDiffConfig:
         changeset = binoc.diff(a, b, config=config)
         assert changeset.root is not None
 
-    def test_custom_comparators(self, snapshot_pair):
-        a, b = snapshot_pair('single-file-modify-text')
-        config = binoc.Config(
-            comparators=['binoc.directory', 'binoc.text', 'binoc.binary'],
-            transformers=[],
-        )
-        changeset = binoc.diff(a, b, config=config)
-        assert changeset.root is not None
-
     def test_config_repr(self):
         config = binoc.Config.default()
         r = repr(config)
         assert 'Config' in r
-        assert 'binoc.csv' in r
+        assert 'binoc.csv' not in r
 
 
 def _collect_actions(node):

@@ -12,94 +12,33 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular",
+        "item_type": "tabular_collection",
         "path": "data.xpt",
         "summary": [
           {
-            "text": "Column added: 'score'"
+            "uint": 1
+          },
+          {
+            "text": " edit"
           }
         ],
         "tags": [
           "binoc.column-addition",
-          "binoc.schema-change"
+          "binoc.schema-change",
+          "binoc.table-change",
+          "binoc.tabular-collection-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [
-            "score"
-          ],
-          "columns_left": [
-            "id",
-            "name"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "name",
-            "score"
-          ],
-          "hash_left": "066683a11a620dc829460d7be10de18b0fe1ce24c47e57bd196874a5eafdfc8e",
-          "hash_right": "1c3b282391da3ae95355796cc95f3106db303d873d6fbfc39c518484771fe330",
-          "left_metadata": {
-            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-            "columns": {},
-            "dataset_index": 1,
-            "dataset_label": null,
-            "dataset_name": "BINOCTST",
-            "datasets": [
-              {
-                "columns": [
-                  "id",
-                  "name"
-                ],
-                "dataset_index": 1,
-                "dataset_label": null,
-                "dataset_name": "BINOCTST",
-                "logical_name": "BINOCTST",
-                "node_name": "BINOCTST",
-                "rows": 2
-              }
-            ],
-            "format": "sas_xport",
-            "logical_name": "BINOCTST",
-            "node_name": "BINOCTST"
-          },
-          "right_metadata": {
-            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-            "columns": {},
-            "dataset_index": 1,
-            "dataset_label": null,
-            "dataset_name": "BINOCTST",
-            "datasets": [
-              {
-                "columns": [
-                  "id",
-                  "name",
-                  "score"
-                ],
-                "dataset_index": 1,
-                "dataset_label": null,
-                "dataset_name": "BINOCTST",
-                "logical_name": "BINOCTST",
-                "node_name": "BINOCTST",
-                "rows": 2
-              }
-            ],
-            "format": "sas_xport",
-            "logical_name": "BINOCTST",
-            "node_name": "BINOCTST"
-          },
-          "rows_added": 0,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 2
-        },
-        "comparator": "binoc-stat-binary.xpt",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "table": "BINOCTST"
+              },
+              "verb": "tabular_collection.change_table"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

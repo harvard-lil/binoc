@@ -1,25 +1,10 @@
-# Same snapshots as sqlite-row-addition but without the SQLite plugin:
-# comparators omit binoc-sqlite.sqlite so .sqlite files are compared as binary.
+# Same snapshots as sqlite-row-addition but without the SQLite rule pack.
 [vector]
 name = "without-plugin"
-description = "SQLite DBs compared as binary (no sqlite comparator)"
+description = "SQLite DBs compared by byte-level fallback (no SQLite rule pack)"
 tags = ["sqlite", "without-plugin"]
 
-[config]
-comparators = [
-    "binoc.zip",
-    "binoc.directory",
-    "binoc.csv",
-    "binoc.text",
-    "binoc.binary",
-]
-transformers = [
-    "binoc.correlation_detector",
-    "binoc.folder_move_detector",
-    "binoc.column_reorder_detector",
-]
-
 [expected]
-root_kind = "modify"
-# Binary comparator will see content change
+root_action = "modify"
+# Binary writer will see content change.
 has_tags = ["binoc.content-changed"]

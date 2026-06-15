@@ -34,7 +34,8 @@ fn diff_default_stdout_is_markdown() {
         .assert()
         .success()
         .stdout(predicates::str::contains("# Changelog:"))
-        .stdout(predicates::str::contains("lines added"));
+        .stdout(predicates::str::contains("story.txt"))
+        .stdout(predicates::str::contains("1 edit"));
 }
 
 #[test]
@@ -87,7 +88,8 @@ fn diff_csv_column_addition_markdown() {
         .arg(dir.join("snapshot-b"))
         .assert()
         .success()
-        .stdout(predicates::str::contains("Column added: 'email'"));
+        .stdout(predicates::str::contains("data.csv"))
+        .stdout(predicates::str::contains("2 edits"));
 }
 
 #[test]
@@ -153,6 +155,32 @@ fn diff_multiple_outputs() {
 }
 
 #[test]
+fn extract_rows_added_from_saved_changeset() {
+    let tmp = tempfile::tempdir().unwrap();
+    let changeset_path = tmp.path().join("changeset.json");
+    let dir = vectors_dir().join("csv-row-addition");
+
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("-o")
+        .arg(&changeset_path)
+        .arg("-q")
+        .assert()
+        .success();
+
+    binoc()
+        .arg("extract")
+        .arg(&changeset_path)
+        .arg("data.csv")
+        .arg("rows_added")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Charlie"));
+}
+
+#[test]
 fn diff_two_snapshots_json_stdout_remains_single_object() {
     let dir = vectors_dir().join("single-file-modify-text");
     binoc()
@@ -212,13 +240,12 @@ fn diff_with_config_file() {
     std::fs::write(
         &config_path,
         r#"
-comparators:
-  - binoc.directory
-  - binoc.csv
-  - binoc.text
-  - binoc.binary
-transformers:
-  - binoc.tabular_analyzer
+dataset:
+  tables:
+    defaults:
+      row_identity:
+        columns:
+          - id
 "#,
     )
     .unwrap();
@@ -232,7 +259,35 @@ transformers:
         .arg(&config_path)
         .assert()
         .success()
-        .stdout(predicates::str::contains("rows added"));
+        .stdout(predicates::str::contains("data.csv"))
+        .stdout(predicates::str::contains("1 edit"));
+}
+
+#[test]
+fn diff_rejects_removed_pipeline_lists_in_config() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config_path = tmp.path().join("config.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+comparators:
+  - example.no_longer_loaded
+transformers:
+  - example.no_longer_loaded
+"#,
+    )
+    .unwrap();
+
+    let dir = vectors_dir().join("csv-row-addition");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--config")
+        .arg(&config_path)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("comparators"));
 }
 
 // ── Error cases ────────────────────────────────────────────────────

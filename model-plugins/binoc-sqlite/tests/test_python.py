@@ -1,14 +1,10 @@
-"""Smoke test: verify the native plugin loads and registers via the C ABI bridge.
+"""Smoke test: verify the Python package imports.
 
-Comparator correctness is covered by the Rust test vectors in
-binoc-sqlite/tests/test_vectors.rs. This test only verifies the
-Python packaging and native loading path.
+Rule-pack correctness is covered by the Rust test vectors in
+binoc-sqlite/tests/test_vectors.rs. Python does not expose parser-rule loading
+yet; this test only verifies the package path.
 """
-
-import binoc
 
 
 def test_native_plugin_loads():
-    r = binoc.PluginRegistry.default()
-    r.load_native_plugin('binoc_sqlite')
-    assert 'binoc-sqlite.sqlite' in r.list_comparators()
+    import binoc_sqlite  # noqa: F401

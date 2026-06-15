@@ -2,27 +2,24 @@
 //! and by plugins (e.g. binoc-sqlite) so they don’t duplicate manifest parsing,
 //! copy/build/snapshot logic, or assertions. Vectors live in a `test-vectors/`
 //! directory; a root `manifest.toml` there provides default `[config]`/`[expected]`;
-//! each vector’s manifest overrides.
+//! each vector's manifest overrides.
 //!
 //! Test vectors commit *source* trees like `archive.zip.d/` instead of opaque
 //! binary archives. A [`VectorMaterializer`] turns each staging directory into
 //! the real artifact (`.zip`, `.tar.gz`, `.sqlite`, ...). The stdlib ships
 //! [`ZipMaterializer`], [`TarMaterializer`], and [`GzipMaterializer`]
 //! ([`stdlib_materializers`]); plugins contribute their own (see
-//! `binoc-sqlite` for SQLite). Both
-//! [`run_vector`] and [`materialize_snapshots`] go through the same walker so
-//! tests and `just materialize` build identical trees.
+//! `binoc-sqlite` for SQLite). Both [`run_vector`] and
+//! [`materialize_snapshots`] go through the same walker so tests and
+//! `just materialize` build identical trees.
 
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 
-use binoc_core::config::{DatasetConfig, OutputConfig, PluginRegistry, TransformerConfig};
+use binoc_core::config::{DatasetConfig, OutputConfig};
 use binoc_core::controller::Controller;
 use binoc_sdk::ir::DiffNode;
-use binoc_sdk::test_support::{AbiCall, AbiComparator, AbiLogCollector, AbiTransformer};
 use binoc_sdk::Changeset;
 use serde::Deserialize;
 
@@ -53,15 +50,10 @@ struct VectorMeta {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 struct ManifestConfig {
     #[serde(default)]
-    comparators: Option<Vec<String>>,
-    #[serde(default)]
-    transformers: Option<Vec<String>>,
-    #[serde(default)]
     output: Option<OutputConfig>,
-    #[serde(default)]
-    transformer_config: Option<TransformerConfig>,
     #[serde(default)]
     dataset: Option<serde_json::Value>,
 }
@@ -288,62 +280,6 @@ pub fn is_staging_dir_name(name: &str, all_suffixes: &[&str]) -> bool {
     all_suffixes.iter().any(|s| name.ends_with(s))
 }
 
-/// Build a default stdlib registry with all plugins wrapped in ABI wrappers.
-/// Returns the registry, a vec of log collectors for snapshotting, and the
-/// shared sequence counter (pass to additional plugin wrappers to keep a
-/// single global ordering).
-pub fn abi_wrapped_default_registry() -> (
-    PluginRegistry,
-    Vec<Arc<dyn AbiLogCollector>>,
-    Arc<AtomicU64>,
-) {
-    use crate::comparators::*;
-    use crate::transformers::*;
-
-    let counter = Arc::new(AtomicU64::new(0));
-    let mut registry = PluginRegistry::new();
-    let mut collectors: Vec<Arc<dyn AbiLogCollector>> = Vec::new();
-
-    macro_rules! wrap_comparator {
-        ($ty:expr) => {{
-            let w = Arc::new(AbiComparator::new($ty, counter.clone()));
-            collectors.push(w.clone());
-            registry.register_comparator(w).expect("same-build plugin");
-        }};
-    }
-    macro_rules! wrap_transformer {
-        ($ty:expr) => {{
-            let w = Arc::new(AbiTransformer::new($ty, counter.clone()));
-            collectors.push(w.clone());
-            registry.register_transformer(w).expect("same-build plugin");
-        }};
-    }
-
-    wrap_comparator!(zip_compare::ZipComparator);
-    wrap_comparator!(tar_compare::TarComparator);
-    wrap_comparator!(gzip_compare::GzipComparator);
-    wrap_comparator!(directory::DirectoryComparator);
-    wrap_comparator!(csv_compare::CsvComparator);
-    wrap_comparator!(text::TextComparator);
-    wrap_comparator!(binary::BinaryComparator);
-
-    wrap_transformer!(declared_correspondence::DeclaredCorrespondence);
-    wrap_transformer!(correlation_detector::CorrelationDetector);
-    wrap_transformer!(fuzzy_correlation_detector::FuzzyCorrelationDetector);
-    wrap_transformer!(folder_move_detector::FolderMoveDetector);
-    wrap_transformer!(table_splitter::TableSplitter);
-    wrap_transformer!(tabular_analyzer::TabularAnalyzer);
-    wrap_transformer!(tabular_stats_annotator::TabularStatsAnnotator);
-    wrap_transformer!(column_reorder::ColumnReorderDetector);
-    wrap_transformer!(table_collection_analyzer::TableCollectionAnalyzer);
-
-    registry
-        .register_renderer(Arc::new(markdown::MarkdownRenderer))
-        .expect("same-build plugin");
-
-    (registry, collectors, counter)
-}
-
 /// Run one vector: materialize snapshots into a temp dir using
 /// `materializers`, then resolve config, run diff, run assertions, and
 /// snapshot. Pass [`stdlib_materializers`] plus any plugin-specific builders.
@@ -351,39 +287,49 @@ pub fn abi_wrapped_default_registry() -> (
 pub fn run_vector(
     vector_dir: &Path,
     vectors_root: &Path,
-    registry_builder: impl FnOnce() -> PluginRegistry,
     materializers: &[&dyn VectorMaterializer],
 ) {
+    run_vector_with_correspondence_engine_config(
+        vector_dir,
+        vectors_root,
+        materializers,
+        crate::correspondence::engine_config_for_dataset_config,
+    );
+}
+
+/// Like [`run_vector`], with a caller-supplied correspondence config. Plugin
+/// crates use this to register in-process rule packs while still reusing the
+/// shared materialization/assertion/snapshot harness.
+pub fn run_vector_with_correspondence_engine_config(
+    vector_dir: &Path,
+    vectors_root: &Path,
+    materializers: &[&dyn VectorMaterializer],
+    config_builder: impl FnOnce(&serde_json::Value) -> binoc_sdk::CorrespondenceEngineConfig,
+) -> Changeset {
     let manifest = load_manifest(vectors_root, vector_dir);
     let config = build_config(&manifest);
 
     let tmp = tempfile::tempdir().expect("temp dir");
-    let snap_a = tmp.path().join("snapshot-a");
-    let snap_b = tmp.path().join("snapshot-b");
-    copy_dir_all(&vector_dir.join("snapshot-a"), &snap_a);
-    copy_dir_all(&vector_dir.join("snapshot-b"), &snap_b);
-    run_materializers(&snap_a, materializers);
-    run_materializers(&snap_b, materializers);
+    let materialized = tmp.path().join(&manifest.vector.name);
+    materialize_snapshots(vector_dir, &materialized, materializers);
+    let snap_a = materialized.join("snapshot-a");
+    let snap_b = materialized.join("snapshot-b");
 
     let (diff_a, diff_b) = diff_roots(&snap_a, &snap_b, &manifest.vector.root_file);
 
-    let registry = registry_builder();
-    let resolved = registry.resolve(&config).unwrap_or_else(|e| {
-        panic!(
-            "Failed to resolve plugins for {}: {e}",
-            manifest.vector.name
-        )
-    });
-    let controller = Controller::new(resolved.comparators, resolved.transformers)
-        .with_transformer_configs(config.transformer_config.as_map())
+    let controller = Controller::new(config_builder(&config.dataset))
         .with_dataset_config(config.dataset.clone());
 
     let changeset = controller
         .diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap())
-        .unwrap_or_else(|e| panic!("Diff failed for {}: {e}", manifest.vector.name));
+        .unwrap_or_else(|e| {
+            panic!(
+                "Correspondence diff failed for {}: {e}",
+                manifest.vector.name
+            )
+        });
 
-    check_invariants(&manifest.vector.name, &changeset);
-
+    check_changeset_invariants(&manifest.vector.name, &changeset);
     if let Some(expected) = &manifest.expected {
         check_assertions(&manifest.vector.name, &changeset, expected, &config);
     }
@@ -401,136 +347,7 @@ pub fn run_vector(
         insta::assert_json_snapshot!("changeset", &stable_changeset);
         insta::assert_snapshot!("changelog", &md);
     });
-}
-
-/// Like [`run_vector`], but also runs the same vector through an ABI-wrapped
-/// registry, asserts that the two runs produce byte-identical changesets, and
-/// snapshots the ABI call log as `abi-log`.
-///
-/// The parity check is the core guarantee: anything a plugin can "cheat" by
-/// exploiting in-process conveniences (shared memory, non-serializable fields,
-/// raw filesystem access outside `DataAccess`) will make the two changesets
-/// diverge and fail the test. Callers pass two registry builders that must
-/// construct logically equivalent sets of plugins — one with raw
-/// implementations, one with every plugin wrapped in
-/// [`AbiComparator`]/[`AbiTransformer`].
-pub fn run_vector_with_abi_log(
-    vector_dir: &Path,
-    vectors_root: &Path,
-    direct_registry_builder: impl FnOnce() -> PluginRegistry,
-    abi_registry_builder: impl FnOnce() -> PluginRegistry,
-    materializers: &[&dyn VectorMaterializer],
-    abi_collectors: &[&dyn AbiLogCollector],
-) {
-    let manifest = load_manifest(vectors_root, vector_dir);
-    let config = build_config(&manifest);
-
-    let tmp = tempfile::tempdir().expect("temp dir");
-    let snap_a = tmp.path().join("snapshot-a");
-    let snap_b = tmp.path().join("snapshot-b");
-    copy_dir_all(&vector_dir.join("snapshot-a"), &snap_a);
-    copy_dir_all(&vector_dir.join("snapshot-b"), &snap_b);
-    run_materializers(&snap_a, materializers);
-    run_materializers(&snap_b, materializers);
-
-    let (diff_a, diff_b) = diff_roots(&snap_a, &snap_b, &manifest.vector.root_file);
-
-    // Single-threaded rayon pool so traversal order is deterministic (both for
-    // the ABI seq counter and for stable parity comparison).
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .build()
-        .expect("rayon pool");
-
-    // Run 1: direct (unwrapped) registry — what an in-process deployment does.
-    let direct_registry = direct_registry_builder();
-    let direct_resolved = direct_registry.resolve(&config).unwrap_or_else(|e| {
-        panic!(
-            "Failed to resolve direct plugins for {}: {e}",
-            manifest.vector.name
-        )
-    });
-    let direct_controller =
-        Controller::new(direct_resolved.comparators, direct_resolved.transformers)
-            .with_transformer_configs(config.transformer_config.as_map())
-            .with_dataset_config(config.dataset.clone());
-    let direct_changeset = pool
-        .install(|| direct_controller.diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap()))
-        .unwrap_or_else(|e| panic!("Direct diff failed for {}: {e}", manifest.vector.name));
-
-    // Run 2: ABI-wrapped registry — what a separately-compiled plugin via the
-    // C ABI will see. Must produce an identical changeset to Run 1.
-    let abi_registry = abi_registry_builder();
-    let abi_resolved = abi_registry.resolve(&config).unwrap_or_else(|e| {
-        panic!(
-            "Failed to resolve ABI plugins for {}: {e}",
-            manifest.vector.name
-        )
-    });
-    let abi_controller = Controller::new(abi_resolved.comparators, abi_resolved.transformers)
-        .with_transformer_configs(config.transformer_config.as_map())
-        .with_dataset_config(config.dataset.clone());
-    let abi_changeset = pool
-        .install(|| abi_controller.diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap()))
-        .unwrap_or_else(|e| panic!("ABI diff failed for {}: {e}", manifest.vector.name));
-
-    assert_changesets_equal(&manifest.vector.name, &direct_changeset, &abi_changeset);
-
-    let mut abi_log: Vec<AbiCall> = Vec::new();
-    for collector in abi_collectors {
-        abi_log.extend(collector.take_abi_log());
-    }
-    abi_log.sort_by_key(|c| c.seq);
-
-    // Use the ABI run as the canonical changeset for downstream checks and
-    // snapshots — parity with the direct run is already asserted.
-    let changeset = abi_changeset;
-    check_invariants(&manifest.vector.name, &changeset);
-
-    if let Some(expected) = &manifest.expected {
-        check_assertions(&manifest.vector.name, &changeset, expected, &config);
-    }
-
-    let mut stable_changeset = changeset.clone();
-    stable_changeset.from_snapshot = "snapshot-a".into();
-    stable_changeset.to_snapshot = "snapshot-b".into();
-    let md_config = markdown_config_for_dataset(&config);
-    let md = markdown::render_markdown(&[stable_changeset.clone()], &md_config);
-
-    let mut settings = insta::Settings::clone_current();
-    settings.set_snapshot_path(vector_dir.join("expected-output"));
-    settings.set_prepend_module_to_snapshot(false);
-    settings.bind(|| {
-        insta::assert_json_snapshot!("changeset", &stable_changeset);
-        insta::assert_snapshot!("changelog", &md);
-        if !abi_log.is_empty() {
-            insta::assert_json_snapshot!("abi-log", &abi_log);
-        }
-    });
-}
-
-/// Assert that two changesets are byte-identical as JSON. Used to enforce that
-/// direct and ABI-wrapped runs of the same vector produce the same result.
-fn assert_changesets_equal(name: &str, direct: &Changeset, abi: &Changeset) {
-    let direct_json = serde_json::to_string_pretty(direct).expect("serialize direct changeset");
-    let abi_json = serde_json::to_string_pretty(abi).expect("serialize ABI changeset");
-    if direct_json != abi_json {
-        // Print a compact diff hint so the failure points at the first
-        // diverging line rather than dumping two large blobs.
-        let first_diff = direct_json
-            .lines()
-            .zip(abi_json.lines())
-            .enumerate()
-            .find(|(_, (d, a))| d != a)
-            .map(|(i, (d, a))| format!("  line {i}:\n    direct: {d}\n    abi:    {a}"))
-            .unwrap_or_else(|| "  (lengths differ, no shared prefix)".into());
-        panic!(
-            "[{name}] direct-dispatch and ABI-wrapped runs produced different changesets.\n\
-             This means a plugin is relying on in-process conveniences that won't survive\n\
-             the real C ABI boundary (e.g. non-serializable fields, shared memory, raw fs\n\
-             access outside DataAccess). First divergence:\n{first_diff}"
-        );
-    }
+    changeset
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -576,15 +393,9 @@ fn build_config(manifest: &Manifest) -> DatasetConfig {
         Some(cfg) => {
             let default = DatasetConfig::default_config();
             DatasetConfig {
-                comparators: cfg.comparators.clone().unwrap_or(default.comparators),
-                transformers: cfg.transformers.clone().unwrap_or(default.transformers),
                 renderers: default.renderers,
                 output: cfg.output.clone().unwrap_or(default.output),
                 dataset: cfg.dataset.clone().unwrap_or(default.dataset),
-                transformer_config: cfg
-                    .transformer_config
-                    .clone()
-                    .unwrap_or(default.transformer_config),
             }
         }
         None => DatasetConfig::default_config(),
@@ -751,15 +562,22 @@ fn gzip_source_path(staging_dir: &Path, gzip_path: &Path) -> PathBuf {
 // ── Invariant checker ─────────────────────────────────────────────────
 
 /// Validate semantic invariants that must hold for every changeset,
-/// regardless of which vector produced it. Runs after diff+transform
-/// and before snapshot comparison so that buggy output is caught even
-/// when the snapshot would silently enshrine it.
-fn check_invariants(name: &str, changeset: &Changeset) {
+/// regardless of which vector produced it. Runs after correspondence projection
+/// and before snapshot comparison so that buggy output is caught even when the
+/// snapshot would silently enshrine it.
+///
+/// This is the canonical home for cheap changeset invariants (tier 1 of
+/// the lint scheme — see `binoc_sdk::lints` for the tier overview).
+/// Invariants added here run on every vector of every crate that uses
+/// this harness, stdlib and plugins alike. Plugins with domain-specific
+/// invariants should call this plus their own checks on changesets they
+/// build in their own tests. `name` is only used to label failures.
+pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
     let Some(root) = &changeset.root else {
         return;
     };
     let mut leaf_paths: Vec<&str> = Vec::new();
-    collect_invariant_violations(name, root, &mut leaf_paths);
+    collect_invariant_violations(root, &mut leaf_paths);
 
     let mut seen = HashSet::new();
     for path in &leaf_paths {
@@ -769,133 +587,13 @@ fn check_invariants(name: &str, changeset: &Changeset) {
     }
 }
 
-fn collect_invariant_violations<'a>(name: &str, node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {
+fn collect_invariant_violations<'a>(node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {
     if node.children.is_empty() {
         leaf_paths.push(&node.path);
     }
 
-    check_tabular_tag_detail_consistency(name, node);
-
     for child in &node.children {
-        collect_invariant_violations(name, child, leaf_paths);
-    }
-}
-
-/// If a tabular node has both tags and details set by TabularAnalyzer,
-/// the tags must be consistent with the detail values. A tag like
-/// `binoc.column-addition` implies `columns_added` is non-empty, and
-/// a non-empty `columns_added` implies the tag is present.
-fn check_tabular_tag_detail_consistency(name: &str, node: &DiffNode) {
-    if !node
-        .transformed_by
-        .contains(&"binoc.tabular_analyzer".to_string())
-    {
-        return;
-    }
-    if node.action == "add" || node.action == "remove" {
-        return;
-    }
-
-    let tag_detail_pairs: &[(&str, &str)] = &[
-        ("binoc.column-addition", "columns_added"),
-        ("binoc.column-removal", "columns_removed"),
-        ("binoc.row-addition", "rows_added"),
-        ("binoc.row-removal", "rows_removed"),
-        ("binoc.cell-change", "cells_changed"),
-    ];
-
-    for &(tag, detail_key) in tag_detail_pairs {
-        let has_tag = node.tags.contains(tag);
-        let detail_is_positive = node.details.get(detail_key).is_some_and(|v| match v {
-            serde_json::Value::Number(n) => n.as_u64().unwrap_or(0) > 0,
-            serde_json::Value::Array(a) => !a.is_empty(),
-            _ => false,
-        });
-
-        assert_eq!(
-            has_tag,
-            detail_is_positive,
-            "[{name}] node '{}': tag '{tag}' is {}, but detail '{detail_key}' is {} \
-             (tags={:?}, details={:?})",
-            node.path,
-            if has_tag { "present" } else { "absent" },
-            if detail_is_positive {
-                "positive/non-empty"
-            } else {
-                "zero/empty/missing"
-            },
-            node.tags,
-            node.details,
-        );
-    }
-
-    check_tabular_column_detail_consistency(name, node);
-}
-
-/// Cross-check: `columns_left` and `columns_right` details must be
-/// consistent with `columns_added` and `columns_removed`. Every column
-/// in `columns_added` must appear in `columns_right` but not `columns_left`,
-/// and vice versa for `columns_removed`.
-fn check_tabular_column_detail_consistency(name: &str, node: &DiffNode) {
-    let get_string_array = |key: &str| -> Option<Vec<String>> {
-        node.details.get(key).and_then(|v| {
-            v.as_array().map(|a| {
-                a.iter()
-                    .filter_map(|item| item.as_str().map(String::from))
-                    .collect()
-            })
-        })
-    };
-
-    let Some(cols_left) = get_string_array("columns_left") else {
-        return;
-    };
-    let Some(cols_right) = get_string_array("columns_right") else {
-        return;
-    };
-    let cols_added = get_string_array("columns_added").unwrap_or_default();
-    let cols_removed = get_string_array("columns_removed").unwrap_or_default();
-
-    let left_set: HashSet<&str> = cols_left.iter().map(|s| s.as_str()).collect();
-    let right_set: HashSet<&str> = cols_right.iter().map(|s| s.as_str()).collect();
-
-    for col in &cols_added {
-        assert!(
-            right_set.contains(col.as_str()) && !left_set.contains(col.as_str()),
-            "[{name}] node '{}': column '{col}' listed as added but \
-             columns_left={cols_left:?}, columns_right={cols_right:?}",
-            node.path,
-        );
-    }
-    for col in &cols_removed {
-        assert!(
-            left_set.contains(col.as_str()) && !right_set.contains(col.as_str()),
-            "[{name}] node '{}': column '{col}' listed as removed but \
-             columns_left={cols_left:?}, columns_right={cols_right:?}",
-            node.path,
-        );
-    }
-
-    if let Some(rows_left) = node.details.get("rows_left").and_then(|v| v.as_u64()) {
-        if let Some(rows_right) = node.details.get("rows_right").and_then(|v| v.as_u64()) {
-            let rows_added = node
-                .details
-                .get("rows_added")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            let rows_removed = node
-                .details
-                .get("rows_removed")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            let expected_right = rows_left + rows_added - rows_removed;
-            assert_eq!(
-                rows_right, expected_right,
-                "[{name}] node '{}': rows_left({rows_left}) + rows_added({rows_added}) \
-                 - rows_removed({rows_removed}) = {expected_right}, but rows_right = {rows_right}",
-                node.path,
-            );
-        }
+        collect_invariant_violations(child, leaf_paths);
     }
 }
 

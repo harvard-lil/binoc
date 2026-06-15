@@ -1,7 +1,7 @@
 """Test vector helpers for binoc plugins.
 
 Provides utilities to discover test vectors and run them against the binoc
-Python API. Plugin authors use this to validate their comparators end-to-end
+Python API. Plugin authors use this to validate correspondence-first output
 through the Python stack.
 
 Snapshots are assumed to be **already materialized** — that is, any ``.zip.d``
@@ -28,19 +28,13 @@ Typical usage in a plugin's pytest suite::
     import binoc
     from binoc.testing import discover_vectors, run_vector
 
-    @pytest.fixture
-    def registry():
-        r = binoc.PluginRegistry.default()
-        r.register_comparator("my-plugin.foo", MyComparator())
-        return r
-
     @pytest.mark.parametrize(
         "vector_dir",
         discover_vectors(vectors_dir()),
         ids=lambda v: v.name,
     )
-    def test_vector(vector_dir, registry):
-        run_vector(vector_dir, registry=registry)
+    def test_vector(vector_dir):
+        run_vector(vector_dir)
 """
 
 from __future__ import annotations
@@ -116,7 +110,7 @@ def run_vector(
 
     Steps:
       1. Parse the manifest (with root-manifest defaults).
-      2. Build a ``binoc.Config`` from the manifest's ``[config]`` section.
+      2. Build a ``binoc.Config`` from supported manifest ``[config]`` fields.
       3. Run ``binoc.diff()`` against the snapshots with the config and
          optional *registry*.
       4. Check ``[expected]`` assertions from the manifest.
@@ -185,7 +179,4 @@ def _load_toml(path: Path) -> dict:
 
 
 def _build_config(manifest: dict) -> binoc.Config:
-    mc = manifest.get('config', {})
-    comparators = mc.get('comparators')
-    transformers = mc.get('transformers')
-    return binoc.Config(comparators=comparators, transformers=transformers)
+    return binoc.Config.default()

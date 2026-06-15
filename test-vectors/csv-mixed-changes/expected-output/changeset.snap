@@ -16,16 +16,10 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "text": "Column added: 'email'; "
+            "uint": 3
           },
           {
-            "text": "columns reordered; "
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " row added"
+            "text": " edits"
           }
         ],
         "tags": [
@@ -35,35 +29,51 @@ expression: "&stable_changeset"
           "binoc.schema-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [
-            "email"
-          ],
-          "columns_left": [
-            "name",
-            "age",
-            "city"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "city",
-            "name",
-            "age",
-            "email"
-          ],
-          "hash_left": "a765f1321a212e939b76c668a316010b8404cf9c8219d987f0413dc9d12fcf58",
-          "hash_right": "61b13952b08b978a78b64484a71389d7064cd65fdf982681d7dca0f90715db8b",
-          "rows_added": 1,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 3
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "order": [
+                  "city",
+                  "name",
+                  "age"
+                ]
+              },
+              "verb": "tabular.reorder_columns"
+            },
+            {
+              "params": {
+                "name": "email",
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "a@test.com",
+                    "b@test.com",
+                    "c@test.com"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            },
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "SF",
+                    "Charlie",
+                    "35",
+                    "c@test.com"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

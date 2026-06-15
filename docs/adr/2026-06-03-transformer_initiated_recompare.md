@@ -1,7 +1,13 @@
 # Transformer-Initiated Recompare as a Correspondence Contract
 
 **Date:** 2026-06-03
-**Status:** Implemented
+**Status:** Superseded by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+
+> **Supersession note (2026-06-12):** `pending_recompare` and controller
+> re-dispatch were removed during the correspondence-first migration.
+> Transformer-discovered identity is now represented as pair-rule evidence over
+> side-tree items. Writers explain the linked pair directly, so no semantic
+> wrapper has to ask the controller to rebuild a merged subtree.
 
 ## Context
 

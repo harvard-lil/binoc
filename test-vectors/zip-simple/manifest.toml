@@ -4,5 +4,5 @@ description = "Zipped files with changes inside"
 tags = ["zip", "archive"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 # has_tags should include content changes

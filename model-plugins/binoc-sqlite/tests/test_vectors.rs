@@ -3,21 +3,14 @@
 //! `.sqlite.d`/`.db.d` lives in `binoc_sqlite::test_support` so this test and
 //! the `materialize-test-vectors` binary share one builder.
 //!
-//! All plugins (stdlib + sqlite) are wrapped in ABI wrappers so every call goes
-//! through the JSON wire format. ABI and DataAccess interactions are snapshotted
-//! as golden files.
-//!
 //! Auto-discovers all vectors — add a new directory with manifest.toml + snapshots
 //! and it will be tested automatically.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use binoc_sdk::test_support::{AbiComparator, AbiLogCollector};
 use binoc_sqlite::test_support::SqliteMaterializer;
-use binoc_sqlite::SqliteComparator;
 use binoc_stdlib::test_vectors::{
-    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
+    discover_vectors, run_vector_with_correspondence_engine_config, stdlib_materializers,
     VectorMaterializer,
 };
 
@@ -43,29 +36,22 @@ fn test_all_vectors() {
     materializers.push(&sqlite);
 
     for vector in &vectors {
-        let (mut registry, mut collectors, counter) = abi_wrapped_default_registry();
-
-        let sqlite_comp = Arc::new(AbiComparator::new(SqliteComparator, counter));
-        collectors.push(sqlite_comp.clone());
-        registry
-            .register_comparator(sqlite_comp)
-            .expect("same-build plugin");
-
-        let collector_refs: Vec<&dyn AbiLogCollector> =
-            collectors.iter().map(|c| c.as_ref()).collect();
-        run_vector_with_abi_log(
+        let is_without_plugin = vector
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == "without-plugin");
+        run_vector_with_correspondence_engine_config(
             vector,
             &vectors_dir(),
-            || {
-                let mut direct = binoc_stdlib::default_registry();
-                direct
-                    .register_comparator(Arc::new(SqliteComparator))
-                    .expect("same-build plugin");
-                direct
-            },
-            move || registry,
             &materializers,
-            &collector_refs,
+            |dataset| {
+                let mut config =
+                    binoc_stdlib::correspondence::engine_config_for_dataset_config(dataset);
+                if !is_without_plugin {
+                    binoc_sqlite::register_correspondence_rules(&mut config);
+                }
+                config
+            },
         );
     }
 }

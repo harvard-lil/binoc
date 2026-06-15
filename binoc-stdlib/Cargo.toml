@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Standard comparators, transformers, and renderers for Binoc"
+description = "Standard correspondence rule pack and renderers for Binoc"
 publish = false
 
 [features]

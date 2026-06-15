@@ -1,11 +1,16 @@
 # Unified Dataset Config and Identity Policy
 
 **Date:** 2026-06-01
-**Status:** Accepted
+**Status:** Accepted; implementation notes superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
 
 Note: the Markdown-renderer grouping example below is superseded by
 [2026-06-02-renderer_groups.md](2026-06-02-renderer_groups.md). Current config
 uses `output.markdown.groups`, not `output.markdown.significance`.
+
+Note: the dataset-semantics shape remains current, but implementation passages
+that mention comparator-to-transformer orchestration or `pending_recompare` are
+superseded by the correspondence engine. Declared file identity is now pair-rule
+evidence over side items.
 
 ## Context
 
@@ -29,9 +34,9 @@ the parts they understand.
 At the same time, Binoc's core rules still apply:
 
 - the controller must remain type-ignorant
-- comparators parse source data into IR and artifacts
-- transformers optimize or annotate IR and may request re-comparison through
-  `pending_recompare`
+- parse rules publish source data as artifacts
+- pair, writer, compaction, and projection rules optimize the correspondence
+  result before changeset projection
 - significance remains a renderer concern
 - configuration is passed into the run, not read from global state
 

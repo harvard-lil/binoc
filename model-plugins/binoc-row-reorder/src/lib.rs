@@ -1,8 +1,11 @@
 mod row_reorder;
 
-pub use row_reorder::RowReorderDetector;
+use std::sync::Arc;
 
-binoc_sdk::export_plugin! {
-    module: binoc_row_reorder,
-    transformers: [RowReorderDetector],
+use binoc_sdk::CorrespondenceEngineConfig;
+
+pub use row_reorder::RowReorderWriter;
+
+pub fn register_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
+    config.writers.insert(0, Arc::new(RowReorderWriter));
 }

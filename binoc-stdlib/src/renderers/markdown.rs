@@ -224,14 +224,10 @@ fn collect_reportable_nodes<'a>(
         || !node.tags.is_empty()
         || (node.children.is_empty() && node.action != "identical");
 
-    // A `move` node with content detail (from fuzzy correlation +
-    // re-dispatch) is reported as one unit: the move headline plus a
-    // trailing content summary. Detail can live in children, in
-    // `annotations.tabular_summary` (TabularAnalyzer), or in
-    // `annotations.content_summary` (comparator leaf summary captured
-    // during inflate). Without this grouping, the move and its content
-    // detail would land in different sections, hiding the
-    // relationship.
+    // A `move` node with content detail is reported as one unit: the move
+    // headline plus a trailing content summary. Detail can live in children or
+    // renderer annotations. Without this grouping, the move and its content
+    // detail would land in different sections, hiding the relationship.
     let group_as_move = should_group_move_children(node);
 
     if is_reportable {
@@ -302,14 +298,12 @@ fn should_group_move_children(node: &DiffNode) -> bool {
 /// Build the trailing description for a move bullet, if any.
 ///
 /// Priority (first match wins):
-/// 1. `annotations.tabular_summary` — rich, from TabularAnalyzer.
-/// 2. `annotations.content_summary` — generic, captured during the
-///    controller's re-dispatch merge.
+/// 1. `annotations.tabular_summary` — rich, from tabular writers.
+/// 2. `annotations.content_summary` — generic content detail.
 /// 3. A join of non-identical child summaries.
 fn move_trailer(node: &DiffNode) -> Option<Summary> {
-    // The annotation trailers are carried as plain strings (so transformers
-    // like the folder-move detector can read them with `.as_str()`); they
-    // render verbatim as a single text segment.
+    // The annotation trailers are carried as plain strings and render
+    // verbatim as a single text segment.
     if let Some(s) = annotation_str(node, "tabular_summary") {
         return Some(s.into());
     }

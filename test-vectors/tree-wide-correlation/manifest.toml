@@ -19,5 +19,5 @@ tags = ["move", "copy", "aggregation", "zip", "nested", "archive", "tree-wide"]
 summary = "Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves."
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.move", "binoc.copy"]

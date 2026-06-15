@@ -3,11 +3,7 @@ name = "csv-column-reorder"
 description = "Columns shuffled, content identical"
 tags = ["csv", "column-reorder", "clerical"]
 
-[config]
-comparators = ["binoc.directory", "binoc.csv"]
-transformers = ["binoc.tabular_analyzer", "binoc.column_reorder_detector"]
-
 [expected]
-root_kind = "modify"
+root_action = "modify"
 child_count = 1
 has_tags = ["binoc.column-reorder"]

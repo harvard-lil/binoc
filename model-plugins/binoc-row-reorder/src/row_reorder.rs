@@ -1,57 +1,62 @@
 use std::collections::BTreeMap;
 
 use binoc_sdk::*;
+use serde_json::json;
 
-/// Detects when a tabular dataset has been re-sorted: same rows as a
-/// multiset, but in a different order.
-///
-/// Consumes [`TABULAR_V1`] artifacts — source-format-agnostic.
-#[derive(Default)]
-pub struct RowReorderDetector;
+pub struct RowReorderWriter;
 
-impl Transformer for RowReorderDetector {
-    fn descriptor(&self) -> TransformerDescriptor {
-        TransformerDescriptor::new("binoc.row_reorder_detector")
-            .with_match_artifacts(vec![tabular_v1()])
-            .with_match_tags(vec!["binoc.cell-change".into()])
+impl EditListWriter for RowReorderWriter {
+    fn descriptor(&self) -> WriterDescriptor {
+        WriterDescriptor {
+            name: "binoc.row_reorder_writer".into(),
+            formats: vec![tabular_v1()],
+            input: NodeMatch::default(),
+            shape: ShapeFilter::Any,
+        }
     }
 
-    fn transform(
-        &self,
-        node: DiffNode,
-        data: &dyn DataAccess,
-        _config: &serde_json::Value,
-    ) -> TransformResult {
-        let Some(pair) = TabularDataPair::from_artifacts(&node, data) else {
-            return TransformResult::Unchanged;
-        };
-        let (Some(left), Some(right)) = (&pair.left, &pair.right) else {
-            return TransformResult::Unchanged;
+    fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+        let (Some(left), Some(right)) = (
+            load_tabular(ctx, ctx.link.left, data)?,
+            load_tabular(ctx, ctx.link.right, data)?,
+        ) else {
+            return Ok(None);
         };
 
-        if left.headers != right.headers {
-            return TransformResult::Unchanged;
+        if left.headers != right.headers || left.rows.len() != right.rows.len() {
+            return Ok(None);
         }
-
-        if left.rows.len() != right.rows.len() {
-            return TransformResult::Unchanged;
-        }
-
-        let left_bag = row_multiset(&left.rows);
-        let right_bag = row_multiset(&right.rows);
-        if left_bag != right_bag {
-            return TransformResult::Unchanged;
-        }
-
         if left.rows == right.rows {
-            return TransformResult::Unchanged;
+            return Ok(Some(Vec::new().into()));
+        }
+        if row_multiset(&left.rows) != row_multiset(&right.rows) {
+            return Ok(None);
         }
 
-        let new_node = node
+        Ok(Some(
+            vec![Edit::new(
+                "tabular.reorder_rows",
+                json!({ "row_count": right.rows.len() }),
+            )
+            .with_item_type("tabular")
             .with_tag("binoc.row-reorder")
-            .with_summary("Rows reordered (same data, different sort order)".to_string());
-        TransformResult::Replace(Box::new(new_node))
+            .with_summary("Rows reordered (same data, different sort order)")]
+            .into(),
+        ))
     }
+}
+
+fn load_tabular(
+    ctx: &LinkCtx<'_>,
+    id: NodeId,
+    data: &dyn DataAccess,
+) -> BinocResult<Option<TabularData>> {
+    let Some(bytes) = ctx.view.artifact_bytes(id, &tabular_v1(), data)? else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))
 }
 
 fn row_multiset(rows: &[Vec<String>]) -> BTreeMap<Vec<String>, usize> {

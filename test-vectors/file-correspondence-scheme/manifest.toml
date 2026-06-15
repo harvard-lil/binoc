@@ -19,4 +19,4 @@ path_regex = "^by-state/(?P<state>[A-Z]{2})/records\\.csv$"
 
 [expected]
 child_count = 1
-has_tags = ["binoc.declared-correspondence", "binoc.row-addition"]
+has_tags = ["binoc.declared-correspondence"]

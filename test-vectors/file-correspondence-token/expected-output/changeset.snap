@@ -11,53 +11,50 @@ expression: "&stable_changeset"
     "path": "",
     "children": [
       {
-        "action": "modify",
+        "action": "move",
         "item_type": "tabular",
-        "path": "running_list.csv",
+        "path": "running_list_as_of_2023.csv",
+        "source_path": "running_list_as_of_2022.csv",
         "summary": [
           {
-            "uint": 1
+            "text": "Moved from "
           },
           {
-            "text": " row added"
+            "path": {
+              "value": "running_list_as_of_2022.csv",
+              "snapshot": "from"
+            }
+          },
+          {
+            "text": " (modified)"
           }
         ],
         "tags": [
+          "binoc.content-changed",
           "binoc.declared-correspondence",
+          "binoc.move",
+          "binoc.move.modified",
           "binoc.row-addition"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [],
-          "columns_left": [
-            "id",
-            "name"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "name"
-          ],
-          "correspondence_key": "running_list",
-          "correspondence_rule": "running-list",
-          "destination_path": "running_list_as_of_2023.csv",
-          "hash_left": "962813cd557c5c6641908d7cb6e6df7ece7224b661726f7f73a68f291d7fabd5",
-          "hash_right": "986fc8e7e20e252afd58def4e2901fd8de66b0f1792f6f2885c7a0d2e4fe1e51",
-          "rows_added": 1,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 3,
-          "source_path": "running_list_as_of_2022.csv"
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "3",
+                    "Cy"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.declared_correspondence"
     ]
   }
 }

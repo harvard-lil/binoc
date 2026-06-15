@@ -4,7 +4,17 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **FoodData_Central_csv_2026-04-30**: Folder moved from FoodData_Central_csv_2025-12-18
-- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: New table (2 columns, 1 row)
-- **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Text modified
-- **FoodData_Central_csv_2026-04-30/docs/old-table.txt**: File removed (1 line)
+- **(root)**: 0 edits
+- **FoodData_Central_csv_2026-04-30**: Added
+- **FoodData_Central_csv_2026-04-30/README.txt**: Moved from FoodData_Central_csv_2025-12-18/README.txt
+- **FoodData_Central_csv_2026-04-30/data**: Moved from FoodData_Central_csv_2025-12-18/data
+- **FoodData_Central_csv_2026-04-30/data/new-table.csv**: Added
+- **FoodData_Central_csv_2026-04-30/docs**: Added
+- **FoodData_Central_csv_2026-04-30/docs/changelog-note.txt**: Moved from FoodData_Central_csv_2025-12-18/docs/changelog-note.txt
+- **FoodData_Central_csv_2026-04-30/docs/license.txt**: Moved from FoodData_Central_csv_2025-12-18/docs/license.txt
+- **FoodData_Central_csv_2026-04-30/docs/schema.txt**: Moved from FoodData_Central_csv_2025-12-18/docs/schema.txt
+- **FoodData_Central_csv_2026-04-30/docs/modified.txt**: Added
+- **FoodData_Central_csv_2025-12-18**: Removed
+- **FoodData_Central_csv_2025-12-18/docs**: Removed
+- **FoodData_Central_csv_2025-12-18/docs/modified.txt**: Removed
+- **FoodData_Central_csv_2025-12-18/docs/old-table.txt**: Removed

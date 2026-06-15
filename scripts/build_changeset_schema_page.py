@@ -2,9 +2,9 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Render docs/reference/changeset-schema.md from the generated JSON Schema.
+"""Render docs/users/reference/changeset-schema.md from the generated JSON Schema.
 
-The authoritative schema lives in `docs/reference/changeset-schema.json`,
+The authoritative schema lives in `docs/users/reference/changeset-schema.json`,
 emitted by the `gen-changeset-schema` Rust binary from the IR types (see
 `binoc-sdk/src/bin/gen_changeset_schema.rs` and ADR
 `2026-04-17-documentation_platform_and_info_design.md` Open Question 1).
@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_PATH = ROOT / "docs" / "reference" / "changeset-schema.json"
-PAGE_PATH = ROOT / "docs" / "reference" / "changeset-schema.md"
+SCHEMA_PATH = ROOT / "docs" / "users" / "reference" / "changeset-schema.json"
+PAGE_PATH = ROOT / "docs" / "users" / "reference" / "changeset-schema.md"
 
 # Order the defs in a reading-friendly sequence. Any type present in the
 # schema but not listed here gets appended alphabetically at the end so the
@@ -74,7 +74,7 @@ from the Rust IR types. The tables below are a rendering of that schema.
   `DiffNode::strip_transient` before changeset JSON is written for users.
   They appear in the schema below, but callers writing changeset files
   should not expect to see populated values. See the
-  [Transient fields on wire ADR](../adr/2026-04-16-transient_fields_on_wire.md).
+  [Transient fields on wire ADR](../../adr/2026-04-16-transient_fields_on_wire.md).
 
 ## Stability
 
@@ -85,7 +85,7 @@ to known plugin versions.
 
 ## Where to go next
 
-- [IR and changesets](../explanation/ir-and-changesets.md) — the conceptual
+- [IR and changesets](../../plugin-developers/explanation/ir-and-changesets.md) — the conceptual
   model behind the shape documented here.
 - [Save and render changesets](../howto/save-and-render-changesets.md) —
   producing and combining changeset JSON from the CLI.

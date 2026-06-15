@@ -16,91 +16,29 @@ expression: "&stable_changeset"
         "path": "data.sqlite",
         "summary": [
           {
-            "text": "Table posts added: "
-          },
-          {
-            "text": "new table ("
-          },
-          {
-            "uint": 3
-          },
-          {
-            "text": " columns, "
-          },
-          {
             "uint": 1
           },
           {
-            "text": " row)"
+            "text": " edit"
           }
         ],
         "tags": [
+          "binoc-sqlite.table-addition",
+          "binoc.schema-change",
           "binoc.table-addition",
           "binoc.tabular-collection-change"
         ],
-        "children": [
-          {
-            "action": "add",
-            "item_type": "tabular",
-            "path": "data.sqlite::posts",
-            "summary": [
-              {
-                "text": "New table ("
-              },
-              {
-                "uint": 3
-              },
-              {
-                "text": " columns, "
-              },
-              {
-                "uint": 1
-              },
-              {
-                "text": " row)"
-              }
-            ],
-            "tags": [
-              "binoc-sqlite.table-addition",
-              "binoc.content-changed",
-              "binoc.schema-change",
-              "binoc.table-addition"
-            ],
-            "details": {
-              "columns": [
-                "id",
-                "title",
-                "user_id"
-              ],
-              "logical_name": "posts",
-              "row_count": 1,
-              "rows": 1
-            },
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          }
-        ],
         "details": {
-          "hash_left": "0bb865f7f287a972d996d07f69dab0d625f02aa5825cc79a6ab79b5c2794355a",
-          "hash_right": "9b5daff3a1a53db53c7691490daa8d0c7653d681ac95bd1bb2a99baa93fd3c37",
-          "tables_added": [
-            "posts"
-          ],
-          "tables_left": [
-            "users"
-          ],
-          "tables_right": [
-            "posts",
-            "users"
+          "edits": [
+            {
+              "params": {
+                "table": "posts"
+              },
+              "verb": "sqlite.add_table"
+            }
           ]
-        },
-        "comparator": "binoc-sqlite.sqlite",
-        "transformed_by": [
-          "binoc.table_collection_analyzer"
-        ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

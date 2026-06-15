@@ -4,5 +4,5 @@ description = "File present in A but not B"
 tags = ["remove", "file"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.content-changed"]

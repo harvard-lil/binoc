@@ -1,7 +1,12 @@
 # Full Comparison Tree and Content Hash Propagation
 
 **Date:** 2026-03-05
-**Status:** Implemented
+**Status:** Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+
+> **Supersession note (2026-06-12):** content hashes remain central pairing
+> evidence, but the engine no longer builds a full merged comparison tree for
+> transformers. It stores side trees and correspondence links, then projects the
+> final changeset tree after edit writing and compaction.
 
 ## Problem
 

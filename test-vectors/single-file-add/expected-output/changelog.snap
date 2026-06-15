@@ -4,4 +4,5 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **new_file.txt**: New file (1 line)
+- **(root)**: 0 edits
+- **new_file.txt**: Added

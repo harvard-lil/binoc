@@ -1,0 +1,9 @@
+[vector]
+name = "zip-rename-inner-rename-edit"
+description = "Zip archive renamed while its only child was renamed and had one cell edited; the modified move counts as roll-up evidence, so the result is a single container move with the renamed+modified child as detail and no dangling remove for the old archive."
+tags = ["zip", "archive", "folder-move", "fuzzy-correlation"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.folder-move", "binoc.move", "binoc.move.modified"]

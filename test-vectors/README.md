@@ -39,14 +39,13 @@ tags = ["tag1", "tag2"]
 # setup = "Optional setup note shown above the run command"
 
 [config]
-# Optional: override default pipeline
-# comparators = ["binoc.csv"]
-# transformers = ["binoc.column_reorder_detector"]
+# Optional: override default dataset/rendering config
+# dataset = { tables = [{ path = "**/*.csv", row_identity = { columns = ["id"] } }] }
 # output = { markdown = { verbosity = "summary" } }
 
 [expected]
 # Structural assertions
-# root_kind = "modify"
+# root_action = "modify"
 # child_count = 1
 # has_tags = ["binoc.column-reorder"]
 # significance = "clerical"
@@ -59,10 +58,11 @@ tags = ["tag1", "tag2"]
   - `summary` — short, user-facing description used in the examples gallery
   - `setup` — optional setup note that overrides the generator's default text
 - **`[config]`** — Optional dataset config overrides from the normal config schema:
-  `comparators`, `transformers`, `transformer_config`, and renderer config under
-  `output` such as `output.markdown.verbosity`
+  `dataset`, `renderers`, and renderer config under `output` such as
+  `output.markdown.verbosity`. Legacy `comparators`, `transformers`, and
+  `transformer_config` keys are rejected.
 - **`[expected]`** — Assertions on the changeset output:
-  - `root_kind` — Kind of the root diff node (e.g. `modify`, `add`, `remove`)
+  - `root_action` — Kind of the root diff node (e.g. `modify`, `add`, `remove`)
   - `child_count` — Number of children at root
   - `has_tags` — Tags that must appear (in root or descendants)
   - `significance` — e.g. `clerical`, `substantive`

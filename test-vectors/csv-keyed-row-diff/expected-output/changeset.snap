@@ -16,22 +16,10 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "uint": 1
+            "uint": 3
           },
           {
-            "text": " row added by key; "
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " row removed by key; "
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " row modified by key"
+            "text": " edits"
           }
         ],
         "tags": [
@@ -40,92 +28,59 @@ expression: "&stable_changeset"
           "binoc.row-removal"
         ],
         "details": {
-          "cells_changed": 1,
-          "columns_added": [],
-          "columns_left": [
-            "id",
-            "name",
-            "price",
-            "status"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "name",
-            "price",
-            "status"
-          ],
-          "hash_left": "6235797724098915a0a1aceb382bd1b91b206b0d403937299adce5c798dac5ad",
-          "hash_right": "a71e03436c2dd8c967acfa5a190b4fc35ed7b77d7e6260ccaf2dfaba0a4906b8",
-          "row_identity": {
-            "columns": [
-              "id"
-            ],
-            "matched_rows": 2,
-            "mode": "keyed",
-            "on_duplicate_key": "diagnostic",
-            "on_null_key": "diagnostic"
-          },
-          "rows_added": 1,
-          "rows_added_keys": [
+          "edits": [
             {
-              "key": {
-                "id": "p4"
-              },
-              "row": 1
-            }
-          ],
-          "rows_left": 3,
-          "rows_modified": 1,
-          "rows_removed": 1,
-          "rows_removed_keys": [
-            {
-              "key": {
-                "id": "p3"
-              },
-              "row": 2
-            }
-          ],
-          "rows_right": 3
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 1,
-            "examples": [
-              {
-                "locator": {
-                  "column": "price",
-                  "key": {
-                    "id": "p2"
-                  }
+              "params": {
+                "index": 2,
+                "key": {
+                  "id": "p3"
                 },
-                "before": {
-                  "value": "20",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "25",
-                  "media_type": "text/plain"
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "p3",
+                    "Gamma",
+                    "30",
+                    "retired"
+                  ]
                 }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ]
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+              },
+              "verb": "tabular.remove_row"
+            },
+            {
+              "params": {
+                "index": 1,
+                "key": {
+                  "id": "p4"
+                },
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "p4",
+                    "Delta",
+                    "40",
+                    "active"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            },
+            {
+              "params": {
+                "column": "price",
+                "from": "20",
+                "key": {
+                  "id": "p2"
+                },
+                "to": "25"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

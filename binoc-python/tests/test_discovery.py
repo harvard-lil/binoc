@@ -9,51 +9,10 @@ from binoc._discovery import discover_plugins
 
 
 class TestPluginRegistry:
-    def test_default_registry_has_stdlib_plugins(self):
-        registry = binoc.PluginRegistry.default()
-        comparators = registry.list_comparators()
-        assert 'binoc.csv' in comparators
-        assert 'binoc.text' in comparators
-        assert 'binoc.binary' in comparators
-        assert 'binoc.directory' in comparators
-        assert 'binoc.zip' in comparators
-
-    def test_default_registry_has_stdlib_transformers(self):
-        registry = binoc.PluginRegistry.default()
-        transformers = registry.list_transformers()
-        assert 'binoc.correlation_detector' in transformers
-        assert 'binoc.folder_move_detector' in transformers
-        assert 'binoc.column_reorder_detector' in transformers
-
     def test_default_registry_has_stdlib_renderers(self):
         registry = binoc.PluginRegistry.default()
         renderers = registry.list_renderers()
         assert 'binoc.markdown' in renderers
-
-    def test_register_python_comparator(self):
-        registry = binoc.PluginRegistry.default()
-
-        class MyComparator(binoc.Comparator):
-            name = 'test.my_comparator'
-            extensions = ['.xyz']
-
-            def compare(self, pair):
-                return binoc.Identical()
-
-        registry.register_comparator('test.my_comparator', MyComparator())
-        assert 'test.my_comparator' in registry.list_comparators()
-
-    def test_register_python_transformer(self):
-        registry = binoc.PluginRegistry.default()
-
-        class MyTransformer(binoc.Transformer):
-            name = 'test.my_transformer'
-
-            def transform(self, node):
-                return binoc.Unchanged()
-
-        registry.register_transformer('test.my_transformer', MyTransformer())
-        assert 'test.my_transformer' in registry.list_transformers()
 
 
 class TestDiscoverPlugins:
@@ -87,12 +46,12 @@ class TestDiscoverPlugins:
     def test_discover_with_no_plugins(self):
         """When no entry points exist, discovery is a no-op."""
         registry = binoc.PluginRegistry.default()
-        before = registry.list_comparators()
+        before = registry.list_renderers()
 
         with patch('binoc._discovery.importlib.metadata.entry_points', return_value=[]):
             discover_plugins(registry)
 
-        assert registry.list_comparators() == before
+        assert registry.list_renderers() == before
 
 
 class TestPythonCLI:

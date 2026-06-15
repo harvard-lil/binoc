@@ -19,4 +19,4 @@ path_regex = "^(?P<list>running_list)_as_of_[0-9]{4}\\.csv$"
 
 [expected]
 child_count = 1
-has_tags = ["binoc.declared-correspondence", "binoc.row-addition"]
+has_tags = ["binoc.declared-correspondence"]

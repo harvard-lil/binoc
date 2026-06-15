@@ -8,38 +8,43 @@ expression: "&stable_changeset"
   "root": {
     "action": "modify",
     "item_type": "tabular",
-    "path": "data.csv",
-    "summary": [
+    "path": "",
+    "children": [
       {
-        "uint": 1
-      },
-      {
-        "text": " row added"
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": [
+          {
+            "uint": 1
+          },
+          {
+            "text": " edit"
+          }
+        ],
+        "tags": [
+          "binoc.move",
+          "binoc.row-addition"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "Charlie",
+                    "35"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
       }
-    ],
-    "tags": [
-      "binoc.row-addition"
-    ],
-    "details": {
-      "cells_changed": 0,
-      "columns_added": [],
-      "columns_left": [
-        "name",
-        "age"
-      ],
-      "columns_removed": [],
-      "columns_right": [
-        "name",
-        "age"
-      ],
-      "rows_added": 1,
-      "rows_left": 2,
-      "rows_removed": 0,
-      "rows_right": 3
-    },
-    "comparator": "binoc.csv",
-    "transformed_by": [
-      "binoc.tabular_analyzer"
     ]
   }
 }

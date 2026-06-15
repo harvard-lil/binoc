@@ -4,5 +4,5 @@ description = "Column removed"
 tags = ["csv", "column-removal", "schema"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.column-removal", "binoc.schema-change"]

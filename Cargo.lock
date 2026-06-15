@@ -127,7 +127,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "binoc-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "assert_cmd",
  "binoc-core",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-sdk",
  "insta",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-python"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-cli",
  "binoc-core",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-row-reorder"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -182,8 +182,9 @@ dependencies = [
 
 [[package]]
 name = "binoc-sdk"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
+ "binoc-sdk",
  "blake3",
  "rand",
  "schemars",
@@ -195,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-sqlite"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -210,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-stat-binary"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -227,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-stdlib"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",

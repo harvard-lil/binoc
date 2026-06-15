@@ -1,7 +1,12 @@
 # Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch
 
 **Date:** 2026-05-13
-**Status:** Implemented
+**Status:** Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+
+> **Supersession note (2026-06-12):** fuzzy rename-modify detection remains a
+> goal, but the `pending_recompare` mechanism described here is retired.
+> Correspondence pair rules now link the renamed file and writers explain the
+> resulting content edits directly.
 
 ## Context
 

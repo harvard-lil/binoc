@@ -1,0 +1,79 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "summary": [
+          {
+            "uint": 3
+          },
+          {
+            "text": " edits"
+          }
+        ],
+        "tags": [
+          "binoc.column-addition",
+          "binoc.column-reorder",
+          "binoc.row-addition",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "order": [
+                  "city",
+                  "name",
+                  "age"
+                ]
+              },
+              "verb": "tabular.reorder_columns"
+            },
+            {
+              "params": {
+                "name": "email",
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "alice@example.test",
+                    "bob@example.test",
+                    "charlie@example.test"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            },
+            {
+              "params": {
+                "index": 1,
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "LA",
+                    "Bob",
+                    "25",
+                    "bob@example.test"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

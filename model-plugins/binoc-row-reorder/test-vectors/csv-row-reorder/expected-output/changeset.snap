@@ -20,166 +20,19 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.cell-change",
           "binoc.row-reorder"
         ],
         "details": {
-          "cells_changed": 9,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "age",
-            "city"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age",
-            "city"
-          ],
-          "hash_left": "7112d37915f13b5d6041b4e3be223d8fe24a25a98fa4b7661575f6dfaaf177fa",
-          "hash_right": "98de509972a451023f3cda6b0e385a654f0a6e06d024d2aaf9e86b396395db23",
-          "rows_added": 0,
-          "rows_left": 3,
-          "rows_removed": 0,
-          "rows_right": 3
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 9,
-            "examples": [
-              {
-                "locator": {
-                  "column": "age",
-                  "row": 0
-                },
-                "before": {
-                  "value": "30",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "35",
-                  "media_type": "text/plain"
-                }
+          "edits": [
+            {
+              "params": {
+                "row_count": 3
               },
-              {
-                "locator": {
-                  "column": "city",
-                  "row": 0
-                },
-                "before": {
-                  "value": "NYC",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "Chicago",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "name",
-                  "row": 0
-                },
-                "before": {
-                  "value": "Alice",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "Charlie",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "age",
-                  "row": 1
-                },
-                "before": {
-                  "value": "25",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "30",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "city",
-                  "row": 1
-                },
-                "before": {
-                  "value": "LA",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "NYC",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "name",
-                  "row": 1
-                },
-                "before": {
-                  "value": "Bob",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "Alice",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "age",
-                  "row": 2
-                },
-                "before": {
-                  "value": "35",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "25",
-                  "media_type": "text/plain"
-                }
-              },
-              {
-                "locator": {
-                  "column": "city",
-                  "row": 2
-                },
-                "before": {
-                  "value": "Chicago",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "LA",
-                  "media_type": "text/plain"
-                }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ],
-            "truncated": true
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer",
-          "binoc.row_reorder_detector"
-        ]
+              "verb": "tabular.reorder_rows"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

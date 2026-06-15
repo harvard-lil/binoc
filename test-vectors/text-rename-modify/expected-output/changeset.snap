@@ -36,25 +36,42 @@ expression: "&stable_changeset"
           "binoc.move.modified"
         ],
         "details": {
-          "hash_left": "b1eae0c798f89df16c497cc75fa45078217f1d69c3e79486b1cd0397a34b1937",
-          "hash_right": "bd0422a0bcfb8406f1d41ced6afd5605ec2c08303d66ca495f68ca8c324268c3",
-          "lines_added": 2,
-          "lines_removed": 0,
-          "lines_unchanged": 13
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "content_summary",
-            "value": "2 lines added"
-          }
-        ],
-        "comparator": "binoc.text"
+          "edits": [
+            {
+              "params": {
+                "examples": [
+                  {
+                    "from": "",
+                    "line": 10,
+                    "to": "- Marketing strategy update"
+                  },
+                  {
+                    "from": "Action Items:",
+                    "line": 11,
+                    "to": ""
+                  },
+                  {
+                    "from": "- Alice to finalize budget by Friday",
+                    "line": 12,
+                    "to": "Action Items:"
+                  },
+                  {
+                    "from": "- Bob to update project timeline",
+                    "line": 13,
+                    "to": "- Alice to finalize budget by Friday"
+                  }
+                ],
+                "examples_truncated": false,
+                "left_line_count": 13,
+                "lines_added": 2,
+                "lines_removed": 0,
+                "right_line_count": 15
+              },
+              "verb": "text.replace_lines"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.fuzzy_correlation_detector"
     ]
   }
 }

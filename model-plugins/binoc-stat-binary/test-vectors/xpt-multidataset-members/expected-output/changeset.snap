@@ -16,308 +16,35 @@ expression: "&stable_changeset"
         "path": "data.xpt",
         "summary": [
           {
-            "text": "Table DM changed: 1 row added; Table LB added: new table (2 columns, 1 row)"
+            "uint": 2
+          },
+          {
+            "text": " edits"
           }
         ],
         "tags": [
+          "binoc.row-addition",
           "binoc.table-addition",
           "binoc.table-change",
           "binoc.tabular-collection-change"
         ],
-        "children": [
-          {
-            "action": "modify",
-            "item_type": "tabular",
-            "path": "data.xpt::DM",
-            "summary": [
-              {
-                "uint": 1
-              },
-              {
-                "text": " row added"
-              }
-            ],
-            "tags": [
-              "binoc.row-addition",
-              "binoc.table-change"
-            ],
-            "details": {
-              "cells_changed": 0,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "name"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "name"
-              ],
-              "left_metadata": {
-                "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-                "columns": {},
-                "dataset_index": 2,
-                "dataset_label": null,
-                "dataset_name": "DM",
-                "datasets": [
-                  {
-                    "columns": [
-                      "id",
-                      "event"
-                    ],
-                    "dataset_index": 1,
-                    "dataset_label": null,
-                    "dataset_name": "AE",
-                    "logical_name": "AE",
-                    "node_name": "AE",
-                    "rows": 1
-                  },
-                  {
-                    "columns": [
-                      "id",
-                      "name"
-                    ],
-                    "dataset_index": 2,
-                    "dataset_label": null,
-                    "dataset_name": "DM",
-                    "logical_name": "DM",
-                    "node_name": "DM",
-                    "rows": 1
-                  }
-                ],
-                "format": "sas_xport",
-                "logical_name": "DM",
-                "node_name": "DM"
-              },
-              "logical_name": "DM",
-              "right_metadata": {
-                "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-                "columns": {},
-                "dataset_index": 2,
-                "dataset_label": null,
-                "dataset_name": "DM",
-                "datasets": [
-                  {
-                    "columns": [
-                      "id",
-                      "event"
-                    ],
-                    "dataset_index": 1,
-                    "dataset_label": null,
-                    "dataset_name": "AE",
-                    "logical_name": "AE",
-                    "node_name": "AE",
-                    "rows": 1
-                  },
-                  {
-                    "columns": [
-                      "id",
-                      "name"
-                    ],
-                    "dataset_index": 2,
-                    "dataset_label": null,
-                    "dataset_name": "DM",
-                    "logical_name": "DM",
-                    "node_name": "DM",
-                    "rows": 2
-                  },
-                  {
-                    "columns": [
-                      "id",
-                      "lab"
-                    ],
-                    "dataset_index": 3,
-                    "dataset_label": null,
-                    "dataset_name": "LB",
-                    "logical_name": "LB",
-                    "node_name": "LB",
-                    "rows": 1
-                  }
-                ],
-                "format": "sas_xport",
-                "logical_name": "DM",
-                "node_name": "DM"
-              },
-              "rows_added": 1,
-              "rows_left": 1,
-              "rows_removed": 0,
-              "rows_right": 2
-            },
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          },
-          {
-            "action": "add",
-            "item_type": "tabular",
-            "path": "data.xpt::LB",
-            "summary": [
-              {
-                "text": "New table ("
-              },
-              {
-                "uint": 2
-              },
-              {
-                "text": " columns, "
-              },
-              {
-                "uint": 1
-              },
-              {
-                "text": " row)"
-              }
-            ],
-            "tags": [
-              "binoc.content-changed",
-              "binoc.table-addition"
-            ],
-            "details": {
-              "columns": [
-                "id",
-                "lab"
-              ],
-              "logical_name": "LB",
-              "metadata": {
-                "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-                "columns": {},
-                "dataset_index": 3,
-                "dataset_label": null,
-                "dataset_name": "LB",
-                "datasets": [
-                  {
-                    "columns": [
-                      "id",
-                      "event"
-                    ],
-                    "dataset_index": 1,
-                    "dataset_label": null,
-                    "dataset_name": "AE",
-                    "logical_name": "AE",
-                    "node_name": "AE",
-                    "rows": 1
-                  },
-                  {
-                    "columns": [
-                      "id",
-                      "name"
-                    ],
-                    "dataset_index": 2,
-                    "dataset_label": null,
-                    "dataset_name": "DM",
-                    "logical_name": "DM",
-                    "node_name": "DM",
-                    "rows": 2
-                  },
-                  {
-                    "columns": [
-                      "id",
-                      "lab"
-                    ],
-                    "dataset_index": 3,
-                    "dataset_label": null,
-                    "dataset_name": "LB",
-                    "logical_name": "LB",
-                    "node_name": "LB",
-                    "rows": 1
-                  }
-                ],
-                "format": "sas_xport",
-                "logical_name": "LB",
-                "node_name": "LB"
-              },
-              "rows": 1
-            },
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          }
-        ],
         "details": {
-          "hash_left": "3492ce81a98c3bf771796cd6b006087a3d6a622be4119c51912a637eb93c72f8",
-          "hash_right": "340740cc0412da03cb96e1e1f039a6fdb03585d67fba80b76e18f63b3db82f40",
-          "left_metadata": {
-            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-            "datasets": [
-              {
-                "columns": [
-                  "id",
-                  "event"
-                ],
-                "dataset_index": 1,
-                "dataset_label": null,
-                "dataset_name": "AE",
-                "logical_name": "AE",
-                "node_name": "AE",
-                "rows": 1
+          "edits": [
+            {
+              "params": {
+                "table": "DM"
               },
-              {
-                "columns": [
-                  "id",
-                  "name"
-                ],
-                "dataset_index": 2,
-                "dataset_label": null,
-                "dataset_name": "DM",
-                "logical_name": "DM",
-                "node_name": "DM",
-                "rows": 1
-              }
-            ],
-            "format": "sas_xport"
-          },
-          "right_metadata": {
-            "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-            "datasets": [
-              {
-                "columns": [
-                  "id",
-                  "event"
-                ],
-                "dataset_index": 1,
-                "dataset_label": null,
-                "dataset_name": "AE",
-                "logical_name": "AE",
-                "node_name": "AE",
-                "rows": 1
+              "verb": "tabular_collection.change_table"
+            },
+            {
+              "params": {
+                "table": "LB"
               },
-              {
-                "columns": [
-                  "id",
-                  "name"
-                ],
-                "dataset_index": 2,
-                "dataset_label": null,
-                "dataset_name": "DM",
-                "logical_name": "DM",
-                "node_name": "DM",
-                "rows": 2
-              },
-              {
-                "columns": [
-                  "id",
-                  "lab"
-                ],
-                "dataset_index": 3,
-                "dataset_label": null,
-                "dataset_name": "LB",
-                "logical_name": "LB",
-                "node_name": "LB",
-                "rows": 1
-              }
-            ],
-            "format": "sas_xport"
-          },
-          "tables_added": [
-            "LB"
-          ],
-          "tables_changed": [
-            "DM"
+              "verb": "tabular_collection.add_table"
+            }
           ]
-        },
-        "comparator": "binoc-stat-binary.xpt"
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

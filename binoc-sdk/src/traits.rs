@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{Changeset, Diagnostic, DiffNode};
+use crate::ir::{Changeset, Diagnostic};
 use crate::types::*;
 
 pub type BinocResult<T> = Result<T, BinocError>;
@@ -13,10 +13,6 @@ pub enum BinocError {
     Io(#[from] std::io::Error),
     #[error("config error: {0}")]
     Config(String),
-    #[error("comparator error in {comparator}: {message}")]
-    Comparator { comparator: String, message: String },
-    #[error("no comparator found for item: {0}")]
-    NoComparator(String),
     #[error("csv error: {0}")]
     Csv(String),
     #[error("zip error: {0}")]
@@ -87,130 +83,6 @@ fn parse_semver(v: &str) -> Option<(u64, u64, u64)> {
     Some((major, minor, patch))
 }
 
-/// Static metadata for a comparator plugin. Serializable — can be sent as
-/// a message, embedded in WASM custom sections, or written to a manifest.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct ComparatorDescriptor {
-    pub sdk_version: String,
-    pub name: String,
-    #[serde(default)]
-    pub extensions: Vec<String>,
-    #[serde(default)]
-    pub media_types: Vec<String>,
-    #[serde(default)]
-    pub scope: ItemScope,
-    #[serde(default)]
-    pub handles_identical: bool,
-}
-
-impl ComparatorDescriptor {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            sdk_version: SDK_VERSION.into(),
-            name: name.into(),
-            extensions: Vec::new(),
-            media_types: Vec::new(),
-            scope: ItemScope::Files,
-            handles_identical: false,
-        }
-    }
-
-    pub fn with_extensions(mut self, exts: Vec<String>) -> Self {
-        self.extensions = exts;
-        self
-    }
-
-    pub fn with_media_types(mut self, types: Vec<String>) -> Self {
-        self.media_types = types;
-        self
-    }
-
-    pub fn with_scope(mut self, scope: ItemScope) -> Self {
-        self.scope = scope;
-        self
-    }
-
-    pub fn with_handles_identical(mut self, handles: bool) -> Self {
-        self.handles_identical = handles;
-        self
-    }
-}
-
-/// Static metadata for a transformer plugin.
-///
-/// Dispatch uses AND-of-ORs: all non-empty fields must pass (AND),
-/// and within each list field any single value satisfying it is enough
-/// (OR). Empty/default fields are unconstrained. A descriptor with
-/// every field empty/default matches nothing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct TransformerDescriptor {
-    pub sdk_version: String,
-    pub name: String,
-    #[serde(default)]
-    pub match_types: Vec<String>,
-    #[serde(default)]
-    pub match_tags: Vec<String>,
-    #[serde(default)]
-    pub match_actions: Vec<String>,
-    #[serde(default = "default_phase")]
-    pub suggested_phase: String,
-    /// Artifact formats the node must have (any one suffices).
-    /// Empty means no artifact filter.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub match_artifacts: Vec<ArtifactFormat>,
-    /// Dispatch filter on node shape. `Container` matches only nodes
-    /// with children; `Leaf` matches only childless nodes; `Any` (the
-    /// default) is unconstrained.
-    #[serde(default)]
-    pub node_shape: NodeShapeFilter,
-}
-
-fn default_phase() -> String {
-    "default".into()
-}
-
-impl TransformerDescriptor {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            sdk_version: SDK_VERSION.into(),
-            name: name.into(),
-            match_types: Vec::new(),
-            match_tags: Vec::new(),
-            match_actions: Vec::new(),
-            suggested_phase: "default".into(),
-            match_artifacts: Vec::new(),
-            node_shape: NodeShapeFilter::Any,
-        }
-    }
-
-    pub fn with_match_types(mut self, types: Vec<String>) -> Self {
-        self.match_types = types;
-        self
-    }
-
-    pub fn with_match_tags(mut self, tags: Vec<String>) -> Self {
-        self.match_tags = tags;
-        self
-    }
-
-    pub fn with_match_actions(mut self, actions: Vec<String>) -> Self {
-        self.match_actions = actions;
-        self
-    }
-
-    pub fn with_match_artifacts(mut self, formats: Vec<ArtifactFormat>) -> Self {
-        self.match_artifacts = formats;
-        self
-    }
-
-    pub fn with_node_shape(mut self, shape: NodeShapeFilter) -> Self {
-        self.node_shape = shape;
-        self
-    }
-}
-
 /// Static metadata for a renderer plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -264,15 +136,14 @@ pub trait DataAccess: Send + Sync {
     /// Publish an artifact: store opaque bytes and return a descriptor.
     ///
     /// Artifacts are the unified mechanism for both private reuse and
-    /// cross-plugin composition. A comparator or transformer publishes
-    /// zero or more artifacts per node; downstream plugins retrieve them
-    /// by format and subject.
+    /// cross-plugin composition. Parse rules publish artifacts; downstream
+    /// rules retrieve them by format and subject.
     ///
     /// `format` is a structured (package, name, version) tuple — see
     /// [`ArtifactFormat`]. `subject` indicates which side of the
     /// comparison the artifact describes. `producer` is the plugin name
     /// for provenance. The returned `ArtifactDescriptor` should be
-    /// attached to the node via `DiffNode.artifacts`.
+    /// carried by the session's artifact store.
     fn publish_artifact(
         &self,
         format: &ArtifactFormat,
@@ -289,79 +160,6 @@ pub trait DataAccess: Send + Sync {
     /// carry this path so native plugins can construct a `LocalDataAccess`
     /// that reads from the same artifact store.
     fn data_root(&self) -> BinocResult<PathBuf>;
-}
-
-// ── Plugin traits ───────────────────────────────────────────────────
-
-/// A plugin that claims an item pair and either emits a leaf diff or
-/// expands the pair into child items for further processing.
-///
-/// Routing is fully declarative via [`ComparatorDescriptor`]. If the
-/// descriptor matches but the comparator discovers at compare-time that
-/// it cannot handle the item, it returns [`CompareResult::Skip`].
-pub trait Comparator: Send + Sync {
-    fn descriptor(&self) -> ComparatorDescriptor;
-
-    fn compare(&self, pair: &ItemPair, data: &dyn DataAccess) -> BinocResult<CompareResult>;
-
-    /// Reconstruct physical access to a child item without re-diffing.
-    /// Container comparators (zip, directory, tar) override this to
-    /// extract or resolve a child path within the container, returning
-    /// an `ItemPair` that downstream comparators can work with.
-    ///
-    /// Used by the extract chain: the controller walks ancestor nodes
-    /// calling `reopen()` to progressively reconstruct the scratchpad.
-    fn reopen(
-        &self,
-        _pair: &ItemPair,
-        _child_path: &str,
-        _data: &dyn DataAccess,
-    ) -> BinocResult<ItemPair> {
-        Err(BinocError::Extract(format!(
-            "{} does not support reopen",
-            self.descriptor().name
-        )))
-    }
-
-    /// Extract user-facing data from a node this comparator produced.
-    fn extract(
-        &self,
-        _node: &DiffNode,
-        _aspect: &str,
-        _data: &dyn DataAccess,
-    ) -> Option<ExtractResult> {
-        None
-    }
-}
-
-/// A plugin that rewrites the completed diff tree.
-///
-/// Matching is declarative via [`TransformerDescriptor`]. If a matched
-/// node should not be transformed, return [`TransformResult::Unchanged`].
-///
-/// `config` is the per-transformer JSON value resolved from the host's
-/// `DatasetConfig.transformer_config` map (keyed by transformer name).
-/// Plugins that don't need configuration can ignore it; the default
-/// value for unconfigured transformers is [`serde_json::Value::Null`].
-pub trait Transformer: Send + Sync {
-    fn descriptor(&self) -> TransformerDescriptor;
-
-    fn transform(
-        &self,
-        node: DiffNode,
-        data: &dyn DataAccess,
-        config: &serde_json::Value,
-    ) -> TransformResult;
-
-    /// Extract user-facing data from a node this transformer modified.
-    fn extract(
-        &self,
-        _node: &DiffNode,
-        _aspect: &str,
-        _data: &dyn DataAccess,
-    ) -> Option<ExtractResult> {
-        None
-    }
 }
 
 /// A plugin that renders changesets into a human-readable format.

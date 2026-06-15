@@ -7,5 +7,5 @@ tags = ["directory", "tar", "overlap", "artifact-collision"]
 summary = "Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths."
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 child_count = 2

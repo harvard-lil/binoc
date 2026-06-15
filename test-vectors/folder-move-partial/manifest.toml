@@ -11,9 +11,6 @@ tags = ["folder-move", "partial", "rollup", "directory"]
 [docs]
 summary = "Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it."
 
-[config]
-transformer_config = { "binoc.folder_move_detector" = { threshold = 0.8 } }
-
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.move", "binoc.folder-move", "binoc.content-changed"]

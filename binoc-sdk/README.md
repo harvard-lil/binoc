@@ -11,4 +11,4 @@ It contains:
 - the native plugin ABI
 - the `export_plugin!` macro
 
-If you are writing a Rust comparator, transformer, or renderer for Binoc, depend on `binoc-sdk`, not `binoc-core`.
+If you are writing a Rust rule pack or renderer for Binoc, depend on `binoc-sdk`, not `binoc-core`.

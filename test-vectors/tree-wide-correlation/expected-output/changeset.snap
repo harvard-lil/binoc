@@ -37,18 +37,18 @@ expression: "&stable_changeset"
         "source_path": "kept.txt",
         "summary": [
           {
-            "text": "Copied from kept.txt to kept-copy.txt and outer.zip/kept-copy.txt"
+            "text": "Copied from "
+          },
+          {
+            "path": {
+              "value": "kept.txt",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
           "binoc.copy"
-        ],
-        "details": {
-          "destinations": [
-            "kept-copy.txt",
-            "outer.zip/kept-copy.txt"
-          ]
-        }
+        ]
       },
       {
         "action": "move",
@@ -57,41 +57,69 @@ expression: "&stable_changeset"
         "source_path": "dup.bin",
         "summary": [
           {
-            "text": "Moved from dup.bin and dup-b.bin"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "dup.bin",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
           "binoc.move"
-        ],
-        "details": {
-          "sources": [
-            "dup.bin",
-            "outer.zip/dup-b.bin"
-          ]
-        }
+        ]
       },
       {
         "action": "modify",
-        "item_type": "zip_archive",
+        "item_type": "file",
         "path": "outer.zip",
+        "summary": [
+          {
+            "uint": 0
+          },
+          {
+            "text": " edits"
+          }
+        ],
         "children": [
           {
+            "action": "move",
+            "item_type": "text",
+            "path": "outer.zip/alpha-renamed.txt",
+            "source_path": "alpha.txt",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "alpha.txt",
+                  "snapshot": "from"
+                }
+              }
+            ],
+            "tags": [
+              "binoc.move"
+            ]
+          },
+          {
             "action": "modify",
-            "item_type": "directory",
-            "path": "outer.zip",
+            "item_type": "item",
+            "path": "outer.zip/inner.zip",
             "children": [
               {
                 "action": "move",
                 "item_type": "text",
-                "path": "outer.zip/alpha-renamed.txt",
-                "source_path": "alpha.txt",
+                "path": "outer.zip/inner.zip/beta-renamed.txt",
+                "source_path": "outer.zip/beta.txt",
                 "summary": [
                   {
                     "text": "Moved from "
                   },
                   {
                     "path": {
-                      "value": "alpha.txt",
+                      "value": "outer.zip/beta.txt",
                       "snapshot": "from"
                     }
                   }
@@ -99,61 +127,44 @@ expression: "&stable_changeset"
                 "tags": [
                   "binoc.move"
                 ]
+              }
+            ]
+          },
+          {
+            "action": "copy",
+            "item_type": "text",
+            "path": "outer.zip/kept-copy.txt",
+            "source_path": "kept.txt",
+            "summary": [
+              {
+                "text": "Copied from "
               },
               {
-                "action": "modify",
-                "item_type": "zip_archive",
-                "path": "outer.zip/inner.zip",
-                "children": [
-                  {
-                    "action": "modify",
-                    "item_type": "directory",
-                    "path": "outer.zip/inner.zip",
-                    "children": [
-                      {
-                        "action": "move",
-                        "item_type": "text",
-                        "path": "outer.zip/inner.zip/beta-renamed.txt",
-                        "source_path": "outer.zip/beta.txt",
-                        "summary": [
-                          {
-                            "text": "Moved from "
-                          },
-                          {
-                            "path": {
-                              "value": "outer.zip/beta.txt",
-                              "snapshot": "from"
-                            }
-                          }
-                        ],
-                        "tags": [
-                          "binoc.move"
-                        ]
-                      }
-                    ],
-                    "comparator": "binoc.directory"
-                  }
-                ],
-                "details": {
-                  "hash_left": "bcf9bf2f23794266b939108385231cc990ded6c3692e0ad79e9b11e0fb454fff",
-                  "hash_right": "850e2e9990ecddf2963fb9a4b6fea6365aa08655f1ce9b7e2f0f92be261e3498"
-                },
-                "comparator": "binoc.zip"
+                "path": {
+                  "value": "kept.txt",
+                  "snapshot": "from"
+                }
               }
             ],
-            "comparator": "binoc.directory"
+            "tags": [
+              "binoc.copy"
+            ]
+          },
+          {
+            "action": "remove",
+            "item_type": "file",
+            "path": "outer.zip/dup-b.bin",
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
           }
-        ],
-        "details": {
-          "hash_left": "f7234757da333df63f0810a7eda2187f01b4012e5ea6d81a11cb5dbf25efb39b",
-          "hash_right": "55088f5d69c8c981ec16931a9fcdfd6f0d765ee063d170f345a261cc1cdac3b5"
-        },
-        "comparator": "binoc.zip"
+        ]
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.correlation_detector"
     ]
   }
 }

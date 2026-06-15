@@ -9,32 +9,65 @@ expression: "&stable_changeset"
     "action": "modify",
     "item_type": "directory",
     "path": "",
+    "summary": [
+      {
+        "uint": 0
+      },
+      {
+        "text": " edits"
+      }
+    ],
     "children": [
       {
-        "action": "move",
+        "action": "add",
         "item_type": "directory",
         "path": "FoodData_Central_csv_2026-04-30",
-        "source_path": "FoodData_Central_csv_2025-12-18",
         "summary": [
           {
-            "text": "Folder moved from "
-          },
-          {
-            "path": {
-              "value": "FoodData_Central_csv_2025-12-18",
-              "snapshot": "from"
-            }
+            "text": "Added"
           }
-        ],
-        "tags": [
-          "binoc.folder-move",
-          "binoc.move"
         ],
         "children": [
           {
-            "action": "modify",
+            "action": "move",
+            "item_type": "text",
+            "path": "FoodData_Central_csv_2026-04-30/README.txt",
+            "source_path": "FoodData_Central_csv_2025-12-18/README.txt",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "FoodData_Central_csv_2025-12-18/README.txt",
+                  "snapshot": "from"
+                }
+              }
+            ],
+            "tags": [
+              "binoc.move"
+            ]
+          },
+          {
+            "action": "move",
             "item_type": "directory",
             "path": "FoodData_Central_csv_2026-04-30/data",
+            "source_path": "FoodData_Central_csv_2025-12-18/data",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "FoodData_Central_csv_2025-12-18/data",
+                  "snapshot": "from"
+                }
+              }
+            ],
+            "tags": [
+              "binoc.folder-move",
+              "binoc.move"
+            ],
             "children": [
               {
                 "action": "add",
@@ -42,93 +75,152 @@ expression: "&stable_changeset"
                 "path": "FoodData_Central_csv_2026-04-30/data/new-table.csv",
                 "summary": [
                   {
-                    "text": "New table ("
-                  },
-                  {
-                    "uint": 2
-                  },
-                  {
-                    "text": " columns, "
-                  },
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " row)"
+                    "text": "Added"
                   }
                 ],
                 "tags": [
                   "binoc.content-changed"
-                ],
-                "details": {
-                  "columns": [
-                    "id",
-                    "value"
-                  ],
-                  "hash_right": "2d019c1a2e29c11e3fabd6cc928c3b751bd93d24a1888f9621e449daea79a9eb",
-                  "rows": 1
-                },
-                "comparator": "binoc.csv",
-                "transformed_by": [
-                  "binoc.tabular_analyzer"
                 ]
               }
-            ],
-            "comparator": "binoc.directory"
+            ]
           },
           {
-            "action": "modify",
+            "action": "add",
             "item_type": "directory",
             "path": "FoodData_Central_csv_2026-04-30/docs",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
             "children": [
               {
-                "action": "modify",
+                "action": "move",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2026-04-30/docs/changelog-note.txt",
+                "source_path": "FoodData_Central_csv_2025-12-18/docs/changelog-note.txt",
+                "summary": [
+                  {
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "FoodData_Central_csv_2025-12-18/docs/changelog-note.txt",
+                      "snapshot": "from"
+                    }
+                  }
+                ],
+                "tags": [
+                  "binoc.move"
+                ]
+              },
+              {
+                "action": "move",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2026-04-30/docs/license.txt",
+                "source_path": "FoodData_Central_csv_2025-12-18/docs/license.txt",
+                "summary": [
+                  {
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "FoodData_Central_csv_2025-12-18/docs/license.txt",
+                      "snapshot": "from"
+                    }
+                  }
+                ],
+                "tags": [
+                  "binoc.move"
+                ]
+              },
+              {
+                "action": "move",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2026-04-30/docs/schema.txt",
+                "source_path": "FoodData_Central_csv_2025-12-18/docs/schema.txt",
+                "summary": [
+                  {
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "FoodData_Central_csv_2025-12-18/docs/schema.txt",
+                      "snapshot": "from"
+                    }
+                  }
+                ],
+                "tags": [
+                  "binoc.move"
+                ]
+              },
+              {
+                "action": "add",
                 "item_type": "text",
                 "path": "FoodData_Central_csv_2026-04-30/docs/modified.txt",
+                "summary": [
+                  {
+                    "text": "Added"
+                  }
+                ],
                 "tags": [
                   "binoc.content-changed"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "action": "remove",
+        "item_type": "directory",
+        "path": "FoodData_Central_csv_2025-12-18",
+        "summary": [
+          {
+            "text": "Removed"
+          }
+        ],
+        "children": [
+          {
+            "action": "remove",
+            "item_type": "directory",
+            "path": "FoodData_Central_csv_2025-12-18/docs",
+            "summary": [
+              {
+                "text": "Removed"
+              }
+            ],
+            "children": [
+              {
+                "action": "remove",
+                "item_type": "text",
+                "path": "FoodData_Central_csv_2025-12-18/docs/modified.txt",
+                "summary": [
+                  {
+                    "text": "Removed"
+                  }
                 ],
-                "details": {
-                  "hash_right": "2b5392085abbd5789de2d8996d5caf9d25435a125733d067b1c830cbb4ed698a",
-                  "lines": 2
-                },
-                "comparator": "binoc.text"
+                "tags": [
+                  "binoc.content-changed"
+                ]
               },
               {
                 "action": "remove",
                 "item_type": "text",
-                "path": "FoodData_Central_csv_2026-04-30/docs/old-table.txt",
+                "path": "FoodData_Central_csv_2025-12-18/docs/old-table.txt",
                 "summary": [
                   {
-                    "text": "File removed ("
-                  },
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " line)"
+                    "text": "Removed"
                   }
                 ],
                 "tags": [
                   "binoc.content-changed"
-                ],
-                "details": {
-                  "hash_left": "05bf7075e8168a12d3c731b21ba3e28567d3df053bdb31822e2cf19ca54cc212",
-                  "lines": 1
-                },
-                "comparator": "binoc.text"
+                ]
               }
-            ],
-            "comparator": "binoc.directory"
+            ]
           }
-        ],
-        "comparator": "binoc.directory"
+        ]
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.correlation_detector",
-      "binoc.folder_move_detector"
     ]
   }
 }

@@ -4,5 +4,5 @@ description = "Multiple change types"
 tags = ["csv", "column-reorder", "column-addition", "row-addition"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.column-reorder", "binoc.column-addition", "binoc.row-addition"]

@@ -14,44 +14,15 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "directory",
         "path": "data",
-        "children": [
+        "summary": [
           {
-            "action": "add",
-            "item_type": "tabular",
-            "path": "data/extra.csv",
-            "summary": [
-              {
-                "text": "New table ("
-              },
-              {
-                "uint": 2
-              },
-              {
-                "text": " columns, "
-              },
-              {
-                "uint": 1
-              },
-              {
-                "text": " row)"
-              }
-            ],
-            "tags": [
-              "binoc.content-changed"
-            ],
-            "details": {
-              "columns": [
-                "id",
-                "value"
-              ],
-              "hash_right": "6d8ed3ee1f5797232a5a3522173a8b531d34ee80c51b62b5f00cd677fa3baefc",
-              "rows": 1
-            },
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
+            "uint": 0
           },
+          {
+            "text": " edits"
+          }
+        ],
+        "children": [
           {
             "action": "modify",
             "item_type": "tabular",
@@ -61,42 +32,49 @@ expression: "&stable_changeset"
                 "uint": 1
               },
               {
-                "text": " row added"
+                "text": " edit"
               }
             ],
             "tags": [
               "binoc.row-addition"
             ],
             "details": {
-              "cells_changed": 0,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "name"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "name"
-              ],
-              "hash_left": "cdd7d4de8f6297472ddf5dcf982eaec86337f445392c33635ef0d8e562817a7f",
-              "hash_right": "cc53a354625fafc744e96856a6f732822bd6920f3852b5b565270e684783aebe",
-              "rows_added": 1,
-              "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 3
-            },
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "3",
+                        "Charlie"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data/extra.csv",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
             ]
           }
-        ],
-        "comparator": "binoc.directory"
+        ]
       },
       {
         "action": "modify",
-        "item_type": "directory",
+        "item_type": "item",
         "path": "docs",
         "children": [
           {
@@ -105,16 +83,10 @@ expression: "&stable_changeset"
             "path": "docs/readme.txt",
             "summary": [
               {
-                "uint": 2
-              },
-              {
-                "text": " lines added, "
-              },
-              {
                 "uint": 1
               },
               {
-                "text": " removed"
+                "text": " edit"
               }
             ],
             "tags": [
@@ -123,18 +95,29 @@ expression: "&stable_changeset"
               "binoc.lines-removed"
             ],
             "details": {
-              "hash_left": "2b04f2d36a6a3ddd736f6b2440f717c1177bf3f574d73322e324370dc255d881",
-              "hash_right": "55d79df89c7cb62b646eaa1c469975562e6fbb48fd572252d4480883a667a040",
-              "lines_added": 2,
-              "lines_removed": 1,
-              "lines_unchanged": 0
-            },
-            "comparator": "binoc.text"
+              "edits": [
+                {
+                  "params": {
+                    "examples": [
+                      {
+                        "from": "Version 1 readme",
+                        "line": 1,
+                        "to": "Version 2 readme"
+                      }
+                    ],
+                    "examples_truncated": false,
+                    "left_line_count": 1,
+                    "lines_added": 2,
+                    "lines_removed": 1,
+                    "right_line_count": 2
+                  },
+                  "verb": "text.replace_lines"
+                }
+              ]
+            }
           }
-        ],
-        "comparator": "binoc.directory"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

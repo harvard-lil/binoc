@@ -16,29 +16,24 @@ expression: "&stable_changeset"
         "path": "data.parquet",
         "summary": [
           {
-            "text": "Content changed (7 bytes → 7 bytes)"
+            "uint": 1
+          },
+          {
+            "text": " edit"
           }
         ],
         "tags": [
           "binoc.content-changed"
         ],
         "details": {
-          "hash_left": "7fe6f87320b7cc2354e51fc6b45eec4b3df2578563457c6898adb9bdbe497d95",
-          "hash_right": "40687e758c23a99ead29b92dc452cbafb22f883ca72a845c1da34bc5116ca5ce",
-          "size_left": 7,
-          "size_right": 7
-        },
-        "comparator": "binoc.binary"
+          "edits": [
+            {
+              "params": {},
+              "verb": "binary.contents-differ"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
-  },
-  "diagnostics": [
-    {
-      "severity": "suggestion",
-      "code": "binoc.binary-fallback",
-      "message": "Compared as binary; a plugin may provide a more semantic diff.",
-      "location": "data.parquet"
-    }
-  ]
+    ]
+  }
 }

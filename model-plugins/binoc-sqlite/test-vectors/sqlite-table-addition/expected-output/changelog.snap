@@ -4,5 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.sqlite**: Table posts added: new table (3 columns, 1 row)
-- **data.sqlite::posts**: New table (3 columns, 1 row)
+- **data.sqlite**: 1 edit

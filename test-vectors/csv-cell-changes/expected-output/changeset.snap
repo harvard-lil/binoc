@@ -19,81 +19,35 @@ expression: "&stable_changeset"
             "uint": 2
           },
           {
-            "text": " cells changed"
+            "text": " edits"
           }
         ],
         "tags": [
           "binoc.cell-change"
         ],
         "details": {
-          "cells_changed": 2,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "score"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "score"
-          ],
-          "hash_left": "bed182a183cdfc4b775833b347569c98740d8e000d85278e82ac9602d2af36fa",
-          "hash_right": "b083286a3ada2ec6791d8793982075d220b30857177753b12ce45e864a584d10",
-          "rows_added": 0,
-          "rows_left": 3,
-          "rows_removed": 0,
-          "rows_right": 3
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 2,
-            "examples": [
-              {
-                "locator": {
-                  "column": "score",
-                  "row": 0
-                },
-                "before": {
-                  "value": "85",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "92",
-                  "media_type": "text/plain"
-                }
+          "edits": [
+            {
+              "params": {
+                "column": "score",
+                "from": "85",
+                "row": 0,
+                "to": "92"
               },
-              {
-                "locator": {
-                  "column": "score",
-                  "row": 1
-                },
-                "before": {
-                  "value": "90",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "88",
-                  "media_type": "text/plain"
-                }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ]
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "90",
+                "row": 1,
+                "to": "88"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

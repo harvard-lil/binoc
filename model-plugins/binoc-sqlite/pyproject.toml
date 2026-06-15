@@ -1,7 +1,7 @@
 [project]
 name = "binoc-sqlite"
 version = "0.1.1"
-description = "SQLite comparator plugin for binoc"
+description = "SQLite correspondence rule pack for binoc"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["binoc>=0.1"]

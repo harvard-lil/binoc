@@ -4,4 +4,4 @@ description = "Nested tar.gz containing CSV"
 tags = ["tar", "nested", "csv"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"

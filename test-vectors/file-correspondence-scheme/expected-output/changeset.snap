@@ -9,55 +9,95 @@ expression: "&stable_changeset"
     "action": "modify",
     "item_type": "directory",
     "path": "",
-    "children": [
+    "summary": [
       {
-        "action": "modify",
-        "item_type": "tabular",
-        "path": "states/AL.csv",
-        "summary": [
-          {
-            "uint": 1
-          },
-          {
-            "text": " row added"
-          }
-        ],
-        "tags": [
-          "binoc.declared-correspondence",
-          "binoc.row-addition"
-        ],
-        "details": {
-          "cells_changed": 0,
-          "columns_added": [],
-          "columns_left": [
-            "id",
-            "city"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "city"
-          ],
-          "correspondence_key": "AL",
-          "correspondence_rule": "state-records",
-          "destination_path": "by-state/AL/records.csv",
-          "hash_left": "eff803d89835b196a34290b8962335829020b8b8977420dd33f3e1cf00e1a311",
-          "hash_right": "393887ee3fd7d1a896bd16c503c9701699129a12467fb4b0595243b3494d0cd4",
-          "rows_added": 1,
-          "rows_left": 1,
-          "rows_removed": 0,
-          "rows_right": 2,
-          "source_path": "data/state_AL.csv"
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+        "uint": 0
+      },
+      {
+        "text": " edits"
       }
     ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.declared_correspondence"
+    "children": [
+      {
+        "action": "add",
+        "item_type": "directory",
+        "path": "by-state",
+        "summary": [
+          {
+            "text": "Added"
+          }
+        ],
+        "children": [
+          {
+            "action": "move",
+            "item_type": "directory",
+            "path": "by-state/AL",
+            "source_path": "data",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data",
+                  "snapshot": "from"
+                }
+              }
+            ],
+            "tags": [
+              "binoc.folder-move",
+              "binoc.move"
+            ],
+            "children": [
+              {
+                "action": "move",
+                "item_type": "tabular",
+                "path": "by-state/AL/records.csv",
+                "source_path": "data/state_AL.csv",
+                "summary": [
+                  {
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "data/state_AL.csv",
+                      "snapshot": "from"
+                    }
+                  },
+                  {
+                    "text": " (modified)"
+                  }
+                ],
+                "tags": [
+                  "binoc.content-changed",
+                  "binoc.declared-correspondence",
+                  "binoc.move",
+                  "binoc.move.modified",
+                  "binoc.row-addition"
+                ],
+                "details": {
+                  "edits": [
+                    {
+                      "params": {
+                        "index": 1,
+                        "values": {
+                          "total_values": 2,
+                          "truncated": false,
+                          "values": [
+                            "2",
+                            "Birmingham"
+                          ]
+                        }
+                      },
+                      "verb": "tabular.add_row"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
     ]
   }
 }

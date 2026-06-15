@@ -4,7 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tsv**: 2 cells changed
-  - Changed cells; use `binoc extract CHANGESET "data.tsv" cells_changed` for all changed cells
-    - row 1, column 'age': '30' -> '31'
-    - row 2, column 'city': 'Boston' -> 'Cambridge'
+- **data.tsv**: 2 edits

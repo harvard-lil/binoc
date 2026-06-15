@@ -1,17 +1,10 @@
 //! Plugin test vectors: binoc-row-reorder/test-vectors/. Uses the shared harness
 //! from binoc_stdlib::test_vectors.
 //!
-//! All plugins (stdlib + row-reorder) are wrapped in ABI wrappers so every call
-//! goes through the JSON wire format. ABI and DataAccess interactions are
-//! snapshotted as golden files.
-
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use binoc_row_reorder::RowReorderDetector;
-use binoc_sdk::test_support::{AbiLogCollector, AbiTransformer};
 use binoc_stdlib::test_vectors::{
-    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
+    discover_vectors, run_vector_with_correspondence_engine_config, stdlib_materializers,
     VectorMaterializer,
 };
 
@@ -31,29 +24,16 @@ fn test_all_vectors() {
     let materializer_refs: Vec<&dyn VectorMaterializer> =
         materializers.iter().map(|m| &**m).collect();
     for vector in &vectors {
-        let (mut registry, mut collectors, counter) = abi_wrapped_default_registry();
-
-        let reorder_trans = Arc::new(AbiTransformer::new(RowReorderDetector, counter));
-        collectors.push(reorder_trans.clone());
-        registry
-            .register_transformer(reorder_trans)
-            .expect("same-build plugin");
-
-        let collector_refs: Vec<&dyn AbiLogCollector> =
-            collectors.iter().map(|c| c.as_ref()).collect();
-        run_vector_with_abi_log(
+        run_vector_with_correspondence_engine_config(
             vector,
             &vectors_dir(),
-            || {
-                let mut direct = binoc_stdlib::default_registry();
-                direct
-                    .register_transformer(Arc::new(RowReorderDetector))
-                    .expect("same-build plugin");
-                direct
-            },
-            move || registry,
             &materializer_refs,
-            &collector_refs,
+            |dataset| {
+                let mut config =
+                    binoc_stdlib::correspondence::engine_config_for_dataset_config(dataset);
+                binoc_row_reorder::register_correspondence_rules(&mut config);
+                config
+            },
         );
     }
 }

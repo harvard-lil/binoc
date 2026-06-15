@@ -111,56 +111,66 @@ nav:
   - Home: index.md
   - Start here: start-here.md
   - Tutorial: tutorial.md
-  - Examples: explanation/test-vectors-gallery.md
+  - Examples: users/explanation/test-vectors-gallery.md
   - For Binoc Users:
       - How-to:
-          - Diff two snapshots: howto/diff-two-snapshots.md
-          - Save and render changesets: howto/save-and-render-changesets.md
-          - Extract changed data: howto/extract-changed-data.md
-          - Install and use plugins: howto/install-and-use-plugins.md
+          - Diff two snapshots: users/howto/diff-two-snapshots.md
+          - Save and render changesets: users/howto/save-and-render-changesets.md
+          - Extract changed data: users/howto/extract-changed-data.md
+          - Install and use plugins: users/howto/install-and-use-plugins.md
       - Reference:
-          - reference/index.md
-          - CLI: reference/cli.md
-          - Dataset config: reference/dataset-config.md
-          - Third-party plugins: reference/third-party-plugins.md
+          - users/reference/index.md
+          - CLI: users/reference/cli.md
+          - Dataset config: users/reference/dataset-config.md
+          - Performance tuning: users/reference/performance-tuning.md
+          - Changeset JSON schema: users/reference/changeset-schema.md
+          - Third-party plugins: users/reference/third-party-plugins.md
       - Explanation:
-          - Why Binoc exists: explanation/why-binoc-exists.md
-          - Vocabulary: explanation/vocabulary.md
-          - Significance classification: explanation/significance-classification.md
-          - Security and trust: explanation/security-and-trust.md
+          - Why Binoc exists: users/explanation/why-binoc-exists.md
+          - Vocabulary: users/explanation/vocabulary.md
+          - Significance classification: users/explanation/significance-classification.md
+          - Security and trust: users/explanation/security-and-trust.md
   - For Plugin Developers:
       - How-to:
-          - Write a Python comparator: howto/write-a-python-comparator.md
-          - Write a Python transformer: howto/write-a-python-transformer.md
-          - Write a Python renderer: howto/write-a-python-renderer.md
-          - Write a Rust comparator: howto/write-a-rust-comparator.md
-          - Write a Rust transformer: howto/write-a-rust-transformer.md
-          - Publish a plugin: howto/publish-a-plugin.md
-          - Test a plugin with vectors: howto/test-a-plugin-with-vectors.md
+          - Write a Python renderer: plugin-developers/howto/write-a-python-renderer.md
+          - Write a Rust rule pack: plugin-developers/howto/write-a-rust-rule-pack.md
+          - Publish a plugin: plugin-developers/howto/publish-a-plugin.md
+          - Test a plugin with vectors: plugin-developers/howto/test-a-plugin-with-vectors.md
       - Reference:
-          - Python API: reference/python.md
-          - Rust SDK: reference/sdk.md
-          - Changeset JSON schema: reference/changeset-schema.md
-          - Plugin discovery: reference/plugin-discovery.md
+          - Python API: plugin-developers/reference/python.md
+          - Rust SDK: plugin-developers/reference/sdk.md
+          - Plugin discovery: plugin-developers/reference/plugin-discovery.md
       - Explanation:
-          - Architecture overview: explanation/architecture.md
-          - Plugin model: explanation/plugin-model.md
-          - IR and changesets: explanation/ir-and-changesets.md
-          - Artifacts and composition: explanation/artifacts-and-composition.md
-          - Dispatch model: explanation/dispatch-model.md
-          - Extract and provenance: explanation/extract-and-provenance.md
-          - Test vectors: explanation/test-vectors.md
+          - Architecture overview: plugin-developers/explanation/architecture.md
+          - Plugin model: plugin-developers/explanation/plugin-model.md
+          - IR and changesets: plugin-developers/explanation/ir-and-changesets.md
+          - Artifacts and composition: plugin-developers/explanation/artifacts-and-composition.md
+          - Dispatch model: plugin-developers/explanation/dispatch-model.md
+          - Extract and provenance: plugin-developers/explanation/extract-and-provenance.md
+          - Test vectors: plugin-developers/explanation/test-vectors.md
   - For Core Developers:
       - How-to:
-          - Cut a release: howto/cut-a-release.md
-          - Contribute to binoc: howto/contribute-to-binoc.md
-          - Write and maintain docs: howto/write-docs.md
+          - Cut a release: core-developers/howto/cut-a-release.md
+          - Contribute to binoc: core-developers/howto/contribute-to-binoc.md
+          - Write and maintain docs: core-developers/howto/write-docs.md
+      - Research:
+          - Prior art and architecture precedents: core-developers/research/precedents.md
+          - Edit lists, edit distance, and compaction: core-developers/research/edit-list-compaction.md
+          - Nurturing a plugin ecosystem under an unstable SDK: core-developers/research/plugin-ecosystem-precedents.md
       # The block below is regenerated by `just docs-adr-index` from each
       # ADR's H1 + filename. Don't hand-edit between the sentinels; add new
       # ADRs with `just adr <title>`.
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Tiered Plugin Surface During Pre-1.0: In-Process Proposed Tier, ABI Stable Tier': adr/2026-06-12-tiered_plugin_surface_pre_1_0.md
+          - 'Stacked Table Writer Stopgap Before CFM-26': adr/2026-06-12-stacked_table_writer_stopgap_pre_cfm_26.md
+          - 'Invariant and Lint Tiers: Harness, Mechanical, Agent': adr/2026-06-12-invariant_and_lint_tiers.md
+          - 'Correspondence-First Migration Completion': adr/2026-06-12-correspondence_first_migration_completion.md
+          - 'Correspondence-First Engine: Two Trees, Links, and Edit-List Compaction': adr/2026-06-12-correspondence_first_engine.md
+          - 'Binoc: the architecture, told as a story': adr/2026-06-12-historical_single_tree_architecture_story.md
+          - 'Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering': adr/2026-06-11-inline_pure_reorder_judgment.md
+          - 'Declared Write-Sets on TransformerDescriptor': adr/2026-06-11-declared_write_sets_on_transformer_descriptor.md
           - 'Transformer-Initiated Recompare as a Correspondence Contract': adr/2026-06-03-transformer_initiated_recompare.md
           - 'Structured Summary Segments': adr/2026-06-03-structured-summary-segments.md
           - 'Progressive Renderer Annotations': adr/2026-06-03-progressive_renderer_annotations.md

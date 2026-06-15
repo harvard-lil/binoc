@@ -1,0 +1,8 @@
+[vector]
+name = "csv-mid-row-insertion"
+description = "A mid-table row insertion compacts while column reorder/addition rules remain independent"
+tags = ["csv", "row-addition", "column-reorder", "column-addition", "lcs", "compaction"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-addition", "binoc.column-reorder", "binoc.column-addition"]

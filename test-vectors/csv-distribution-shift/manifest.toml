@@ -6,8 +6,5 @@ tags = ["csv", "statistics", "row-identity"]
 [config]
 dataset = { tables = { defaults = { row_identity = { columns = ["id"] } } } }
 
-[config.transformer_config."binoc.tabular_stats_annotator"]
-enabled = true
-
 [expected]
 has_tags = ["binoc.cell-change"]

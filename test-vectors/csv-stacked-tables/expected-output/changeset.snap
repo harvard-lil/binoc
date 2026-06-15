@@ -16,93 +16,28 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "text": "Table table_2 changed: "
-          },
-          {
             "uint": 1
           },
           {
-            "text": " row added"
+            "text": " edit"
           }
         ],
         "tags": [
+          "binoc.row-addition",
           "binoc.table-change",
-          "binoc.tabular-collection",
           "binoc.tabular-collection-change"
         ],
-        "children": [
-          {
-            "action": "modify",
-            "item_type": "tabular",
-            "path": "data.csv#table_2",
-            "summary": [
-              {
-                "uint": 1
-              },
-              {
-                "text": " row added"
-              }
-            ],
-            "tags": [
-              "binoc.row-addition",
-              "binoc.table-change"
-            ],
-            "details": {
-              "cells_changed": 0,
-              "columns": [
-                "Appl No",
-                "Product",
-                "Applicant",
-                "Approval Date"
-              ],
-              "columns_added": [],
-              "columns_left": [
-                "Appl No",
-                "Product",
-                "Applicant",
-                "Approval Date"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "Appl No",
-                "Product",
-                "Applicant",
-                "Approval Date"
-              ],
-              "end_row": 8,
-              "header_row": 6,
-              "logical_name": "table_2",
-              "rows_added": 1,
-              "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 3
-            },
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          }
-        ],
         "details": {
-          "tables_changed": [
-            "table_2"
-          ],
-          "tables_left": [
-            "table_1",
-            "table_2"
-          ],
-          "tables_right": [
-            "table_1",
-            "table_2"
+          "edits": [
+            {
+              "params": {
+                "table": "table_2"
+              },
+              "verb": "tabular_collection.change_table"
+            }
           ]
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.table_splitter",
-          "binoc.table_collection_analyzer"
-        ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

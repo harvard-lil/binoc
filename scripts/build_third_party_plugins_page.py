@@ -2,11 +2,11 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Emit docs/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+"""Emit docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 
-Catalog entries include declarative dispatch metadata (`extensions`, `media_types`,
-and related fields) aligned with `ComparatorDescriptor` / `TransformerDescriptor`
-in binoc-sdk so tooling can match files to plugins without scraping Markdown.
+Catalog entries include advertised file selectors (`extensions`, `media_types`,
+and related fields) so tooling can match files to plugins without scraping
+Markdown.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "third_party_plugins.json"
-OUT_PATH = ROOT / "docs" / "reference" / "third-party-plugins.md"
+OUT_PATH = ROOT / "docs" / "users" / "reference" / "third-party-plugins.md"
 
 PACKAGE_LABELS = {"pypi": "PyPI", "crate": "crates.io"}
 
@@ -53,73 +53,19 @@ def _md_table(rows: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _format_comparator_dispatch(d: dict[str, Any], path: str) -> list[tuple[str, str]]:
+def _format_rule_pack_dispatch(d: dict[str, Any], path: str) -> list[tuple[str, str]]:
     exts = _optional_str_list(d.get("extensions"), f"{path}.extensions")
     mts = _optional_str_list(d.get("media_types"), f"{path}.media_types")
     scope = d.get("scope", "Files")
     if not isinstance(scope, str):
         _die(f"{path}.scope: expected string")
-    hi = d.get("handles_identical", False)
-    if not isinstance(hi, bool):
-        _die(f"{path}.handles_identical: expected boolean")
     rows: list[tuple[str, str]] = [
         ("`extensions`", ", ".join(f"`{e}`" for e in exts) if exts else "—"),
         ("`media_types`", ", ".join(f"`{m}`" for m in mts) if mts else "—"),
         ("`scope`", f"`{scope}`"),
-        ("`handles_identical`", "`true`" if hi else "`false`"),
     ]
     for key in d:
-        if key not in ("extensions", "media_types", "scope", "handles_identical"):
-            _die(f"{path}: unknown dispatch key {key!r}")
-    return rows
-
-
-def _format_transformer_dispatch(d: dict[str, Any], path: str) -> list[tuple[str, str]]:
-    rows: list[tuple[str, str]] = []
-    match_types = _optional_str_list(d.get("match_types"), f"{path}.match_types")
-    match_tags = _optional_str_list(d.get("match_tags"), f"{path}.match_tags")
-    match_actions = _optional_str_list(d.get("match_actions"), f"{path}.match_actions")
-    phase = d.get("suggested_phase", "default")
-    if not isinstance(phase, str):
-        _die(f"{path}.suggested_phase: expected string")
-    node_shape = d.get("node_shape", "Any")
-    if not isinstance(node_shape, str):
-        _die(f"{path}.node_shape: expected string")
-
-    arts_raw = d.get("match_artifacts") or []
-    if not isinstance(arts_raw, list):
-        _die(f"{path}.match_artifacts: expected array")
-    arts_fmt: list[str] = []
-    for i, a in enumerate(arts_raw):
-        if not isinstance(a, dict):
-            _die(f"{path}.match_artifacts[{i}]: expected object")
-        for req in ("package", "name", "version"):
-            if req not in a:
-                _die(f"{path}.match_artifacts[{i}]: missing {req!r}")
-        pkg, name, ver = a["package"], a["name"], a["version"]
-        if not isinstance(pkg, str) or not isinstance(name, str):
-            _die(f"{path}.match_artifacts[{i}]: package and name must be strings")
-        if not isinstance(ver, int) or ver < 0:
-            _die(f"{path}.match_artifacts[{i}]: version must be a non-negative int")
-        arts_fmt.append(f"`{pkg}.{name}.v{ver}`")
-
-    rows.append(("`match_types`", ", ".join(f"`{t}`" for t in match_types) if match_types else "—"))
-    rows.append(("`match_tags`", ", ".join(f"`{t}`" for t in match_tags) if match_tags else "—"))
-    rows.append(("`match_actions`", ", ".join(f"`{t}`" for t in match_actions) if match_actions else "—"))
-    rows.append(("`suggested_phase`", f"`{phase}`"))
-    rows.append(("`match_artifacts`", ", ".join(arts_fmt) if arts_fmt else "—"))
-    rows.append(("`node_shape`", f"`{node_shape}`"))
-
-    allowed = {
-        "match_types",
-        "match_tags",
-        "match_actions",
-        "suggested_phase",
-        "match_artifacts",
-        "node_shape",
-    }
-    for key in d:
-        if key not in allowed:
+        if key not in ("extensions", "media_types", "scope"):
             _die(f"{path}: unknown dispatch key {key!r}")
     return rows
 
@@ -175,7 +121,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
             "After you install the package (for example from PyPI), binoc picks it up "
             "via the standard entry-point group — see [Install and use plugins]"
             "(../howto/install-and-use-plugins.md) and [Plugin discovery]"
-            "(plugin-discovery.md)."
+            "(../../plugin-developers/reference/plugin-discovery.md)."
         )
         lines.append("")
         lines.append("Published packages declare discovery metadata like this:")
@@ -194,12 +140,12 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
             )
             lines.append("")
 
-    comparators = p.get("comparators") or []
-    if not isinstance(comparators, list):
-        _die(f"{base}.comparators: expected array")
+    rule_packs = p.get("rule_packs") or []
+    if not isinstance(rule_packs, list):
+        _die(f"{base}.rule_packs: expected array")
 
-    for ci, c in enumerate(comparators):
-        cp = f"{base}.comparators[{ci}]"
+    for ci, c in enumerate(rule_packs):
+        cp = f"{base}.rule_packs[{ci}]"
         if not isinstance(c, dict):
             _die(f"{cp}: expected object")
         cname = c.get("name")
@@ -209,7 +155,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         if not isinstance(dispatch, dict):
             _die(f"{cp}.dispatch: expected object")
 
-        if len(comparators) == 1:
+        if len(rule_packs) == 1:
             lines.append("### When it handles your files")
         else:
             if ci == 0:
@@ -218,23 +164,28 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
             lines.append(f"#### `{cname}`")
         lines.append("")
         lines.append(
-            "A file is routed to this plugin when **either** its path matches one of "
-            "the **extensions** or its detected **media type** matches (same rules as "
-            "the rest of the pipeline). Ordering relative to other plugins and the "
-            "standard library is up to your "
-            "[dataset config](dataset-config.md)."
+            "This rule pack is relevant when a file path matches one of the "
+            "**extensions** or its detected **media type** matches. These selectors "
+            "are advertised for discovery and documentation; current diff behavior "
+            "is driven by the correspondence engine's rule configuration."
         )
         lines.append("")
-        lines.append(_md_table(_format_comparator_dispatch(dispatch, f"{cp}.dispatch")))
+        lines.append(_md_table(_format_rule_pack_dispatch(dispatch, f"{cp}.dispatch")))
         lines.append("")
 
-        ir_types = c.get("ir_item_types")
-        if ir_types is not None:
-            _ = _as_str_list(ir_types, f"{cp}.ir_item_types")
+        item_types = c.get("item_types")
+        if item_types is not None:
+            _ = _as_str_list(item_types, f"{cp}.item_types")
             lines.append(
                 "*Labels you may see in a changeset (not used for routing):* "
-                + ", ".join(f"`{t}`" for t in ir_types)
+                + ", ".join(f"`{t}`" for t in item_types)
             )
+            lines.append("")
+
+        rules = c.get("rules")
+        if rules is not None:
+            _ = _as_str_list(rules, f"{cp}.rules")
+            lines.append("*Rule families supplied:* " + ", ".join(f"`{r}`" for r in rules))
             lines.append("")
 
         notes = c.get("notes")
@@ -243,29 +194,6 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
                 _die(f"{cp}.notes: expected string")
             lines.append(notes)
             lines.append("")
-
-    transformers = p.get("transformers") or []
-    if not isinstance(transformers, list):
-        _die(f"{base}.transformers: expected array")
-    for ti, t in enumerate(transformers):
-        tp = f"{base}.transformers[{ti}]"
-        if not isinstance(t, dict):
-            _die(f"{tp}: expected object")
-        tname = t.get("name")
-        if not isinstance(tname, str):
-            _die(f"{tp}.name: expected string")
-        dispatch = t.get("dispatch")
-        if not isinstance(dispatch, dict):
-            _die(f"{tp}.dispatch: expected object")
-        lines.append(f"### Transformer: `{tname}`")
-        lines.append("")
-        lines.append(
-            "Runs on diff nodes when the following transformer dispatch rules match "
-            "(see [Dispatch model](../explanation/dispatch-model.md)):"
-        )
-        lines.append("")
-        lines.append(_md_table(_format_transformer_dispatch(dispatch, f"{tp}.dispatch")))
-        lines.append("")
 
     renderers = p.get("renderers") or []
     if not isinstance(renderers, list):
@@ -292,8 +220,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         "source_path",
         "packages",
         "entry_point",
-        "comparators",
-        "transformers",
+        "rule_packs",
         "renderers",
     }
     for key in p:
@@ -324,20 +251,19 @@ def main() -> int:
         "",
         "# Third-party plugins",
         "",
-        "Binoc ships a capable [standard library](../explanation/plugin-model.md) "
+        "Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) "
         "(`binoc-stdlib`), but some datasets use formats that need a dedicated "
-        "comparator. Install one of the **add-on plugins** below when your "
+        "rule pack. Install one of the **add-on plugins** below when your "
         "snapshots include those kinds of files.",
         "",
         "To find a match, compare your filenames (suffixes) and, when available, "
         "detected media types to the tables under each plugin. Once you find one, "
-        "install the package and add its comparator names to your "
-        "[dataset config](dataset-config.md) where needed.",
+        "install the package and configure any dataset semantics it documents.",
         "",
         "!!! tip \"Publishing or listing a plugin\"",
         "",
         "    If you maintain a plugin and want it listed here, see "
-        "[Publish a plugin](../howto/publish-a-plugin.md).",
+        "[Publish a plugin](../../plugin-developers/howto/publish-a-plugin.md).",
         "",
         "!!! note \"Generated page\"",
         "",
@@ -360,9 +286,8 @@ def main() -> int:
     lines.append("")
     lines.append(
         f"The canonical data lives in `{rel_data}` (JSON). Hosts that suggest plugins "
-        "for unrecognized formats should read that file; dispatch fields mirror "
-        "[`ComparatorDescriptor`](https://docs.rs/binoc-sdk/latest/binoc_sdk/"
-        "struct.ComparatorDescriptor.html) in binoc-sdk."
+        "for unrecognized formats should read that file; dispatch fields describe "
+        "the rule pack's advertised file selectors."
     )
     lines.append("")
 

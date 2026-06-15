@@ -5,5 +5,9 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
-  "root": null
+  "root": {
+    "action": "identical",
+    "item_type": "directory",
+    "path": ""
+  }
 }

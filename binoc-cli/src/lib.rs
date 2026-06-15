@@ -81,17 +81,17 @@ enum Commands {
     },
     /// Extract actual changed data from a changeset node.
     ///
-    /// Reopens both snapshots through the comparator chain and returns the
-    /// real bytes or text for a given node and aspect (e.g. `rows_added`,
-    /// `diff`, `content`). Use this to recover data that changesets only
-    /// summarize.
+    /// Reopens both snapshots through the correspondence engine and asks the
+    /// rule that owns the projected node for the requested aspect (e.g.
+    /// `rows_added`, `diff`, `content`). Use this to recover data that
+    /// changesets only summarize.
     Extract {
         /// Path to a changeset JSON file.
         changeset: PathBuf,
         /// Node path within the changeset (e.g. `/path/to/file.csv`).
         node: String,
         /// Named aspect of the node to extract. Which aspects are available
-        /// depends on the comparator that produced the node.
+        /// depends on the rule that owns the projected node.
         #[arg(default_value = "content")]
         aspect: String,
         /// Override the "before" snapshot path. Defaults to the one recorded
@@ -244,8 +244,20 @@ fn write_outputs(
     Ok(())
 }
 
+fn resolve_renderers_only(
+    registry: &PluginRegistry,
+    config: &DatasetConfig,
+) -> Result<ResolvedPlugins, Box<dyn std::error::Error>> {
+    Ok(registry.resolve(config)?)
+}
+
+fn diff_controller(config: &DatasetConfig) -> Controller {
+    Controller::new(binoc_stdlib::correspondence::engine_config_for_dataset_config(&config.dataset))
+        .with_dataset_config(config.dataset.clone())
+}
+
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the
-/// `emit-cli-markdown` binary that regenerates `docs/reference/cli.md`) can
+/// `emit-cli-markdown` binary that regenerates `docs/users/reference/cli.md`) can
 /// walk it without depending on private types.
 pub fn command() -> clap::Command {
     Cli::command()
@@ -277,14 +289,11 @@ pub fn run(
         } => {
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
-                None => registry.default_config(),
+                None => DatasetConfig::default_config(),
             };
 
-            let resolved = registry.resolve(&dataset_config)?;
-            let controller =
-                Controller::new(resolved.comparators.clone(), resolved.transformers.clone())
-                    .with_transformer_configs(dataset_config.transformer_config.as_map())
-                    .with_dataset_config(dataset_config.dataset.clone());
+            let resolved = resolve_renderers_only(&registry, &dataset_config)?;
+            let controller = diff_controller(&dataset_config);
 
             let snapshots: Vec<String> = snapshots
                 .iter()
@@ -310,10 +319,10 @@ pub fn run(
         } => {
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
-                None => registry.default_config(),
+                None => DatasetConfig::default_config(),
             };
 
-            let resolved = registry.resolve(&dataset_config)?;
+            let resolved = resolve_renderers_only(&registry, &dataset_config)?;
 
             let mut changesets: Vec<Changeset> = Vec::new();
             for path in &changeset_paths {
@@ -361,13 +370,10 @@ pub fn run(
 
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
-                None => registry.default_config(),
+                None => DatasetConfig::default_config(),
             };
 
-            let resolved = registry.resolve(&dataset_config)?;
-            let controller = Controller::new(resolved.comparators, resolved.transformers)
-                .with_transformer_configs(dataset_config.transformer_config.as_map())
-                .with_dataset_config(dataset_config.dataset.clone());
+            let controller = diff_controller(&dataset_config);
 
             match controller.extract(&changeset, &node, &aspect, &snap_a, &snap_b) {
                 Ok(result) => match result {

@@ -1,3 +1,4 @@
+pub mod correspondence;
 pub mod data_access;
 pub mod ir;
 pub mod plugin_abi;
@@ -5,8 +6,11 @@ pub mod traits;
 pub mod types;
 
 #[cfg(feature = "test-support")]
+pub mod lints;
+#[cfg(feature = "test-support")]
 pub mod test_support;
 
+pub use correspondence::*;
 pub use data_access::LocalDataAccess;
 pub use ir::{
     Annotation, Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode,

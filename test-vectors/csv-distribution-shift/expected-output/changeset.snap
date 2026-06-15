@@ -16,158 +16,75 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "uint": 4
+            "uint": 5
           },
           {
-            "text": " rows modified by key"
+            "text": " edits"
           }
         ],
         "tags": [
           "binoc.cell-change"
         ],
         "details": {
-          "cells_changed": 5,
-          "columns_added": [],
-          "columns_left": [
-            "id",
-            "score",
-            "label"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "score",
-            "label"
-          ],
-          "hash_left": "80034b65c9113ce13204651a58eb57726dd055894d2c8d5b7a3a6943d24d5941",
-          "hash_right": "9ffd3e0e8207a6ce0f0454302c45c39815d2179e3562dd924f971fdc989eeb15",
-          "row_identity": {
-            "columns": [
-              "id"
-            ],
-            "matched_rows": 4,
-            "mode": "keyed",
-            "on_duplicate_key": "diagnostic",
-            "on_null_key": "diagnostic"
-          },
-          "rows_added": 0,
-          "rows_left": 4,
-          "rows_modified": 4,
-          "rows_removed": 0,
-          "rows_right": 4
-        },
-        "detail_blocks": [
-          {
-            "id": "cells_changed",
-            "kind": "binoc.tabular.cell_changes.v1",
-            "label": "Changed cells",
-            "total_count": 5,
-            "examples": [
-              {
-                "locator": {
-                  "column": "score",
-                  "key": {
-                    "id": "1"
-                  }
+          "edits": [
+            {
+              "params": {
+                "column": "score",
+                "from": "10",
+                "key": {
+                  "id": "1"
                 },
-                "before": {
-                  "value": "10",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "12",
-                  "media_type": "text/plain"
-                }
+                "to": "12"
               },
-              {
-                "locator": {
-                  "column": "label",
-                  "key": {
-                    "id": "2"
-                  }
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "20",
+                "key": {
+                  "id": "2"
                 },
-                "before": {
-                  "value": "beta",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "beta2",
-                  "media_type": "text/plain"
-                }
+                "to": "35"
               },
-              {
-                "locator": {
-                  "column": "score",
-                  "key": {
-                    "id": "2"
-                  }
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "label",
+                "from": "beta",
+                "key": {
+                  "id": "2"
                 },
-                "before": {
-                  "value": "20",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "35",
-                  "media_type": "text/plain"
-                }
+                "to": "beta2"
               },
-              {
-                "locator": {
-                  "column": "score",
-                  "key": {
-                    "id": "3"
-                  }
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "30",
+                "key": {
+                  "id": "3"
                 },
-                "before": {
-                  "value": "30",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "45",
-                  "media_type": "text/plain"
-                }
+                "to": "45"
               },
-              {
-                "locator": {
-                  "column": "score",
-                  "key": {
-                    "id": "4"
-                  }
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "",
+                "key": {
+                  "id": "4"
                 },
-                "before": {
-                  "value": "",
-                  "media_type": "text/plain"
-                },
-                "after": {
-                  "value": "50",
-                  "media_type": "text/plain"
-                }
-              }
-            ],
-            "extract": [
-              {
-                "aspect": "cells_changed",
-                "label": "All changed cells"
-              }
-            ]
-          }
-        ],
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "distribution_shifts",
-            "value": [
-              "column 'score': mean 20 -> 35.5, median 20 -> 40, range 10-30 -> 12-50, nulls 1 -> 0, mean abs delta 10.667 across 3 paired rows"
-            ]
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer",
-          "binoc.tabular_stats_annotator"
-        ]
+                "to": "50"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

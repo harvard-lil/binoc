@@ -16,79 +16,29 @@ expression: "&stable_changeset"
         "path": "data.sqlite",
         "summary": [
           {
-            "text": "Table users changed: "
-          },
-          {
             "uint": 1
           },
           {
-            "text": " row added"
+            "text": " edit"
           }
         ],
         "tags": [
+          "binoc-sqlite.row-addition",
+          "binoc.row-addition",
           "binoc.table-change",
           "binoc.tabular-collection-change"
         ],
-        "children": [
-          {
-            "action": "modify",
-            "item_type": "tabular",
-            "path": "data.sqlite::users",
-            "summary": [
-              {
-                "uint": 1
-              },
-              {
-                "text": " row added"
-              }
-            ],
-            "tags": [
-              "binoc-sqlite.row-addition",
-              "binoc.row-addition",
-              "binoc.table-change"
-            ],
-            "details": {
-              "cells_changed": 0,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "name"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "name"
-              ],
-              "logical_name": "users",
-              "rows_added": 1,
-              "rows_left": 1,
-              "rows_removed": 0,
-              "rows_right": 2
-            },
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          }
-        ],
         "details": {
-          "hash_left": "0bb865f7f287a972d996d07f69dab0d625f02aa5825cc79a6ab79b5c2794355a",
-          "hash_right": "403f22fa3dbe2a501520c6b9bb9c2ecd8f8e431d957f2c050f112d546953bc72",
-          "tables_changed": [
-            "users"
-          ],
-          "tables_left": [
-            "users"
-          ],
-          "tables_right": [
-            "users"
+          "edits": [
+            {
+              "params": {
+                "table": "users"
+              },
+              "verb": "sqlite.change_table"
+            }
           ]
-        },
-        "comparator": "binoc-sqlite.sqlite",
-        "transformed_by": [
-          "binoc.table_collection_analyzer"
-        ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

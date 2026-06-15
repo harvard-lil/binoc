@@ -119,7 +119,7 @@ def update_mkdocs_nav(adrs: list[Adr]) -> None:
     nav_lines.append(f"{indent}- adr/README.md")
     for adr in reversed(adrs):
         # Quote titles defensively: many ADRs have colons in their H1 (e.g.
-        # "Transformer dispatch: bottom-up..."), which is invalid unquoted YAML.
+        # "Dispatch: bottom-up..."), which is invalid unquoted YAML.
         title_quoted = "'" + adr.title.replace("'", "''") + "'"
         nav_lines.append(f"{indent}- {title_quoted}: adr/{adr.filename}")
     nav_lines.append(f"{indent}{NAV_END}")

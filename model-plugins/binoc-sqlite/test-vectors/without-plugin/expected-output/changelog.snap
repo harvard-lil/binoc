@@ -4,8 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.sqlite**: Content changed (8.0 KB → 8.0 KB)
-
-## Suggestions
-
-- Compared as binary; a plugin may provide a more semantic diff. (`data.sqlite`) [binoc.binary-fallback]
+- **data.sqlite**: 1 edit

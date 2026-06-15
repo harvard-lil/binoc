@@ -24,11 +24,9 @@ Quick start::
     markdown = binoc.to_markdown([changeset])
 
 Writing plugins:
-    Subclass :class:`Comparator` to parse a new file format into the IR, or
-    subclass :class:`Transformer` to rewrite the diff tree. Register them on
-    a :class:`Config` with :meth:`Config.add_comparator` /
-    :meth:`Config.add_transformer`, or on a :class:`PluginRegistry` for
-    reuse across multiple diffs and for distribution as an entry point.
+    Python supports embedding, rendering, and dataset configuration. Parser
+    and rewrite rule authoring is Rust-only until the correspondence rule ABI
+    lands.
 
 Test-vector helpers for plugin authors live in :mod:`binoc.testing`.
 """
@@ -37,173 +35,19 @@ from binoc._binoc import (
     Changeset,
     Config,
     DiffNode,
-    Expand,
-    Identical,
     ItemPair,
-    Leaf,
     PluginRegistry,
-    Remove,
-    Replace,
-    ReplaceMany,
-    Skip,
-    Unchanged,
     diff,
     to_json,
     to_markdown,
 )
 
-
-class Comparator:
-    """Base class for Python-authored comparators.
-
-    A comparator is the parser layer of binoc: it takes an :class:`ItemPair`
-    and decides whether the two sides are semantically identical, whether
-    they differ (and how), and — for container formats — what child items
-    the controller should recursively diff next.
-
-    Subclass this and set the class attributes listed below, then implement
-    :meth:`compare`. If neither ``extensions`` nor ``media_types`` is set, the
-    comparator is treated as an imperative fallback and :meth:`can_handle`
-    decides whether it should run for each item.
-
-    Attributes:
-        name: Dispatch name / registry key for this comparator, e.g.
-            ``"bio.fasta"``. Plugins should namespace by package.
-        extensions: File extensions (with leading ``.``) this comparator
-            claims. Declarative dispatch: first comparator to claim an
-            item wins. Ordering is a :class:`Config` concern.
-        media_types: MIME media types this comparator claims.
-
-    Example::
-
-        class FastaComparator(binoc.Comparator):
-            name = "bio.fasta"
-            extensions = [".fasta", ".fa"]
-
-            def compare(self, pair):
-                return binoc.Leaf(binoc.DiffNode(
-                    action="modify",
-                    item_type="fasta",
-                    path=pair.logical_path,
-                ))
-
-        config = binoc.Config.default()
-        config.add_comparator(FastaComparator())
-        changeset = binoc.diff("a", "b", config=config)
-    """
-
-    name: str = ''
-    extensions: list[str] = []
-    media_types: list[str] = []
-
-    def can_handle(self, pair: ItemPair) -> bool:
-        """Return ``True`` if this comparator can handle *pair*.
-
-        Declarative dispatch by ``extensions`` / ``media_types`` is the normal
-        path. This method is only consulted for Python comparators that do not
-        declare either list.
-        """
-        return False
-
-    def compare(self, pair: ItemPair) -> 'Identical | Skip | Leaf | Expand':
-        """Compare an :class:`ItemPair` and return a result variant.
-
-        Must return one of:
-
-        - :class:`Identical` — items are semantically the same; produce no
-          diff node.
-        - :class:`Skip` — this comparator cannot handle the item after all;
-          the controller should try the next matching comparator.
-        - :class:`Leaf` — terminal diff node; the controller will not
-          recurse into it.
-        - :class:`Expand` — container diff node plus the child
-          :class:`ItemPair` s to recurse into.
-
-        Raises :class:`NotImplementedError` if a subclass forgets to
-        implement it.
-        """
-        raise NotImplementedError
-
-
-class Transformer:
-    """Base class for Python-authored transformers.
-
-    A transformer is an optimization / normalization pass over the diff
-    tree: it rewrites :class:`DiffNode` s after all comparators have run
-    but before rendering. Transformers operate only on the IR — they do
-    not have access to the raw snapshot data.
-
-    Subclass this, set the dispatch filters, and implement :meth:`transform`.
-
-    Attributes:
-        name: Dispatch name / registry key for this transformer.
-        match_types: If non-empty, only call :meth:`transform` on nodes
-            whose :attr:`~DiffNode.item_type` is in this list.
-        match_tags: If non-empty, only call :meth:`transform` on nodes
-            carrying at least one of these tags.
-        match_actions: If non-empty, only call :meth:`transform` on nodes
-            whose :attr:`~DiffNode.action` is in this list.
-        node_shape: Dispatch filter on node shape — one of ``"any"``
-            (default), ``"container"`` (only nodes with children), or
-            ``"leaf"`` (only childless nodes).
-
-    Example::
-
-        class Normalizer(binoc.Transformer):
-            name = "myproject.normalizer"
-            match_tags = ["myproject.raw"]
-
-            def transform(self, node):
-                return binoc.Replace(node.with_tag("myproject.normalized"))
-
-        config = binoc.Config.default()
-        config.add_transformer(Normalizer())
-    """
-
-    name: str = ''
-    match_types: list[str] = []
-    match_tags: list[str] = []
-    match_actions: list[str] = []
-    node_shape: str = 'any'
-
-    def can_handle(self, node: DiffNode) -> bool:
-        """Return ``True`` if this transformer should process *node*.
-
-        Imperative escape hatch for cases where the declarative filters
-        (``match_types`` / ``match_tags`` / ``match_actions`` /
-        ``node_shape``) cannot express the match.
-        """
-        return False
-
-    def transform(self, node: DiffNode) -> 'Unchanged | Replace | ReplaceMany | Remove':
-        """Rewrite a matched :class:`DiffNode` and return a result variant.
-
-        Must return one of:
-
-        - :class:`Unchanged` — leave the node alone.
-        - :class:`Replace` — replace the node with one new node.
-        - :class:`ReplaceMany` — replace the node with zero or more nodes.
-        - :class:`Remove` — drop the node from the tree entirely.
-        """
-        raise NotImplementedError
-
-
 __all__ = [
     'Changeset',
-    'Comparator',
     'Config',
     'DiffNode',
-    'Expand',
-    'Identical',
     'ItemPair',
-    'Leaf',
     'PluginRegistry',
-    'Remove',
-    'Replace',
-    'ReplaceMany',
-    'Skip',
-    'Transformer',
-    'Unchanged',
     'diff',
     'to_json',
     'to_markdown',

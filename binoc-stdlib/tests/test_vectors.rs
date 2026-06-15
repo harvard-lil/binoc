@@ -1,17 +1,13 @@
 //! Workspace test vectors: test-vectors/ at repo root. Uses the shared harness
 //! from binoc_stdlib::test_vectors so plugins can do the same without duplicating logic.
 //!
-//! All stdlib plugins are wrapped in ABI wrappers so every call goes through the
-//! JSON wire format. ABI and DataAccess interactions are snapshotted as golden files.
-//!
 //! Auto-discovers all vectors — add a new directory with manifest.toml + snapshots
 //! and it will be tested automatically.
 
 use std::path::PathBuf;
 
 use binoc_stdlib::test_vectors::{
-    abi_wrapped_default_registry, discover_vectors, run_vector_with_abi_log, stdlib_materializers,
-    VectorMaterializer,
+    discover_vectors, run_vector, stdlib_materializers, VectorMaterializer,
 };
 
 fn vectors_dir() -> PathBuf {
@@ -33,16 +29,6 @@ fn test_all_vectors() {
     let materializer_refs: Vec<&dyn VectorMaterializer> =
         materializers.iter().map(|m| &**m).collect();
     for vector in &vectors {
-        let (registry, collectors, _counter) = abi_wrapped_default_registry();
-        let collector_refs: Vec<&dyn binoc_sdk::test_support::AbiLogCollector> =
-            collectors.iter().map(|c| c.as_ref()).collect();
-        run_vector_with_abi_log(
-            vector,
-            &vectors_dir(),
-            binoc_stdlib::default_registry,
-            move || registry,
-            &materializer_refs,
-            &collector_refs,
-        );
+        run_vector(vector, &vectors_dir(), &materializer_refs);
     }
 }

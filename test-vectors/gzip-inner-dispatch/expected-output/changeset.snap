@@ -12,25 +12,19 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "gzip_stream",
+        "item_type": "item",
         "path": "census.txt.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "text",
-            "path": "census.txt",
+            "path": "census.txt.gz/census.txt",
             "summary": [
               {
                 "uint": 1
               },
               {
-                "text": " line added, "
-              },
-              {
-                "uint": 1
-              },
-              {
-                "text": " removed"
+                "text": " edit"
               }
             ],
             "tags": [
@@ -39,42 +33,44 @@ expression: "&stable_changeset"
               "binoc.lines-removed"
             ],
             "details": {
-              "hash_left": "4628bf7bfbbff679c16c4bff9e4bf8575313be5ae6daad5598685c49cd2602bd",
-              "hash_right": "9d3ee4c62ce450076f31bc515ac6523df3092b7f745a11a8094bcce9e87de139",
-              "lines_added": 1,
-              "lines_removed": 1,
-              "lines_unchanged": 2
-            },
-            "comparator": "binoc.text"
+              "edits": [
+                {
+                  "params": {
+                    "examples": [
+                      {
+                        "from": "1|Aroostook|120",
+                        "line": 2,
+                        "to": "1|Aroostook|121"
+                      }
+                    ],
+                    "examples_truncated": false,
+                    "left_line_count": 3,
+                    "lines_added": 1,
+                    "lines_removed": 1,
+                    "right_line_count": 3
+                  },
+                  "verb": "text.replace_lines"
+                }
+              ]
+            }
           }
-        ],
-        "details": {
-          "hash_left": "cc9146d9472db5882bbb48f06d7de71e5d54f8f90de8324ae9a3cb5a4ddc1bcb",
-          "hash_right": "373b168014951dc3efcb0fbfcb0e3814b27f99210a77fc965914ee674addf300"
-        },
-        "comparator": "binoc.gzip"
+        ]
       },
       {
         "action": "modify",
-        "item_type": "gzip_stream",
+        "item_type": "item",
         "path": "data.csv.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "tabular",
-            "path": "data.csv",
+            "path": "data.csv.gz/data.csv",
             "summary": [
               {
-                "uint": 1
+                "uint": 2
               },
               {
-                "text": " row added; "
-              },
-              {
-                "uint": 1
-              },
-              {
-                "text": " cell changed"
+                "text": " edits"
               }
             ],
             "tags": [
@@ -82,67 +78,35 @@ expression: "&stable_changeset"
               "binoc.row-addition"
             ],
             "details": {
-              "cells_changed": 1,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "name"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "name"
-              ],
-              "hash_left": "eba11b43a64542bc15d8713fbd9cdc03026225c2742892413d254c7af756129f",
-              "hash_right": "77a1c8e56e9cb017d94a8b1d85e53675ec3acac6aac1ce6e0219ca5f186d026a",
-              "rows_added": 1,
-              "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 3
-            },
-            "detail_blocks": [
-              {
-                "id": "cells_changed",
-                "kind": "binoc.tabular.cell_changes.v1",
-                "label": "Changed cells",
-                "total_count": 1,
-                "examples": [
-                  {
-                    "locator": {
-                      "column": "name",
-                      "row": 1
-                    },
-                    "before": {
-                      "value": "Bob",
-                      "media_type": "text/plain"
-                    },
-                    "after": {
-                      "value": "Robert",
-                      "media_type": "text/plain"
+              "edits": [
+                {
+                  "params": {
+                    "column": "name",
+                    "from": "Bob",
+                    "row": 1,
+                    "to": "Robert"
+                  },
+                  "verb": "tabular.edit_cell"
+                },
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "3",
+                        "Carla"
+                      ]
                     }
-                  }
-                ],
-                "extract": [
-                  {
-                    "aspect": "cells_changed",
-                    "label": "All changed cells"
-                  }
-                ]
-              }
-            ],
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
           }
-        ],
-        "details": {
-          "hash_left": "836e6597b4fb16563591ba2a4a7262417e3a67ef60f6063ed88a49d96e8461b0",
-          "hash_right": "f51d33a8db40fc51bc47f87311886e8d49005111759cf793c490975071e28179"
-        },
-        "comparator": "binoc.gzip"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

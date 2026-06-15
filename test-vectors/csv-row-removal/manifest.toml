@@ -4,5 +4,5 @@ description = "Rows removed from CSV"
 tags = ["csv", "row-removal"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = ["binoc.row-removal"]

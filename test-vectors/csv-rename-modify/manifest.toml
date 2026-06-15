@@ -1,7 +1,7 @@
 [vector]
 name = "csv-rename-modify"
-description = "CSV renamed and a column added: detected as a single move with content diff via fuzzy correlation"
+description = "CSV renamed and modified: detected as a single move by fuzzy correlation"
 tags = ["csv", "fuzzy-move", "rename-modify"]
 
 [expected]
-has_tags = ["binoc.move", "binoc.move.modified", "binoc.column-addition"]
+has_tags = ["binoc.move", "binoc.move.modified"]

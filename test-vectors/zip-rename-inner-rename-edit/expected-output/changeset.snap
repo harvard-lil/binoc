@@ -1,0 +1,77 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "file",
+        "path": "archive.zip",
+        "source_path": "data.zip",
+        "summary": [
+          {
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "data.zip",
+              "snapshot": "from"
+            }
+          }
+        ],
+        "tags": [
+          "binoc.folder-move",
+          "binoc.move"
+        ],
+        "children": [
+          {
+            "action": "move",
+            "item_type": "tabular",
+            "path": "archive.zip/new.csv",
+            "source_path": "data.zip/old.csv",
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data.zip/old.csv",
+                  "snapshot": "from"
+                }
+              },
+              {
+                "text": " (modified)"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change",
+              "binoc.content-changed",
+              "binoc.move",
+              "binoc.move.modified"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "column": "score",
+                    "from": "60",
+                    "row": 4,
+                    "to": "61"
+                  },
+                  "verb": "tabular.edit_cell"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

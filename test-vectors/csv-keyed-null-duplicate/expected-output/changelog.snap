@@ -4,11 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.csv**: 4 rows added by key; 4 rows removed by key; 1 row modified by key
-  - Changed cells; use `binoc extract CHANGESET "data.csv" cells_changed` for all changed cells
-    - key id 'b', column 'score': '20' -> '21'
+- **data.csv**: 14 edits
 
 ## Warnings
 
-- 2 rows had null configured key values (`data.csv`) [binoc.null-key]
-- 1 configured row key appeared more than once (`data.csv`) [binoc.duplicate-key]
+- configured row keys had null values; fell back to positional row comparison (`binoc.write.tabular`) [binoc.keyed_row_identity_degraded]

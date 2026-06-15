@@ -28,6 +28,11 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 thiserror = "2.0"
 
+[dev-dependencies]
+# Self-dependency so the lints module (behind test-support) compiles for
+# binoc-sdk's own unit tests, same pattern as binoc-sqlite.
+binoc-sdk = { path = ".", features = ["test-support"] }
+
 [[bin]]
 name = "gen-changeset-schema"
 path = "src/bin/gen_changeset_schema.rs"

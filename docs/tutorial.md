@@ -5,9 +5,8 @@ audience: new user
 # Tutorial
 
 Binoc is most useful when a plain filesystem diff would be noisy. In
-this tutorial you will use the sample snapshots in this repository,
-run a few increasingly useful diffs, and finish by teaching binoc one
-new format.
+this tutorial you will use the sample snapshots in this repository and
+run a few increasingly useful diffs.
 
 Clone the repository so you have the tutorial fixtures:
 
@@ -172,10 +171,11 @@ binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-mate
 Binoc expands container formats like zip before dispatching their contents.
 Paths such as `archive.zip/data.txt` point inside the archive.
 
-## Teaching binoc a new format
+## Unsupported formats
 
-Binoc can learn domain formats through plugins. For example, the standard
-library does not understand FASTA:
+When Binoc has no semantic rules for a domain format, it still reports a
+truthful fallback. For example, the standard library does not understand
+FASTA:
 
 ```bash
 binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
@@ -192,104 +192,20 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 
 ```
 
-All the default tool can say is that the two FASTA files are different.
-
-With a short plugin, we can report the useful fact instead of the generic byte
-change. This example defines the comparator in one Python script; the same
-class could later be packaged as a reusable plugin.
-
-```bash
-python - <<'PY'
-from pathlib import Path
-import binoc
-
-class FastaComparator(binoc.Comparator):
-    name = 'bio.fasta'
-    extensions = ['.fasta', '.fa']
-
-    def compare(self, pair):
-        left = self._parse(Path(pair.left_path).read_text()) if pair.left_path else {}
-        right = self._parse(Path(pair.right_path).read_text()) if pair.right_path else {}
-
-        ids = sorted(set(left) | set(right))
-        sequences_changed = sum(
-            1
-            for record_id in ids
-            if left.get(record_id, {}).get('seq') != right.get(record_id, {}).get('seq')
-        )
-        headers_changed = sum(
-            1
-            for record_id in ids
-            if left.get(record_id, {}).get('hdr') != right.get(record_id, {}).get('hdr')
-        )
-
-        if not sequences_changed and not headers_changed:
-            return binoc.Identical()
-
-        summary = (
-            f'{sequences_changed} sequence(s) changed'
-            if sequences_changed
-            else f'Headers updated ({headers_changed} records); sequences unchanged'
-        )
-        tags = ['bio.header-change'] if headers_changed else []
-        if sequences_changed:
-            tags.append('bio.sequence-change')
-
-        return binoc.Leaf(
-            binoc.DiffNode(
-                action='modify',
-                item_type='fasta',
-                path=pair.logical_path,
-                summary=summary,
-                tags=tags,
-            )
-        )
-
-    @staticmethod
-    def _parse(text):
-        records = {}
-        current = None
-        for line in text.strip().split('\n'):
-            if line.startswith('>'):
-                current = line.split()[0][1:]
-                records[current] = {'hdr': line, 'seq': ''}
-            elif current:
-                records[current]['seq'] += line.strip()
-        return records
-
-config = binoc.Config(comparators=['binoc.text'])
-config.add_comparator(FastaComparator())
-changeset = binoc.diff(
-    './docs/examples/fasta-demo/snapshot-a/sequences.fasta',
-    './docs/examples/fasta-demo/snapshot-b/sequences.fasta',
-    config=config,
-)
-print(binoc.to_markdown([changeset]))
-PY
-```
-
-```output
-# Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
-
-- **sequences.fasta**: Headers updated (2 records); sequences unchanged
-
-
-```
-
-Now binoc reports that only the headers changed, and these two FASTA files do
-not substantively differ.
+The suggestion is intentional: it tells you the output is a safe byte-level
+result, not a domain-specific FASTA interpretation.
 
 ## Where next
 
 If you want to keep working from the command line, continue with
-[Diff two snapshots](howto/diff-two-snapshots.md),
-[Save and render changesets](howto/save-and-render-changesets.md), and
-[Extract changed data](howto/extract-changed-data.md).
+[Diff two snapshots](users/howto/diff-two-snapshots.md),
+[Save and render changesets](users/howto/save-and-render-changesets.md), and
+[Extract changed data](users/howto/extract-changed-data.md).
 
 If you want to use packaged extensions, go to
-[Install and use plugins](howto/install-and-use-plugins.md). If you
-want to turn the FASTA script into a real plugin, continue with
-[Write a Python comparator](howto/write-a-python-comparator.md).
+[Install and use plugins](users/howto/install-and-use-plugins.md). If you want
+to understand how current plugins fit into the engine, continue with
+[Plugin model](plugin-developers/explanation/plugin-model.md).
 
 If you want to learn more about the design of binoc, start with the
-[Architecture overview](explanation/architecture.md).
+[Architecture overview](plugin-developers/explanation/architecture.md).

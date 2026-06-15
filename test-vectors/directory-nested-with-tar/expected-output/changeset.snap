@@ -12,7 +12,43 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "directory",
+        "item_type": "item",
+        "path": "data.tar.gz",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.tar.gz/records.csv",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " edit"
+              }
+            ],
+            "tags": [
+              "binoc.cell-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "column": "count",
+                    "from": "20",
+                    "row": 1,
+                    "to": "25"
+                  },
+                  "verb": "tabular.edit_cell"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "action": "modify",
+        "item_type": "item",
         "path": "data",
         "children": [
           {
@@ -24,129 +60,33 @@ expression: "&stable_changeset"
                 "uint": 1
               },
               {
-                "text": " row added"
+                "text": " edit"
               }
             ],
             "tags": [
               "binoc.row-addition"
             ],
             "details": {
-              "cells_changed": 0,
-              "columns_added": [],
-              "columns_left": [
-                "id",
-                "name"
-              ],
-              "columns_removed": [],
-              "columns_right": [
-                "id",
-                "name"
-              ],
-              "hash_left": "cdd7d4de8f6297472ddf5dcf982eaec86337f445392c33635ef0d8e562817a7f",
-              "hash_right": "cc53a354625fafc744e96856a6f732822bd6920f3852b5b565270e684783aebe",
-              "rows_added": 1,
-              "rows_left": 2,
-              "rows_removed": 0,
-              "rows_right": 3
-            },
-            "comparator": "binoc.csv",
-            "transformed_by": [
-              "binoc.tabular_analyzer"
-            ]
-          }
-        ],
-        "comparator": "binoc.directory"
-      },
-      {
-        "action": "modify",
-        "item_type": "tar_archive",
-        "path": "data.tar.gz",
-        "children": [
-          {
-            "action": "modify",
-            "item_type": "directory",
-            "path": "data.tar.gz",
-            "children": [
-              {
-                "action": "modify",
-                "item_type": "tabular",
-                "path": "data.tar.gz/records.csv",
-                "summary": [
-                  {
-                    "uint": 1
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "3",
+                        "Charlie"
+                      ]
+                    }
                   },
-                  {
-                    "text": " cell changed"
-                  }
-                ],
-                "tags": [
-                  "binoc.cell-change"
-                ],
-                "details": {
-                  "cells_changed": 1,
-                  "columns_added": [],
-                  "columns_left": [
-                    "color",
-                    "count"
-                  ],
-                  "columns_removed": [],
-                  "columns_right": [
-                    "color",
-                    "count"
-                  ],
-                  "hash_left": "0463b9522aa6dbd88e08547a23df529fdb6678e3890a9c0640adbaf806d14f3f",
-                  "hash_right": "a8c13f26270af860dc46d6f53063106d83f5a8626da02b7072bcdb11cdf7ef3c",
-                  "rows_added": 0,
-                  "rows_left": 3,
-                  "rows_removed": 0,
-                  "rows_right": 3
-                },
-                "detail_blocks": [
-                  {
-                    "id": "cells_changed",
-                    "kind": "binoc.tabular.cell_changes.v1",
-                    "label": "Changed cells",
-                    "total_count": 1,
-                    "examples": [
-                      {
-                        "locator": {
-                          "column": "count",
-                          "row": 1
-                        },
-                        "before": {
-                          "value": "20",
-                          "media_type": "text/plain"
-                        },
-                        "after": {
-                          "value": "25",
-                          "media_type": "text/plain"
-                        }
-                      }
-                    ],
-                    "extract": [
-                      {
-                        "aspect": "cells_changed",
-                        "label": "All changed cells"
-                      }
-                    ]
-                  }
-                ],
-                "comparator": "binoc.csv",
-                "transformed_by": [
-                  "binoc.tabular_analyzer"
-                ]
-              }
-            ],
-            "comparator": "binoc.directory"
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
           }
-        ],
-        "details": {
-          "hash_left": "a6d4cc1d45f12b03f7330c059384ab3f267351228eb3eba1f7f9ff64d4dd730a",
-          "hash_right": "e5f599a93839512b0eabfb1bea23c9166c2a5bd54e0a772f4a36b794c7718dcf"
-        },
-        "comparator": "binoc.tar"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

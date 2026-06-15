@@ -31,50 +31,47 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.column-addition",
+          "binoc.content-changed",
           "binoc.move",
           "binoc.move.modified",
           "binoc.schema-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [
-            "email"
-          ],
-          "columns_left": [
-            "name",
-            "age",
-            "city"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age",
-            "city",
-            "email"
-          ],
-          "hash_left": "42b2a4014aa632b24d601469c283d3ec1f97dd693f5a711948308fa36cfdc5c2",
-          "hash_right": "79918510667ab641e7fa26b57cfd293ed9b48287b94fa1eed5017d4224e82e19",
-          "rows_added": 0,
-          "rows_left": 3,
-          "rows_removed": 0,
-          "rows_right": 3
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "tabular_summary",
-            "value": "Column added: 'email'"
-          }
-        ],
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "name",
+                  "age",
+                  "city"
+                ],
+                "to": [
+                  "name",
+                  "age",
+                  "city",
+                  "email"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "email",
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "alice@test.com",
+                    "bob@test.com",
+                    "carol@test.com"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory",
-    "transformed_by": [
-      "binoc.fuzzy_correlation_detector"
     ]
   }
 }

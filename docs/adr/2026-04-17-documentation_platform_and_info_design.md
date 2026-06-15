@@ -94,7 +94,7 @@ The existing `docs/writing_plugins.md` is mode-mixed and is split:
   artifacts buy you. Links into the relevant ADRs rather than repeating
   them.
 
-### 3. The audience map drives entry points and cross-linking, not the file tree
+### 3. The audience map drives both the file tree and the nav
 
 Each page declares the audience it is primarily written for in its
 frontmatter. Some pages may also list secondary audiences, because a
@@ -114,16 +114,37 @@ of reader. The five recurring audiences are:
   correct page rather than synthesizing from many. This is a primary
   reason to enforce the Diátaxis split.
 
-The top-level navigation in `mkdocs.yml` is organized by Diátaxis mode
-(Tutorial / How-to / Reference / Explanation), not by audience. Audience
-metadata is used for three lighter-weight routing aids instead:
+The site's top-level structure — **both** the on-disk layout and the
+`mkdocs.yml` nav — is organized **by audience** (For Binoc Users / For
+Plugin Developers / For Core Developers), with the Diátaxis modes
+(How-to / Reference / Explanation) nested inside each. Pages live at
+`docs/<audience>/<mode>/<page>.md` and the explicit `nav:` block mirrors
+that tree one-to-one, so a file's location predicts its nav slot and vice
+versa — there is no separate structure to keep in sync.
 
-- a single **Start here** page organized by role
-- section-index guidance ("if you are X, start with Y")
-- per-page introductory copy and related links
+Audiences are treated as **nested subsets, not disjoint groups**: every
+reader is a user first, some users are also plugin authors, and a few of
+those are also core developers (Users ⊇ Plugin authors ⊇ Core devs). Each
+page is therefore placed at its **highest level of generality** — the
+broadest audience that needs it. A page useful to everyone lives under
+Users; a page only plugin authors need lives under Plugin Developers; a
+core-only page under Core Developers. This keeps developer-specific
+material from swamping the pages most readers want, and guarantees a single
+home per page (no page is duplicated across audiences). The **Start here**
+page remains a role-based router, per-page frontmatter still records
+primary/secondary audiences for cross-linking, and the Diátaxis split is
+preserved *within* each audience.
 
-This keeps the global structure stable and task-shaped while still
-giving first-time readers a role-based way in.
+Two generated areas stay at the top level on disk and are surfaced under
+their audience purely through the nav: `docs/adr/` (cited by stable path
+from source comments, `AGENTS.md`, the `justfile`, and test manifests —
+moving it would ripple far outside `docs/`) and `docs/sdk/` rustdoc.
+
+> **History.** This supersedes the original form of this decision, which
+> kept the file tree in Diátaxis order and deliberately left audience *out*
+> of the nav. In practice the nav shipped audience-first while the tree
+> stayed Diátaxis-first, so the two disagreed and pages were hard to locate
+> when editing. Committing both to audience-first removes that seam.
 
 ### 4. Reference is generated, not written
 
@@ -430,7 +451,10 @@ into `docs/index.md`, the tutorial, and the explanation set.
 `mkdocs.yml` lives at the repo root. The nav follows the audience
 sections (Users / Plugin Developers / Core Developers) with Diátaxis
 modes (How-to / Reference / Explanation) nested inside each, plus a
-top-level Tutorial, Examples, and Start here. The `include-markdown`,
+top-level Tutorial, Examples, and Start here. Per §3, the on-disk tree
+(`docs/<audience>/<mode>/`) mirrors this nav one-to-one; the `nav:` block
+is maintained explicitly (no nav-from-disk plugin) so adding a page is a
+one-line edit. The `include-markdown`,
 `mkdocstrings`, `pymdownx.superfences` (with mermaid), and `admonition`
 extensions are enabled; `--strict` mode catches broken links and orphan
 pages.

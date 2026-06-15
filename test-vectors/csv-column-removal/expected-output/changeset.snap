@@ -16,7 +16,10 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "text": "Column removed: 'city'"
+            "uint": 2
+          },
+          {
+            "text": " edits"
           }
         ],
         "tags": [
@@ -24,33 +27,38 @@ expression: "&stable_changeset"
           "binoc.schema-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "age",
-            "city"
-          ],
-          "columns_removed": [
-            "city"
-          ],
-          "columns_right": [
-            "name",
-            "age"
-          ],
-          "hash_left": "a765f1321a212e939b76c668a316010b8404cf9c8219d987f0413dc9d12fcf58",
-          "hash_right": "5c23cb3199c0882f4743d97b03873b1fb881bf2592ff4ab318ba8213593162e3",
-          "rows_added": 0,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 2
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "name",
+                  "age",
+                  "city"
+                ],
+                "to": [
+                  "name",
+                  "age"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "city",
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "NYC",
+                    "LA"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_column"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

@@ -19,37 +19,45 @@ expression: "&stable_changeset"
             "uint": 2
           },
           {
-            "text": " rows removed"
+            "text": " edits"
           }
         ],
         "tags": [
           "binoc.row-removal"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "age"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age"
-          ],
-          "hash_left": "9d3084af09a1a8977f5664439bbc23cc0734ffa5eeb3f68e6f1afc635ab48ee3",
-          "hash_right": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
-          "rows_added": 0,
-          "rows_left": 3,
-          "rows_removed": 2,
-          "rows_right": 1
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "index": 1,
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "Bob",
+                    "25"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_row"
+            },
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "Charlie",
+                    "35"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_row"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

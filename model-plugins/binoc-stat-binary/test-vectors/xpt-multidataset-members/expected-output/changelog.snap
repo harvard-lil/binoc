@@ -4,6 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.xpt**: Table DM changed: 1 row added; Table LB added: new table (2 columns, 1 row)
-- **data.xpt::DM**: 1 row added
-- **data.xpt::LB**: New table (2 columns, 1 row)
+- **data.xpt**: 2 edits

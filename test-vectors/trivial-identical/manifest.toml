@@ -5,5 +5,5 @@ tags = ["identical", "baseline"]
 
 [expected]
 # Structural assertions
-# root_kind = "modify"
+# root_action = "modify"
 # child_count = 0  # no children (identical)

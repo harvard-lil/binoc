@@ -1,7 +1,11 @@
 # Cross-Phase Data Cache in CompareContext
 
 **Date:** 2026-03-05
-**Status:** Superseded by [Published artifacts for cross-plugin composition](2026-03-19-published_artifacts_for_cross_plugin_composition.md)
+**Status:** Superseded by [Published artifacts for cross-plugin composition](2026-03-19-published_artifacts_for_cross_plugin_composition.md) and [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+
+> **Supersession note (2026-06-12):** artifacts are still the composition
+> mechanism, but they now flow through correspondence rule families rather than
+> a comparator-to-transformer phase boundary.
 
 ## Problem
 

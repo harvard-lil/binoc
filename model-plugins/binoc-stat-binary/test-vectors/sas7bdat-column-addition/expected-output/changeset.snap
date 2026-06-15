@@ -12,59 +12,33 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular",
+        "item_type": "tabular_collection",
         "path": "data.sas7bdat",
         "summary": [
           {
-            "text": "Column added: 'score'"
+            "uint": 1
+          },
+          {
+            "text": " edit"
           }
         ],
         "tags": [
           "binoc.column-addition",
-          "binoc.schema-change"
+          "binoc.schema-change",
+          "binoc.table-change",
+          "binoc.tabular-collection-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [
-            "score"
-          ],
-          "columns_left": [
-            "id",
-            "name"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "id",
-            "name",
-            "score"
-          ],
-          "hash_left": "f2941fd4a6e81b069b936ad4da1245b04dcaeac8565537990da27bec7c3a3a1f",
-          "hash_right": "958311fa5e7cd5095f39555f73e1b7f6b1f32936e883e50c506c21a5829c59a0",
-          "left_metadata": {
-            "cell_encoding": "values flattened to display strings; SAS missing values use '.', '.A' ... where available; value labels are metadata only",
-            "columns": {},
-            "dataset_label": null,
-            "dataset_name": "BINOCTST",
-            "format": "sas7bdat"
-          },
-          "right_metadata": {
-            "cell_encoding": "values flattened to display strings; SAS missing values use '.', '.A' ... where available; value labels are metadata only",
-            "columns": {},
-            "dataset_label": null,
-            "dataset_name": "BINOCTST",
-            "format": "sas7bdat"
-          },
-          "rows_added": 0,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 2
-        },
-        "comparator": "binoc-stat-binary.sas7bdat",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "table": "data"
+              },
+              "verb": "tabular_collection.change_table"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

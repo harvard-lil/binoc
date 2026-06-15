@@ -9,6 +9,14 @@ expression: "&stable_changeset"
     "action": "modify",
     "item_type": "directory",
     "path": "",
+    "summary": [
+      {
+        "uint": 0
+      },
+      {
+        "text": " edits"
+      }
+    ],
     "children": [
       {
         "action": "add",
@@ -16,25 +24,13 @@ expression: "&stable_changeset"
         "path": "new_file.txt",
         "summary": [
           {
-            "text": "New file ("
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " line)"
+            "text": "Added"
           }
         ],
         "tags": [
           "binoc.content-changed"
-        ],
-        "details": {
-          "hash_right": "d90aa2033e3031da3f6d22212832ed1841cd13fd6746556dd48ff7642eb4a46c",
-          "lines": 1
-        },
-        "comparator": "binoc.text"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

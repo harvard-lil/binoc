@@ -1,0 +1,576 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Changeset",
+  "description": "A structured description of how to get from one snapshot to the next.",
+  "type": "object",
+  "properties": {
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      }
+    },
+    "from_snapshot": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "root": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiffNode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "to_snapshot": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "from_snapshot",
+    "to_snapshot"
+  ],
+  "$defs": {
+    "Annotation": {
+      "description": "Renderer-visible metadata attached to a projected diff node by a rule pack.\n\nAnnotations are intentionally progressively typed: producers can start with\na string or simple JSON value, and renderers can either display the generic\nvalue shape or add package/key-specific handling later. The package namespace\nkeeps independently-authored plugins from colliding on common keys.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "value": true
+      },
+      "required": [
+        "package",
+        "key",
+        "value"
+      ]
+    },
+    "ArtifactDescriptor": {
+      "description": "Descriptor for a published artifact attached to a node.\n\nArtifacts are the unified mechanism for both private reuse and\ncross-plugin composition. Parse rules publish artifacts; downstream rules\nconsume them by format.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/ArtifactFormat"
+        },
+        "handle": {
+          "description": "Opaque handle managed by the SDK's DataAccess implementation.\nPlugins should not create or interpret this value directly.",
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "subject": {
+          "$ref": "#/$defs/ArtifactSubject"
+        }
+      },
+      "required": [
+        "format",
+        "subject",
+        "producer",
+        "handle"
+      ]
+    },
+    "ArtifactFormat": {
+      "description": "Identifies an artifact's data format as a structured tuple of\n(package, name, version).\n\n- **`package`** — the package that owns and defines this format,\n  resolvable through the language's normal package system\n  (e.g. `\"binoc\"`, `\"binoc-csv\"`, `\"acme-parquet\"`).\n- **`name`** — the format name within that package\n  (e.g. `\"tabular\"`, `\"relational-schema\"`).\n- **`version`** — a single integer. Bump only for breaking schema\n  changes. Adding optional fields to an existing version is fine\n  and does not require a bump (JSON/serde naturally ignore unknown\n  fields and default missing ones).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "package",
+        "name",
+        "version"
+      ]
+    },
+    "ArtifactSubject": {
+      "description": "Which side of a comparison an artifact describes.",
+      "type": "string",
+      "enum": [
+        "left",
+        "right",
+        "pair"
+      ]
+    },
+    "DetailBlock": {
+      "description": "Renderer-visible, bounded evidence attached to a diff node.",
+      "type": "object",
+      "properties": {
+        "examples": {
+          "description": "Captured examples for inline rendering.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailExample"
+          }
+        },
+        "extract": {
+          "description": "Named extract aspects for exhaustive retrieval.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtractHint"
+          }
+        },
+        "id": {
+          "description": "Stable within this node, for anchors and extract selection.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Open, namespaced kind such as `binoc.tabular.cell_changes.v1`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Short renderer-facing label.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_count": {
+          "description": "Total matching items if known, including omitted examples.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "truncated": {
+          "description": "Whether the producer truncated capture before exhausting candidates.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ]
+    },
+    "DetailExample": {
+      "description": "One bounded example inside a detail block.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "Value after the change, if present.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValuePreview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "before": {
+          "description": "Value before the change, if present.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValuePreview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "Domain-specific structured context.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "locator": {
+          "description": "Structured locator such as row/column, line range, or key path.",
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "Diagnostic": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ]
+    },
+    "DiagnosticSeverity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "suggestion"
+      ]
+    },
+    "DiffNode": {
+      "description": "A node in the projected diff tree — the durable changeset structure\nconsumed by renderers, serializers, and bindings.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Open enum: \"add\", \"remove\", \"modify\", \"move\", \"reorder\",\n\"schema_change\", etc. Plugins may define new actions.",
+          "type": "string"
+        },
+        "annotations": {
+          "description": "Renderer-visible annotations supplied by rule packs.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          }
+        },
+        "artifacts": {
+          "description": "Published artifacts for this node. Session-scoped working data: carried\nacross the plugin ABI wire as descriptors (the bytes live in the shared\n`data_root` cache), but not meaningful outside a session. Callers\nwriting changeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactDescriptor"
+          }
+        },
+        "children": {
+          "description": "Child diff nodes forming the tree structure.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffNode"
+          }
+        },
+        "detail_blocks": {
+          "description": "Renderer-visible, structured evidence blocks. Rule packs populate\nthese with bounded examples while they still have domain knowledge;\nrenderers decide how much to display.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailBlock"
+          }
+        },
+        "details": {
+          "description": "Structured payload, schema determined by item_type/action convention.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "diagnostics": {
+          "description": "Node-scoped diagnostics emitted during a run.\nTransient: the controller hoists them into [`Changeset::diagnostics`]\nat the end of the diff, then clears this field so the output shape\nstays as one durable top-level diagnostics list.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          }
+        },
+        "item_type": {
+          "description": "Open string: \"directory\", \"file\", \"tabular\", \"zip_archive\", etc.\nNo built-in types — conventions, not enforcement.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Location within snapshot (logical path, including interior paths\nlike \"archive.zip/data/file.csv\").",
+          "type": "string"
+        },
+        "source_items": {
+          "description": "The original item pair associated with this projected node when one is\navailable. Session-scoped working data: available during a live run for\nrules and extractors that need to re-read source data. Callers writing\nchangeset output must strip this via\n[`DiffNode::strip_transient`] before serializing.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemPair"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_path": {
+          "description": "For moves/renames: the original path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "description": "Optional structured one-liner describing the change. Set during\nprojection; renderers format each [`Segment`] by its\ntype. Build it with [`Summary`]'s builder, or pass a plain string —\n`impl Into<Summary>` wraps it as a single [`Segment::Text`].",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Summary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "description": "Open bag of semantic tags, namespaced by convention.\ne.g. \"binoc.column-reorder\", \"biobinoc.gap-change\"",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action",
+        "item_type",
+        "path"
+      ]
+    },
+    "ExtractHint": {
+      "description": "Pointer to an extract aspect that can return exhaustive content.",
+      "type": "object",
+      "properties": {
+        "aspect": {
+          "description": "Aspect name accepted by `binoc extract`.",
+          "type": "string"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "aspect"
+      ]
+    },
+    "ItemPair": {
+      "description": "A pair of items to compare. Either side may be None (add/remove).",
+      "type": "object",
+      "properties": {
+        "left": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ItemRef": {
+      "description": "Metadata-only view of one side of a comparison. Carries logical identity\nand content metadata but NOT a filesystem path — data access goes through\n`DataAccess`.\n\n# Metadata invariants\n\n`content_hash`, `size`, and `media_type` are **opportunistic hints**.\nProducers (expand rules like directory/zip, or data backends)\npopulate them when doing so is cheap — typically as a byproduct of work\nthey were already performing. Consumers **must not assume presence**, but\n**may trust presence**: when a field is set, the value accurately reflects\nthe current bytes. Use [`ItemRef::resolve_hash`] / [`ItemRef::resolve_size`]\nto obtain a value with a transparent fall-back read.\n\nThis keeps fast paths (directory-only listings, short-circuit identical\ndetection) cheap while letting consumers that need a value — most notably\nthe move detector, which correlates leaves across container boundaries —\nhydrate on demand.",
+      "type": "object",
+      "properties": {
+        "content_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handle": {
+          "description": "Opaque identifier used by DataAccess implementations to locate data.\nPlugin authors should not create or interpret this value directly.",
+          "type": "string",
+          "default": ""
+        },
+        "is_dir": {
+          "type": "boolean"
+        },
+        "logical_path": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projection_hint": {
+          "description": "Optional projection metadata supplied by rule packs while they still\nknow the vocabulary. Core carries this through but does not interpret\nfile names, media types, or plugin-specific tags.",
+          "$ref": "#/$defs/ProjectionHint"
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "logical_path",
+        "is_dir"
+      ]
+    },
+    "ProjectionHint": {
+      "description": "Product-facing projection metadata supplied by rules, not inferred by core.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "item_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Summary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Segment": {
+      "description": "One piece of a [`Summary`].\n\nEach variant carries a value *and*, implicitly, the render-time policy\nfor it: group an integer, format a float, leave text alone, dereference\na path. Renderers format by variant; they never parse prose to recover\nthe type of a value, because the producer never threw it away. Variants\ntrack *render behavior*, not semantics — a currency or percent is `Text`\nplus a number, never its own variant. See ADR\n2026-06-03-structured-summary-segments.",
+      "oneOf": [
+        {
+          "description": "Verbatim text: connective wording, units, punctuation, and any\nvalue the renderer must not reinterpret. Embedded digits are never\nreformatted — a number that should be grouped is a [`Segment::Uint`],\nand a path that could be linked is a [`Segment::Path`].",
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ]
+        },
+        {
+          "description": "A path or locator. Renderers may shorten or hyperlink it; `snapshot`\nsays which side of the diff it resolves in.",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "object",
+              "properties": {
+                "snapshot": {
+                  "$ref": "#/$defs/Side"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "snapshot"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "description": "A non-negative count. Renderers apply digit grouping / locale.",
+          "type": "object",
+          "properties": {
+            "uint": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "uint"
+          ]
+        },
+        {
+          "description": "A real-valued quantity. Renderers apply decimal / precision policy.",
+          "type": "object",
+          "properties": {
+            "float": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "float"
+          ]
+        }
+      ]
+    },
+    "Side": {
+      "description": "Which snapshot a [`Segment::Path`] resolves in.\n\nLets a renderer that can dereference a path — hyperlink it, shorten it\nagainst a tree, show an icon — target the correct side of the diff\nwithout understanding *why* the path appears (rename, copy,\ncross-reference, ...). It is a property of the value, not an encoding of\nany one concept. See ADR 2026-06-03-structured-summary-segments.",
+      "oneOf": [
+        {
+          "description": "The \"before\" snapshot (a source/original path).",
+          "type": "string",
+          "const": "from"
+        },
+        {
+          "description": "The \"after\" snapshot (a destination/current path).",
+          "type": "string",
+          "const": "to"
+        }
+      ]
+    },
+    "Summary": {
+      "description": "A structured, render-ready one-line summary: an ordered list of typed\n[`Segment`]s.\n\nRule packs build it; renderers format\neach segment by its type. This replaces free-text summaries so that\nnumber and path formatting is a render-time decision the renderer makes\nfrom typed values, rather than a fragile reparse of prose. A producer\nthat owns a concept (a rename detector) owns the *wording* — it emits the\nconnective `Text` and the `Path`s — while the renderer owns the\n*typography*. See ADR 2026-06-03-structured-summary-segments.\n\nThe ergonomic shortcut for the common case is `impl Into<Summary>`:\n`with_summary(\"plain text\")` still works and produces a single\n[`Segment::Text`].",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Segment"
+      }
+    },
+    "ValuePreview": {
+      "description": "A bounded preview of one value in a detail example.",
+      "type": "object",
+      "properties": {
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "value": true
+      },
+      "required": [
+        "value"
+      ]
+    }
+  }
+}

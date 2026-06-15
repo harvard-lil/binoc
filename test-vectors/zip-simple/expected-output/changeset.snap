@@ -12,81 +12,71 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "zip_archive",
+        "item_type": "file",
         "path": "archive.zip",
+        "summary": [
+          {
+            "uint": 0
+          },
+          {
+            "text": " edits"
+          }
+        ],
         "children": [
           {
             "action": "modify",
-            "item_type": "directory",
-            "path": "archive.zip",
-            "children": [
+            "item_type": "text",
+            "path": "archive.zip/data.txt",
+            "summary": [
               {
-                "action": "modify",
-                "item_type": "text",
-                "path": "archive.zip/data.txt",
-                "summary": [
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " line added, "
-                  },
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " removed"
-                  }
-                ],
-                "tags": [
-                  "binoc.content-changed",
-                  "binoc.lines-added",
-                  "binoc.lines-removed"
-                ],
-                "details": {
-                  "hash_left": "7d2be715558f22c45fe42095dbf7dc30052cc5d9536c5906c5a7b22d9b3bf7cb",
-                  "hash_right": "3a91d536da3fd59de72f6583c93d9cb7b0a605c0dc951e340d6a5edfd93fef89",
-                  "lines_added": 1,
-                  "lines_removed": 1,
-                  "lines_unchanged": 0
-                },
-                "comparator": "binoc.text"
+                "uint": 1
               },
               {
-                "action": "add",
-                "item_type": "text",
-                "path": "archive.zip/extra.txt",
-                "summary": [
-                  {
-                    "text": "New file ("
-                  },
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " line)"
-                  }
-                ],
-                "tags": [
-                  "binoc.content-changed"
-                ],
-                "details": {
-                  "hash_right": "813e851f4cd79904f9eba7b985cc0bad26dc7abdda98afbc2729d9000601cf75",
-                  "lines": 1
-                },
-                "comparator": "binoc.text"
+                "text": " edit"
               }
             ],
-            "comparator": "binoc.directory"
+            "tags": [
+              "binoc.content-changed",
+              "binoc.lines-added",
+              "binoc.lines-removed"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "examples": [
+                      {
+                        "from": "hello from zip A",
+                        "line": 1,
+                        "to": "hello from zip B"
+                      }
+                    ],
+                    "examples_truncated": false,
+                    "left_line_count": 1,
+                    "lines_added": 1,
+                    "lines_removed": 1,
+                    "right_line_count": 1
+                  },
+                  "verb": "text.replace_lines"
+                }
+              ]
+            }
+          },
+          {
+            "action": "add",
+            "item_type": "text",
+            "path": "archive.zip/extra.txt",
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
           }
-        ],
-        "details": {
-          "hash_left": "c5b903718934b42a5e5543353a7c3194a949207166e2e446c8b1775a39c63545",
-          "hash_right": "e45fbd744960d5be4ff0012946aa1bcf703b399f6489fc8dfef1fbfd95a1ba5c"
-        },
-        "comparator": "binoc.zip"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

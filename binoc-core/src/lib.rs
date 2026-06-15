@@ -1,5 +1,6 @@
 pub mod config;
 pub mod controller;
+pub mod correspondence;
 pub mod data_access;
 pub mod output;
 

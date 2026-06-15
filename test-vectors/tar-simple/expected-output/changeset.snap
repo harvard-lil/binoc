@@ -12,89 +12,77 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tar_archive",
+        "item_type": "item",
         "path": "archive.tar.gz",
         "children": [
           {
             "action": "modify",
-            "item_type": "directory",
-            "path": "archive.tar.gz",
-            "children": [
+            "item_type": "tabular",
+            "path": "archive.tar.gz/data.csv",
+            "summary": [
               {
-                "action": "modify",
-                "item_type": "tabular",
-                "path": "archive.tar.gz/data.csv",
-                "summary": [
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " row added"
-                  }
-                ],
-                "tags": [
-                  "binoc.row-addition"
-                ],
-                "details": {
-                  "cells_changed": 0,
-                  "columns_added": [],
-                  "columns_left": [
-                    "name",
-                    "value"
-                  ],
-                  "columns_removed": [],
-                  "columns_right": [
-                    "name",
-                    "value"
-                  ],
-                  "hash_left": "7bf844f200e5185d763fa3de0e5e8594b40e1d185ad44ff0f4ed04022932101c",
-                  "hash_right": "ede76a418425d2eea65f13e8c76ac4bd2a650b8d4d0260c8eada208e0446e365",
-                  "rows_added": 1,
-                  "rows_left": 2,
-                  "rows_removed": 0,
-                  "rows_right": 3
-                },
-                "comparator": "binoc.csv",
-                "transformed_by": [
-                  "binoc.tabular_analyzer"
-                ]
+                "uint": 1
               },
               {
-                "action": "modify",
-                "item_type": "text",
-                "path": "archive.tar.gz/hello.txt",
-                "summary": [
-                  {
-                    "uint": 1
-                  },
-                  {
-                    "text": " line added"
-                  }
-                ],
-                "tags": [
-                  "binoc.content-changed",
-                  "binoc.lines-added"
-                ],
-                "details": {
-                  "hash_left": "94f1675bac4f8bc3c593c63dbf5fe78a0bfda01082af85d5b41a65096db56bff",
-                  "hash_right": "bac60b5524cb1c42057cfba1738e8c3d3240ecc979a3475f8c3678e9c3345d55",
-                  "lines_added": 1,
-                  "lines_removed": 0,
-                  "lines_unchanged": 1
-                },
-                "comparator": "binoc.text"
+                "text": " edit"
               }
             ],
-            "comparator": "binoc.directory"
+            "tags": [
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "gamma",
+                        "3"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          },
+          {
+            "action": "modify",
+            "item_type": "text",
+            "path": "archive.tar.gz/hello.txt",
+            "summary": [
+              {
+                "uint": 1
+              },
+              {
+                "text": " edit"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed",
+              "binoc.lines-added"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "examples": [],
+                    "examples_truncated": false,
+                    "left_line_count": 1,
+                    "lines_added": 1,
+                    "lines_removed": 0,
+                    "right_line_count": 2
+                  },
+                  "verb": "text.replace_lines"
+                }
+              ]
+            }
           }
-        ],
-        "details": {
-          "hash_left": "19b58e306ba049a1d441267579c10987f01fdc60df9453dacb9768a55393673f",
-          "hash_right": "14019f9e5ed2697a7f78a0958484ca9072e35cec8583b48fbdb109d64952729d"
-        },
-        "comparator": "binoc.tar"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

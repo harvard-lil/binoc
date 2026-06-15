@@ -16,40 +16,44 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "uint": 2
+            "uint": 1
           },
           {
-            "text": " rows added"
+            "text": " edit"
           }
         ],
         "tags": [
           "binoc.row-addition"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [],
-          "columns_left": [
-            "name",
-            "age"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age"
-          ],
-          "hash_left": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
-          "hash_right": "9d3084af09a1a8977f5664439bbc23cc0734ffa5eeb3f68e6f1afc635ab48ee3",
-          "rows_added": 2,
-          "rows_left": 1,
-          "rows_removed": 0,
-          "rows_right": 3
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "rows": [
+                  {
+                    "total_values": 2,
+                    "truncated": false,
+                    "values": [
+                      "Bob",
+                      "25"
+                    ]
+                  },
+                  {
+                    "total_values": 2,
+                    "truncated": false,
+                    "values": [
+                      "Charlie",
+                      "35"
+                    ]
+                  }
+                ],
+                "start": 1
+              },
+              "verb": "tabular.append_rows"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

@@ -16,7 +16,10 @@ expression: "&stable_changeset"
         "path": "data.csv",
         "summary": [
           {
-            "text": "Column added: 'email'"
+            "uint": 2
+          },
+          {
+            "text": " edits"
           }
         ],
         "tags": [
@@ -24,33 +27,38 @@ expression: "&stable_changeset"
           "binoc.schema-change"
         ],
         "details": {
-          "cells_changed": 0,
-          "columns_added": [
-            "email"
-          ],
-          "columns_left": [
-            "name",
-            "age"
-          ],
-          "columns_removed": [],
-          "columns_right": [
-            "name",
-            "age",
-            "email"
-          ],
-          "hash_left": "5c23cb3199c0882f4743d97b03873b1fb881bf2592ff4ab318ba8213593162e3",
-          "hash_right": "ba70ccdeb5e198834b1c94230f981cf9d54bc30877556ce6060921ba3db4441f",
-          "rows_added": 0,
-          "rows_left": 2,
-          "rows_removed": 0,
-          "rows_right": 2
-        },
-        "comparator": "binoc.csv",
-        "transformed_by": [
-          "binoc.tabular_analyzer"
-        ]
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "name",
+                  "age"
+                ],
+                "to": [
+                  "name",
+                  "age",
+                  "email"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "email",
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "alice@test.com",
+                    "bob@test.com"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            }
+          ]
+        }
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

@@ -1,19 +1,1 @@
-# Defaults for binoc-sqlite test vectors. Per-vector manifest.toml overrides.
 # SQLite DBs are built from .sqlite.d / .db.d dirs (SQL files run in order).
-
-[config]
-comparators = [
-    "binoc.zip",
-    "binoc.directory",
-    "binoc-sqlite.sqlite",
-    "binoc.csv",
-    "binoc.text",
-    "binoc.binary",
-]
-transformers = [
-    "binoc.correlation_detector",
-    "binoc.folder_move_detector",
-    "binoc.tabular_analyzer",
-    "binoc.column_reorder_detector",
-    "binoc.table_collection_analyzer",
-]

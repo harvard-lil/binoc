@@ -12,84 +12,52 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "zip_archive",
+        "item_type": "item",
         "path": "outer.zip",
         "children": [
           {
             "action": "modify",
-            "item_type": "directory",
-            "path": "outer.zip",
+            "item_type": "item",
+            "path": "outer.zip/inner.zip",
             "children": [
               {
                 "action": "modify",
-                "item_type": "zip_archive",
-                "path": "outer.zip/inner.zip",
-                "children": [
+                "item_type": "tabular",
+                "path": "outer.zip/inner.zip/data.csv",
+                "summary": [
                   {
-                    "action": "modify",
-                    "item_type": "directory",
-                    "path": "outer.zip/inner.zip",
-                    "children": [
-                      {
-                        "action": "modify",
-                        "item_type": "tabular",
-                        "path": "outer.zip/inner.zip/data.csv",
-                        "summary": [
-                          {
-                            "uint": 1
-                          },
-                          {
-                            "text": " row added"
-                          }
-                        ],
-                        "tags": [
-                          "binoc.row-addition"
-                        ],
-                        "details": {
-                          "cells_changed": 0,
-                          "columns_added": [],
-                          "columns_left": [
-                            "name",
-                            "age"
-                          ],
-                          "columns_removed": [],
-                          "columns_right": [
-                            "name",
-                            "age"
-                          ],
-                          "hash_left": "da7b8bbf55956445b53ea4cdc7d6b24dbbebf121598c76d83ac206bbec9f812a",
-                          "hash_right": "5c23cb3199c0882f4743d97b03873b1fb881bf2592ff4ab318ba8213593162e3",
-                          "rows_added": 1,
-                          "rows_left": 1,
-                          "rows_removed": 0,
-                          "rows_right": 2
-                        },
-                        "comparator": "binoc.csv",
-                        "transformed_by": [
-                          "binoc.tabular_analyzer"
-                        ]
-                      }
-                    ],
-                    "comparator": "binoc.directory"
+                    "uint": 1
+                  },
+                  {
+                    "text": " edit"
                   }
                 ],
+                "tags": [
+                  "binoc.row-addition"
+                ],
                 "details": {
-                  "hash_left": "1b56e82aa00813dda455426e0f04671097892fdc1250cc8f54163dca85f822ea",
-                  "hash_right": "c1e9067ea6f651c61a3874012b92c6ef6a7faa4a17d6d5c5fc168198e295a034"
-                },
-                "comparator": "binoc.zip"
+                  "edits": [
+                    {
+                      "params": {
+                        "index": 1,
+                        "values": {
+                          "total_values": 2,
+                          "truncated": false,
+                          "values": [
+                            "Bob",
+                            "25"
+                          ]
+                        }
+                      },
+                      "verb": "tabular.add_row"
+                    }
+                  ]
+                }
               }
-            ],
-            "comparator": "binoc.directory"
+            ]
           }
-        ],
-        "details": {
-          "hash_left": "f9fc5fb0555ddd8f40d2e4537fc61263bb426a6f741047309796dd48eb200197",
-          "hash_right": "c5d5ca595c4596820f0f5470d3c6990173da99d98aa0e2c0cd3d57f1810bb190"
-        },
-        "comparator": "binoc.zip"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

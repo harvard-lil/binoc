@@ -4,4 +4,4 @@ description = "Nested zip containing CSV"
 tags = ["zip", "nested", "csv"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"

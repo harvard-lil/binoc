@@ -4,7 +4,7 @@ description = "SQLite database with one changed table and one added table"
 tags = ["sqlite", "multi-table", "row-addition", "table-addition"]
 
 [expected]
-root_kind = "modify"
+root_action = "modify"
 has_tags = [
     "binoc.tabular-collection-change",
     "binoc.table-change",

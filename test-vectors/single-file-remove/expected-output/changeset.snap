@@ -9,6 +9,14 @@ expression: "&stable_changeset"
     "action": "modify",
     "item_type": "directory",
     "path": "",
+    "summary": [
+      {
+        "uint": 0
+      },
+      {
+        "text": " edits"
+      }
+    ],
     "children": [
       {
         "action": "remove",
@@ -16,25 +24,13 @@ expression: "&stable_changeset"
         "path": "removed_file.txt",
         "summary": [
           {
-            "text": "File removed ("
-          },
-          {
-            "uint": 1
-          },
-          {
-            "text": " line)"
+            "text": "Removed"
           }
         ],
         "tags": [
           "binoc.content-changed"
-        ],
-        "details": {
-          "hash_left": "5c8e190f730bdf06ad211e9b475fab2064637d7906d82eb9a26333050e052973",
-          "lines": 1
-        },
-        "comparator": "binoc.text"
+        ]
       }
-    ],
-    "comparator": "binoc.directory"
+    ]
   }
 }

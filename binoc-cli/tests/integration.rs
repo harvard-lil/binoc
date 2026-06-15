@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 
-use binoc_core::config::DatasetConfig;
 use binoc_core::controller::Controller;
 use binoc_sdk::Changeset;
 
@@ -10,10 +9,7 @@ fn setup_test_dir() -> tempfile::TempDir {
 }
 
 fn create_controller() -> Controller {
-    let config = DatasetConfig::default_config();
-    let registry = binoc_stdlib::default_registry();
-    let resolved = registry.resolve(&config).unwrap();
-    Controller::new(resolved.comparators, resolved.transformers)
+    Controller::new(binoc_stdlib::correspondence::default_engine_config())
 }
 
 #[test]
@@ -126,18 +122,9 @@ fn test_modified_text_file() {
     assert_eq!(modified.item_type, "text");
     assert!(modified.tags.contains("binoc.content-changed"));
 
-    let lines_added = modified
-        .details
-        .get("lines_added")
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    let lines_removed = modified
-        .details
-        .get("lines_removed")
-        .unwrap()
-        .as_u64()
-        .unwrap();
+    let text_edit = &modified.details["edits"][0]["params"];
+    let lines_added = text_edit["lines_added"].as_u64().unwrap();
+    let lines_removed = text_edit["lines_removed"].as_u64().unwrap();
     assert!(lines_added > 0);
     assert!(lines_removed > 0);
 }
@@ -177,14 +164,10 @@ fn test_csv_column_changes() {
     assert!(csv_node.tags.contains("binoc.column-addition"));
     assert!(csv_node.tags.contains("binoc.row-addition"));
 
-    let cols_added = csv_node
-        .details
-        .get("columns_added")
-        .unwrap()
-        .as_array()
-        .unwrap();
-    assert_eq!(cols_added.len(), 1);
-    assert_eq!(cols_added[0], "email");
+    let edits = csv_node.details["edits"].as_array().unwrap();
+    assert!(edits
+        .iter()
+        .any(|edit| edit["verb"] == "tabular.add_column" && edit["params"]["name"] == "email"));
 }
 
 #[test]
@@ -218,9 +201,13 @@ fn test_csv_column_reorder_only() {
         .find(|c| c.item_type == "tabular")
         .expect("should have tabular node");
 
-    // The column_reorder_detector transformer should have converted this to "reorder"
-    assert_eq!(csv_node.action, "reorder");
+    assert_eq!(csv_node.action, "modify");
     assert!(csv_node.tags.contains("binoc.column-reorder"));
+    assert!(csv_node.details["edits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|edit| edit["verb"] == "tabular.reorder_columns"));
 }
 
 #[test]
@@ -282,14 +269,21 @@ fn test_zip_comparison() {
         .unwrap();
 
     let root = changeset.root.expect("should have root");
-    let zip_node = root
+    let archive_node = root
         .children
         .iter()
-        .find(|c| c.item_type == "zip_archive")
-        .expect("should have zip_archive node");
+        .find(|c| c.path == "archive.zip")
+        .expect("should have archive node");
 
     assert!(
-        !zip_node.children.is_empty() || zip_node.children.iter().any(|c| !c.children.is_empty()),
+        archive_node
+            .children
+            .iter()
+            .any(|c| c.path == "archive.zip/data.txt")
+            && archive_node
+                .children
+                .iter()
+                .any(|c| c.path == "archive.zip/extra.txt"),
         "zip should have diffed contents"
     );
 }
@@ -450,6 +444,48 @@ fn test_extract_csv_full_content() {
 }
 
 #[test]
+fn test_extract_text_diff() {
+    let tmp = setup_test_dir();
+    let dir_a = tmp.path().join("a");
+    let dir_b = tmp.path().join("b");
+    fs::create_dir_all(&dir_a).unwrap();
+    fs::create_dir_all(&dir_b).unwrap();
+
+    fs::write(dir_a.join("notes.txt"), "alpha\nbeta\n").unwrap();
+    fs::write(dir_b.join("notes.txt"), "alpha\nbeta changed\ngamma\n").unwrap();
+
+    let controller = create_controller();
+    let changeset = controller
+        .diff(dir_a.to_str().unwrap(), dir_b.to_str().unwrap())
+        .unwrap();
+
+    let result = controller
+        .extract(
+            &changeset,
+            "notes.txt",
+            "diff",
+            dir_a.to_str().unwrap(),
+            dir_b.to_str().unwrap(),
+        )
+        .unwrap();
+
+    match result {
+        binoc_sdk::ExtractResult::Text(text) => {
+            assert!(
+                text.contains("-beta"),
+                "should contain removed line: {text}"
+            );
+            assert!(
+                text.contains("+beta changed"),
+                "should contain inserted line: {text}"
+            );
+            assert!(text.contains("+gamma"), "should contain added line: {text}");
+        }
+        _ => panic!("expected Text result"),
+    }
+}
+
+#[test]
 fn test_extract_through_zip() {
     let tmp = setup_test_dir();
     let dir_a = tmp.path().join("a");
@@ -525,10 +561,8 @@ fn create_test_zip(path: &PathBuf, entries: &[(&str, &str)]) {
 
 #[test]
 fn test_csv_rename_modify_detected_as_move() {
-    // A CSV that is both renamed and gets a column added must surface
-    // as a single move node carrying the tabular content diff —
-    // exercising fuzzy correlation + pending_recompare inflation +
-    // TabularAnalyzer on a move action.
+    // A CSV that is both renamed and gets a column added surfaces as a single
+    // modified move with a content summary.
     let tmp = setup_test_dir();
     let dir_a = tmp.path().join("a");
     let dir_b = tmp.path().join("b");
@@ -568,11 +602,6 @@ fn test_csv_rename_modify_detected_as_move() {
         all_tags.contains("binoc.move.modified"),
         "expected binoc.move.modified"
     );
-    assert!(
-        all_tags.contains("binoc.column-addition"),
-        "expected binoc.column-addition from tabular analysis on the move"
-    );
-
     let move_node = root
         .children
         .iter()

@@ -1,7 +1,16 @@
 # Transformer Composition and Artifact Flow
 
 **Date:** 2026-03-20
-**Status:** Implemented
+**Status:** Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+
+> **Supersession note (2026-06-12):** the public artifact lesson survives, but
+> the engine no longer composes a sequence of IR transformers over a completed
+> merged tree. Parse rules publish artifacts, writers emit edit lists, and
+> compaction rules rewrite those edit lists under a strict cost-decrease check.
+> The CFM-40 LCS row-alignment proof also supersedes this ADR's deferred
+> "sequential undo" escape hatch: a mid-table row insertion can be inferred
+> after independent column reorder/addition writes without mutating either
+> side into a normalized intermediate artifact.
 
 ## Context
 
@@ -38,6 +47,13 @@ The CSV comparator implements this pattern. A future Parquet or Excel comparator
 
 ### Two-layer transformer pipeline
 
+> **Superseded in part (2026-06-11):** the in-tree layer split described
+> below was collapsed — `ColumnReorderDetector` is gone and
+> `TabularAnalyzer` performs the pure-reorder upgrade inline. The
+> refinement layer survives as the extension point for judgments that need
+> their own scan (e.g. the out-of-tree `RowReorderDetector`). See
+> [Inline Pure-Reorder Judgment](2026-06-11-inline_pure_reorder_judgment.md).
+
 Tabular analysis uses two layers of transformers:
 
 1. **`TabularAnalyzer`** — matches any node with `tabular_v1` artifacts. Detects column additions/removals/reorder, row additions/removals, cell changes. Sets tags (`binoc.column-addition`, `binoc.row-addition`, `binoc.cell-change`, etc.), details, and summary text. Handles add/remove nodes as well as modify.
@@ -66,6 +82,6 @@ This would let each transformer see a simpler input, but has significant downsid
 - **Semantic ambiguity.** Decomposing a combined change into an ordered sequence of atomic changes is a human interpretation, not a mathematical fact. Two users may reasonably disagree about whether "reorder + rename + add rows" or "create new spreadsheet" is the right narrative.
 - **API complexity.** Needs conventions for artifact supersession, provenance tracking through transformations, and careful handling of `ArtifactSubject`.
 
-The artifact API does not prevent this model — transformers have access to `data.publish_artifact()` and `node.with_artifact()` — but we don't optimize for it or provide conventions for derived artifacts. If a compelling use case emerges where change decomposition is well-defined and ordering is unambiguous, we can add `ArtifactSubject` variants for normalized data and supersession conventions at that point.
+The artifact API does not prevent this model — transformers have access to `data.publish_artifact()` and `node.with_artifact()` — but we don't optimize for it or provide conventions for derived artifacts. A compelling change-decomposition use case did emerge in CFM-40: mid-table row insertion combined with column reorder/addition. The correspondence engine handles it as bounded LCS edit-list compaction (`binoc.compact.row_alignment`), so no normalized artifact subjects or supersession conventions are needed for that case.
 
 **Analysis in the comparator.** The previous design: comparators do full analysis and emit enriched nodes with tags, details, and summary. Simpler pipeline (no dependency on transformers for basic output) but couples every format-specific parser to the downstream analysis vocabulary and forces duplication across tabular emitters.
