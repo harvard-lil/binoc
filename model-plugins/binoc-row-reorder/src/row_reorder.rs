@@ -12,6 +12,7 @@ impl EditListWriter for RowReorderWriter {
             formats: vec![tabular_v1()],
             input: NodeMatch::default(),
             shape: ShapeFilter::Any,
+            fallback: false,
         }
     }
 

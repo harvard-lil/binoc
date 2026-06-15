@@ -10,6 +10,9 @@
 //!   a format to reveal (the immediate members of an archive expansion, and every
 //!   parsed table / sheet / section).
 //!
+//! Segment names beginning with `>` are escaped as `\>` so an ordinary member
+//! named `>q1.csv` is written `dir/\>q1.csv`, not `dir/>q1.csv`.
+//!
 //! The separators are cosmetic: nothing in the engine decides behavior by parsing
 //! a path string. Parent/child relationships come from the IR tree, and child
 //! kind rides on `ItemRef.projection_hint.item_type`. These helpers exist so that
@@ -24,13 +27,28 @@ pub const MEMBER_SEP: char = '/';
 /// format). Two characters: a slash followed by `>`.
 pub const DECOMPOSE_SEP: &str = "/>";
 
+/// Escape a logical path segment for inclusion after either separator.
+///
+/// The escape is intentionally tiny: only leading `>` and leading `\` are
+/// rewritten, because only the first byte after `/` participates in the
+/// decompose-boundary grammar. A literal leading `>` becomes `\>`; a literal
+/// leading `\` becomes `\\` so the escaped spelling itself can round-trip.
+pub fn escape_segment(name: &str) -> String {
+    if name.starts_with(['>', '\\']) {
+        format!("\\{name}")
+    } else {
+        name.to_string()
+    }
+}
+
 /// Append `name` as an ordinary member of `parent` (the `/` separator).
 ///
 /// Used for directory entries and for structure inside an extracted archive.
 /// An empty `parent` yields `name` unchanged (root-level entries).
 pub fn member_child(parent: &str, name: &str) -> String {
+    let name = escape_segment(name);
     if parent.is_empty() {
-        name.to_string()
+        name
     } else {
         format!("{parent}{MEMBER_SEP}{name}")
     }
@@ -42,6 +60,7 @@ pub fn member_child(parent: &str, name: &str) -> String {
 /// table/sheet/section children. `parent` is never meaningfully empty here — a
 /// decompose child always hangs off the node whose format was opened.
 pub fn decompose_child(parent: &str, name: &str) -> String {
+    let name = escape_segment(name);
     format!("{parent}{DECOMPOSE_SEP}{name}")
 }
 
@@ -102,10 +121,23 @@ mod tests {
     }
 
     #[test]
+    fn segment_escape_disambiguates_leading_decompose_marker() {
+        assert_eq!(escape_segment(">q1.csv"), r"\>q1.csv");
+        assert_eq!(escape_segment(r"\>q1.csv"), r"\\>q1.csv");
+        assert_eq!(member_child("dir", ">q1.csv"), r"dir/\>q1.csv");
+        assert_eq!(member_child("dir", r"\>q1.csv"), r"dir/\\>q1.csv");
+        assert_eq!(
+            decompose_child("book.xlsx", ">Summary"),
+            r"book.xlsx/>\>Summary"
+        );
+    }
+
+    #[test]
     fn file_name_handles_both_separators() {
         assert_eq!(file_name("a.txt"), "a.txt");
         assert_eq!(file_name("dir/a.txt"), "a.txt");
         assert_eq!(file_name("data.csv/>table_1"), "table_1");
+        assert_eq!(file_name(r"dir/\>q1.csv"), r"\>q1.csv");
         assert_eq!(file_name("dir/data.zip/>reports/q1.csv"), "q1.csv");
         assert_eq!(
             file_name("dir/data.zip/>reports/q1.csv/>table_2"),
@@ -123,6 +155,10 @@ mod tests {
         assert_eq!(
             segments("data.csv/>table_1"),
             vec![("data.csv", "data.csv"), ("data.csv/>table_1", "table_1")]
+        );
+        assert_eq!(
+            segments(r"dir/\>q1.csv"),
+            vec![("dir", "dir"), (r"dir/\>q1.csv", r"\>q1.csv")]
         );
         assert_eq!(
             segments("dir/data.zip/>reports/q1.csv/>table_2"),

@@ -4,6 +4,9 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+- **data.xpt**: File metadata changed
+  - Metadata changed
+    - file datasets changed from [{"logical_name":"AE","node_name":"AE"},{"logical_name":"DM","node_name":"DM"}] to [{"logical_name":"AE","node_name":"AE"},{"logical_name":"DM","node_name":"DM"},{"logical_name":"LB","node_name":"LB"}]
 - **data.xpt/>DM**: 1 row added
   - Rows added
     - row 2: '2', 'Bob'

@@ -805,15 +805,21 @@ fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
         i = j;
     }
 
-    let ambiguous_reason = if sections.len() >= 2 && !wide_unclaimed.is_empty() {
+    // Only treat unclaimed wide rows as a genuine ambiguous *stacked* layout
+    // when there is positive evidence of stacking beyond the row-width
+    // heuristic: at least one section is introduced by a banner/title row (a
+    // width-1 caption above its header). A plain flat table with a few ragged
+    // rows can otherwise be chopped into header-led "sections" whose "headers"
+    // are really data rows — that is not a stacked layout and must not surface
+    // the splitter suggestion (false positive on showcase brfss-prevalence /
+    // fda-purple-book flat tables, neither of which carries banner rows).
+    let looks_genuinely_stacked =
+        sections.len() >= 2 && sections.iter().any(|section| section.title.is_some());
+    let ambiguous_reason = if looks_genuinely_stacked && !wide_unclaimed.is_empty() {
         Some(format!(
             "The CSV has stacked table-like regions, but row{} {} outside any clear rectangle; leaving it as one table.",
             if wide_unclaimed.len() == 1 { "" } else { "s" },
-            wide_unclaimed
-                .iter()
-                .map(|row| row.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
+            bounded_index_list(&wide_unclaimed),
         ))
     } else {
         None
@@ -822,6 +828,28 @@ fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
     StackedDetection {
         sections,
         ambiguous_reason,
+    }
+}
+
+/// Maximum number of concrete row indices listed inline in a diagnostic
+/// message before the rest are summarized as a remaining count, so a large
+/// input can never produce an unbounded message string.
+const MAX_INLINE_INDICES: usize = 5;
+
+/// Render a list of 1-based row indices for inline use in a diagnostic message,
+/// capped at [`MAX_INLINE_INDICES`] concrete entries plus an `and N more`
+/// suffix. Keeps per-row diagnostic messages bounded on large inputs.
+fn bounded_index_list(indices: &[usize]) -> String {
+    let shown = indices
+        .iter()
+        .take(MAX_INLINE_INDICES)
+        .map(|index| index.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if indices.len() > MAX_INLINE_INDICES {
+        format!("{shown}, and {} more", indices.len() - MAX_INLINE_INDICES)
+    } else {
+        shown
     }
 }
 
@@ -964,5 +992,64 @@ fn title_from_rows(rows: &[Vec<String>], title_rows: &[usize]) -> Option<String>
         None
     } else {
         Some(parts.join(" / "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detect(csv: &str) -> StackedDetection {
+        let table = parse_csv_bytes(csv.as_bytes(), b',').expect("parse csv");
+        detect_stacked_sections(&table)
+    }
+
+    #[test]
+    fn flat_wide_csv_does_not_emit_ambiguous_suggestion() {
+        // A plain flat table whose mostly-unique text rows let the width
+        // heuristic chop it into header-led "sections" (the second "header" is
+        // really a data row) and strand a couple of ragged rows. With no banner
+        // rows it is not a stacked layout, so no splitter suggestion fires.
+        let csv = "State,Topic,Response,Break_Out,Sample_Size\n\
+                   Alabama,Health Status,Excellent,Overall,1234\n\
+                   Alaska,Diabetes,Yes,Age 18-24,extra,cell\n\
+                   Arizona,Smoking,Current,Female,Male,Other,More\n\
+                   Arkansas,Health Status,Good,Overall,2345\n\
+                   California,Diabetes,No,Age 25-34,3456\n";
+        let detection = detect(csv);
+        // The heuristic still chops it (multiple sections, stray wide rows) ...
+        assert!(detection.sections.len() >= 2);
+        // ... but with no banner rows it must not surface as ambiguous.
+        assert!(
+            detection.ambiguous_reason.is_none(),
+            "flat table wrongly flagged ambiguous: {:?}",
+            detection.ambiguous_reason
+        );
+    }
+
+    #[test]
+    fn genuinely_stacked_csv_still_emits_ambiguous_suggestion() {
+        // Banner row ("Report") above the first table is positive evidence of a
+        // stacked layout; with a stray wide row it stays genuinely ambiguous.
+        let csv = "Report\nA,B\n1,2\n\n100,200,300\nC,D\n3,4\n";
+        let detection = detect(csv);
+        let reason = detection
+            .ambiguous_reason
+            .expect("genuinely stacked CSV should stay ambiguous");
+        assert!(reason.contains("outside any clear rectangle"), "{reason}");
+    }
+
+    #[test]
+    fn bounded_index_list_caps_inline_indices() {
+        assert_eq!(bounded_index_list(&[3]), "3");
+        assert_eq!(bounded_index_list(&[3, 4, 5]), "3, 4, 5");
+        // More than the cap collapses the tail into a remaining count so the
+        // message can never grow unbounded on large inputs.
+        let many: Vec<usize> = (1..=12).collect();
+        assert_eq!(
+            bounded_index_list(&many),
+            "1, 2, 3, 4, 5, and 7 more",
+            "expected a capped list with a remaining count"
+        );
     }
 }

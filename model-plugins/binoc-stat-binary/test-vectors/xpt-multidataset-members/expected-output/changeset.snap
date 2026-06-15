@@ -13,7 +13,7 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "SAS transport file",
+        "item_type": "metadata",
         "path": "data.xpt",
         "sources": [
           {
@@ -25,11 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "uint": 0
-          },
-          {
-            "text": " edits"
+            "text": "File metadata changed"
           }
+        ],
+        "tags": [
+          "binoc.metadata-change",
+          "binoc.metadata.file",
+          "binoc.metadata.provenance"
         ],
         "children": [
           {
@@ -91,7 +93,48 @@ expression: "&stable_changeset"
               "binoc.content-changed"
             ]
           }
-        ]
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": [
+                      {
+                        "logical_name": "AE",
+                        "node_name": "AE"
+                      },
+                      {
+                        "logical_name": "DM",
+                        "node_name": "DM"
+                      }
+                    ],
+                    "key": "datasets",
+                    "kind": "changed",
+                    "to": [
+                      {
+                        "logical_name": "AE",
+                        "node_name": "AE"
+                      },
+                      {
+                        "logical_name": "DM",
+                        "node_name": "DM"
+                      },
+                      {
+                        "logical_name": "LB",
+                        "node_name": "LB"
+                      }
+                    ]
+                  }
+                ],
+                "examples_truncated": false,
+                "scope": "file"
+              },
+              "verb": "metadata.value_change"
+            }
+          ]
+        }
       }
     ]
   }

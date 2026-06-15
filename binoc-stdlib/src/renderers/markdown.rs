@@ -694,6 +694,123 @@ fn render_known_edit_details(
     render_tabular_row_details(out, edits, config, detail_budget);
     render_text_line_details(out, edits, config, detail_budget);
     render_binary_strings_details(out, edits, config, detail_budget);
+    // Metadata reads AFTER the primary table/content edits above, so a changelog
+    // says "what the table did" then "what its metadata did" (CFM-82).
+    render_metadata_details(out, edits, config, detail_budget);
+}
+
+/// Render `metadata.value_change` edits (column/table/file metadata) as human
+/// prose: a relabeled column, a changed display format, a dropped value-label
+/// set, or a file-level provenance/version/encoding change.
+fn render_metadata_details(
+    out: &mut String,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let metadata: Vec<&serde_json::Value> = edits
+        .iter()
+        .filter(|edit| edit.get("verb").and_then(|v| v.as_str()) == Some("metadata.value_change"))
+        .collect();
+    if metadata.is_empty() {
+        return;
+    }
+    if !detail_budget.push_line(out, "  - Metadata changed\n".to_string()) {
+        return;
+    }
+    for edit in metadata {
+        let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+        let scope = params.get("scope").and_then(|v| v.as_str()).unwrap_or("");
+        let where_ = match scope {
+            "column" => params
+                .get("locator")
+                .and_then(|l| l.get("column"))
+                .and_then(|c| c.as_str())
+                .map(|name| format!("column '{name}'"))
+                .unwrap_or_else(|| "column".into()),
+            "table" => "table".into(),
+            "file" => "file".into(),
+            other => other.to_string(),
+        };
+        let changes = params
+            .get("changes")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        for change in changes.iter().take(config.max_examples_per_block.max(1)) {
+            let line = format_metadata_change(&where_, change, config);
+            if !detail_budget.push_line(out, format!("    - {line}\n")) {
+                return;
+            }
+        }
+    }
+}
+
+/// One metadata key change as a single prose line.
+fn format_metadata_change(
+    where_: &str,
+    change: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+) -> String {
+    let kind = change
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("changed");
+    let key = humanize_metadata_key(
+        change
+            .get("key")
+            .and_then(|v| v.as_str())
+            .unwrap_or("value"),
+    );
+    let from = change.get("from").map(|v| format_metadata_value(v, config));
+    let to = change.get("to").map(|v| format_metadata_value(v, config));
+    match kind {
+        "added" => format!(
+            "{where_} {key} set to {}",
+            to.unwrap_or_else(|| "(value)".into())
+        ),
+        "removed" => format!(
+            "{where_} {key} removed (was {})",
+            from.unwrap_or_else(|| "(value)".into())
+        ),
+        _ => match (from, to) {
+            (Some(from), Some(to)) => format!("{where_} {key} changed from {from} to {to}"),
+            (_, Some(to)) => format!("{where_} {key} set to {to}"),
+            (Some(from), _) => format!("{where_} {key} removed (was {from})"),
+            _ => format!("{where_} {key} changed"),
+        },
+    }
+}
+
+/// Format a metadata value (string bare-quoted, other JSON compacted) with
+/// truncation, for prose lines.
+fn format_metadata_value(value: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    match value {
+        serde_json::Value::String(text) => {
+            let (text, truncated) = truncate_text(text, config.max_value_chars);
+            format!("'{text}'{}", if truncated { "..." } else { "" })
+        }
+        other => {
+            let rendered = serde_json::to_string(other).unwrap_or_else(|_| "null".into());
+            let (rendered, truncated) = truncate_text(&rendered, config.max_value_chars);
+            format!("{rendered}{}", if truncated { "..." } else { "" })
+        }
+    }
+}
+
+/// Turn a metadata bag key into a readable noun phrase.
+fn humanize_metadata_key(key: &str) -> String {
+    match key {
+        "label" => "label".into(),
+        "format" => "display format".into(),
+        "value_label_set" => "value-label set".into(),
+        "value_labels" => "value-label dictionary".into(),
+        "dataset_label" => "dataset label".into(),
+        "dataset_name" => "dataset name".into(),
+        "source_format" => "source format".into(),
+        "file_encoding" | "cell_encoding" => "encoding".into(),
+        other => other.replace('_', " "),
+    }
 }
 
 /// Render the additive extracted-strings projection attached to a

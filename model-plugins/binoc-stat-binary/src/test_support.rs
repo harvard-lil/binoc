@@ -5,6 +5,7 @@
 //! turns it into a real binary file so the vector exercises the reader without
 //! storing opaque binary fixtures in git.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use binoc_stdlib::test_vectors::VectorMaterializer;
@@ -30,7 +31,7 @@ impl VectorMaterializer for DtaMaterializer {
 
     fn build(&self, staging_dir: &Path, out_path: &Path, _all_staging_suffixes: &[&str]) {
         let fixture = read_csv_fixture(staging_dir);
-        write_dta(out_path, &fixture.headers, &fixture.rows);
+        write_dta(out_path, &fixture);
     }
 }
 
@@ -60,6 +61,64 @@ struct CsvFixture {
     dataset_name: Option<String>,
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
+    /// Optional metadata overrides from an adjacent `meta.toml` sidecar, letting a
+    /// vector change column labels/formats or the dataset label INDEPENDENTLY of
+    /// the table content — the case CFM-82 metadata rendering must cover.
+    meta: FixtureMeta,
+}
+
+/// Metadata overrides parsed from a staging dir's optional `meta.toml`:
+///
+/// ```toml
+/// dataset_label = "Demographics"
+/// [columns.age]
+/// label = "Age in years"
+/// format = "%8.2f"
+/// ```
+#[derive(Default, serde::Deserialize)]
+struct FixtureMeta {
+    #[serde(default)]
+    dataset_label: Option<String>,
+    #[serde(default)]
+    columns: BTreeMap<String, ColumnMeta>,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct ColumnMeta {
+    #[serde(default)]
+    label: Option<String>,
+    #[serde(default)]
+    format: Option<String>,
+}
+
+impl FixtureMeta {
+    /// The label for a column: explicit override, else the default `{name} label`.
+    fn column_label(&self, name: &str) -> String {
+        self.columns
+            .get(name)
+            .and_then(|column| column.label.clone())
+            .unwrap_or_else(|| format!("{name} label"))
+    }
+
+    fn column_format(&self, name: &str) -> Option<String> {
+        self.columns
+            .get(name)
+            .and_then(|column| column.format.clone())
+    }
+
+    fn dataset_label(&self, default: &str) -> String {
+        self.dataset_label.clone().unwrap_or_else(|| default.into())
+    }
+}
+
+fn read_fixture_meta(staging_dir: &Path) -> FixtureMeta {
+    let meta_path = staging_dir.join("meta.toml");
+    if !meta_path.is_file() {
+        return FixtureMeta::default();
+    }
+    let content = std::fs::read_to_string(&meta_path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", meta_path.display()));
+    toml::from_str(&content).unwrap_or_else(|e| panic!("parse {}: {e}", meta_path.display()))
 }
 
 fn read_csv_fixture(staging_dir: &Path) -> CsvFixture {
@@ -77,6 +136,7 @@ fn read_csv_fixture(staging_dir: &Path) -> CsvFixture {
         rows: lines
             .map(|line| line.split(',').map(ToOwned::to_owned).collect())
             .collect(),
+        meta: read_fixture_meta(staging_dir),
     }
 }
 
@@ -112,21 +172,26 @@ fn read_xpt_fixture(staging_dir: &Path) -> Vec<CsvFixture> {
     datasets
 }
 
-fn write_dta(out_path: &Path, headers: &[String], rows: &[Vec<String>]) {
+fn write_dta(out_path: &Path, fixture: &CsvFixture) {
+    let headers = &fixture.headers;
+    let rows = &fixture.rows;
+    let meta = &fixture.meta;
     if out_path.exists() {
         std::fs::remove_file(out_path)
             .unwrap_or_else(|e| panic!("remove_file {}: {e}", out_path.display()));
     }
 
     let header = Header::builder(Release::V118, ByteOrder::LittleEndian)
-        .dataset_label("binoc test vector")
+        .dataset_label(meta.dataset_label("binoc test vector"))
         .build();
     let mut schema_builder = Schema::builder();
     for name in headers {
-        schema_builder = schema_builder.add_variable(
-            Variable::builder(VariableType::FixedString(64), name.as_str())
-                .label(format!("{name} label")),
-        );
+        let mut variable = Variable::builder(VariableType::FixedString(64), name.as_str())
+            .label(meta.column_label(name));
+        if let Some(format) = meta.column_format(name) {
+            variable = variable.format(format);
+        }
+        schema_builder = schema_builder.add_variable(variable);
     }
     let schema = schema_builder
         .build()
@@ -207,6 +272,11 @@ fn build_xpt_schema(dataset: &CsvFixture) -> XportSchema {
     let dataset_name = dataset.dataset_name.as_deref().unwrap_or("BINOCTST");
     let mut schema_builder = XportSchema::builder();
     let mut schema = schema_builder.dataset_name(dataset_name);
+    // A dataset label only rides on the schema when the fixture sets one; the
+    // default leaves it empty so unrelated vectors stay byte-stable.
+    if let Some(label) = &dataset.meta.dataset_label {
+        schema = schema.dataset_label(label.as_str());
+    }
     for (index, header) in dataset.headers.iter().enumerate() {
         let width = dataset
             .rows
@@ -221,6 +291,13 @@ fn build_xpt_schema(dataset: &CsvFixture) -> XportSchema {
             .short_name(header.as_str())
             .value_type(SasVariableType::Character)
             .value_length(width.try_into().expect("xpt field width fits in u16"));
+        // A column label only rides when the fixture sets one explicitly (the xpt
+        // default carries no per-variable label, unlike the dta default).
+        if let Some(column) = dataset.meta.columns.get(header) {
+            if let Some(label) = &column.label {
+                variable.long_label(label.as_str());
+            }
+        }
         schema = schema.add_variable(variable);
     }
     schema

@@ -1,0 +1,84 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "metadata",
+        "path": "data.dta",
+        "sources": [
+          {
+            "path": "data.dta",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 column metadata change; Table metadata changed"
+          }
+        ],
+        "tags": [
+          "binoc.metadata-change",
+          "binoc.metadata.column",
+          "binoc.metadata.column-label",
+          "binoc.metadata.display-format",
+          "binoc.metadata.table"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "%8.0g",
+                    "key": "format",
+                    "kind": "changed",
+                    "to": "%9.2f"
+                  },
+                  {
+                    "from": "Age",
+                    "key": "label",
+                    "kind": "changed",
+                    "to": "Age in years"
+                  }
+                ],
+                "examples_truncated": false,
+                "locator": {
+                  "column": "age"
+                },
+                "scope": "column"
+              },
+              "verb": "metadata.value_change"
+            },
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "Demographics",
+                    "key": "dataset_label",
+                    "kind": "changed",
+                    "to": "Subject Demographics"
+                  }
+                ],
+                "examples_truncated": false,
+                "scope": "table"
+              },
+              "verb": "metadata.value_change"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

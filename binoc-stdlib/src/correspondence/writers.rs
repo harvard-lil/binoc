@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use binoc_sdk::{
-    file_name, structured_document_v1, tabular_extract, tabular_v1, BinocError, BinocResult,
-    DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractResult, IdentityFailurePolicy,
-    LinkCtx, NodeId, NodeMatch, ShapeFilter, StructuredDocument, TabularData, TabularDataPair,
-    Value, WriteOutput, WriterDescriptor,
+    file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
+    BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractResult,
+    IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, ShapeFilter,
+    StructuredDocument, TabularData, TabularDataPair, Value, WriteOutput, WriterDescriptor,
 };
 use rust_strings::{strings, BytesConfig, Encoding};
 use serde_json::json;
@@ -39,6 +39,7 @@ impl EditListWriter for ContainerWriter {
             formats: vec![],
             input: NodeMatch::default(),
             shape: ShapeFilter::Container,
+            fallback: false,
         }
     }
 
@@ -79,6 +80,7 @@ impl EditListWriter for TabularWriter {
             formats: vec![tabular_v1()],
             input: NodeMatch::default(),
             shape: ShapeFilter::Any,
+            fallback: false,
         }
     }
 
@@ -133,9 +135,18 @@ impl EditListWriter for TabularWriter {
             }
         }
 
+        // Tier-1/tier-2 metadata changes (column labels/formats/value-label set
+        // names; table label/name) are diffed independently of cell/row content
+        // and appended AFTER the primary table edits, so the changelog reads
+        // "what the table did" then "what its metadata did". They are kept out of
+        // the keyed/positional row machinery above so they never duplicate a cell
+        // diff. See the tiered-artifact-metadata + per-artifact-writer ADRs.
+        let metadata_edits = tabular_metadata_edits(&left, &right);
+
         if !ctx.row_keys.is_empty() && keys_present(ctx.row_keys, &left, &right) {
             if keyed_rows_complete(ctx.row_keys, &left, &right) {
                 write_keyed_row_edits(&mut edits, ctx.row_keys, &left, &right);
+                edits.extend(metadata_edits);
                 return Ok(Some(WriteOutput { edits, diagnostics }));
             }
             let quality = key_quality(ctx.row_keys, &left, &right);
@@ -184,6 +195,8 @@ impl EditListWriter for TabularWriter {
                 json!({ "index": index, "values": capture_row(row) }),
             ));
         }
+
+        edits.extend(metadata_edits);
 
         Ok(Some(WriteOutput { edits, diagnostics }))
     }
@@ -561,6 +574,268 @@ fn cell_edit(params: serde_json::Value) -> Edit {
         .with_tag("binoc.cell-change")
 }
 
+// ── Metadata rendering (CFM-82) ─────────────────────────────────────────────
+//
+// Three metadata tiers (see the tiered-artifact-metadata ADR) are diffed into a
+// single, format-neutral `metadata.value_change` vocabulary:
+//   * tier 1 — per-column metadata (label / display format / value-label set
+//     name), keyed to a column, emitted by `TabularWriter`;
+//   * tier 2 — per-table metadata (dataset name/label), keyed to the table,
+//     emitted by `TabularWriter`;
+//   * tier 3 — per-parse / file-level metadata (source-format identity, version,
+//     encoding, value-label dictionaries, creator/tooling provenance), emitted
+//     by `ParserMetadataWriter` from the `parser_metadata_v1` artifact.
+//
+// Every emitted edit is factual and richly tagged so the renderer/config layer
+// can weight a relabeled column, a dropped value-label set, and a file-level
+// provenance rename differently (AGENTS rule 3) — significance lives in config,
+// not here. The base tag `binoc.metadata-change` marks all of them; a scope tag
+// (`binoc.metadata.column` / `.table` / `.file`) and one or more semantic tags
+// (`binoc.metadata.column-label`, `binoc.metadata.value-label-set`,
+// `binoc.metadata.display-format`, `binoc.metadata.provenance`) let config map
+// significance precisely.
+
+const MAX_METADATA_CHANGES: usize = 32;
+
+/// One changed key within a metadata bag, as JSON for an edit's `changes` array.
+/// `from`/`to` carry the raw JSON value (the renderer formats and truncates it);
+/// an absent key is recorded as JSON `null`.
+fn metadata_key_change(
+    kind: &str,
+    key: &str,
+    from: Option<&serde_json::Value>,
+    to: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    json!({
+        "kind": kind,
+        "key": key,
+        "from": from.cloned().unwrap_or(serde_json::Value::Null),
+        "to": to.cloned().unwrap_or(serde_json::Value::Null),
+    })
+}
+
+/// Diff two metadata objects key-by-key, returning the changed keys and the set
+/// of semantic tags those keys imply. Non-object inputs are treated as empty.
+fn diff_metadata_object(
+    left: &serde_json::Value,
+    right: &serde_json::Value,
+) -> (Vec<serde_json::Value>, BTreeSet<String>) {
+    let empty = serde_json::Map::new();
+    let left_map = left.as_object().unwrap_or(&empty);
+    let right_map = right.as_object().unwrap_or(&empty);
+
+    let mut keys: BTreeSet<&String> = BTreeSet::new();
+    keys.extend(left_map.keys());
+    keys.extend(right_map.keys());
+
+    let mut changes = Vec::new();
+    let mut tags = BTreeSet::new();
+    for key in keys {
+        let left_value = left_map.get(key);
+        let right_value = right_map.get(key);
+        // Treat JSON null as absent so "label: null -> "X"" reads as an addition.
+        let left_present = left_value.is_some_and(|value| !value.is_null());
+        let right_present = right_value.is_some_and(|value| !value.is_null());
+        if left_value == right_value {
+            continue;
+        }
+        let kind = match (left_present, right_present) {
+            (false, true) => "added",
+            (true, false) => "removed",
+            _ => "changed",
+        };
+        if changes.len() < MAX_METADATA_CHANGES {
+            changes.push(metadata_key_change(kind, key, left_value, right_value));
+        }
+        if let Some(tag) = metadata_key_tag(key) {
+            tags.insert(tag.to_string());
+        }
+    }
+    (changes, tags)
+}
+
+/// Map a metadata key to a semantic tag so config can weight it. Unknown keys
+/// get no specific tag (they still carry the scope + base tags).
+fn metadata_key_tag(key: &str) -> Option<&'static str> {
+    match key {
+        "label" | "dataset_label" | "dataset_name" => Some("binoc.metadata.column-label"),
+        "value_label_set" | "value_labels" => Some("binoc.metadata.value-label-set"),
+        "format" => Some("binoc.metadata.display-format"),
+        "release" | "version" | "sas_version" | "file_encoding" | "cell_encoding"
+        | "compression" | "endianness" | "vendor" => Some("binoc.metadata.provenance"),
+        _ => None,
+    }
+}
+
+/// Build a `metadata.value_change` edit, or `None` when nothing changed.
+fn metadata_value_change_edit(
+    scope: &str,
+    scope_tag: &str,
+    locator: serde_json::Value,
+    changes: Vec<serde_json::Value>,
+    semantic_tags: BTreeSet<String>,
+    truncated: bool,
+) -> Option<Edit> {
+    if changes.is_empty() {
+        return None;
+    }
+    let mut params = serde_json::Map::new();
+    params.insert("scope".into(), json!(scope));
+    if !locator.is_null() {
+        params.insert("locator".into(), locator);
+    }
+    params.insert("changes".into(), json!(changes));
+    params.insert("examples_truncated".into(), json!(truncated));
+
+    let mut edit = Edit::new("metadata.value_change", serde_json::Value::Object(params))
+        .with_item_type("metadata")
+        .with_tag("binoc.metadata-change")
+        .with_tag(scope_tag);
+    for tag in semantic_tags {
+        edit = edit.with_tag(tag);
+    }
+    Some(edit)
+}
+
+/// Diff tier-1 (per-column) and tier-2 (per-table) metadata carried on
+/// `tabular_v1`. Column metadata is matched by column NAME (so a relabeled
+/// column reads as a metadata change, and a reordered column does not produce a
+/// spurious metadata diff). Columns added/removed are already reported by the
+/// schema edits, so a column present on only one side is skipped here.
+fn tabular_metadata_edits(left: &TabularData, right: &TabularData) -> Vec<Edit> {
+    let mut edits = Vec::new();
+
+    // Tier 1: per-column metadata, matched by column name.
+    for (right_index, header) in right.headers.iter().enumerate() {
+        let Some(left_index) = left.column_index(header) else {
+            continue;
+        };
+        let left_meta = left
+            .column_metadata
+            .get(left_index)
+            .unwrap_or(&serde_json::Value::Null);
+        let right_meta = right
+            .column_metadata
+            .get(right_index)
+            .unwrap_or(&serde_json::Value::Null);
+        let (changes, semantic_tags) = diff_metadata_object(left_meta, right_meta);
+        let truncated = changes.len() >= MAX_METADATA_CHANGES;
+        if let Some(edit) = metadata_value_change_edit(
+            "column",
+            "binoc.metadata.column",
+            json!({ "column": header }),
+            changes,
+            semantic_tags,
+            truncated,
+        ) {
+            edits.push(edit);
+        }
+    }
+
+    // Tier 2: per-table metadata.
+    let (changes, semantic_tags) =
+        diff_metadata_object(&left.table_metadata, &right.table_metadata);
+    let truncated = changes.len() >= MAX_METADATA_CHANGES;
+    if let Some(edit) = metadata_value_change_edit(
+        "table",
+        "binoc.metadata.table",
+        serde_json::Value::Null,
+        changes,
+        semantic_tags,
+        truncated,
+    ) {
+        edits.push(edit);
+    }
+
+    edits
+}
+
+/// Renders tier-3 parser metadata (`parser_metadata_v1`). The sole writer for
+/// that format (`fallback: false`), so provenance/extract routing is
+/// unambiguous. Composes alongside `TabularWriter`/`ContainerWriter` on the same
+/// node under the per-artifact dispatch (CFM-81).
+pub struct ParserMetadataWriter;
+
+impl EditListWriter for ParserMetadataWriter {
+    fn descriptor(&self) -> WriterDescriptor {
+        WriterDescriptor {
+            name: "binoc.write.parser_metadata".into(),
+            formats: vec![parser_metadata_v1()],
+            input: NodeMatch::default(),
+            shape: ShapeFilter::Any,
+            fallback: false,
+        }
+    }
+
+    fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+        let (Some(left), Some(right)) = (
+            load_parser_metadata(ctx, ctx.link.left, data)?,
+            load_parser_metadata(ctx, ctx.link.right, data)?,
+        ) else {
+            return Ok(None);
+        };
+
+        let mut edits = Vec::new();
+
+        // A source-format change (e.g. .dta re-saved as .sas7bdat) is itself a
+        // file-level provenance fact.
+        if left.format != right.format {
+            edits.push(
+                Edit::new(
+                    "metadata.value_change",
+                    json!({
+                        "scope": "file",
+                        "changes": [metadata_key_change(
+                            "changed",
+                            "source_format",
+                            Some(&json!(left.format)),
+                            Some(&json!(right.format)),
+                        )],
+                        "examples_truncated": false,
+                    }),
+                )
+                .with_item_type("metadata")
+                .with_tag("binoc.metadata-change")
+                .with_tag("binoc.metadata.file")
+                .with_tag("binoc.metadata.provenance"),
+            );
+        }
+
+        let (changes, mut semantic_tags) = diff_metadata_object(&left.value, &right.value);
+        // File-level provenance is the default weighting bucket for tier 3, so a
+        // changed key with no more-specific tag still routes as provenance.
+        if !changes.is_empty() {
+            semantic_tags.insert("binoc.metadata.provenance".into());
+        }
+        let truncated = changes.len() >= MAX_METADATA_CHANGES;
+        if let Some(edit) = metadata_value_change_edit(
+            "file",
+            "binoc.metadata.file",
+            serde_json::Value::Null,
+            changes,
+            semantic_tags,
+            truncated,
+        ) {
+            edits.push(edit);
+        }
+
+        Ok(Some(edits.into()))
+    }
+}
+
+fn load_parser_metadata(
+    ctx: &LinkCtx<'_>,
+    id: NodeId,
+    data: &dyn DataAccess,
+) -> BinocResult<Option<ParserMetadata>> {
+    let Some(bytes) = ctx.view.artifact_bytes(id, &parser_metadata_v1(), data)? else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|err| BinocError::Other(format!("decode parser metadata artifact: {err}")))
+}
+
 pub struct FallbackWriter;
 
 pub struct TextWriter;
@@ -578,6 +853,7 @@ impl EditListWriter for StructuredDocumentWriter {
             formats: vec![structured_document_v1()],
             input: NodeMatch::default(),
             shape: ShapeFilter::Leaf,
+            fallback: false,
         }
     }
 
@@ -841,6 +1117,7 @@ impl EditListWriter for TextWriter {
                 ..NodeMatch::default()
             },
             shape: ShapeFilter::Leaf,
+            fallback: false,
         }
     }
 
@@ -1081,6 +1358,7 @@ impl EditListWriter for FallbackWriter {
             formats: vec![],
             input: NodeMatch::default(),
             shape: ShapeFilter::Any,
+            fallback: true,
         }
     }
 

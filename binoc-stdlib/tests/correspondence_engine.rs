@@ -1100,6 +1100,7 @@ impl EditListWriter for ExtrasFrobnicateWriter {
             formats: vec![],
             input: NodeMatch::default(),
             shape: ShapeFilter::Any,
+            fallback: false,
         }
     }
 

@@ -421,6 +421,16 @@ pub struct Edit {
     pub params: serde_json::Value,
     #[serde(default)]
     pub projection: EditProjection,
+    /// Provenance tag: which content type produced this edit. For an artifact
+    /// writer it is the artifact format's display string (e.g.
+    /// `binoc.tabular.v1`); for a structural writer (container/text/fallback) it
+    /// is the writer's name. Set by the dispatcher after a writer runs — writers
+    /// do not populate it themselves — so the merged per-link edit list can be
+    /// sliced back into per-content-type segments for format-scoped compaction,
+    /// extract routing, and grouped summary/projection. `None` only for
+    /// hand-built edits in tests that never pass through dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
 }
 
 impl Edit {
@@ -429,7 +439,15 @@ impl Edit {
             verb: verb.into(),
             params,
             projection: EditProjection::default(),
+            provenance: None,
         }
+    }
+
+    /// Stamp this edit's provenance (the producing format/writer). Used by the
+    /// dispatcher; idempotent and chainable.
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
     }
 
     pub fn hidden(mut self) -> Self {
@@ -484,6 +502,11 @@ pub struct WriterDescriptor {
     pub input: NodeMatch,
     #[serde(default)]
     pub shape: ShapeFilter,
+    /// Marks the last-resort structural writer (the byte/hash fallback). Under
+    /// composing dispatch (CFM-81) the fallback runs only when no other writer
+    /// claimed the link; a fallback writer always declares empty `formats`.
+    #[serde(default)]
+    pub fallback: bool,
 }
 
 pub struct LinkCtx<'a> {
@@ -541,6 +564,18 @@ impl From<Vec<Edit>> for WriteOutput {
 
 pub trait CompactionRule: Send + Sync {
     fn name(&self) -> &str;
+
+    /// The artifact format whose provenance-scoped segment this rule rewrites.
+    /// The dispatcher slices a link's merged edit list down to the edits tagged
+    /// with this format before calling [`rewrite`](Self::rewrite), so a rule
+    /// never sees or rewrites another content type's edits. `None` means the
+    /// rule operates on the whole (unsegmented) edit list — reserved for
+    /// cross-content-type or structural compaction; format-specific rules must
+    /// declare their format.
+    fn format(&self) -> Option<ArtifactFormat> {
+        None
+    }
+
     fn rewrite(
         &self,
         ctx: &LinkCtx<'_>,

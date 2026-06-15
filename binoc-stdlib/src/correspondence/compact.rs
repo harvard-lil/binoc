@@ -17,6 +17,10 @@ impl CompactionRule for ColumnReorder {
         "binoc.compact.column_reorder"
     }
 
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
     fn rewrite(
         &self,
         _ctx: &LinkCtx<'_>,
@@ -64,6 +68,10 @@ impl CompactionRule for ColumnReorder {
 impl CompactionRule for ColumnRename {
     fn name(&self) -> &str {
         "binoc.compact.column_rename"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
     }
 
     fn rewrite(
@@ -417,6 +425,10 @@ impl CompactionRule for RowAlignment {
         "binoc.compact.row_alignment"
     }
 
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
     fn rewrite(
         &self,
         _ctx: &LinkCtx<'_>,
@@ -565,6 +577,10 @@ fn lcs_pairs<T: PartialEq>(left: &[T], right: &[T]) -> Vec<(usize, usize)> {
 impl CompactionRule for RowAdditionConsolidation {
     fn name(&self) -> &str {
         "binoc.compact.row_addition"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
     }
 
     fn rewrite(

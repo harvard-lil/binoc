@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3"]
-test-support = ["dep:binoc-stdlib"]
+test-support = ["dep:binoc-stdlib", "dep:toml"]
 
 [[bin]]
 name = "materialize-stat-binary-test-vectors"
@@ -34,6 +34,7 @@ sas_xport = "0.4.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
+toml = { version = "1.0.4", optional = true }
 
 [dev-dependencies]
 binoc-core = { workspace = true }

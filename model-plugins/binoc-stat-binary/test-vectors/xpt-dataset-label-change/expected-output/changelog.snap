@@ -1,0 +1,15 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Significant metadata
+
+- **data.xpt/>DM**: 1 row added; Table metadata changed
+  - Rows added
+    - row 2: '2', 'Bob'
+  - Metadata changed
+    - table dataset label changed from 'Demographics' to 'Subject Demographics'
+
+## Minor metadata

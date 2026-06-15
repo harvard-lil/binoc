@@ -296,7 +296,7 @@
           "type": "string"
         },
         "path": {
-          "description": "Location within snapshot (logical path, including interior paths\nlike \"archive.zip/data/file.csv\").",
+          "description": "Location within snapshot (logical path, including interior paths\nlike \"archive.zip/>data/file.csv\"). `/>` marks a decompose boundary;\na literal segment beginning with `>` is escaped as `\\>`.",
           "type": "string"
         },
         "source_items": {
@@ -436,6 +436,7 @@
           "type": "boolean"
         },
         "logical_path": {
+          "description": "User-meaningful location within a snapshot. `/>` marks a\ndecompose boundary; a literal segment beginning with `>` is escaped\nas `\\>`.",
           "type": "string"
         },
         "media_type": {

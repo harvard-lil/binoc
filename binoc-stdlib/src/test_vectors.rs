@@ -544,18 +544,18 @@ fn link_change_details(
             Some(new) => {
                 if old.edit_cost != new.edit_cost
                     || old.edit_count != new.edit_count
-                    || old.writer != new.writer
+                    || old.writers != new.writers
                     || old.settled != new.settled
                 {
                     details.push(format!(
-                        "link changed {} edit_cost {} -> {}, edit_count {} -> {}, writer {:?} -> {:?}, settled {} -> {}",
+                        "link changed {} edit_cost {} -> {}, edit_count {} -> {}, writers {:?} -> {:?}, settled {} -> {}",
                         link_label(new),
                         old.edit_cost,
                         new.edit_cost,
                         old.edit_count,
                         new.edit_count,
-                        old.writer,
-                        new.writer,
+                        old.writers,
+                        new.writers,
                         old.settled,
                         new.settled
                     ));
@@ -978,7 +978,7 @@ mod cost_baseline_tests {
             right_path: right_path.into(),
             evidence: "test.evidence".into(),
             proposer: "test.pair".into(),
-            writer: writer.map(str::to_string),
+            writers: writer.into_iter().map(str::to_string).collect(),
             settled: false,
             edit_count: 1,
             edit_cost,
@@ -1024,7 +1024,7 @@ mod cost_baseline_tests {
         assert!(warning.contains("description_cost regressed from 10 to 20"));
         assert!(warning.contains("link changed 'a.csv' -> 'a.csv'"));
         assert!(warning.contains("edit_cost 9 -> 19"));
-        assert!(warning.contains("writer Some(\"old.writer\") -> Some(\"new.writer\")"));
+        assert!(warning.contains("writers {\"old.writer\"} -> {\"new.writer\"}"));
         assert!(warning.contains("compaction_accepted"));
     }
 }

@@ -46,6 +46,35 @@ it.
   `ParseOutput.artifacts` (a second artifact on a node); stat-binary restores its
   dropped labels/formats/value-labels/version facts into the three tiers.
   Carried, not yet rendered. (ADR: tiered artifact metadata.)
+- **CFM-81 composable per-artifact writer dispatch.** The artifact is the
+  rendering unit: per-link dispatch now runs one writer per *present* artifact
+  format and concatenates, composing with structural writers (`ContainerWriter`/
+  `TextWriter`/`FallbackWriter`, marked by a `fallback` descriptor flag).
+  `Edit.provenance` tags each edit with its producing format/writer; compaction
+  is format-scoped; `writer_used`/`extract`/trace/`LinkDescriptionCost` migrated
+  to per-link writer **sets**. Single-artifact nodes behave as before. (ADR:
+  composable per-artifact writers.)
+- **CFM-78 bounded diagnostics.** `bounded_index_list` caps inline index/key
+  lists to a few examples + remaining count; `binoc.table_splitter.ambiguous` no
+  longer fires on flat single-table CSVs (gated on a detected banner/title), only
+  on genuine stacked layouts. Audit confirmed no other unbounded per-item
+  diagnostic interpolations remain.
+- **CFM-82 metadata rendering + significance.** `ParserMetadataWriter`
+  (`parser_metadata_v1`) and tabular column/table metadata diffing emit
+  `metadata.value_change`, composed per-artifact (CFM-81) alongside table/content
+  edits; Markdown renders them after the content blocks; significance is mapped
+  from scope/semantic tags (`binoc.metadata.column-label`/`.value-label-set`/
+  `.display-format`/`.provenance`) via renderer-group config, not the IR. Proven
+  by stat-binary `stata-metadata-change` (`.dta` leaf) and `xpt-dataset-label-change`
+  (`.xpt` container). Note: composed-edit order is artifact-format-sorted then
+  structural-last; correct reader-facing order comes from the renderer choosing
+  block order — revisit only if a consumer relies on raw composed order. (ADR:
+  tiered artifact metadata.)
+- **Path-boundary escaping.** A logical-path segment literally starting with `>`
+  (or `\`) is now escaped with a leading backslash by the `binoc_sdk::path`
+  helpers (`escape_segment`), so `dir/>q1.csv` is unambiguously a decompose
+  boundary while a real file `>q1.csv` is written `dir/\>q1.csv`. Resolves the
+  previously-parked `/>` ambiguity; documented in the parsed-children ADR.
 
 ## Open work, in order
 
@@ -65,31 +94,7 @@ The engine has had unfold (`add_child`) since day one and never had fold;
 the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
 (output: the *artifact* is the render unit).
 
-1. **CFM-78 tail — bound diagnostics.** Inline index cap done; still open: audit
-   other per-row message interpolations; gate/quiet `binoc.table_splitter.ambiguous`
-   on flat single-table CSVs (false positive on showcase brfss/fda).
-
-2. **CFM-81 — composable per-artifact writer dispatch.** *Architectural enabler;
-   prerequisite for CFM-82 and a cleaner CFM-71.* Dispatch today is
-   one-writer-per-link (first match wins) — a degenerate case that worked only
-   while each node had exactly one content artifact. Move to: **the artifact is
-   the rendering unit** — run one writer per present artifact format and
-   concatenate, composing with node-level structural writers (container
-   child-tracking, fallback). Needs: writer taxonomy (artifact vs structural);
-   **edit provenance** (tag each `Edit` with its producing format) so
-   compaction/extract/summary stay per-content-type in a merged list;
-   deterministic ordering; format-scoped compaction; the per-link→per-writer-set
-   bookkeeping migration (`writer_used`, `extract`, trace, perf_report). (ADR:
-   composable per-artifact writers — this decision.)
-
-3. **CFM-82 — metadata rendering + significance** (needs CFM-81). A real
-   `ParserMetadataWriter`, plus tabular column/table-metadata rendering, emitting
-   `metadata.value_change`; significance mapping so a relabeled column, a dropped
-   value-label set, and a creator rename weigh differently — via renderer config,
-   not the IR. First proof: an `.xpt` container metadata change renders alongside
-   child edits; a `.dta` label/format change renders on the leaf.
-
-4. **CFM-83 — multi-input claims (file-set fusion; `subsume`).** Generalize the
+1. **CFM-83 — multi-input claims (file-set fusion; `subsume`).** Generalize the
    parse claim from one node to a **correlated set of nodes**: `ParseDescriptor`
    input becomes an ordered member-match list (single-file = size-1 degenerate)
    with a correlation key (default: same container + shared basename stem;
@@ -107,9 +112,13 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
    once). Reduces pressure on CFM-72 (a file set is one node per side, so 1:1
    pairing suffices). Proof: `roads.{shp,shx,dbf,prj}` whose CRS changes while
    geometry is unchanged; a standalone `.dbf` sharing a stem must still parse
-   alone (decline path). (ADR: multi-input claims.)
+   alone (decline path). (ADR: multi-input claims.) *CFM-81 carry-overs:* under
+   the new dispatch multiple structural writers now COMPOSE (no first-match
+   break), so any structural writer this adds must check overlaps; and `subsume`
+   must exclude subsumed members from the per-artifact dispatch as well as from
+   projection.
 
-5. **CFM-71 — container-type-change projection + parent reconciliation.** Linked
+2. **CFM-71 — container-type-change projection + parent reconciliation.** Linked
    containers whose representation changed (directory↔SQLite, file↔section dir)
    render as a container/serialization change, not move+add/remove; reconcile
    linked parents before projecting children. Direction (from the parsed-children
@@ -120,7 +129,7 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
    directly from CFM-81 (a container node carrying both structural and metadata
    edits); shares member-attribution provenance with CFM-83.
 
-6. **CFM-72 / CFM-73 — split/merge correspondence.** Pair rule over `tabular_v1`
+3. **CFM-72 / CFM-73 — split/merge correspondence.** Pair rule over `tabular_v1`
    children proposing one-to-many / many-to-one when row sets partition cleanly;
    split/merge claim with residual edits; gate fuzzy one-to-one when a stronger
    split explanation exists; prove via description cost. CFM-73 extends to text
@@ -132,12 +141,12 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
    parsed children at all. Vectors: `*-split-by-year`,
    `report-split-into-section-files`.
 
-7. **CFM-74 / CFM-75 / CFM-76 — replayable claims.** Finalize the
+4. **CFM-74 / CFM-75 / CFM-76 — replayable claims.** Finalize the
    `Changeset.claims` payload (scope/verb/params/covered/evidence/residual) with
    replay verification; numeric unit-conversion and precision-rounding claims;
    bounded near-duplicate row hints. Build on the cost ratchet, not render hacks.
 
-8. **CFM-77+ — domain format plugins.** FASTQ, VCF, TIFF/image equality,
+5. **CFM-77+ — domain format plugins.** FASTQ, VCF, TIFF/image equality,
    XBRL-like JSON — after the generic machinery is coherent, unless a user needs
    one first. (Shapefile geometry already shipped as `binoc-shapefile`; its
    fusion is CFM-83, not here.)
@@ -151,9 +160,6 @@ the parse unit), CFM-80 (content: a node carries N artifacts), and CFM-81
 - **True graph output** — a renderer option, not an engine change.
 - **N-snapshot / k-tree lineages** — future product feature, not a correctness gap.
 - **Arrow IPC `tabular_v2`** — only when extraction/interchange justifies it.
-- **Decompose-separator escaping** — a logical-path segment literally starting
-  with `>` is ambiguous with the `/>` boundary marker. Accepted as a known
-  limitation (greenfield); revisit only if real data hits it.
 
 ## References
 

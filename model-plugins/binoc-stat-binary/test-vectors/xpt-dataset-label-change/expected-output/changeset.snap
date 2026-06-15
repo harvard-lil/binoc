@@ -1,0 +1,80 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "SAS transport file",
+        "path": "data.xpt",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.xpt/>DM",
+            "sources": [
+              {
+                "path": "data.xpt/>DM",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added; Table metadata changed"
+              }
+            ],
+            "tags": [
+              "binoc.metadata-change",
+              "binoc.metadata.column-label",
+              "binoc.metadata.table",
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "changes": [
+                      {
+                        "from": "Demographics",
+                        "key": "dataset_label",
+                        "kind": "changed",
+                        "to": "Subject Demographics"
+                      }
+                    ],
+                    "examples_truncated": false,
+                    "scope": "table"
+                  },
+                  "verb": "metadata.value_change"
+                },
+                {
+                  "params": {
+                    "index": 1,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "2",
+                        "Bob"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

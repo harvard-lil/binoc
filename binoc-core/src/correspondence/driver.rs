@@ -35,7 +35,7 @@ pub struct RunStats {
     pub links_upgraded: u64,
     pub priorities: BTreeMap<String, u32>,
     pub events: Vec<FireEvent>,
-    pub writer_used: BTreeMap<usize, String>,
+    pub writer_used: BTreeMap<usize, BTreeSet<String>>,
     pub unwritten_links: Vec<usize>,
     pub compaction_accepted: BTreeMap<String, u64>,
     pub compaction_rejected: BTreeMap<String, u64>,
@@ -63,7 +63,10 @@ pub struct LinkDescriptionCost {
     pub right_path: String,
     pub evidence: String,
     pub proposer: String,
-    pub writer: Option<String>,
+    /// The set of writers (artifact + structural) that contributed edits to this
+    /// link, sorted. Empty when the link is settled, invisible, or unwritten.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub writers: BTreeSet<String>,
     pub settled: bool,
     pub edit_count: u64,
     pub edit_cost: u64,
@@ -126,7 +129,12 @@ impl CorrespondenceRunResult {
                 right_path: self.store.right.node(link.right).item.logical_path.clone(),
                 evidence: link.evidence.clone(),
                 proposer: link.proposer.clone(),
-                writer: self.stats.writer_used.get(&index).cloned(),
+                writers: self
+                    .stats
+                    .writer_used
+                    .get(&index)
+                    .cloned()
+                    .unwrap_or_default(),
                 settled: link.settled,
                 edit_count: edits.len() as u64,
                 edit_cost: link_edit_cost,
@@ -161,19 +169,12 @@ impl CorrespondenceRunResult {
                 line.path
             ))
         })?;
-        let writer_name = self.stats.writer_used.get(&link_index).ok_or_else(|| {
+        let writer_names = self.stats.writer_used.get(&link_index).ok_or_else(|| {
             BinocError::Extract(format!(
                 "node '{}' has no edit-list writer recorded",
                 line.path
             ))
         })?;
-        let writer = config
-            .writers
-            .iter()
-            .find(|writer| writer.descriptor().name == *writer_name)
-            .ok_or_else(|| {
-                BinocError::Extract(format!("edit-list writer '{writer_name}' not registered"))
-            })?;
         let link = self.store.links.link(link_index);
         let view = CoreEngineView::new(&self.store, false);
         let link_ref = view.link_ref(link_index);
@@ -193,12 +194,24 @@ impl CorrespondenceRunResult {
             .get(&link_index)
             .map(Vec::as_slice)
             .unwrap_or(&[]);
-        writer.extract(&ctx, edits, aspect, data)?.ok_or_else(|| {
-            BinocError::Extract(format!(
-                "edit-list writer '{writer_name}' cannot extract aspect '{aspect}' from node '{}'",
-                line.path
-            ))
-        })
+        // Route the aspect request to whichever contributing writer can satisfy
+        // it. Each writer sees only the provenance-scoped segment it produced, so
+        // an aspect on a multi-artifact link reaches the right content type. The
+        // first writer that yields a result wins.
+        for writer in &config.writers {
+            let descriptor = writer.descriptor();
+            if !writer_names.contains(&descriptor.name) {
+                continue;
+            }
+            let scoped = scoped_edits(edits, &writer_provenance(&descriptor));
+            if let Some(result) = writer.extract(&ctx, &scoped, aspect, data)? {
+                return Ok(result);
+            }
+        }
+        Err(BinocError::Extract(format!(
+            "no edit-list writer for node '{}' can extract aspect '{aspect}'",
+            line.path
+        )))
     }
 }
 
@@ -739,52 +752,136 @@ fn run_inner(
                 continue;
             }
 
-            let mut written = false;
+            let Some(link_ref) = view
+                .links_of(left_id)
+                .into_iter()
+                .find(|l| l.index == index)
+            else {
+                edit_lists.insert(index, Vec::new());
+                continue;
+            };
+            let ctx = LinkCtx {
+                view: &view,
+                link: link_ref,
+                row_keys: config
+                    .row_keys
+                    .get(&store.right.node(link.right).item.logical_path)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+                row_identity_policies: config
+                    .row_identity_policies
+                    .get(&store.right.node(link.right).item.logical_path)
+                    .copied()
+                    .unwrap_or_default(),
+            };
+
+            // Dispatch composes, then selects (CFM-81). The link's edit list is
+            // the concatenation of:
+            //   * one artifact writer per *present* artifact format — within a
+            //     format, registration order picks the first writer that returns
+            //     `Some` (the substitutability / dialect axis);
+            //   * each applicable structural writer (empty `formats`), excluding
+            //     the fallback;
+            //   * the fallback, but only when nothing above claimed the link.
+            // Each contribution's edits are stamped with the producer's
+            // provenance so downstream compaction/extract/summary stay
+            // per-content-type. Ordering is deterministic: artifact formats in
+            // sorted order, then structural writers in registration order.
+            let mut writers_used: BTreeSet<String> = BTreeSet::new();
+            let mut artifact_segments: BTreeMap<ArtifactFormat, Vec<Edit>> = BTreeMap::new();
+            let mut structural_edits: Vec<Edit> = Vec::new();
+            let mut fallback: Option<&Arc<dyn binoc_sdk::EditListWriter>> = None;
+            // A link is "claimed" once any non-fallback writer returns `Some`
+            // (even an empty edit list), exactly as the old first-match loop's
+            // `break` claimed it. The fallback fires only on unclaimed links.
+            let mut claimed = false;
+
             for writer in &config.writers {
                 let descriptor = writer.descriptor();
                 if !writer_matches(&descriptor, &store, left_id, right_id) {
                     continue;
                 }
-                let Some(link_ref) = view
-                    .links_of(left_id)
-                    .into_iter()
-                    .find(|l| l.index == index)
-                else {
+                let is_fallback = descriptor.formats.is_empty() && is_fallback_writer(&descriptor);
+                if is_fallback {
+                    // Defer the fallback until we know whether the link was
+                    // claimed by anything else.
+                    fallback.get_or_insert(writer);
                     continue;
-                };
-                let ctx = LinkCtx {
-                    view: &view,
-                    link: link_ref,
-                    row_keys: config
-                        .row_keys
-                        .get(&store.right.node(link.right).item.logical_path)
-                        .map(Vec::as_slice)
-                        .unwrap_or(&[]),
-                    row_identity_policies: config
-                        .row_identity_policies
-                        .get(&store.right.node(link.right).item.logical_path)
-                        .copied()
-                        .unwrap_or_default(),
-                };
-                if let Some(output) = writer.write(&ctx, data)? {
-                    append_rule_diagnostics(&mut diagnostics, &descriptor.name, output.diagnostics);
-                    stats.writer_used.insert(index, descriptor.name.clone());
-                    if let Some(trace) = trace.as_deref_mut() {
-                        trace.push(TraceStep::Write {
-                            writer: descriptor.name.clone(),
-                            link: index,
-                            edits: output.edits.clone(),
-                        });
+                }
+                let provenance = writer_provenance(&descriptor);
+                if descriptor.formats.is_empty() {
+                    // Structural writer (container/text).
+                    if let Some(output) = writer.write(&ctx, data)? {
+                        append_rule_diagnostics(
+                            &mut diagnostics,
+                            &descriptor.name,
+                            output.diagnostics,
+                        );
+                        claimed = true;
+                        writers_used.insert(descriptor.name.clone());
+                        structural_edits.extend(stamp(output.edits, &provenance));
                     }
-                    edit_lists.insert(index, output.edits);
-                    written = true;
-                    break;
+                } else {
+                    // Artifact writer. Within a format, the first writer (by
+                    // registration order) that returns `Some` wins; later
+                    // writers for an already-produced format are skipped.
+                    let format = descriptor.formats[0].clone();
+                    if artifact_segments.contains_key(&format) {
+                        continue;
+                    }
+                    if let Some(output) = writer.write(&ctx, data)? {
+                        append_rule_diagnostics(
+                            &mut diagnostics,
+                            &descriptor.name,
+                            output.diagnostics,
+                        );
+                        claimed = true;
+                        writers_used.insert(descriptor.name.clone());
+                        artifact_segments.insert(format, stamp(output.edits, &provenance));
+                    }
                 }
             }
-            if !written {
-                stats.unwritten_links.push(index);
-                edit_lists.insert(index, Vec::new());
+
+            // Concatenate in deterministic order: artifact formats sorted, then
+            // structural contributions.
+            let mut composed: Vec<Edit> = Vec::new();
+            for (_format, segment) in artifact_segments {
+                composed.extend(segment);
             }
+            composed.extend(structural_edits);
+
+            if !claimed {
+                if let Some(writer) = fallback {
+                    let descriptor = writer.descriptor();
+                    if let Some(output) = writer.write(&ctx, data)? {
+                        append_rule_diagnostics(
+                            &mut diagnostics,
+                            &descriptor.name,
+                            output.diagnostics,
+                        );
+                        claimed = true;
+                        writers_used.insert(descriptor.name.clone());
+                        composed.extend(stamp(output.edits, &writer_provenance(&descriptor)));
+                    }
+                }
+            }
+
+            if let Some(trace) = trace.as_deref_mut() {
+                if !writers_used.is_empty() {
+                    trace.push(TraceStep::Write {
+                        writers: writers_used.iter().cloned().collect(),
+                        link: index,
+                        edits: composed.clone(),
+                    });
+                }
+            }
+
+            if claimed {
+                stats.writer_used.insert(index, writers_used);
+            } else {
+                stats.unwritten_links.push(index);
+            }
+            edit_lists.insert(index, composed);
         }
     }
 
@@ -810,7 +907,30 @@ fn run_inner(
                         .copied()
                         .unwrap_or_default(),
                 };
-                if let Some(rewritten) = rule.rewrite(&ctx, edits, data)? {
+                // Format-scoped compaction (CFM-81): a rule that declares a
+                // `format()` sees and rewrites only the provenance-scoped segment
+                // of that format, never the whole mixed list. A rule with no
+                // declared format keeps operating on the full list.
+                let scope = rule.format().map(|format| format.to_string());
+                let scoped: Vec<Edit> = match &scope {
+                    Some(provenance) => scoped_edits(edits, provenance),
+                    None => edits.clone(),
+                };
+                if scoped.is_empty() {
+                    continue;
+                }
+                if let Some(rewritten_segment) = rule.rewrite(&ctx, &scoped, data)? {
+                    // Re-stamp the rewritten segment with its format provenance
+                    // (rewrite rules synthesize fresh edits without it), then
+                    // splice it back into the full list at the position of the
+                    // first edit it replaced — preserving other content types'
+                    // edits in place.
+                    let rewritten = match &scope {
+                        Some(provenance) => {
+                            splice_scoped(edits, provenance, stamp(rewritten_segment, provenance))
+                        }
+                        None => rewritten_segment,
+                    };
                     let accepted = cost(&rewritten) < cost(edits);
                     if let Some(trace) = trace.as_deref_mut() {
                         trace.push(TraceStep::Compact {
@@ -965,6 +1085,64 @@ fn link_index_of(store: &Store, left: u32, right: u32) -> usize {
         .copied()
         .find(|&index| store.links.link(index).right == right)
         .expect("applied link must exist in the link store")
+}
+
+/// The provenance key for a writer's edits. Artifact writers tag with their
+/// (single) artifact format's display string; structural writers tag with their
+/// own name. This is the key compaction (`CompactionRule::format`) and extract
+/// route on to stay per-content-type within a link's merged edit list.
+fn writer_provenance(descriptor: &WriterDescriptor) -> String {
+    match descriptor.formats.first() {
+        Some(format) => format.to_string(),
+        None => descriptor.name.clone(),
+    }
+}
+
+/// Whether a writer is the deferred last-resort fallback (CFM-81).
+fn is_fallback_writer(descriptor: &WriterDescriptor) -> bool {
+    descriptor.fallback
+}
+
+/// Stamp every edit with `provenance`, overwriting any prior tag. Applied to a
+/// writer's output and to compaction rewrites so a content type's segment stays
+/// identifiable after rewriting.
+fn stamp(edits: Vec<Edit>, provenance: &str) -> Vec<Edit> {
+    edits
+        .into_iter()
+        .map(|edit| edit.with_provenance(provenance))
+        .collect()
+}
+
+/// The edits in `edits` tagged with `provenance`, in order.
+fn scoped_edits(edits: &[Edit], provenance: &str) -> Vec<Edit> {
+    edits
+        .iter()
+        .filter(|edit| edit.provenance.as_deref() == Some(provenance))
+        .cloned()
+        .collect()
+}
+
+/// Replace the `provenance`-scoped run within `original` with `replacement`,
+/// keeping all other-provenance edits in their original positions. The
+/// replacement is inserted at the position of the first matching edit; if no
+/// edit currently carries `provenance`, the replacement is appended.
+fn splice_scoped(original: &[Edit], provenance: &str, replacement: Vec<Edit>) -> Vec<Edit> {
+    let mut out = Vec::with_capacity(original.len() + replacement.len());
+    let mut inserted = false;
+    for edit in original {
+        if edit.provenance.as_deref() == Some(provenance) {
+            if !inserted {
+                out.extend(replacement.iter().cloned());
+                inserted = true;
+            }
+        } else {
+            out.push(edit.clone());
+        }
+    }
+    if !inserted {
+        out.extend(replacement);
+    }
+    out
 }
 
 fn writer_matches(
@@ -1254,6 +1432,7 @@ mod tests {
                 formats: vec![],
                 input: Default::default(),
                 shape: ShapeFilter::Any,
+                fallback: false,
             }
         }
 
@@ -1294,6 +1473,297 @@ mod tests {
             }]
             .into())
         }
+    }
+
+    // ── CFM-81 composition fixtures ──────────────────────────────────────
+    //
+    // A parse rule that publishes TWO orthogonal artifacts on the parsed node:
+    // its primary `bytes` artifact (format = descriptor.output) plus a second
+    // artifact in a different format. This is the multi-artifact-per-node shape
+    // that composing dispatch exists to render.
+    struct TwoArtifactParse {
+        primary: ArtifactFormat,
+        secondary: ArtifactFormat,
+    }
+
+    impl ParseRule for TwoArtifactParse {
+        fn descriptor(&self) -> ParseDescriptor {
+            ParseDescriptor {
+                name: "two_artifact".into(),
+                input: Default::default(),
+                output: self.primary.clone(),
+                fires_beneath_settled: false,
+            }
+        }
+
+        fn parse(&self, _item: &ItemRef, _data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+            Ok(ParseOutput {
+                bytes: vec![1],
+                artifacts: vec![binoc_sdk::ParsedArtifact {
+                    format: self.secondary.clone(),
+                    bytes: vec![2],
+                }],
+                ..Default::default()
+            })
+        }
+    }
+
+    /// An artifact writer for one format that emits `verb` `count` times
+    /// (provenance is stamped by the dispatcher, not the writer).
+    struct OneFormatWriter {
+        name: &'static str,
+        format: ArtifactFormat,
+        verb: &'static str,
+        count: usize,
+    }
+
+    impl binoc_sdk::EditListWriter for OneFormatWriter {
+        fn descriptor(&self) -> WriterDescriptor {
+            WriterDescriptor {
+                name: self.name.into(),
+                formats: vec![self.format.clone()],
+                input: Default::default(),
+                shape: ShapeFilter::Any,
+                fallback: false,
+            }
+        }
+
+        fn write(
+            &self,
+            _ctx: &LinkCtx<'_>,
+            _data: &dyn DataAccess,
+        ) -> BinocResult<Option<binoc_sdk::WriteOutput>> {
+            Ok(Some(
+                (0..self.count)
+                    .map(|_| Edit::new(self.verb, serde_json::json!({})))
+                    .collect::<Vec<_>>()
+                    .into(),
+            ))
+        }
+    }
+
+    /// A structural writer (empty formats) emitting one edit.
+    struct StructuralEditWriter;
+
+    impl binoc_sdk::EditListWriter for StructuralEditWriter {
+        fn descriptor(&self) -> WriterDescriptor {
+            WriterDescriptor {
+                name: "structural".into(),
+                formats: vec![],
+                input: Default::default(),
+                shape: ShapeFilter::Any,
+                fallback: false,
+            }
+        }
+
+        fn write(
+            &self,
+            _ctx: &LinkCtx<'_>,
+            _data: &dyn DataAccess,
+        ) -> BinocResult<Option<binoc_sdk::WriteOutput>> {
+            Ok(Some(
+                vec![Edit::new("structural.note", serde_json::json!({}))].into(),
+            ))
+        }
+    }
+
+    /// A compaction rule scoped to one format that collapses its segment to a
+    /// single cheaper edit. It asserts it only ever sees its own format's edits.
+    struct FormatScopedCompaction {
+        format: ArtifactFormat,
+    }
+
+    impl CompactionRule for FormatScopedCompaction {
+        fn name(&self) -> &str {
+            "format_scoped"
+        }
+
+        fn format(&self) -> Option<ArtifactFormat> {
+            Some(self.format.clone())
+        }
+
+        fn rewrite(
+            &self,
+            _ctx: &LinkCtx<'_>,
+            edits: &[Edit],
+            _data: &dyn DataAccess,
+        ) -> BinocResult<Option<Vec<Edit>>> {
+            // Format-scoping guarantee: the rule only receives its own segment.
+            assert!(
+                edits.iter().all(|edit| edit.verb == "artifact_a.edit"),
+                "format-scoped compaction saw a foreign edit: {:?}",
+                edits.iter().map(|e| &e.verb).collect::<Vec<_>>()
+            );
+            Ok(Some(vec![Edit::new(
+                "artifact_a.compacted",
+                serde_json::json!({}),
+            )]))
+        }
+    }
+
+    #[test]
+    fn dispatch_composes_artifacts_then_structural_with_scoped_compaction() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let file = temp.path().join("data.bin");
+        std::fs::write(&file, b"data").unwrap();
+        let data = binoc_sdk::LocalDataAccess::new();
+        let left = data.register_local(&file, "data.bin").unwrap();
+        let right = data.register_local(&file, "data.bin").unwrap();
+        // Two formats whose Display strings sort A < B, so concatenation order is
+        // deterministic and checkable.
+        let format_a = ArtifactFormat::new("test", "artifact_a", 1);
+        let format_b = ArtifactFormat::new("test", "artifact_b", 1);
+        let config = CorrespondenceEngineConfig {
+            rules: vec![
+                CoreRule::Parse(Arc::new(TwoArtifactParse {
+                    primary: format_a.clone(),
+                    secondary: format_b.clone(),
+                })),
+                CoreRule::Pair(Arc::new(SingleRootPair)),
+            ],
+            writers: vec![
+                // Registration order intentionally B-before-A and structural in
+                // the middle, to prove ordering is by format (sorted), not by
+                // registration, and that structural always lands last.
+                Arc::new(OneFormatWriter {
+                    name: "writer_b",
+                    format: format_b.clone(),
+                    verb: "artifact_b.edit",
+                    count: 1,
+                }),
+                Arc::new(StructuralEditWriter),
+                // A emits two edits so the scoped compaction (2 -> 1) genuinely
+                // reduces cost and is accepted.
+                Arc::new(OneFormatWriter {
+                    name: "writer_a",
+                    format: format_a.clone(),
+                    verb: "artifact_a.edit",
+                    count: 2,
+                }),
+            ],
+            compaction: vec![Arc::new(FormatScopedCompaction {
+                format: format_a.clone(),
+            })],
+            annotators: vec![],
+            row_keys: BTreeMap::new(),
+            row_identity_policies: BTreeMap::new(),
+            root_projection: ProjectionHint::default(),
+            dataset_configurator: None,
+        };
+
+        let result = run(&config, left, right, &data).expect("run");
+
+        let (&index, edits) = result
+            .edit_lists
+            .iter()
+            .find(|(_, edits)| !edits.is_empty())
+            .expect("a written link");
+
+        // Composition + deterministic ordering: artifact formats sorted (A then
+        // B), structural last. Compaction rewrote only A's segment.
+        let verbs: Vec<&str> = edits.iter().map(|edit| edit.verb.as_str()).collect();
+        assert_eq!(
+            verbs,
+            vec!["artifact_a.compacted", "artifact_b.edit", "structural.note"]
+        );
+
+        // Provenance: each edit carries its producer's tag. The compacted A edit
+        // keeps A's format provenance; B carries B's format; structural carries
+        // the writer name.
+        assert_eq!(
+            edits[0].provenance.as_deref(),
+            Some(format_a.to_string().as_str())
+        );
+        assert_eq!(
+            edits[1].provenance.as_deref(),
+            Some(format_b.to_string().as_str())
+        );
+        assert_eq!(edits[2].provenance.as_deref(), Some("structural"));
+
+        // Writer-set bookkeeping: all three contributors recorded, no fallback.
+        let writers = result.stats.writer_used.get(&index).expect("writer set");
+        assert_eq!(
+            writers.iter().cloned().collect::<Vec<_>>(),
+            vec![
+                "structural".to_string(),
+                "writer_a".to_string(),
+                "writer_b".to_string()
+            ]
+        );
+
+        assert_eq!(
+            result.stats.compaction_accepted.get("format_scoped"),
+            Some(&1)
+        );
+    }
+
+    #[test]
+    fn fallback_fires_only_when_no_other_writer_claims() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let file = temp.path().join("data.bin");
+        std::fs::write(&file, b"data").unwrap();
+        let data = binoc_sdk::LocalDataAccess::new();
+        let left = data.register_local(&file, "data.bin").unwrap();
+        let right = data.register_local(&file, "data.bin").unwrap();
+
+        struct ClaimingFallback;
+        impl binoc_sdk::EditListWriter for ClaimingFallback {
+            fn descriptor(&self) -> WriterDescriptor {
+                WriterDescriptor {
+                    name: "fallback".into(),
+                    formats: vec![],
+                    input: Default::default(),
+                    shape: ShapeFilter::Any,
+                    fallback: true,
+                }
+            }
+            fn write(
+                &self,
+                _ctx: &LinkCtx<'_>,
+                _data: &dyn DataAccess,
+            ) -> BinocResult<Option<binoc_sdk::WriteOutput>> {
+                Ok(Some(
+                    vec![Edit::new("fallback.edit", serde_json::json!({}))].into(),
+                ))
+            }
+        }
+
+        // With a structural writer that claims, the fallback must not fire.
+        let with_claim = CorrespondenceEngineConfig {
+            rules: vec![CoreRule::Pair(Arc::new(SingleRootPair))],
+            writers: vec![Arc::new(StructuralEditWriter), Arc::new(ClaimingFallback)],
+            compaction: vec![],
+            annotators: vec![],
+            row_keys: BTreeMap::new(),
+            row_identity_policies: BTreeMap::new(),
+            root_projection: ProjectionHint::default(),
+            dataset_configurator: None,
+        };
+        let result = run(&with_claim, left.clone(), right.clone(), &data).expect("run");
+        let writers = result.stats.writer_used.values().next().expect("writers");
+        assert!(writers.contains("structural"));
+        assert!(
+            !writers.contains("fallback"),
+            "fallback fired despite a claim"
+        );
+
+        // With no claiming writer, the fallback is the sole contributor.
+        let only_fallback = CorrespondenceEngineConfig {
+            rules: vec![CoreRule::Pair(Arc::new(SingleRootPair))],
+            writers: vec![Arc::new(ClaimingFallback)],
+            compaction: vec![],
+            annotators: vec![],
+            row_keys: BTreeMap::new(),
+            row_identity_policies: BTreeMap::new(),
+            root_projection: ProjectionHint::default(),
+            dataset_configurator: None,
+        };
+        let result = run(&only_fallback, left, right, &data).expect("run");
+        let writers = result.stats.writer_used.values().next().expect("writers");
+        assert_eq!(
+            writers.iter().cloned().collect::<Vec<_>>(),
+            vec!["fallback"]
+        );
     }
 
     #[test]

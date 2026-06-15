@@ -17,7 +17,9 @@ pub use ir::{
     Annotation, Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode,
     ExtractHint, Segment, Side, Source, Summary, ValuePreview,
 };
-pub use path::{decompose_child, file_name, member_child, segments, DECOMPOSE_SEP, MEMBER_SEP};
+pub use path::{
+    decompose_child, escape_segment, file_name, member_child, segments, DECOMPOSE_SEP, MEMBER_SEP,
+};
 pub use traits::*;
 pub use types::*;
 

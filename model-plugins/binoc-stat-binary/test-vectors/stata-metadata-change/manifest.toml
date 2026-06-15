@@ -1,0 +1,34 @@
+[vector]
+name = "stata-metadata-change"
+description = "A Stata DTA whose rows are unchanged but whose variable label, display format, and dataset label change renders as metadata edits on the leaf, with no spurious cell/row diffs."
+tags = ["stata", "metadata", "tabular"]
+
+[docs]
+summary = "Variable-label, display-format, and dataset-label changes on a .dta leaf render as metadata changes, separate from cell/row diffs."
+setup = """
+Both snapshots carry the same two rows; only the `age` column's label
+(`Age` -> `Age in years`) and display format (`%8.0g` -> `%9.2f`) and the
+dataset label (`Demographics` -> `Subject Demographics`) differ. The renderer
+config maps the column/value-label tags to a higher-significance group than the
+display-format/provenance tags, demonstrating that significance is a config
+concern (AGENTS rule 3), not baked into the writer or IR.
+"""
+
+# Significance is mapped from tags via renderer config. Column- and
+# value-label-set changes weigh higher than display-format / file-provenance.
+[config.output.markdown]
+groups = [
+    { heading = "Significant metadata", tags = ["binoc.metadata.column-label", "binoc.metadata.value-label-set"] },
+    { heading = "Minor metadata", tags = ["binoc.metadata.display-format", "binoc.metadata.provenance"] },
+]
+
+[expected]
+root_action = "modify"
+has_tags = [
+    "binoc.metadata-change",
+    "binoc.metadata.column",
+    "binoc.metadata.table",
+    "binoc.metadata.column-label",
+    "binoc.metadata.display-format",
+]
+significance = "Significant metadata"

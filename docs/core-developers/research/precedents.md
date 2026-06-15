@@ -42,6 +42,17 @@ The serious "don't reimplement" arguments are all per-layer.*
 - **Beyond Compare** (commercial GUI; BC5, 2024): keyed Table Compare
   sessions, format converters, archive handling — interactive, not a batch
   semantic-summary tool.
+- **Nested-path notation precedent.** Java
+  [`JarURLConnection`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/net/JarURLConnection.html)
+  uses `!/` to separate a JAR URL from the path of an entry inside it; that is
+  the strongest prior art for a compact archive-boundary glyph. GDAL's
+  [virtual file systems](https://gdal.org/en/stable/user/virtual_file_systems.html)
+  go further, composing handlers such as `/vsizip/` and `/vsicurl/` and using
+  brace forms for nested archive paths. A 2017
+  [gdal-dev thread](https://lists.osgeo.org/pipermail/gdal-dev/2017-October/047361.html)
+  explicitly treats braces as an ambiguity improvement over older nested-path
+  spelling. Transferable lesson for binoc: a compact left-to-right separator is
+  readable, but portable canonical paths need an escape or bracketing rule.
 
 **Tabular leaves (Move 4, Claim 1).**
 

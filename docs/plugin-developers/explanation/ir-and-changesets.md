@@ -38,7 +38,7 @@ The full set of fields is defined in `binoc-sdk/src/ir.rs`.
 |---|---|---|
 | `action` | open string | What happened: `"add"`, `"remove"`, `"modify"`, `"move"`, `"reorder"`, `"identical"`, or a plugin-defined value. |
 | `item_type` | open string | What the item is: `"directory"`, `"file"`, `"tabular"`, `"zip_archive"`, or a plugin-defined value. Core does not schedule on it. |
-| `path` | string | Logical path within the snapshot, e.g. `"archive.zip/data/file.csv"`. |
+| `path` | string | Logical path within the snapshot, e.g. `"archive.zip/>data/file.csv"`. `/>` marks a decompose boundary; a literal segment beginning with `>` is escaped as `\>`. |
 | `sources` | list | Renderer-visible provenance records with path, side, and optional evidence/action. Moves, copies, merges, and deduplications use the same shape. |
 | `summary` | optional | Human-readable one-liner set during projection. |
 | `tags` | set of strings | Semantic observations such as `binoc.column-reorder` or `binoc.content-changed`. |

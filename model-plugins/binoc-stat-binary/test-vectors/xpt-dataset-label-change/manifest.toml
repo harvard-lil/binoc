@@ -1,0 +1,31 @@
+[vector]
+name = "xpt-dataset-label-change"
+description = "A SAS XPORT container whose DM member is relabeled and gains a row renders the dataset-label metadata change ALONGSIDE the child table's row edit, with the file-level inventory unchanged."
+tags = ["xpt", "multi-table", "metadata", "row-addition"]
+
+[docs]
+summary = "A relabeled .xpt member dataset renders a tier-2 metadata change on the child node, composed with that child's row edit (per-artifact dispatch, CFM-81)."
+setup = """
+Both snapshots carry the same two member datasets (DM, AE), so the container's
+file-level parser metadata is unchanged. The DM member's dataset label changes
+(`Demographics` -> `Subject Demographics`) and DM also gains a row. The child
+table node therefore carries BOTH a `tabular.add_row` edit and a
+`metadata.value_change` (table scope) edit — the proof that per-artifact
+dispatch composes table content and metadata on one node.
+"""
+
+[config.output.markdown]
+groups = [
+    { heading = "Significant metadata", tags = ["binoc.metadata.column-label", "binoc.metadata.value-label-set"] },
+    { heading = "Minor metadata", tags = ["binoc.metadata.display-format", "binoc.metadata.provenance"] },
+]
+
+[expected]
+root_action = "modify"
+has_tags = [
+    "binoc.row-addition",
+    "binoc.metadata-change",
+    "binoc.metadata.table",
+    "binoc.metadata.column-label",
+]
+significance = "Significant metadata"

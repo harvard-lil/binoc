@@ -817,6 +817,9 @@ fn tabular_columns_in_common(left: &TabularData, right: &TabularData) -> Vec<Str
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ItemRef {
+    /// User-meaningful location within a snapshot. `/>` marks a
+    /// decompose boundary; a literal segment beginning with `>` is escaped
+    /// as `\>`.
     pub logical_path: String,
     pub is_dir: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]

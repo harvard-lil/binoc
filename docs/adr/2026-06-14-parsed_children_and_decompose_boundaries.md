@@ -49,8 +49,13 @@ table. A **directory is `/`, not `/>`**: its tree is already navigable, and (lik
 paths inside a zip) it conceptually parses in one go. Only format-decoding
 (zip/tar/gzip, CSV-stack, SQLite, Excel) earns `/>`.
 
-Known limitation: a real path segment literally beginning with `>` is ambiguous
-with the boundary marker. Greenfield-acceptable; documented, not escaped.
+A real path segment literally beginning with `>` is escaped with a leading
+backslash when it follows a member separator. For example, a file named
+`>q1.csv` inside `dir` is written `dir/\>q1.csv`; `dir/>q1.csv` is always a
+decompose boundary followed by `q1.csv`. A literal leading backslash is escaped
+too, so `\>q1.csv` is written `\\>q1.csv`. The SDK path helpers implement this
+rule for callers that build logical paths through `member_child` or
+`decompose_child`.
 
 ### 2. The separator is cosmetic; structure lives in fields and the tree
 
@@ -142,6 +147,15 @@ here so it is not re-litigated.
   indistinguishable from a directory named `data.csv`. The thing that makes
   `archive.zip/...` honest is the *suffix* convention, which does not transfer to
   parsed substructure that never had a filename.
+- **JAR-style `!/`.** Rejected despite useful precedent: Java JAR URLs use it
+  to split a container URL from an entry path, but the marker still needs an
+  escaping story for portable Binoc logical paths and reads less like ordinary
+  path descent than `/` plus a directional marker.
+- **GDAL-style paired braces for nested virtual filesystems.** Rejected as the
+  canonical spelling: braces make ambiguous archive paths explicit and compose
+  well for virtual filesystems, but they turn Binoc's projected node paths into
+  nested expressions rather than left-to-right paths. Worth retaining as prior
+  art if logical paths ever need type-qualified reopen chains.
 - **A distinct fragment glyph only for parse (`#`), `/` for archive expansion.**
   This was the first proposal. Rejected in favor of `/>` for both
   format-decode boundaries, because the meaningful line is

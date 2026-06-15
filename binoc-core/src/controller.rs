@@ -169,15 +169,16 @@ impl Controller {
         let to = Path::new(to_path);
 
         let logical = if to.is_dir() && from.is_dir() {
-            ""
+            String::new()
         } else {
             Self::filename_or_empty(to)
                 .or_else(|| Self::filename_or_empty(from))
-                .unwrap_or("")
+                .map(escape_segment)
+                .unwrap_or_default()
         };
 
-        let left = data.register_local(from, logical)?;
-        let right = data.register_local(to, logical)?;
+        let left = data.register_local(from, &logical)?;
+        let right = data.register_local(to, &logical)?;
         Ok(ItemPair::both(left, right))
     }
 
@@ -299,5 +300,24 @@ mod tests {
         .unwrap();
 
         assert_eq!(pair.logical_path(), "right.txt");
+    }
+
+    #[test]
+    fn root_pair_escapes_leading_decompose_marker_for_file_roots() {
+        let dir = tempfile::tempdir().unwrap();
+        let left = dir.path().join("left.txt");
+        let right = dir.path().join(">right.txt");
+        std::fs::write(&left, "a").unwrap();
+        std::fs::write(&right, "b").unwrap();
+        let data = Arc::new(LocalDataAccess::new_for_diff(&left, &right).unwrap());
+
+        let pair = Controller::make_root_pair(
+            left.to_string_lossy().as_ref(),
+            right.to_string_lossy().as_ref(),
+            &data,
+        )
+        .unwrap();
+
+        assert_eq!(pair.logical_path(), r"\>right.txt");
     }
 }

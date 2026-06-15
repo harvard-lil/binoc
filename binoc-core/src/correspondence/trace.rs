@@ -110,9 +110,12 @@ pub enum TraceStep {
         new_proposer: String,
         settled: bool,
     },
-    /// An edit-list writer explained a link's differences.
+    /// The edit-list writers that explained a link's differences. Under
+    /// composing dispatch (CFM-81) a link can be written by more than one writer
+    /// (one per present artifact format, plus structural contributions), so the
+    /// step records the full set rather than a single writer.
     Write {
-        writer: String,
+        writers: Vec<String>,
         link: usize,
         edits: Vec<Edit>,
     },

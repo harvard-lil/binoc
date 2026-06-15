@@ -58,7 +58,7 @@ flowchart LR
 | **Pair** | A correspondence rule family that proposes links between side items. |
 | **Writer** | A correspondence rule family that explains one link as edits. |
 | **Compaction** | A correspondence rule family that rewrites edit lists only when the replacement strictly reduces cost. |
-| **Logical path** | The user-meaningful path within a snapshot, including interior paths like `archive.zip/data/file.csv`. |
+| **Logical path** | The user-meaningful path within a snapshot, including interior paths like `archive.zip/>data/file.csv`. `/>` marks a decompose boundary; a literal segment beginning with `>` is escaped as `\>`. |
 
 ## IR fields
 

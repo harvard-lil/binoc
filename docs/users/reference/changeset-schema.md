@@ -80,7 +80,7 @@ A node in the projected diff tree — the durable changeset structure consumed b
 | `details` | object (free-form) | no | Structured payload, schema determined by item_type/action convention. |
 | `diagnostics` | array of [`Diagnostic`](#diagnostic) | no | Node-scoped diagnostics emitted during a run. Transient: the controller hoists them into [`Changeset::diagnostics`] at the end of the diff, then clears this field so the output shape stays as one durable top-level diagnostics list. |
 | `item_type` | string | yes | Open string: "directory", "file", "tabular", "zip_archive", etc. No built-in types — conventions, not enforcement. |
-| `path` | string | yes | Location within snapshot (logical path, including interior paths like "archive.zip/data/file.csv"). |
+| `path` | string | yes | Location within snapshot (logical path, including interior paths like "archive.zip/>data/file.csv"). `/>` marks a decompose boundary; a literal segment beginning with `>` is escaped as `\>`. |
 | `source_items` | [`ItemPair`](#itempair) \| null | no | The original item pair associated with this projected node when one is available. Session-scoped working data: available during a live run for rules and extractors that need to re-read source data. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
 | `sources` | array of [`Source`](#source) | no | Renderer-visible provenance for this projected node. |
 | `summary` | [`Summary`](#summary) \| null | no | Optional structured one-liner describing the change. Set during projection; renderers format each [`Segment`] by its type. Build it with [`Summary`]'s builder, or pass a plain string — `impl Into<Summary>` wraps it as a single [`Segment::Text`]. |
@@ -104,7 +104,7 @@ Metadata-only view of one side of a comparison. Carries logical identity and con
 | `content_hash` | string \| null | no |  |
 | `handle` | string | no | Opaque identifier used by DataAccess implementations to locate data. Plugin authors should not create or interpret this value directly. |
 | `is_dir` | boolean | yes |  |
-| `logical_path` | string | yes |  |
+| `logical_path` | string | yes | User-meaningful location within a snapshot. `/>` marks a decompose boundary; a literal segment beginning with `>` is escaped as `\>`. |
 | `media_type` | string \| null | no |  |
 | `projection_hint` | [`ProjectionHint`](#projectionhint) | no | Optional projection metadata supplied by rule packs while they still know the vocabulary. Core carries this through but does not interpret file names, media types, or plugin-specific tags. |
 | `size` | integer \| null | no |  |

@@ -77,6 +77,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
         ],
         writers: vec![
             Arc::new(writers::TabularWriter),
+            Arc::new(writers::ParserMetadataWriter),
             Arc::new(writers::StructuredDocumentWriter),
             Arc::new(writers::TextWriter),
             Arc::new(writers::ContainerWriter),
@@ -251,6 +252,7 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
     }
 
     parts.extend(text_fact_summaries(edits));
+    parts.extend(metadata_summaries(edits));
 
     if parts.is_empty() {
         None
@@ -322,6 +324,41 @@ fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
             }
             _ => {}
         }
+    }
+    parts
+}
+
+/// Summarize `metadata.value_change` edits into prose, grouped by scope so a
+/// column-label change, a table-label change, and a file-level provenance change
+/// each read distinctly.
+fn metadata_summaries(edits: &[Edit]) -> Vec<String> {
+    let mut column = 0usize;
+    let mut table = 0usize;
+    let mut file = 0usize;
+    for edit in edits
+        .iter()
+        .filter(|edit| edit.verb == "metadata.value_change")
+    {
+        match edit.params.get("scope").and_then(|v| v.as_str()) {
+            Some("column") => column += 1,
+            Some("table") => table += 1,
+            Some("file") => file += 1,
+            _ => {}
+        }
+    }
+    let mut parts = Vec::new();
+    if column > 0 {
+        parts.push(count_phrase(
+            column,
+            "column metadata change",
+            "column metadata changes",
+        ));
+    }
+    if table > 0 {
+        parts.push("Table metadata changed".into());
+    }
+    if file > 0 {
+        parts.push("File metadata changed".into());
     }
     parts
 }

@@ -400,7 +400,7 @@ struct StructuralMetrics {
     links_added: u64,
     links_upgraded: u64,
     priorities: BTreeMap<String, u32>,
-    writer_used: BTreeMap<usize, String>,
+    writer_used: BTreeMap<usize, std::collections::BTreeSet<String>>,
     unwritten_links: Vec<usize>,
     compaction_accepted: BTreeMap<String, u64>,
     compaction_rejected: BTreeMap<String, u64>,

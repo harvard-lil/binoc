@@ -549,7 +549,8 @@ function describe(s) {
   if (!s) return '<span class="empty">Press play to begin.</span>';
   const ln = i => base(nodeOf("left", i)?.path ?? "");
   const rn = i => base(nodeOf("right", i)?.path ?? "");
-  const rule = `<span class="rule">${s.rule || s.writer || ""}</span>`;
+  const writerLabel = Array.isArray(s.writers) ? s.writers.join(" + ") : s.writer;
+  const rule = `<span class="rule">${s.rule || writerLabel || ""}</span>`;
   switch (s.kind) {
     case "expand": return `${rule} expanded <b>${base(nodeOf(s.side, s.node)?.path)}</b> into ${s.children.length} child${s.children.length === 1 ? "" : "ren"}.`;
     case "parse": return `${rule} parsed <b>${base(nodeOf(s.side, s.node)?.path)}</b> as <code>${s.format}</code>${s.children && s.children.length ? ` (+${s.children.length} children)` : ""}.`;

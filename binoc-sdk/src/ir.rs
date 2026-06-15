@@ -333,7 +333,8 @@ pub struct DiffNode {
     pub item_type: String,
 
     /// Location within snapshot (logical path, including interior paths
-    /// like "archive.zip/data/file.csv").
+    /// like "archive.zip/>data/file.csv"). `/>` marks a decompose boundary;
+    /// a literal segment beginning with `>` is escaped as `\>`.
     pub path: String,
 
     /// Renderer-visible provenance for this projected node.
