@@ -4,14 +4,27 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **archive.tar.gz/inventory.csv**: 1 edit
-- **bundle.zip/notes.txt**: 1 edit
-- **data.csv**: 2 edits
-- **docs**: 0 edits
-- **docs/readme.txt**: 1 edit
+- **archive.tar.gz/>inventory.csv**: 1 row added
+  - Rows added
+    - row 3: 'sprockets', '20'
+- **bundle.zip/>notes.txt**: 2 lines added; 1 line removed
+  - Line changes
+    - line 1: 'Version 1 notes.' -> 'Version 2 notes.'
+- **data.csv**: 2 cells changed
+  - Changed cells
+    - row 1, column 'age': '30' -> '31'
+    - row 3, column 'city': 'Seattle' -> 'Portland'
+- **docs/readme.txt**: 2 lines added; 2 lines removed
+  - Line changes
+    - line 2: 'This is the original readme.' -> 'This is the updated readme.'
+    - line 4: 'Some will change.' -> 'New content added here.'
 - **docs/old-notes.txt**: Removed
 - **docs/new-file.txt**: Added
-- **icon.bin**: 1 edit
+- **icon.bin**: Binary content changed; 1 extracted string added, 1 extracted string removed
+  - Extracted strings added
+    - '\nFAKEICONv2'
+  - Extracted strings removed
+    - '\nFAKEICONv1'
 - **license-copy.txt**: Copied from license.txt
-- **metrics.csv**: 1 edit
+- **metrics.csv**: Columns reordered
 - **summary.txt**: Moved from report.txt

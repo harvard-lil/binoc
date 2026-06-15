@@ -4,5 +4,9 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tar.gz/records.csv**: 1 edit
-- **data/records.csv**: 1 edit
+- **data.tar.gz/>records.csv**: 1 cell changed
+  - Changed cells
+    - row 2, column 'count': '20' -> '25'
+- **data/records.csv**: 1 row added
+  - Rows added
+    - row 3: '3', 'Charlie'

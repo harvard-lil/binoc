@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,32 +13,46 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular_collection",
+        "item_type": "SQLite database",
         "path": "data.sqlite",
-        "summary": [
+        "sources": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "path": "data.sqlite",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
           }
         ],
-        "tags": [
-          "binoc-sqlite.table-addition",
-          "binoc.schema-change",
-          "binoc.table-addition",
-          "binoc.tabular-collection-change"
+        "summary": [
+          {
+            "uint": 0
+          },
+          {
+            "text": " edits"
+          }
         ],
-        "details": {
-          "edits": [
-            {
-              "params": {
-                "table": "posts"
-              },
-              "verb": "sqlite.add_table"
-            }
-          ]
-        }
+        "children": [
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data.sqlite/>posts",
+            "sources": [
+              {
+                "path": "data.sqlite/>posts",
+                "side": "to",
+                "action": "add"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
       }
     ]
   }

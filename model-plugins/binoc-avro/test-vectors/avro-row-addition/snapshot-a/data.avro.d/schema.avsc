@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "Measurement",
+  "fields": [
+    {"name": "id", "type": "long"},
+    {"name": "label", "type": "string"},
+    {"name": "score", "type": "double"},
+    {"name": "active", "type": "boolean"},
+    {"name": "note", "type": ["null", "string"], "default": null}
+  ]
+}

@@ -82,130 +82,325 @@ pub fn tabular_v1() -> ArtifactFormat {
     ArtifactFormat::new("binoc", "tabular", 1)
 }
 
-/// Standard manifest format for sources that contain multiple logical tables.
+/// Standard format for a generic, format-neutral value tree.
 ///
-/// This artifact is a table-set manifest, not a copy of table data. Individual
-/// table nodes should still publish [`tabular_v1`] artifacts for row/column/cell
-/// analysis.
-pub fn tabular_collection_v1() -> ArtifactFormat {
-    ArtifactFormat::new("binoc", "tabular_collection", 1)
+/// Produced by parsers for tree-structured formats (JSON, JSONL of mixed shape,
+/// YAML, TOML, ...) and consumed by the structured-document writer. This is the
+/// fallback for any structured source that is not a consistently-shaped record
+/// collection. See the typed-record ADR.
+pub fn structured_document_v1() -> ArtifactFormat {
+    ArtifactFormat::new("binoc", "structured_document", 1)
+}
+
+/// Standard format for tier-3 *parser metadata* — facts a parser extracted about
+/// a node that are not the node's primary data payload: source-format identity
+/// and version, file-level properties, cross-table dictionaries, creator/tooling
+/// provenance. Rides as a second artifact on the parsed node (alongside a
+/// `tabular_v1` leaf, or on a multi-table container that has no table of its
+/// own). Consumed by format, like any artifact; carrying it is useful even with
+/// no current consumer (see the tiered-artifact-metadata ADR).
+pub fn parser_metadata_v1() -> ArtifactFormat {
+    ArtifactFormat::new("binoc", "parser_metadata", 1)
+}
+
+// ── Cell value model ────────────────────────────────────────────────
+
+static NULL_VALUE: Value = Value::Null;
+
+/// A single tabular cell value.
+///
+/// Scalars (`Null`/`Bool`/`Number`/`String`) diff by content. `Nested` holds a
+/// canonicalized object/array (object keys sorted recursively) and participates
+/// in diffs by equality only — a changed nested cell is reported as a cell edit,
+/// but binoc does not recurse into it (see the typed-record ADR). `String` cells
+/// are the all-untyped case used by CSV and other typeless sources.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Value {
+    Null,
+    Bool(bool),
+    Number(serde_json::Number),
+    String(String),
+    Nested(Box<serde_json::Value>),
+}
+
+impl Value {
+    /// Build a cell value from arbitrary JSON, canonicalizing nested containers
+    /// so that equality is order-independent.
+    pub fn from_json(value: serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(b) => Value::Bool(b),
+            serde_json::Value::Number(n) => Value::Number(n),
+            serde_json::Value::String(s) => Value::String(s),
+            other => Value::Nested(Box::new(canonicalize_json(other))),
+        }
+    }
+
+    /// The JSON representation of this cell, used when building edit params.
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Value::Null => serde_json::Value::Null,
+            Value::Bool(b) => serde_json::Value::Bool(*b),
+            Value::Number(n) => serde_json::Value::Number(n.clone()),
+            Value::String(s) => serde_json::Value::String(s.clone()),
+            Value::Nested(v) => (**v).clone(),
+        }
+    }
+
+    /// A flat textual rendering for tokenization, CSV serialization, and scoring.
+    pub fn as_text(&self) -> std::borrow::Cow<'_, str> {
+        match self {
+            Value::Null => std::borrow::Cow::Borrowed(""),
+            Value::Bool(true) => std::borrow::Cow::Borrowed("true"),
+            Value::Bool(false) => std::borrow::Cow::Borrowed("false"),
+            Value::Number(n) => std::borrow::Cow::Owned(n.to_string()),
+            Value::String(s) => std::borrow::Cow::Borrowed(s.as_str()),
+            Value::Nested(v) => std::borrow::Cow::Owned(v.to_string()),
+        }
+    }
+
+    /// True when the value carries no content for keying/identity purposes
+    /// (null, or an empty/whitespace string).
+    pub fn is_blank(&self) -> bool {
+        match self {
+            Value::Null => true,
+            Value::String(s) => s.trim().is_empty(),
+            _ => false,
+        }
+    }
+
+    /// Feed a stable, type-tagged byte signature into a hasher (row alignment).
+    pub fn hash_into(&self, hasher: &mut blake3::Hasher) {
+        match self {
+            Value::Null => {
+                hasher.update(&[0]);
+            }
+            Value::Bool(b) => {
+                hasher.update(&[1, *b as u8]);
+            }
+            Value::Number(n) => {
+                hasher.update(&[2]);
+                hasher.update(n.to_string().as_bytes());
+            }
+            Value::String(s) => {
+                hasher.update(&[3]);
+                hasher.update(&(s.len() as u64).to_le_bytes());
+                hasher.update(s.as_bytes());
+            }
+            Value::Nested(v) => {
+                hasher.update(&[4]);
+                hasher.update(v.to_string().as_bytes());
+            }
+        }
+    }
+}
+
+impl Serialize for Value {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_json().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Value::from_json(serde_json::Value::deserialize(
+            deserializer,
+        )?))
+    }
+}
+
+/// Recursively sort object keys so that nested-value equality is order-independent.
+fn canonicalize_json(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(canonicalize_json).collect())
+        }
+        serde_json::Value::Object(map) => {
+            let sorted: BTreeMap<String, serde_json::Value> = map
+                .into_iter()
+                .map(|(k, v)| (k, canonicalize_json(v)))
+                .collect();
+            serde_json::Value::Object(sorted.into_iter().collect())
+        }
+        other => other,
+    }
 }
 
 // ── Format-neutral data types ───────────────────────────────────────
 
-/// Format-neutral tabular data. Produced by CSV, Excel, Parquet, and other
-/// tabular parsers; consumed by tabular writers, compaction rules, and
+/// Format-neutral tabular data: an ordered list of records with a shared column
+/// schema. Produced by CSV, JSON record arrays, JSONL, Excel, Parquet, DB, and
+/// other tabular parsers; consumed by tabular writers, compaction rules, and
 /// extractors.
 ///
 /// This is the codec type for the [`tabular_v1`] artifact format.
 /// Serialize with `serde_json::to_vec`, deserialize with `serde_json::from_slice`.
+///
+/// The shape spectrum (rectangular?, named columns?, typed cells?) is *derived*
+/// from the data via [`TabularData::is_rectangular`],
+/// [`TabularData::has_named_columns`], and the cell `Value` variants — rules gate
+/// their behavior on those facts rather than on artifact subtypes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabularData {
+    /// Column names. For headerless sources these are synthesized positional
+    /// labels and `has_header` is `false`.
     pub headers: Vec<String>,
-    pub rows: Vec<Vec<String>>,
+    pub rows: Vec<Vec<Value>>,
+    /// Whether the source supplied real column names (CSV header, object keys).
+    #[serde(default = "default_true")]
+    pub has_header: bool,
+    /// Declared identity column names, in order. Empty when the source declares
+    /// no key; drives keyed row alignment when present.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub key: Vec<String>,
+    /// Optional source-declared type per column (parallel to `headers`), when the
+    /// source format carries one (DB, Parquet, Stata). Empty means "none".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub column_types: Vec<Option<String>>,
+    /// Optional per-column metadata bag (parallel to `headers`), when the source
+    /// format carries column-scoped facts a generic tabular consumer would not
+    /// otherwise see — labels, display formats, value-label set names, units.
+    /// Each entry is an open object (or `Null` for a column with no metadata).
+    /// Empty means "none". This is tier 1 of the tiered-metadata design (see the
+    /// tiered-artifact-metadata ADR): facts keyed to a *column*.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub column_metadata: Vec<serde_json::Value>,
+    /// Optional table-scoped metadata bag — facts about *this table as a whole*
+    /// that are not per-column and not per-file (a single-table file folds its
+    /// source-format facts here; a table inside a multi-table container carries
+    /// only its own facts, e.g. dataset name/label). `Null` means "none". This
+    /// is tier 2 of the tiered-metadata design.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub table_metadata: serde_json::Value,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl TabularData {
+    /// Construct from all-string cells (CSV and other untyped sources). Cells are
+    /// wrapped in [`Value::String`]; the result is byte-identical in behavior to
+    /// the legacy all-string tabular model.
+    pub fn from_string_rows(headers: Vec<String>, rows: Vec<Vec<String>>) -> Self {
+        Self {
+            headers,
+            rows: rows
+                .into_iter()
+                .map(|row| row.into_iter().map(Value::String).collect())
+                .collect(),
+            has_header: true,
+            key: Vec::new(),
+            column_types: Vec::new(),
+            column_metadata: Vec::new(),
+            table_metadata: serde_json::Value::Null,
+        }
+    }
+
+    /// Construct from typed rows with a named header.
+    pub fn new(headers: Vec<String>, rows: Vec<Vec<Value>>) -> Self {
+        Self {
+            headers,
+            rows,
+            has_header: true,
+            key: Vec::new(),
+            column_types: Vec::new(),
+            column_metadata: Vec::new(),
+            table_metadata: serde_json::Value::Null,
+        }
+    }
+
+    /// Attach tier-1 per-column metadata (parallel to `headers`). Builder-style
+    /// so producers can enrich a table without restating every field.
+    pub fn with_column_metadata(mut self, column_metadata: Vec<serde_json::Value>) -> Self {
+        self.column_metadata = column_metadata;
+        self
+    }
+
+    /// Attach tier-2 table-scoped metadata.
+    pub fn with_table_metadata(mut self, table_metadata: serde_json::Value) -> Self {
+        self.table_metadata = table_metadata;
+        self
+    }
+
     pub fn column_index(&self, name: &str) -> Option<usize> {
         self.headers.iter().position(|h| h == name)
     }
 
-    pub fn column_values(&self, name: &str) -> Option<Vec<&str>> {
+    pub fn column_values(&self, name: &str) -> Option<Vec<&Value>> {
         let idx = self.column_index(name)?;
         Some(
             self.rows
                 .iter()
-                .map(|r| r.get(idx).map(|s| s.as_str()).unwrap_or(""))
+                .map(|r| r.get(idx).unwrap_or(&NULL_VALUE))
                 .collect(),
         )
+    }
+
+    /// Every row has arity equal to the column count.
+    pub fn is_rectangular(&self) -> bool {
+        let width = self.headers.len();
+        self.rows.iter().all(|row| row.len() == width)
+    }
+
+    /// The source supplied real, usable column names.
+    pub fn has_named_columns(&self) -> bool {
+        self.has_header && !self.headers.is_empty()
+    }
+
+    /// Columns can be identified across rows and snapshots — the precondition for
+    /// cell-grain and column-grain edits. Otherwise the writer degrades to
+    /// row-grain output.
+    pub fn stable_columns(&self) -> bool {
+        self.has_named_columns() || self.is_rectangular()
     }
 
     pub fn to_csv(&self) -> String {
         let mut out = self.headers.join(",");
         out.push('\n');
         for row in &self.rows {
-            out.push_str(&row.join(","));
+            let cells: Vec<String> = row.iter().map(|v| v.as_text().into_owned()).collect();
+            out.push_str(&cells.join(","));
             out.push('\n');
         }
         out
     }
 }
 
-/// Format-neutral manifest for a source that contains multiple logical tables.
+/// Generic format-neutral value tree. Codec type for [`structured_document_v1`].
 ///
-/// This is the codec type for the [`tabular_collection_v1`] artifact format.
-/// Serialize with `serde_json::to_vec`, deserialize with `serde_json::from_slice`.
+/// All source formats transcode their content into a single `serde_json::Value`
+/// tree; `format` records the origin ("json", "yaml", "toml", ...) and `source`
+/// is an open bag of serialization facts (key order, indentation, BOM, trailing
+/// newline) that consumers ignore when unknown.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TabularCollectionData {
-    pub tables: Vec<TableMember>,
+pub struct StructuredDocument {
+    pub value: serde_json::Value,
+    pub format: String,
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub source: serde_json::Value,
 }
 
-/// One logical table within a [`TabularCollectionData`] manifest.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TableMember {
-    /// Stable identity used to match this table across snapshots.
-    pub logical_name: String,
-    /// Path of the table node in the IR.
-    pub node_path: String,
-    /// Provenance inside the source item.
-    pub source: TableSourceLocation,
-    /// Cheap shape summary. Full table data lives in `tabular_v1`.
-    pub shape: TableShape,
-    /// Optional plugin/domain metadata. Consumers must ignore unknown fields.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub metadata: BTreeMap<String, serde_json::Value>,
-}
-
-/// Where a logical table came from inside a source item.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TableSourceLocation {
-    /// Logical path of the source item in the Binoc tree.
-    pub item_path: String,
-    /// Open string such as "sheet", "sqlite_table", or "csv_region".
-    pub kind: String,
-    /// Source-specific locator values, such as `{"table": "products"}`.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub locator: BTreeMap<String, serde_json::Value>,
-}
-
-/// Shape summary for one logical table.
+/// Codec type for [`parser_metadata_v1`] — tier-3 parser metadata.
+///
+/// `format` is the producer's source-format identity (e.g. `"stata_dta"`,
+/// `"sas7bdat"`, `"sas_xport"`), so a consumer can interpret `value` without
+/// guessing. `value` is an open bag of parser-level facts; consumers diff it
+/// generically and ignore keys they do not recognize. Deliberately flat: this
+/// is "a matching subtype for a record artifact" today, and may grow typed
+/// structure in a future version rather than via artifact-format inheritance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TableShape {
-    pub columns: Vec<String>,
-    pub row_count: Option<u64>,
+pub struct ParserMetadata {
+    pub format: String,
+    pub value: serde_json::Value,
 }
 
-/// A pair of tabular collection manifests (left/right sides of a comparison).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TabularCollectionDataPair {
-    pub left: Option<TabularCollectionData>,
-    pub right: Option<TabularCollectionData>,
-}
-
-impl TabularCollectionDataPair {
-    /// Build a `TabularCollectionDataPair` from [`tabular_collection_v1`]
-    /// artifacts on a node.
-    pub fn from_artifacts(
-        node: &crate::ir::DiffNode,
-        data: &dyn crate::traits::DataAccess,
-    ) -> Option<Self> {
-        let fmt = tabular_collection_v1();
-        let left = node
-            .artifacts
-            .iter()
-            .find(|a| a.format == fmt && a.subject == ArtifactSubject::Left)
-            .and_then(|desc| data.get_artifact(desc).ok()?)
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        let right = node
-            .artifacts
-            .iter()
-            .find(|a| a.format == fmt && a.subject == ArtifactSubject::Right)
-            .and_then(|desc| data.get_artifact(desc).ok()?)
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        if left.is_none() && right.is_none() {
-            return None;
+impl ParserMetadata {
+    pub fn new(format: impl Into<String>, value: serde_json::Value) -> Self {
+        Self {
+            format: format.into(),
+            value,
         }
-        Some(Self { left, right })
     }
 }
 
@@ -490,10 +685,7 @@ pub fn tabular_extract(
             if left_len >= right.rows.len() {
                 return Some(ExtractResult::Text("No rows added.\n".into()));
             }
-            let added = TabularData {
-                headers: right.headers.clone(),
-                rows: right.rows[left_len..].to_vec(),
-            };
+            let added = TabularData::new(right.headers.clone(), right.rows[left_len..].to_vec());
             Some(ExtractResult::Text(added.to_csv()))
         }
         "rows_removed" => {
@@ -502,10 +694,7 @@ pub fn tabular_extract(
             if right_len >= left.rows.len() {
                 return Some(ExtractResult::Text("No rows removed.\n".into()));
             }
-            let removed = TabularData {
-                headers: left.headers.clone(),
-                rows: left.rows[right_len..].to_vec(),
-            };
+            let removed = TabularData::new(left.headers.clone(), left.rows[right_len..].to_vec());
             Some(ExtractResult::Text(removed.to_csv()))
         }
         "cells_changed" => {
@@ -519,10 +708,10 @@ pub fn tabular_extract(
                 for col in &common_cols {
                     let li = left.column_index(col)?;
                     let ri = right.column_index(col)?;
-                    let lv = left.rows[i].get(li).map(|s| s.as_str()).unwrap_or("");
-                    let rv = right.rows[i].get(ri).map(|s| s.as_str()).unwrap_or("");
+                    let lv = left.rows[i].get(li).unwrap_or(&NULL_VALUE);
+                    let rv = right.rows[i].get(ri).unwrap_or(&NULL_VALUE);
                     if lv != rv {
-                        out.push_str(&format!("{i},{col},{lv},{rv}\n"));
+                        out.push_str(&format!("{i},{col},{},{}\n", lv.as_text(), rv.as_text()));
                     }
                 }
             }
@@ -547,7 +736,7 @@ pub fn tabular_extract(
                 out.push_str(&format!("{col}\n"));
                 if let Some(vals) = right.column_values(col) {
                     for val in vals {
-                        out.push_str(&format!("  {val}\n"));
+                        out.push_str(&format!("  {}\n", val.as_text()));
                     }
                 }
             }
@@ -572,7 +761,7 @@ pub fn tabular_extract(
                 out.push_str(&format!("{col}\n"));
                 if let Some(vals) = left.column_values(col) {
                     for val in vals {
-                        out.push_str(&format!("  {val}\n"));
+                        out.push_str(&format!("  {}\n", val.as_text()));
                     }
                 }
             }

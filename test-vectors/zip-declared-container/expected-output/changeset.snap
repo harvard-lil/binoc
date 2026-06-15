@@ -1,0 +1,87 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "file",
+        "path": "outer.zip",
+        "children": [
+          {
+            "action": "move",
+            "item_type": "file",
+            "path": "outer.zip/>records.zip",
+            "sources": [
+              {
+                "path": "outer.zip/>records-old.zip",
+                "side": "from",
+                "evidence": "binoc.pair.declared",
+                "action": "move"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "outer.zip/>records-old.zip",
+                  "snapshot": "from"
+                }
+              }
+            ],
+            "tags": [
+              "binoc.declared-correspondence",
+              "binoc.move"
+            ],
+            "children": [
+              {
+                "action": "modify",
+                "item_type": "tabular",
+                "path": "outer.zip/>records.zip/>data.csv",
+                "sources": [
+                  {
+                    "path": "outer.zip/>records-old.zip/>data.csv",
+                    "side": "from",
+                    "evidence": "binoc.pair.name",
+                    "action": "modify"
+                  }
+                ],
+                "summary": [
+                  {
+                    "text": "1 cell changed"
+                  }
+                ],
+                "tags": [
+                  "binoc.cell-change"
+                ],
+                "details": {
+                  "edits": [
+                    {
+                      "params": {
+                        "column": "score",
+                        "from": "24",
+                        "row": 1,
+                        "to": "25"
+                      },
+                      "verb": "tabular.edit_cell"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

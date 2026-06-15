@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "text",
@@ -14,12 +15,17 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "text",
         "path": "story.txt",
+        "sources": [
+          {
+            "path": "story.txt",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "2 lines added; 1 line removed"
           }
         ],
         "tags": [

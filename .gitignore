@@ -1,6 +1,7 @@
 /target
 /site
 /docs/sdk/
+/docs/users/explanation/replays/
 test-vectors-materialized/
 *.snap.new
 *.swp
@@ -8,3 +9,5 @@ test-vectors-materialized/
 *.pyc
 *.so
 /binoc-python/python/binoc/lib_binoc.dylib.dSYM
+/local/
+/.claude

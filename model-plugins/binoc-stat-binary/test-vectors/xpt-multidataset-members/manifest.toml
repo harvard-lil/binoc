@@ -1,13 +1,11 @@
 [vector]
 name = "xpt-multidataset-members"
-description = "Multi-member SAS XPORT files become a tabular collection so later datasets are diffed instead of silently dropped."
-tags = ["xpt", "tabular-collection", "multi-table", "row-addition", "table-addition"]
+description = "Multi-member SAS XPORT files decompose into one tabular child per dataset, so a later dataset is diffed (and a new dataset added) instead of silently dropped."
+tags = ["xpt", "multi-table", "row-addition", "table-addition"]
 
 [expected]
 root_action = "modify"
 has_tags = [
-    "binoc.tabular-collection-change",
-    "binoc.table-change",
-    "binoc.table-addition",
+    "binoc.content-changed",
     "binoc.row-addition",
 ]

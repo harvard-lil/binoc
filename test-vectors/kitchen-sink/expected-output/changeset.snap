@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,19 +13,24 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "archive.tar.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "tabular",
-            "path": "archive.tar.gz/inventory.csv",
+            "path": "archive.tar.gz/>inventory.csv",
+            "sources": [
+              {
+                "path": "archive.tar.gz/>inventory.csv",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "1 row added"
               }
             ],
             "tags": [
@@ -53,19 +59,24 @@ expression: "&stable_changeset"
       },
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "bundle.zip",
         "children": [
           {
             "action": "modify",
             "item_type": "text",
-            "path": "bundle.zip/notes.txt",
+            "path": "bundle.zip/>notes.txt",
+            "sources": [
+              {
+                "path": "bundle.zip/>notes.txt",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "2 lines added; 1 line removed"
               }
             ],
             "tags": [
@@ -101,12 +112,17 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 2
-          },
-          {
-            "text": " edits"
+            "text": "2 cells changed"
           }
         ],
         "tags": [
@@ -139,6 +155,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "directory",
         "path": "docs",
+        "sources": [
+          {
+            "path": "docs",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
             "uint": 0
@@ -152,12 +176,17 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "text",
             "path": "docs/readme.txt",
+            "sources": [
+              {
+                "path": "docs/readme.txt",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "2 lines added; 2 lines removed"
               }
             ],
             "tags": [
@@ -196,6 +225,13 @@ expression: "&stable_changeset"
             "action": "remove",
             "item_type": "text",
             "path": "docs/old-notes.txt",
+            "sources": [
+              {
+                "path": "docs/old-notes.txt",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
             "summary": [
               {
                 "text": "Removed"
@@ -209,6 +245,13 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "text",
             "path": "docs/new-file.txt",
+            "sources": [
+              {
+                "path": "docs/new-file.txt",
+                "side": "to",
+                "action": "add"
+              }
+            ],
             "summary": [
               {
                 "text": "Added"
@@ -224,21 +267,43 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "icon.bin",
+        "sources": [
+          {
+            "path": "icon.bin",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "Binary content changed; 1 extracted string added, 1 extracted string removed"
           }
         ],
         "tags": [
-          "binoc.content-changed"
+          "binoc.content-changed",
+          "binoc.strings-changed"
         ],
         "details": {
           "edits": [
             {
-              "params": {},
+              "params": {
+                "strings": {
+                  "added": [
+                    "\\nFAKEICONv2"
+                  ],
+                  "added_count": 1,
+                  "examples_truncated": false,
+                  "left_count": 2,
+                  "min_length": 4,
+                  "removed": [
+                    "\\nFAKEICONv1"
+                  ],
+                  "removed_count": 1,
+                  "right_count": 2,
+                  "scan_truncated": false
+                }
+              },
               "verb": "binary.contents-differ"
             }
           ]
@@ -248,7 +313,14 @@ expression: "&stable_changeset"
         "action": "copy",
         "item_type": "text",
         "path": "license-copy.txt",
-        "source_path": "license.txt",
+        "sources": [
+          {
+            "path": "license.txt",
+            "side": "from",
+            "evidence": "binoc.pair.copy",
+            "action": "copy"
+          }
+        ],
         "summary": [
           {
             "text": "Copied from "
@@ -268,12 +340,17 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "tabular",
         "path": "metrics.csv",
+        "sources": [
+          {
+            "path": "metrics.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "Columns reordered"
           }
         ],
         "tags": [
@@ -299,7 +376,14 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "text",
         "path": "summary.txt",
-        "source_path": "report.txt",
+        "sources": [
+          {
+            "path": "report.txt",
+            "side": "from",
+            "evidence": "binoc.pair.hash",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
             "text": "Moved from "

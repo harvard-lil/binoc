@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,6 +15,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "directory",
         "path": "data",
+        "sources": [
+          {
+            "path": "data",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
             "uint": 0
@@ -27,12 +36,17 @@ expression: "&stable_changeset"
             "action": "modify",
             "item_type": "tabular",
             "path": "data/records.csv",
+            "sources": [
+              {
+                "path": "data/records.csv",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "1 row added"
               }
             ],
             "tags": [
@@ -61,6 +75,13 @@ expression: "&stable_changeset"
             "action": "add",
             "item_type": "tabular",
             "path": "data/extra.csv",
+            "sources": [
+              {
+                "path": "data/extra.csv",
+                "side": "to",
+                "action": "add"
+              }
+            ],
             "summary": [
               {
                 "text": "Added"
@@ -74,19 +95,24 @@ expression: "&stable_changeset"
       },
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "directory",
         "path": "docs",
         "children": [
           {
             "action": "modify",
             "item_type": "text",
             "path": "docs/readme.txt",
+            "sources": [
+              {
+                "path": "docs/readme.txt",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "2 lines added; 1 line removed"
               }
             ],
             "tags": [

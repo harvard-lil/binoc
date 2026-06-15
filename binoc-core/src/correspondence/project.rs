@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use binoc_sdk::{
     edit_count_summary, file_name, Changeset, DiffNode, Edit, NodeId, ProjectionAnnotationContext,
-    ProjectionAnnotator, ProjectionHint, Side, Summary, TreeSide,
+    ProjectionAnnotator, ProjectionHint, Side, Source, Summary, TreeSide,
 };
 use serde_json::json;
 
@@ -14,7 +14,7 @@ pub struct ActionLine {
     pub link_index: Option<usize>,
     pub action: String,
     pub path: String,
-    pub source_path: Option<String>,
+    pub sources: Vec<Source>,
     pub evidence: Option<String>,
     pub verbs: Vec<String>,
     pub edits: Vec<Edit>,
@@ -27,6 +27,10 @@ pub struct ActionLine {
 #[derive(Debug, Clone, Default)]
 pub struct Projection {
     pub lines: Vec<ActionLine>,
+    /// `item_type` for each container path (a node with children), so projection
+    /// can label intermediate ancestor nodes that have no change-line of their
+    /// own. Falls back to `"container"` when a node set no explicit `item_type`.
+    pub container_item_types: BTreeMap<String, String>,
 }
 
 impl Projection {
@@ -48,9 +52,13 @@ impl Projection {
             } else {
                 &line.path
             });
-            if let Some(source) = &line.source_path {
+            if let Some(source) = line.sources.iter().find(|source| source.side == Side::From) {
                 out.push_str(" <- ");
-                out.push_str(if source.is_empty() { "<root>" } else { source });
+                out.push_str(if source.path.is_empty() {
+                    "<root>"
+                } else {
+                    &source.path
+                });
             }
             if let Some(evidence) = &line.evidence {
                 out.push_str(&format!(" [{evidence}]"));
@@ -78,7 +86,12 @@ impl Projection {
         );
         let mut merged_paths = BTreeSet::new();
         for line in self.changed() {
-            insert_line(&mut root, line, &mut merged_paths);
+            insert_line(
+                &mut root,
+                line,
+                &mut merged_paths,
+                &self.container_item_types,
+            );
         }
         Changeset::new(from, to, Some(root))
     }
@@ -177,13 +190,11 @@ pub fn project(
             .unwrap_or_else(|| default_summary(&action, left_path, &visible_edits));
         let line = ActionLine {
             link_index: Some(index),
-            action,
+            action: action.clone(),
             path: right_path.clone(),
-            source_path: if moved || copied {
-                Some(left_path.clone())
-            } else {
-                None
-            },
+            sources: vec![Source::new(left_path.clone(), Side::From)
+                .with_evidence(link.evidence.clone())
+                .with_action(action)],
             evidence: Some(link.evidence.clone()),
             verbs: edits.iter().map(|edit| edit.verb.clone()).collect(),
             edits: visible_edits,
@@ -232,8 +243,16 @@ pub fn project(
                 ActionLine {
                     link_index: None,
                     action: action.to_string(),
-                    path,
-                    source_path: None,
+                    path: path.clone(),
+                    sources: vec![Source::new(
+                        path,
+                        if side == TreeSide::Left {
+                            Side::From
+                        } else {
+                            Side::To
+                        },
+                    )
+                    .with_action(action)],
                     evidence: None,
                     verbs: Vec::new(),
                     edits: Vec::new(),
@@ -248,7 +267,39 @@ pub fn project(
         lines.extend(node_lines.into_iter().map(|(_, line)| line));
     }
 
-    Projection { lines }
+    // Record the item_type of every container node (one with children) so the
+    // tree builder can label interior ancestor nodes that have no change-line.
+    // The right side wins where a path exists on both.
+    let mut container_item_types = BTreeMap::new();
+    for side in [TreeSide::Left, TreeSide::Right] {
+        let tree = store.tree(side);
+        for index in 0..tree.len() as u32 {
+            let node = tree.node(index);
+            if node.children.is_empty() {
+                continue;
+            }
+            let item_type = node
+                .projection
+                .item_type
+                .clone()
+                .unwrap_or_else(|| "container".into());
+            match side {
+                TreeSide::Left => {
+                    container_item_types
+                        .entry(node.item.logical_path.clone())
+                        .or_insert(item_type);
+                }
+                TreeSide::Right => {
+                    container_item_types.insert(node.item.logical_path.clone(), item_type);
+                }
+            }
+        }
+    }
+
+    Projection {
+        lines,
+        container_item_types,
+    }
 }
 
 fn default_summary(action: &str, left_path: &str, edits: &[Edit]) -> Summary {
@@ -271,18 +322,7 @@ fn default_summary(action: &str, left_path: &str, edits: &[Edit]) -> Summary {
 }
 
 fn overlay_projection(target: &mut ProjectionHint, source: &ProjectionHint) {
-    if source.action.is_some() {
-        target.action = source.action.clone();
-    }
-    if source.item_type.is_some() {
-        target.item_type = source.item_type.clone();
-    }
-    if source.summary.is_some() {
-        target.summary = source.summary.clone();
-    }
-    target.tags.extend(source.tags.iter().cloned());
-    target.tags.sort();
-    target.tags.dedup();
+    target.overlay_from(source);
 }
 
 fn apply_annotations(
@@ -308,17 +348,30 @@ fn carried_path_change(store: &Store, left: u32, right: u32) -> bool {
     }
 }
 
-fn insert_line(root: &mut DiffNode, line: &ActionLine, merged_paths: &mut BTreeSet<String>) {
-    let segments: Vec<&str> = line
-        .path
-        .split('/')
-        .filter(|segment| !segment.is_empty())
+fn insert_line(
+    root: &mut DiffNode,
+    line: &ActionLine,
+    merged_paths: &mut BTreeSet<String>,
+    container_item_types: &BTreeMap<String, String>,
+) {
+    // Each yielded `cumulative` preserves the original separators (`/` for
+    // membership, `/>` for decompose boundaries), so it matches node paths and
+    // can be used directly as the projection node key.
+    let segments: Vec<&str> = binoc_sdk::segments(&line.path)
+        .into_iter()
+        .map(|(cumulative, _name)| cumulative)
         .collect();
     let had_projected_line = !merged_paths.insert(line.path.clone());
     if segments.is_empty() {
         merge_line_into_node(root, line, had_projected_line);
     } else {
-        insert_segments(root, &segments, line, had_projected_line);
+        insert_segments(
+            root,
+            &segments,
+            line,
+            had_projected_line,
+            container_item_types,
+        );
     }
 }
 
@@ -327,21 +380,31 @@ fn insert_segments(
     segments: &[&str],
     line: &ActionLine,
     had_projected_line: bool,
+    container_item_types: &BTreeMap<String, String>,
 ) {
-    let current_path = if parent.path.is_empty() {
-        segments[0].to_string()
-    } else {
-        format!("{}/{}", parent.path, segments[0])
-    };
+    let current_path = segments[0].to_string();
     let is_leaf = segments.len() == 1;
     let position = parent
         .children
         .iter()
         .position(|child| child.path == current_path)
         .unwrap_or_else(|| {
+            // A node skeleton created only to host descendants is an interior
+            // container. Use the kind the producing rule named for this path
+            // (e.g. "SQLite database"); fall back to the generic "container".
+            // A leaf gets its real item_type from the line via
+            // `merge_line_into_node` below.
+            let item_type = if is_leaf {
+                "item"
+            } else {
+                container_item_types
+                    .get(&current_path)
+                    .map(String::as_str)
+                    .unwrap_or("container")
+            };
             parent
                 .children
-                .push(DiffNode::new("modify", "item", current_path.clone()));
+                .push(DiffNode::new("modify", item_type, current_path.clone()));
             parent.children.len() - 1
         });
     if is_leaf {
@@ -352,6 +415,7 @@ fn insert_segments(
             &segments[1..],
             line,
             had_projected_line,
+            container_item_types,
         );
     }
 }
@@ -368,7 +432,7 @@ fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_li
         .item_type
         .clone()
         .unwrap_or_else(|| if line.container { "container" } else { "item" }.into());
-    node.source_path = line.source_path.clone();
+    node.sources = line.sources.clone();
     node.summary = Some(line.summary.clone());
     node.tags.extend(line.projection.tags.iter().cloned());
     if !line.edits.is_empty() {
@@ -392,29 +456,10 @@ fn merge_projected_collision(node: &mut DiffNode, line: &ActionLine) {
             .clone()
             .unwrap_or_else(|| if line.container { "container" } else { "item" }.into());
     }
-    if let Some(source_path) = &line.source_path {
-        merge_source_path(node, source_path);
-    }
+    merge_sources(node, &line.sources);
     node.tags.extend(line.projection.tags.iter().cloned());
     append_visible_edits(node, &line.edits);
-    node.summary = Some(
-        Summary::new().count(
-            node.details
-                .get("projection_line_count")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(1)
-                + 1,
-            "projected change",
-        ),
-    );
-    let count = node
-        .details
-        .get("projection_line_count")
-        .and_then(|value| value.as_u64())
-        .unwrap_or(1)
-        + 1;
-    node.details
-        .insert("projection_line_count".into(), serde_json::json!(count));
+    node.summary = Some(merged_summary(&node.sources));
 }
 
 fn merge_action(left: &str, right: &str) -> &'static str {
@@ -433,29 +478,21 @@ fn merge_action(left: &str, right: &str) -> &'static str {
     }
 }
 
-fn merge_source_path(node: &mut DiffNode, source_path: &str) {
-    let mut sources: Vec<String> = node
-        .details
-        .get("source_paths")
-        .and_then(|value| value.as_array())
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(|value| value.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-    if let Some(existing) = &node.source_path {
-        sources.push(existing.clone());
+fn merge_sources(node: &mut DiffNode, sources: &[Source]) {
+    node.sources.extend(sources.iter().cloned());
+    node.sources.sort();
+    node.sources.dedup();
+}
+
+fn merged_summary(sources: &[Source]) -> Summary {
+    let mut summary = Summary::new().text("Merged from ");
+    for (index, source) in sources.iter().enumerate() {
+        if index > 0 {
+            summary = summary.text(", ");
+        }
+        summary = summary.path(source.path.clone(), source.side);
     }
-    sources.push(source_path.to_string());
-    sources.sort();
-    sources.dedup();
-    node.source_path = sources.first().cloned();
-    if sources.len() > 1 {
-        node.details
-            .insert("source_paths".into(), serde_json::json!(sources));
-    }
+    summary
 }
 
 fn append_visible_edits(node: &mut DiffNode, edits: &[Edit]) {
@@ -548,5 +585,83 @@ mod tests {
         assert_eq!(node.item_type, "custom-item");
         assert!(node.tags.contains("test.tag"));
         assert_eq!(node.details["edits"][0]["verb"], json!("test.edit"));
+    }
+
+    #[test]
+    fn projected_collision_keeps_first_class_sources() {
+        let mut store = Store::new(
+            ItemRef {
+                is_dir: true,
+                projection_hint: ProjectionHint::default().item_type("tree"),
+                ..item("")
+            },
+            ItemRef {
+                is_dir: true,
+                projection_hint: ProjectionHint::default().item_type("tree"),
+                ..item("")
+            },
+            ProjectionHint::default().item_type("tree"),
+        );
+        let left_a = store.left.add_child(
+            0,
+            item("a.txt"),
+            ProjectionHint::default().item_type("leaf"),
+        );
+        let left_b = store.left.add_child(
+            0,
+            item("b.txt"),
+            ProjectionHint::default().item_type("leaf"),
+        );
+        let right = store.right.add_child(
+            0,
+            item("merged.txt"),
+            ProjectionHint::default().item_type("leaf"),
+        );
+        store.links.apply(
+            LinkProposal {
+                left: left_a,
+                right,
+                evidence: "test.merge".into(),
+                settled: false,
+                projection: ProjectionHint::default(),
+            },
+            "test-rule",
+            1,
+        );
+        store.links.apply(
+            LinkProposal {
+                left: left_b,
+                right,
+                evidence: "test.merge".into(),
+                settled: false,
+                projection: ProjectionHint::default(),
+            },
+            "test-rule",
+            1,
+        );
+
+        let changeset = project(&store, &BTreeMap::new(), &[]).to_changeset("left", "right");
+        let root = changeset.root.expect("root");
+        let node = root
+            .children
+            .iter()
+            .find(|node| node.path == "merged.txt")
+            .unwrap();
+
+        assert_eq!(node.sources.len(), 2);
+        assert!(node
+            .sources
+            .iter()
+            .any(|source| source.path == "a.txt" && source.side == Side::From));
+        assert!(node
+            .sources
+            .iter()
+            .any(|source| source.path == "b.txt" && source.side == Side::From));
+        assert_eq!(
+            node.summary.as_ref().map(Summary::plain_text).as_deref(),
+            Some("Merged from a.txt, b.txt")
+        );
+        assert!(!node.details.contains_key("projection_line_count"));
+        assert!(!node.details.contains_key("source_paths"));
     }
 }

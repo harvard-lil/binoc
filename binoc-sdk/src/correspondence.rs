@@ -87,6 +87,23 @@ impl ProjectionHint {
         self.tags.sort();
         self.tags.dedup();
     }
+
+    /// Overlay `other` onto `self`: every field `other` sets wins (unlike
+    /// [`merge_from`](Self::merge_from), which only fills gaps). Tags union.
+    pub fn overlay_from(&mut self, other: &ProjectionHint) {
+        if other.action.is_some() {
+            self.action = other.action.clone();
+        }
+        if other.item_type.is_some() {
+            self.item_type = other.item_type.clone();
+        }
+        if other.summary.is_some() {
+            self.summary = other.summary.clone();
+        }
+        self.tags.extend(other.tags.iter().cloned());
+        self.tags.sort();
+        self.tags.dedup();
+    }
 }
 
 pub struct ProjectionAnnotationContext<'a> {
@@ -242,8 +259,6 @@ pub struct ParseDescriptor {
     pub input: NodeMatch,
     pub output: ArtifactFormat,
     #[serde(default)]
-    pub requires_link: bool,
-    #[serde(default)]
     pub fires_beneath_settled: bool,
 }
 
@@ -258,6 +273,39 @@ pub struct ParseOutput {
     pub bytes: Vec<u8>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<ParsedChild>,
+    /// Additional artifacts to publish on the parsed node itself, beyond the
+    /// primary `bytes` artifact (whose format is the descriptor's `output`).
+    /// This is the channel for a second artifact on a node — e.g. a
+    /// `parser_metadata_v1` bag riding alongside a `tabular_v1` leaf, or on a
+    /// container that publishes no primary `bytes`. Each rides as its own
+    /// format, diffed independently by a format-matched writer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<ParsedArtifact>,
+    /// Projection overlay for the node being parsed. A container parse (one that
+    /// emits children and no parent artifact) uses this to name what kind of
+    /// container the node is — e.g. `item_type("SQLite database")` — since the
+    /// node would otherwise inherit only an extension-based guess. Fields set
+    /// here win over the node's existing projection (see
+    /// [`ProjectionHint::overlay_from`]).
+    #[serde(default, skip_serializing_if = "projection_hint_is_default")]
+    pub projection: ProjectionHint,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ParsedChild {
+    pub item: ItemRef,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<ParsedArtifact>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ParsedArtifact {
+    pub format: ArtifactFormat,
+    pub bytes: Vec<u8>,
 }
 
 impl From<Vec<u8>> for ParseOutput {
@@ -265,6 +313,9 @@ impl From<Vec<u8>> for ParseOutput {
         Self {
             bytes,
             diagnostics: Vec::new(),
+            children: Vec::new(),
+            artifacts: Vec::new(),
+            projection: ProjectionHint::default(),
         }
     }
 }
@@ -275,6 +326,15 @@ pub struct PairDescriptor {
     pub name: String,
     #[serde(default)]
     pub emits: Vec<String>,
+    /// Artifact formats this rule consumes pre-link to decide pairings.
+    ///
+    /// This is a declared read-set, the pairing-side analogue of a parse
+    /// rule's `output`. A rule that pairs nodes by their parsed content (rather
+    /// than by raw bytes, hashes, or paths) lists those formats here so the
+    /// engine knows the artifacts must be materialized on unlinked nodes before
+    /// the rule runs. Rules that read no artifacts leave this empty.
+    #[serde(default)]
+    pub reads: Vec<ArtifactFormat>,
     #[serde(default)]
     pub sees_beneath_settled: bool,
 }
@@ -481,12 +541,12 @@ impl From<Vec<Edit>> for WriteOutput {
 
 pub trait CompactionRule: Send + Sync {
     fn name(&self) -> &str;
-    fn rewrite(&self, edits: &[Edit]) -> Option<Vec<Edit>>;
-}
-
-/// Last path segment of a logical path.
-pub fn file_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
+    fn rewrite(
+        &self,
+        ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>>;
 }
 
 /// Generic summary for edit-count fallback projection.

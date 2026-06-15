@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <row>
+    <row _id="row-1" _uuid="00000000-0000-0000-0000-000000000001">
+      <station_id>0427</station_id>
+      <station_name>North Bridge</station_name>
+      <gauge_height>12.4</gauge_height>
+      <status>active</status>
+    </row>
+    <row _id="row-2" _uuid="00000000-0000-0000-0000-000000000002">
+      <station_id>0613</station_id>
+      <station_name>Mill Creek</station_name>
+      <gauge_height>8.1</gauge_height>
+      <status>active</status>
+    </row>
+    <row _id="row-3" _uuid="00000000-0000-0000-0000-000000000003">
+      <station_id>0791</station_id>
+      <station_name>Cedar Falls</station_name>
+      <gauge_height>5.6</gauge_height>
+      <status>active</status>
+    </row>
+  </row>
+</response>

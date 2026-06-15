@@ -227,16 +227,19 @@ mod tests {
             PairDescriptor {
                 name: "missing-evidence".into(),
                 emits: vec![],
+                reads: vec![],
                 sees_beneath_settled: false,
             },
             PairDescriptor {
                 name: "bad-evidence".into(),
                 emits: vec!["".into(), "hash".into(), "hash".into()],
+                reads: vec![],
                 sees_beneath_settled: false,
             },
             PairDescriptor {
                 name: "".into(),
                 emits: vec!["root".into()],
+                reads: vec![],
                 sees_beneath_settled: false,
             },
         ]);
@@ -265,6 +268,7 @@ mod tests {
         let report = lint_pair_descriptors(&[PairDescriptor {
             name: "hash-pair".into(),
             emits: vec!["binoc.hash".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }]);
 

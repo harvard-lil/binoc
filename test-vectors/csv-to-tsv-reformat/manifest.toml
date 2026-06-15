@@ -1,0 +1,20 @@
+[vector]
+name = "csv-to-tsv-reformat"
+description = "Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add"
+tags = ["csv", "tsv", "reformat", "serialization-change", "tabular-pair"]
+
+[expected]
+# Exactly one projected child: the single tabular link between data.csv and
+# data.tsv. A remove + add would surface two children instead.
+child_count = 1
+# Proves: the format change is reported (binoc.serialization-change), the link
+# is a move/rename rather than add+remove (binoc.move, binoc.move.modified),
+# and row-level edits are present (binoc.cell-change from Bob's age 25->26,
+# binoc.row-addition from the added Dave row).
+has_tags = [
+    "binoc.serialization-change",
+    "binoc.move",
+    "binoc.move.modified",
+    "binoc.cell-change",
+    "binoc.row-addition",
+]

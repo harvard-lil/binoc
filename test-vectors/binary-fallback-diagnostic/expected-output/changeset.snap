@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,21 +15,43 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "data.parquet",
+        "sources": [
+          {
+            "path": "data.parquet",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "Binary content changed; 1 extracted string added, 1 extracted string removed"
           }
         ],
         "tags": [
-          "binoc.content-changed"
+          "binoc.content-changed",
+          "binoc.strings-changed"
         ],
         "details": {
           "edits": [
             {
-              "params": {},
+              "params": {
+                "strings": {
+                  "added": [
+                    "after!\\n"
+                  ],
+                  "added_count": 1,
+                  "examples_truncated": false,
+                  "left_count": 1,
+                  "min_length": 4,
+                  "removed": [
+                    "before\\n"
+                  ],
+                  "removed_count": 1,
+                  "right_count": 1,
+                  "scan_truncated": false
+                }
+              },
               "verb": "binary.contents-differ"
             }
           ]

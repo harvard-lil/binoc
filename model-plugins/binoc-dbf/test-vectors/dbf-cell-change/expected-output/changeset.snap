@@ -1,0 +1,50 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.dbf",
+        "sources": [
+          {
+            "path": "data.dbf",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 cell changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "score",
+                "from": 88.5,
+                "row": 1,
+                "to": 91.0
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

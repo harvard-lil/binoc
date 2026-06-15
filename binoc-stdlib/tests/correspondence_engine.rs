@@ -5,9 +5,11 @@ use std::sync::Arc;
 use binoc_core::controller::Controller;
 use binoc_core::correspondence::{self, ActionLine, CorrespondenceRunResult, Projection};
 use binoc_sdk::{
-    BinocResult, CoreRule, CorrespondenceEngineConfig, DataAccess, DiffNode, Edit, EditListWriter,
-    EngineView, LinkCtx, LinkProposal, NodeMatch, PairDescriptor, PairOutput, PairRule,
-    ProjectionHint, ShapeFilter, TreeSide, WriteOutput, WriterDescriptor,
+    tabular_v1, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig, DataAccess,
+    DiagnosticSeverity, DiffNode, Edit, EditListWriter, EngineView, ExpandDescriptor, ExpandOutput,
+    ExpandRule, LinkCtx, LinkProposal, NodeMatch, PairDescriptor, PairOutput, PairRule,
+    ParseDescriptor, ParseOutput, ParseRule, ProjectionHint, ShapeFilter, Side, Source,
+    TabularData, TreeSide, WriteOutput, WriterDescriptor,
 };
 use binoc_stdlib::correspondence::{default_engine_config, expand, pair, parse, writers};
 use binoc_stdlib::test_vectors::{
@@ -88,6 +90,15 @@ fn find_line<'a>(projection: &'a Projection, action: &str, path: &str) -> &'a Ac
         })
 }
 
+fn assert_from_source(sources: &[Source], path: &str) {
+    assert!(
+        sources
+            .iter()
+            .any(|source| source.side == Side::From && source.path == path),
+        "expected from-source `{path}`, got {sources:?}"
+    );
+}
+
 #[test]
 fn settled_archive_link_short_circuits_expansion_and_parse() {
     let (_guard, left, right) = materialized_vector("zip-rename-identical");
@@ -103,7 +114,7 @@ fn settled_archive_link_short_circuits_expansion_and_parse() {
 
     assert_eq!(lines.len(), 1, "projection:\n{}", projection.render_text());
     let archive = find_line(&projection, "move", "archive.zip");
-    assert_eq!(archive.source_path.as_deref(), Some("data.zip"));
+    assert_from_source(&archive.sources, "data.zip");
     assert_eq!(archive.evidence.as_deref(), Some("binoc.pair.hash"));
 
     assert_eq!(result.stats.fires_of("binoc.expand.zip"), 0);
@@ -130,14 +141,14 @@ fn late_fuzzy_link_triggers_parse_without_add_remove_fallout() {
     );
 
     let archive = find_line(&projection, "move", "archive.zip");
-    assert_eq!(archive.source_path.as_deref(), Some("data.zip"));
+    assert_from_source(&archive.sources, "data.zip");
     assert_eq!(
         archive.evidence.as_deref(),
         Some("binoc.pair.container_from_children")
     );
 
-    let csv = find_line(&projection, "move", "archive.zip/new.csv");
-    assert_eq!(csv.source_path.as_deref(), Some("data.zip/old.csv"));
+    let csv = find_line(&projection, "move", "archive.zip/>new.csv");
+    assert_from_source(&csv.sources, "data.zip/>old.csv");
     assert_eq!(csv.evidence.as_deref(), Some("binoc.pair.fuzzy"));
     assert_eq!(csv.verbs, vec!["tabular.edit_cell"]);
     assert_eq!(csv.edits[0].params["column"], serde_json::json!("score"));
@@ -172,7 +183,7 @@ fn config_injected_pair_rule_improves_output_without_engine_awareness() {
         .rules
         .retain(|rule| rule.name() != "binoc.pair.container_from_children");
     let without_projection = run_engine(&left, &right, &without).project();
-    let moved_file = find_line(&without_projection, "move", "archive.zip/new.csv");
+    let moved_file = find_line(&without_projection, "move", "archive.zip/>new.csv");
     assert_eq!(moved_file.verbs, vec!["tabular.edit_cell"]);
     find_line(&without_projection, "remove", "data.zip");
     find_line(&without_projection, "add", "archive.zip");
@@ -249,7 +260,7 @@ fn pair_rule_order_controls_priority_and_output_deterministically() {
     let permuted_run = run_engine(&left, &right, &permuted);
     let permuted_projection = permuted_run.project();
     let cross = find_line(&permuted_projection, "move", "b.csv");
-    assert_eq!(cross.source_path.as_deref(), Some("a.csv"));
+    assert_from_source(&cross.sources, "a.csv");
     assert_eq!(cross.evidence.as_deref(), Some("binoc.pair.fuzzy"));
     find_line(&permuted_projection, "add", "a.csv");
 
@@ -281,6 +292,168 @@ fn correspondence_engine_reports_csv_cell_change() {
     assert_eq!(
         node.details["edits"][0]["verb"],
         serde_json::json!("tabular.edit_cell")
+    );
+}
+
+#[test]
+fn text_writer_reports_line_ending_and_bom_reexport_as_facts() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("variants.vcf"),
+        b"\xEF\xBB\xBF##fileformat=VCFv4.2\r\n#CHROM\tPOS\r\n1\t10\r\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("variants.vcf"),
+        b"##fileformat=VCFv4.2\n#CHROM\tPOS\n1\t10\n",
+    )
+    .unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let node = find(&root, "variants.vcf").expect("variants.vcf node");
+    assert_eq!(node.action, "modify");
+    assert_eq!(node.item_type, "text");
+    assert!(node.tags.contains("binoc.line-ending-change"));
+    assert!(node.tags.contains("binoc.bom-change"));
+    assert!(node.tags.contains("binoc.encoding-change"));
+    assert!(!node.tags.contains("binoc.content-changed"));
+    assert_eq!(
+        node.summary.as_ref().map(|summary| summary.plain_text()),
+        Some("Line endings changed; UTF-8 BOM changed".into())
+    );
+    let verbs: Vec<&str> = node.details["edits"]
+        .as_array()
+        .expect("edits")
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(verbs, vec!["text.line_endings_changed", "text.bom_changed"]);
+}
+
+#[test]
+fn text_writer_reports_whitespace_only_change_without_generic_replacement() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("notes.txt"), "alpha beta\nsecond line\n").unwrap();
+    fs::write(right.join("notes.txt"), "alpha   beta\nsecond\tline\n").unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let node = find(&root, "notes.txt").expect("notes.txt node");
+    assert_eq!(node.action, "modify");
+    assert!(node.tags.contains("binoc.whitespace-only-change"));
+    assert!(!node.tags.contains("binoc.content-changed"));
+    assert_eq!(
+        node.summary.as_ref().map(|summary| summary.plain_text()),
+        Some("Whitespace-only text change".into())
+    );
+    let verbs: Vec<&str> = node.details["edits"]
+        .as_array()
+        .expect("edits")
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(verbs, vec!["text.whitespace_only_changed"]);
+}
+
+#[test]
+fn json_writer_reports_key_order_and_formatting_as_serialization_change() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("metadata.json"),
+        "{\r\n  \"name\": \"alpha\",\r\n  \"version\": 1\r\n}\r\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("metadata.json"),
+        "{\"version\":1,\"name\":\"alpha\"}\n",
+    )
+    .unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let node = find(&root, "metadata.json").expect("metadata.json node");
+    assert_eq!(node.action, "modify");
+    assert_eq!(node.item_type, "json");
+    assert!(node.tags.contains("binoc.serialization-change"));
+    assert!(node.tags.contains("binoc.document-serialization-change"));
+    assert!(!node.tags.contains("binoc.content-changed"));
+    assert_eq!(
+        node.summary.as_ref().map(|summary| summary.plain_text()),
+        Some("Document serialization changed".into())
+    );
+    let edit = &node.details["edits"].as_array().expect("edits")[0];
+    assert_eq!(
+        edit["verb"],
+        serde_json::json!("document.serialization_change")
+    );
+    let kinds = edit["params"]["kinds"].as_array().expect("kinds");
+    assert!(kinds.contains(&serde_json::json!("object_key_order")));
+    assert!(kinds.contains(&serde_json::json!("formatting")));
+}
+
+#[test]
+fn json_writer_keeps_array_order_significant() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("records.json"), "[1, 2, 3]\n").unwrap();
+    fs::write(right.join("records.json"), "[1, 3, 2]\n").unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let node = find(&root, "records.json").expect("records.json node");
+    assert_eq!(node.action, "modify");
+    assert_eq!(node.item_type, "json");
+    assert!(node.tags.contains("binoc.content-changed"));
+    assert!(node.tags.contains("binoc.document-value-change"));
+    assert_eq!(
+        node.summary.as_ref().map(|summary| summary.plain_text()),
+        Some("Document values changed".into())
+    );
+    let edit = &node.details["edits"].as_array().expect("edits")[0];
+    assert_eq!(edit["verb"], serde_json::json!("document.value_change"));
+    assert_eq!(
+        edit["params"]["changes"][0]["path"],
+        serde_json::json!("$[1]")
+    );
+}
+
+#[test]
+fn json_media_type_parse_handles_json_without_extension() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left_file = temp.path().join("left-metadata");
+    let right_file = temp.path().join("right-metadata");
+    fs::write(&left_file, "{\"name\":\"alpha\",\"version\":1}\n").unwrap();
+    fs::write(&right_file, "{\"version\":1,\"name\":\"alpha\"}\n").unwrap();
+
+    let data = binoc_sdk::LocalDataAccess::new();
+    let mut left = data.register_local(&left_file, "metadata").expect("left");
+    let mut right = data.register_local(&right_file, "metadata").expect("right");
+    left.media_type = Some("application/json".into());
+    right.media_type = Some("application/json".into());
+
+    let run = correspondence::driver::run(&default_engine_config(), left, right, &data)
+        .expect("engine run");
+    assert_eq!(run.stats.fires_of("binoc.parse.json_media"), 2);
+    let changeset = run.project().to_changeset("left", "right");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "metadata").expect("metadata node");
+    assert_eq!(node.item_type, "json");
+    assert!(node.tags.contains("binoc.serialization-change"));
+    assert_eq!(
+        node.details["edits"][0]["verb"],
+        serde_json::json!("document.serialization_change")
     );
 }
 
@@ -344,7 +517,7 @@ fn correspondence_engine_reports_copy_without_double_counting_container_edits() 
     let root = diff_with_correspondence(&left, &right);
     let node = find(&root, "duplicate.txt").expect("copy node");
     assert_eq!(node.action, "copy");
-    assert_eq!(node.source_path.as_deref(), Some("original.txt"));
+    assert_from_source(&node.sources, "original.txt");
     assert!(node.tags.contains("binoc.copy"));
     assert!(
         root.details.is_empty(),
@@ -384,7 +557,7 @@ fn correspondence_engine_rolls_up_container_move_from_child_evidence() {
     let root = diff_with_correspondence(&left, &right);
     let folder = find(&root, "documentation").expect("folder move");
     assert_eq!(folder.action, "move");
-    assert_eq!(folder.source_path.as_deref(), Some("docs"));
+    assert_from_source(&folder.sources, "docs");
     assert!(folder.tags.contains("binoc.move"));
     assert!(
         find(&root, "documentation/readme.txt").is_none(),
@@ -406,7 +579,7 @@ fn correspondence_engine_default_expands_renamed_collection_and_keeps_copy_out()
     let root = diff_with_correspondence(&left, &right);
     let copy = find(&root, "duplicate.txt").expect("copy out");
     assert_eq!(copy.action, "copy");
-    assert_eq!(copy.source_path.as_deref(), Some("docs/original.txt"));
+    assert_from_source(&copy.sources, "docs/original.txt");
 }
 
 #[test]
@@ -618,6 +791,163 @@ fn keyed_row_degradation_honors_failure_policies() {
 }
 
 #[test]
+fn stacked_csv_decomposes_into_table_children() {
+    let (_guard, left, right) = materialized_vector("csv-stacked-tables");
+    let result = run_engine(&left, &right, &default_engine_config());
+    assert_eq!(result.stats.fires_of("binoc.parse.csv"), 2);
+
+    let root = result
+        .project()
+        .to_changeset("snapshot-a", "snapshot-b")
+        .root
+        .expect("root");
+    // The CSV is now a container node carrying table children, no parent
+    // artifact and no whole-file edits restating its children.
+    let node = find(&root, "data.csv").expect("data.csv");
+    assert!(!node.details.contains_key("edits"));
+    // Table children hang off a decompose boundary (`/>`).
+    let table_node = find(&root, "data.csv/>table_2").expect("table child");
+    assert_eq!(table_node.item_type, "tabular");
+    assert!(table_node.tags.contains("binoc.row-addition"));
+    assert_eq!(table_node.details["edits"][0]["verb"], "tabular.add_row");
+}
+
+#[test]
+fn ambiguous_stacked_csv_surfaces_splitter_suggestion_and_falls_back_to_tabular() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.csv"),
+        "Report\nA,B\n1,2\n\n100,200,300\nC,D\n3,4\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.csv"),
+        "Report\nA,B\n1,2\n\n100,200,300\nC,D\n9,5\n",
+    )
+    .unwrap();
+
+    let data = binoc_sdk::LocalDataAccess::new();
+    let left_root = data.register_local(&left, "").expect("left root");
+    let right_root = data.register_local(&right, "").expect("right root");
+    let result =
+        correspondence::driver::run(&default_engine_config(), left_root, right_root, &data)
+            .expect("engine run");
+    assert_eq!(result.stats.fires_of("binoc.parse.csv"), 2);
+    let mut changeset = result.project().to_changeset("snapshot-a", "snapshot-b");
+    changeset.diagnostics.extend(result.diagnostics);
+    assert!(
+        changeset.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "binoc.table_splitter.ambiguous"
+                && diagnostic.severity == DiagnosticSeverity::Suggestion
+                && diagnostic.message.contains("outside any clear rectangle")
+        }),
+        "diagnostics: {:?}",
+        changeset.diagnostics
+    );
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.csv").expect("data.csv");
+    assert_eq!(node.item_type, "tabular");
+    assert!(node.tags.contains("binoc.cell-change"));
+}
+
+#[test]
+fn expand_rule_failure_degrades_one_node_and_continues() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("bad.fail"), "left bad\n").unwrap();
+    fs::write(right.join("bad.fail"), "right bad\n").unwrap();
+    fs::write(left.join("good.txt"), "old\n").unwrap();
+    fs::write(right.join("good.txt"), "new\n").unwrap();
+
+    let config = CorrespondenceEngineConfig {
+        rules: vec![
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Pair(Arc::new(pair::RootPair)),
+            CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+            CoreRule::Expand(Arc::new(FailingExpand)),
+        ],
+        writers: vec![
+            Arc::new(writers::TextWriter),
+            Arc::new(writers::FallbackWriter),
+        ],
+        compaction: vec![],
+        annotators: vec![],
+        row_keys: Default::default(),
+        row_identity_policies: Default::default(),
+        root_projection: ProjectionHint::default().item_type("directory"),
+        dataset_configurator: None,
+    };
+    let changeset = diff_with_config(&left, &right, config);
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.rule.expand_failed"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.location.as_deref() == Some("test.expand.fail:left:bad.fail")
+    }));
+    let root = changeset.root.expect("root");
+    let bad = find(&root, "bad.fail").expect("bad.fail");
+    assert_eq!(bad.action, "modify");
+    assert_eq!(bad.details["edits"][0]["verb"], "binary.contents-differ");
+    let good = find(&root, "good.txt").expect("good.txt");
+    assert_eq!(good.action, "modify");
+    assert_eq!(good.item_type, "text");
+}
+
+#[test]
+fn parse_rule_failure_degrades_one_node_and_continues() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("bad.csv"), "id,value\n1,left\n").unwrap();
+    fs::write(right.join("bad.csv"), "id,value\n1,right\n").unwrap();
+    fs::write(left.join("good.csv"), "id,value\n1,old\n").unwrap();
+    fs::write(right.join("good.csv"), "id,value\n1,new\n").unwrap();
+
+    let config = CorrespondenceEngineConfig {
+        rules: vec![
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Pair(Arc::new(pair::RootPair)),
+            CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+            CoreRule::Parse(Arc::new(FailingParse)),
+        ],
+        writers: vec![
+            Arc::new(writers::TabularWriter),
+            Arc::new(writers::FallbackWriter),
+        ],
+        compaction: vec![],
+        annotators: vec![],
+        row_keys: Default::default(),
+        row_identity_policies: Default::default(),
+        root_projection: ProjectionHint::default().item_type("directory"),
+        dataset_configurator: None,
+    };
+    let changeset = diff_with_config(&left, &right, config);
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.rule.parse_failed"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.location.as_deref() == Some("test.parse.fail:left:bad.csv")
+    }));
+    let root = changeset.root.expect("root");
+    let bad = find(&root, "bad.csv").expect("bad.csv");
+    assert_eq!(bad.action, "modify");
+    assert_eq!(bad.details["edits"][0]["verb"], "binary.contents-differ");
+    let good = find(&root, "good.csv").expect("good.csv");
+    assert_eq!(good.action, "modify");
+    assert_eq!(good.item_type, "tabular");
+    assert_eq!(good.details["edits"][0]["verb"], "tabular.edit_cell");
+}
+
+#[test]
 fn correspondence_engine_uses_dataset_row_keys_on_production_path() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
@@ -662,8 +992,8 @@ fn correspondence_engine_resolves_declared_pairs_against_live_archive_view() {
                 "correspondences": [{
                     "name": "archive-inner",
                     "key": "records",
-                    "left": { "path_regex": "^data\\.zip/state_old\\.csv$" },
-                    "right": { "path_regex": "^archive\\.zip/records\\.csv$" }
+                    "left": { "path_regex": "^data\\.zip/>state_old\\.csv$" },
+                    "right": { "path_regex": "^archive\\.zip/>records\\.csv$" }
                 }]
             }
         }));
@@ -672,9 +1002,9 @@ fn correspondence_engine_resolves_declared_pairs_against_live_archive_view() {
         .expect("correspondence diff")
         .root
         .expect("root");
-    let node = find(&root, "archive.zip/records.csv").expect("declared pair node");
+    let node = find(&root, "archive.zip/>records.csv").expect("declared pair node");
     assert!(node.tags.contains("binoc.declared-correspondence"));
-    assert_eq!(node.source_path.as_deref(), Some("data.zip/state_old.csv"));
+    assert_from_source(&node.sources, "data.zip/>state_old.csv");
 }
 
 #[test]
@@ -722,6 +1052,7 @@ impl PairRule for ExtrasContainerFromChildEvidence {
         PairDescriptor {
             name: "extras.container_from_children".into(),
             emits: vec!["extras.container_from_children".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -798,6 +1129,79 @@ impl EditListWriter for ExtrasFrobnicateWriter {
             .into(),
         ))
     }
+}
+
+struct FailingExpand;
+
+impl ExpandRule for FailingExpand {
+    fn descriptor(&self) -> ExpandDescriptor {
+        ExpandDescriptor {
+            name: "test.expand.fail".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                extensions: vec![".fail".into()],
+                ..NodeMatch::default()
+            },
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn expand(
+        &self,
+        item: &binoc_sdk::ItemRef,
+        _data: &dyn DataAccess,
+    ) -> BinocResult<ExpandOutput> {
+        Err(BinocError::Other(format!(
+            "synthetic corrupt member at {}",
+            item.logical_path
+        )))
+    }
+}
+
+struct FailingParse;
+
+impl ParseRule for FailingParse {
+    fn descriptor(&self) -> ParseDescriptor {
+        ParseDescriptor {
+            name: "test.parse.fail".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                extensions: vec![".csv".into()],
+                ..NodeMatch::default()
+            },
+            output: tabular_v1(),
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn parse(&self, item: &binoc_sdk::ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        if item.logical_path == "bad.csv" {
+            return Err(BinocError::Csv("synthetic corrupt csv".into()));
+        }
+        let bytes = data.read_bytes(item)?;
+        let table = parse_tiny_csv(&String::from_utf8_lossy(&bytes));
+        Ok(ParseOutput {
+            bytes: serde_json::to_vec(&table)
+                .map_err(|err| BinocError::Other(format!("serialize test table: {err}")))?,
+            diagnostics: Vec::new(),
+            children: Vec::new(),
+            ..Default::default()
+        })
+    }
+}
+
+fn parse_tiny_csv(input: &str) -> TabularData {
+    let mut lines = input.lines();
+    let headers = lines
+        .next()
+        .unwrap_or_default()
+        .split(',')
+        .map(str::to_string)
+        .collect();
+    let rows = lines
+        .map(|line| line.split(',').map(str::to_string).collect())
+        .collect();
+    TabularData::from_string_rows(headers, rows)
 }
 
 #[test]

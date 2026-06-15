@@ -4,4 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.parquet**: 1 edit
+- **data.parquet**: Binary content changed; 1 extracted string added, 1 extracted string removed
+  - Extracted strings added
+    - 'after!\n'
+  - Extracted strings removed
+    - 'before\n'

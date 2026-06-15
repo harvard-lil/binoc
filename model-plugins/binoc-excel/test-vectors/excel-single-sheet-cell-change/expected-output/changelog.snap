@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.xlsx/>Scores**: 1 cell changed
+  - Changed cells
+    - row 1, column 'score': 85.0 -> 92.0

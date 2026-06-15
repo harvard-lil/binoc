@@ -4,4 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **outer.zip/inner.zip/data.csv**: 1 edit
+- **outer.zip/>inner.zip/>data.csv**: 1 row added
+  - Rows added
+    - row 2: 'Bob', '25'

@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.sas7bdat**: 1 edit
+- **data.sas7bdat**: Column added: 'score'

@@ -1,0 +1,35 @@
+[package]
+name = "binoc-avro"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "avro correspondence rule pack for Binoc"
+publish = false
+
+[lib]
+name = "binoc_avro"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# test-support: expose the VectorMaterializer for this format so the plugin's
+# own tests and its materialize-test-vectors binary share one builder.
+test-support = ["dep:binoc-stdlib"]
+
+[dependencies]
+binoc-sdk = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
+apache-avro = "0.21.0"
+
+[dev-dependencies]
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-avro = { path = ".", features = ["test-support"] }
+tempfile = "3"

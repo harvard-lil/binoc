@@ -1,5 +1,6 @@
 """Tests for plugin discovery and the PluginRegistry Python wrapper."""
 
+import json
 import subprocess
 import sys
 from unittest.mock import MagicMock, patch
@@ -74,3 +75,15 @@ class TestPythonCLI:
         )
         assert result.returncode == 0
         assert '"action": "add"' in result.stdout
+
+    def test_python_m_binoc_diff_json_stdout_is_complete(self, snapshot_pair):
+        a, b = snapshot_pair('kitchen-sink')
+        result = subprocess.run(
+            [sys.executable, '-m', 'binoc', 'diff', a, b, '--format', 'json'],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        parsed = json.loads(result.stdout)
+        assert parsed['from_snapshot'].endswith('snapshot-a')
+        assert parsed['to_snapshot'].endswith('snapshot-b')

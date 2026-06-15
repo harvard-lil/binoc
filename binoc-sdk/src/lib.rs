@@ -1,6 +1,7 @@
 pub mod correspondence;
 pub mod data_access;
 pub mod ir;
+pub mod path;
 pub mod plugin_abi;
 pub mod traits;
 pub mod types;
@@ -14,8 +15,9 @@ pub use correspondence::*;
 pub use data_access::LocalDataAccess;
 pub use ir::{
     Annotation, Changeset, DetailBlock, DetailExample, Diagnostic, DiagnosticSeverity, DiffNode,
-    ExtractHint, Segment, Side, Summary, ValuePreview,
+    ExtractHint, Segment, Side, Source, Summary, ValuePreview,
 };
+pub use path::{decompose_child, file_name, member_child, segments, DECOMPOSE_SEP, MEMBER_SEP};
 pub use traits::*;
 pub use types::*;
 

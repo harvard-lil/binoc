@@ -5,10 +5,19 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
     "path": "",
+    "sources": [
+      {
+        "path": "",
+        "side": "from",
+        "evidence": "binoc.pair.root",
+        "action": "modify"
+      }
+    ],
     "summary": [
       {
         "uint": 0
@@ -22,6 +31,13 @@ expression: "&stable_changeset"
         "action": "add",
         "item_type": "directory",
         "path": "by-state",
+        "sources": [
+          {
+            "path": "by-state",
+            "side": "to",
+            "action": "add"
+          }
+        ],
         "summary": [
           {
             "text": "Added"
@@ -32,7 +48,14 @@ expression: "&stable_changeset"
             "action": "move",
             "item_type": "directory",
             "path": "by-state/AL",
-            "source_path": "data",
+            "sources": [
+              {
+                "path": "data",
+                "side": "from",
+                "evidence": "binoc.pair.container_from_children",
+                "action": "move"
+              }
+            ],
             "summary": [
               {
                 "text": "Moved from "
@@ -53,19 +76,17 @@ expression: "&stable_changeset"
                 "action": "move",
                 "item_type": "tabular",
                 "path": "by-state/AL/records.csv",
-                "source_path": "data/state_AL.csv",
+                "sources": [
+                  {
+                    "path": "data/state_AL.csv",
+                    "side": "from",
+                    "evidence": "binoc.pair.declared",
+                    "action": "move"
+                  }
+                ],
                 "summary": [
                   {
-                    "text": "Moved from "
-                  },
-                  {
-                    "path": {
-                      "value": "data/state_AL.csv",
-                      "snapshot": "from"
-                    }
-                  },
-                  {
-                    "text": " (modified)"
+                    "text": "1 row added"
                   }
                 ],
                 "tags": [

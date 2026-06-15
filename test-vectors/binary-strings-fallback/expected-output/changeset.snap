@@ -1,0 +1,64 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "file",
+        "path": "firmware.bin",
+        "sources": [
+          {
+            "path": "firmware.bin",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Binary content changed; 2 extracted strings added, 2 extracted strings removed"
+          }
+        ],
+        "tags": [
+          "binoc.content-changed",
+          "binoc.strings-changed"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "strings": {
+                  "added": [
+                    "build-beta",
+                    "version=2.0.0"
+                  ],
+                  "added_count": 2,
+                  "examples_truncated": false,
+                  "left_count": 3,
+                  "min_length": 4,
+                  "removed": [
+                    "build-alpha",
+                    "version=1.0.0"
+                  ],
+                  "removed_count": 2,
+                  "right_count": 3,
+                  "scan_truncated": false
+                }
+              },
+              "verb": "binary.contents-differ"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

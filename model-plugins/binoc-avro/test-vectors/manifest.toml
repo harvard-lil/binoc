@@ -1,0 +1,1 @@
+# Avro containers are built from .avro.d dirs (schema.avsc + records.jsonl).

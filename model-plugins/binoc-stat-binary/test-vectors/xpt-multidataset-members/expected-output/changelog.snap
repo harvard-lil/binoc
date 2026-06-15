@@ -4,4 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.xpt**: 2 edits
+- **data.xpt/>DM**: 1 row added
+  - Rows added
+    - row 2: '2', 'Bob'
+- **data.xpt/>LB**: Added

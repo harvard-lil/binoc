@@ -4,13 +4,14 @@ pub mod pair;
 pub mod parse;
 pub mod writers;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use binoc_sdk::{
     BinocResult, CoreRule, CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig,
-    DataAccess, DatasetSemanticsV1, Diagnostic, FileSelector, ItemRef, ProjectionAnnotationContext,
-    ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies,
+    DataAccess, DatasetSemanticsV1, Diagnostic, Edit, FileSelector, ItemRef,
+    ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
+    RowIdentityPolicies,
 };
 use regex::Regex;
 
@@ -56,24 +57,34 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             CoreRule::Pair(Arc::new(pair::CopyPair)),
             CoreRule::Pair(Arc::new(pair::DeclaredPair::default())),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+            CoreRule::Pair(Arc::new(pair::TabularPair::default())),
             CoreRule::Pair(Arc::new(pair::FuzzyPair::default())),
             CoreRule::Pair(Arc::new(pair::ContainerFromChildEvidence::default())),
             CoreRule::Expand(Arc::new(expand::ZipExpand)),
             CoreRule::Expand(Arc::new(expand::TarExpand)),
             CoreRule::Expand(Arc::new(expand::GzipExpand)),
             CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Parse(Arc::new(parse::JsonRecordsParse)),
+            CoreRule::Parse(Arc::new(parse::JsonMediaRecordsParse)),
+            CoreRule::Parse(Arc::new(parse::JsonParse)),
+            CoreRule::Parse(Arc::new(parse::JsonMediaParse)),
             CoreRule::Parse(Arc::new(parse::CsvParse)),
+            CoreRule::Parse(Arc::new(parse::YamlParse)),
+            CoreRule::Parse(Arc::new(parse::YamlMediaParse)),
+            CoreRule::Parse(Arc::new(parse::TomlParse)),
+            CoreRule::Parse(Arc::new(parse::IniParse)),
             CoreRule::Pair(Arc::new(pair::RootPair)),
         ],
         writers: vec![
             Arc::new(writers::TabularWriter),
-            Arc::new(writers::TabularCollectionWriter),
+            Arc::new(writers::StructuredDocumentWriter),
             Arc::new(writers::TextWriter),
             Arc::new(writers::ContainerWriter),
             Arc::new(writers::FallbackWriter),
         ],
         compaction: vec![
             Arc::new(compact::ColumnReorder),
+            Arc::new(compact::ColumnRename),
             Arc::new(compact::RowAlignment),
             Arc::new(compact::RowAdditionConsolidation),
         ],
@@ -156,7 +167,170 @@ impl ProjectionAnnotator for StdlibProjectionAnnotator {
         if ctx.unlinked_side.is_some() && !ctx.container {
             hint = hint.tag("binoc.content-changed");
         }
+        if let Some(summary) = summarize_known_edits(ctx.edits) {
+            hint = hint.summary(summary);
+        }
         hint
+    }
+}
+
+fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
+    let mut parts = Vec::new();
+
+    let added_columns = column_names(edits, "tabular.add_column");
+    let removed_columns = column_names(edits, "tabular.remove_column");
+    let renamed_columns = edits
+        .iter()
+        .filter(|edit| edit.verb == "tabular.rename_column")
+        .collect::<Vec<_>>();
+    if added_columns.len() == 1 {
+        parts.push(format!("Column added: '{}'", added_columns[0]));
+    } else if !added_columns.is_empty() {
+        parts.push(count_phrase(
+            added_columns.len(),
+            "column added",
+            "columns added",
+        ));
+    }
+    if removed_columns.len() == 1 {
+        parts.push(format!("Column removed: '{}'", removed_columns[0]));
+    } else if !removed_columns.is_empty() {
+        parts.push(count_phrase(
+            removed_columns.len(),
+            "column removed",
+            "columns removed",
+        ));
+    }
+    if renamed_columns.len() == 1 {
+        let params = &renamed_columns[0].params;
+        if let (Some(from), Some(to)) = (
+            params.get("from").and_then(|value| value.as_str()),
+            params.get("to").and_then(|value| value.as_str()),
+        ) {
+            parts.push(format!("Column renamed: '{from}' -> '{to}'"));
+        }
+    } else if !renamed_columns.is_empty() {
+        parts.push(count_phrase(
+            renamed_columns.len(),
+            "column renamed",
+            "columns renamed",
+        ));
+    }
+    if edits
+        .iter()
+        .any(|edit| edit.verb == "tabular.reorder_columns")
+    {
+        parts.push("Columns reordered".into());
+    }
+
+    let rows_added = count_verb(edits, "tabular.add_row");
+    let rows_removed = count_verb(edits, "tabular.remove_row");
+    if rows_added > 0 {
+        parts.push(count_phrase(rows_added, "row added", "rows added"));
+    }
+    if rows_removed > 0 {
+        parts.push(count_phrase(rows_removed, "row removed", "rows removed"));
+    }
+
+    let cell_edits = edits
+        .iter()
+        .filter(|edit| edit.verb == "tabular.edit_cell")
+        .collect::<Vec<_>>();
+    let keyed_rows = unique_keyed_rows(&cell_edits);
+    if !keyed_rows.is_empty() {
+        parts.push(format!(
+            "{} modified by key",
+            count_phrase(keyed_rows.len(), "row", "rows")
+        ));
+    } else if !cell_edits.is_empty() {
+        parts.push(count_phrase(
+            cell_edits.len(),
+            "cell changed",
+            "cells changed",
+        ));
+    }
+
+    parts.extend(text_fact_summaries(edits));
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
+}
+
+fn column_names(edits: &[Edit], verb: &str) -> Vec<String> {
+    edits
+        .iter()
+        .filter(|edit| edit.verb == verb)
+        .filter_map(|edit| {
+            edit.params
+                .get("name")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+fn count_verb(edits: &[Edit], verb: &str) -> usize {
+    edits.iter().filter(|edit| edit.verb == verb).count()
+}
+
+fn unique_keyed_rows(edits: &[&Edit]) -> BTreeSet<String> {
+    edits
+        .iter()
+        .filter_map(|edit| edit.params.get("key"))
+        .map(|key| key.to_string())
+        .collect()
+}
+
+fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
+    let mut parts = Vec::new();
+    for edit in edits {
+        match edit.verb.as_str() {
+            "text.line_endings_changed" => parts.push("Line endings changed".into()),
+            "text.bom_changed" => parts.push("UTF-8 BOM changed".into()),
+            "text.encoding_changed" => parts.push("Encoding changed".into()),
+            "text.whitespace_only_changed" => parts.push("Whitespace-only text change".into()),
+            "text.replace_lines" => {
+                let added = edit
+                    .params
+                    .get("lines_added")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(0);
+                let removed = edit
+                    .params
+                    .get("lines_removed")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(0);
+                match (added, removed) {
+                    (0, 0) => parts.push("Text changed".into()),
+                    (added, 0) => {
+                        parts.push(count_phrase(added as usize, "line added", "lines added"))
+                    }
+                    (0, removed) => parts.push(count_phrase(
+                        removed as usize,
+                        "line removed",
+                        "lines removed",
+                    )),
+                    (added, removed) => parts.push(format!(
+                        "{}; {}",
+                        count_phrase(added as usize, "line added", "lines added"),
+                        count_phrase(removed as usize, "line removed", "lines removed")
+                    )),
+                }
+            }
+            _ => {}
+        }
+    }
+    parts
+}
+
+fn count_phrase(count: usize, singular: &str, plural: &str) -> String {
+    if count == 1 {
+        format!("1 {singular}")
+    } else {
+        format!("{count} {plural}")
     }
 }
 

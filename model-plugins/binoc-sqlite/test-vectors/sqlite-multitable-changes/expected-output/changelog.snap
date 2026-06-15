@@ -4,4 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.sqlite**: 2 edits
+- **data.sqlite/>users**: 1 row added
+  - Rows added
+    - row 2: 2, 'Bob'
+- **data.sqlite/>orders**: Added

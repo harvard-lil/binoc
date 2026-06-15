@@ -319,6 +319,76 @@ fn py_annotations_to_ir(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Annotation>> {
     ))
 }
 
+fn side_to_py(side: Side) -> &'static str {
+    match side {
+        Side::From => "from",
+        Side::To => "to",
+    }
+}
+
+fn side_from_py(value: &str) -> PyResult<Side> {
+    match value {
+        "from" => Ok(Side::From),
+        "to" => Ok(Side::To),
+        _ => Err(PyValueError::new_err("source side must be 'from' or 'to'")),
+    }
+}
+
+fn source_to_py<'py>(py: Python<'py>, source: &Source) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("path", &source.path)?;
+    dict.set_item("side", side_to_py(source.side))?;
+    dict.set_item("evidence", source.evidence.as_deref())?;
+    dict.set_item("action", source.action.as_deref())?;
+    Ok(dict)
+}
+
+fn sources_to_py<'py>(py: Python<'py>, sources: &[Source]) -> PyResult<Bound<'py, PyList>> {
+    let items: PyResult<Vec<Bound<'py, PyDict>>> = sources
+        .iter()
+        .map(|source| source_to_py(py, source))
+        .collect();
+    PyList::new(py, items?)
+}
+
+fn py_source_record_to_ir(dict: &Bound<'_, PyDict>) -> PyResult<Source> {
+    let path = dict
+        .get_item("path")?
+        .ok_or_else(|| PyTypeError::new_err("source record missing 'path'"))?
+        .extract::<String>()?;
+    let side = dict
+        .get_item("side")?
+        .ok_or_else(|| PyTypeError::new_err("source record missing 'side'"))?
+        .extract::<String>()?;
+    let mut source = Source::new(path, side_from_py(&side)?);
+    source.evidence = optional_string_item(dict, "evidence")?;
+    source.action = optional_string_item(dict, "action")?;
+    Ok(source)
+}
+
+fn optional_string_item(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<String>> {
+    match dict.get_item(key)? {
+        Some(value) if !value.is_none() => Ok(Some(value.extract::<String>()?)),
+        _ => Ok(None),
+    }
+}
+
+fn py_sources_to_ir(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Source>> {
+    if let Ok(list) = obj.cast::<PyList>() {
+        let mut sources = Vec::new();
+        for item in list.iter() {
+            let dict = item
+                .cast::<PyDict>()
+                .map_err(|_| PyTypeError::new_err("source list items must be dicts"))?;
+            sources.push(py_source_record_to_ir(dict)?);
+        }
+        return Ok(sources);
+    }
+    Err(PyTypeError::new_err(
+        "sources must be a list of source dicts",
+    ))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PyDiffNode
 // ═══════════════════════════════════════════════════════════════════════════
@@ -352,7 +422,9 @@ impl PyDiffNode {
     /// :param item_type: Open-string noun describing what kind of item this
     ///     is (``"file"``, ``"directory"``, ``"csv.row"``, ...).
     /// :param path: Logical path of the item within the snapshot.
-    /// :param source_path: Optional prior logical path, for moves/renames.
+    /// :param sources: Optional list of provenance records with ``path``,
+    ///     ``side`` (``"from"`` or ``"to"``), and optional ``evidence`` /
+    ///     ``action``.
     /// :param summary: Optional human-readable one-line summary.
     /// :param tags: Optional list or set of open-string tags (used for
     ///     renderer grouping and rule-pack semantics).
@@ -361,13 +433,13 @@ impl PyDiffNode {
     ///     ``package``, ``key``, and ``value`` fields.
     /// :param children: Optional list of child ``DiffNode`` s.
     #[new]
-    #[pyo3(signature = (action, item_type, path, *, source_path=None, summary=None, tags=None, details=None, annotations=None, children=None))]
+    #[pyo3(signature = (action, item_type, path, *, sources=None, summary=None, tags=None, details=None, annotations=None, children=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         action: String,
         item_type: String,
         path: String,
-        source_path: Option<String>,
+        sources: Option<Bound<'_, PyAny>>,
         summary: Option<String>,
         tags: Option<Bound<'_, PyAny>>,
         details: Option<Bound<'_, PyDict>>,
@@ -375,7 +447,9 @@ impl PyDiffNode {
         children: Option<Vec<PyDiffNode>>,
     ) -> PyResult<Self> {
         let mut node = DiffNode::new(action, item_type, path);
-        node.source_path = source_path;
+        if let Some(sources_obj) = sources {
+            node.sources = py_sources_to_ir(&sources_obj)?;
+        }
         node.summary = summary.map(Into::into);
         if let Some(tags_obj) = tags {
             if let Ok(tag_list) = tags_obj.extract::<Vec<String>>() {
@@ -417,10 +491,10 @@ impl PyDiffNode {
     fn path(&self) -> &str {
         &self.inner.path
     }
-    /// Prior logical path if this item was moved or renamed; ``None`` otherwise.
+    /// Provenance records for this projected node.
     #[getter]
-    fn source_path(&self) -> Option<&str> {
-        self.inner.source_path.as_deref()
+    fn sources<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        sources_to_py(py, &self.inner.sources)
     }
     /// Optional one-line human summary of the change, as plain text.
     #[getter]
@@ -469,7 +543,7 @@ impl PyDiffNode {
         dict.set_item("action", &self.inner.action)?;
         dict.set_item("item_type", &self.inner.item_type)?;
         dict.set_item("path", &self.inner.path)?;
-        dict.set_item("source_path", self.inner.source_path.as_deref())?;
+        dict.set_item("sources", sources_to_py(py, &self.inner.sources)?)?;
         dict.set_item(
             "summary",
             self.inner.summary.as_ref().map(|s| s.plain_text()),
@@ -507,12 +581,20 @@ impl PyDiffNode {
             inner: self.inner.clone().with_tag(tag),
         }
     }
-    /// Return a clone of this node with ``source_path`` replaced (used to
-    /// record moves/renames).
-    fn with_source_path(&self, source: String) -> Self {
-        Self {
-            inner: self.inner.clone().with_source_path(source),
-        }
+    /// Return a clone of this node with a provenance source appended.
+    fn with_source(
+        &self,
+        path: String,
+        side: String,
+        evidence: Option<String>,
+        action: Option<String>,
+    ) -> PyResult<Self> {
+        let mut source = Source::new(path, side_from_py(&side)?);
+        source.evidence = evidence;
+        source.action = action;
+        Ok(Self {
+            inner: self.inner.clone().with_source(source),
+        })
     }
     /// Return a clone of this node with its ``children`` replaced.
     fn with_children(&self, children: Vec<PyDiffNode>) -> Self {
@@ -701,6 +783,13 @@ impl PyChangeset {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         json_to_py(py, &value)
     }
+    /// Run-scoped global claims. Reserved for future claim producers.
+    #[getter]
+    fn claims<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let value = serde_json::to_value(&self.inner.claims)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        json_to_py(py, &value)
+    }
     /// Total number of nodes in the diff tree (0 if :attr:`root` is ``None``).
     #[getter]
     fn node_count(&self) -> usize {
@@ -730,6 +819,9 @@ impl PyChangeset {
             }
             None => dict.set_item("root", py.None())?,
         }
+        let claims = serde_json::to_value(&self.inner.claims)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        dict.set_item("claims", json_to_py(py, &claims)?)?;
         let meta = PyDict::new(py);
         for (k, v) in &self.inner.metadata {
             meta.set_item(k, v)?;

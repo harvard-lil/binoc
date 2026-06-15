@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **firmware.bin**: Binary content changed; 2 extracted strings added, 2 extracted strings removed
+  - Extracted strings added
+    - 'build-beta'
+    - 'version=2.0.0'
+  - Extracted strings removed
+    - 'build-alpha'
+    - 'version=1.0.0'

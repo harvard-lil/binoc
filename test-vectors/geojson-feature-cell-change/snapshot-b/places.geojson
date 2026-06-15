@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-71.06, 42.36]},
+      "properties": {"name": "Boston", "population": 675000}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-122.42, 37.77]},
+      "properties": {"name": "San Francisco", "population": 815000}
+    }
+  ]
+}

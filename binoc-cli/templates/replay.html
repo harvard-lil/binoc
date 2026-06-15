@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>binoc replay</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c2330;
+    --ink: #e6edf3;
+    --muted: #8b97a7;
+    --line: #2a3340;
+    --left: #6ea8fe;
+    --right: #7ee0a8;
+    --link: #c9a3ff;
+    --accent: #ffcf5c;
+    --add: #7ee0a8;
+    --remove: #ff8094;
+    --mod: #ffcf5c;
+    --c-expand: #6ea8fe;
+    --c-parse: #58c4dc;
+    --c-link: #c9a3ff;
+    --c-write: #ffcf5c;
+    --c-compact: #ff8fb0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  /* ---- top bar ---- */
+  header { border-bottom: 1px solid var(--line); }
+  .titlerow { padding: 9px 16px 6px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .titlerow h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  .titlerow .snap { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+  .phase {
+    margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 600;
+    background: var(--panel-2); padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line);
+  }
+  .steprow {
+    padding: 7px 16px 9px; background: var(--panel); border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px; min-height: 38px;
+  }
+  .steprow .tag { flex: none; }
+  #stepText { font-size: 13.5px; }
+  #stepText .rule { color: var(--accent); font-family: ui-monospace, monospace; }
+  #stepText .empty { color: var(--muted); font-style: italic; }
+
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* ---- step log ---- */
+  #log { width: 256px; flex: none; border-right: 1px solid var(--line); background: var(--panel); overflow: auto; }
+  #log h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0; padding: 11px 12px 6px; }
+  .loggroup { border-bottom: 1px solid var(--line); }
+  .loghdr {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--ink); user-select: none;
+  }
+  .loghdr:hover { background: var(--panel-2); }
+  .loghdr .tw { color: var(--muted); width: 10px; display: inline-block; transition: transform .15s; }
+  .loggroup.collapsed .logitems { display: none; }
+  .loggroup.collapsed .tw { transform: rotate(-90deg); }
+  .loghdr .gcount { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11px; }
+  .logrow {
+    display: flex; align-items: center; gap: 7px; padding: 4px 10px 4px 22px; cursor: pointer;
+    font-size: 12px; border-left: 2px solid transparent;
+  }
+  .logrow:hover { background: var(--panel-2); }
+  .logrow.current { background: #20283a; border-left-color: var(--accent); }
+  .logrow .subj { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag {
+    font: 600 9.5px ui-monospace, monospace; letter-spacing: .5px; padding: 1.5px 5px; border-radius: 4px;
+    color: #0c0f14; text-transform: uppercase;
+  }
+  .tag.expand { background: var(--c-expand); }
+  .tag.parse { background: var(--c-parse); }
+  .tag.link_add, .tag.link_upgrade { background: var(--c-link); }
+  .tag.write { background: var(--c-write); }
+  .tag.compact { background: var(--c-compact); }
+
+  /* ---- stage ---- */
+  #stage { flex: 1; position: relative; min-width: 0; }
+  svg { width: 100%; height: 100%; display: block; }
+
+  /* ---- floating inspector overlay ---- */
+  #overlay {
+    position: absolute; right: 16px; bottom: 16px; width: 320px; max-height: 70%;
+    background: rgba(22,27,34,.96); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.45); display: none; flex-direction: column; overflow: hidden;
+    backdrop-filter: blur(3px);
+  }
+  #overlay.open { display: flex; }
+  .ovhead { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  .ovhead h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0; }
+  .ovhead .x { margin-left: auto; cursor: pointer; color: var(--muted); border: none; background: none; font-size: 18px; line-height: 1; padding: 0 2px; }
+  .ovhead .x:hover { color: var(--ink); }
+  .ovbody { padding: 11px 12px; overflow: auto; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12.5px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+  .editstitle { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 12px 0 6px; }
+  ul.edits { list-style: none; margin: 0; padding: 0; }
+  ul.edits li {
+    padding: 4px 8px; margin-bottom: 4px; border-radius: 6px;
+    background: var(--panel-2); border-left: 3px solid var(--line);
+    font-family: ui-monospace, monospace; font-size: 12px; animation: pop .25s ease;
+  }
+  ul.edits li.add { border-left-color: var(--add); }
+  ul.edits li.remove { border-left-color: var(--remove); }
+  ul.edits li.mod { border-left-color: var(--mod); }
+  ul.edits li .params { color: var(--muted); display: block; font-size: 11px; margin-top: 2px; white-space: pre-wrap; }
+  .empty { color: var(--muted); font-style: italic; }
+  @keyframes pop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* ---- footer controls ---- */
+  footer { border-top: 1px solid var(--line); padding: 10px 16px; background: var(--panel); display: flex; align-items: center; gap: 12px; }
+  footer button { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 14px; min-width: 38px; }
+  footer button:hover { border-color: var(--muted); }
+  footer button.primary { background: var(--left); color: #06121f; border-color: var(--left); font-weight: 600; }
+  #scrub { flex: 1; accent-color: var(--left); }
+  #counter { font-family: ui-monospace, monospace; color: var(--muted); font-size: 12px; min-width: 78px; text-align: right; }
+  label.speed { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+
+  /* ---- svg element states ---- */
+  .node, .tlink, .tedge { transition: opacity .35s ease; }
+  .hidden { opacity: 0 !important; pointer-events: none; }
+  .node { cursor: pointer; }
+  .node .chip { fill: #16304c; stroke: #2c4a6b; stroke-width: 1.2; }
+  .node.right .chip { fill: #133626; stroke: #245038; }
+  .node .glyph path, .node .glyph rect, .node .glyph line { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .node.left .glyph path, .node.left .glyph rect, .node.left .glyph line { stroke: var(--left); }
+  .node.right .glyph path, .node.right .glyph rect, .node.right .glyph line { stroke: var(--right); }
+  .node.born .chip { stroke: var(--accent); stroke-width: 1.8; }
+  .node.selected .chip { stroke: var(--accent); stroke-width: 2.6; fill: #38301a; }
+  .nlabel { fill: var(--muted); font: 10px ui-monospace, monospace; pointer-events: none; transition: opacity .2s ease; }
+  .node.born .nlabel, .node.selected .nlabel { fill: var(--ink); }
+  /* dense trees: hide labels until a node is hovered / born / selected */
+  svg.dense .nlabel { opacity: 0; }
+  svg.dense .node:hover .nlabel, svg.dense .node.born .nlabel, svg.dense .node.selected .nlabel { opacity: 1; }
+  .node:hover .chip { stroke-width: 2.2; }
+  #svg { cursor: grab; }
+  #svg.panning { cursor: grabbing; }
+  .tedge { stroke: #2c4a6b; stroke-width: 1.5; fill: none; }
+  .tedge.right { stroke: #245038; }
+  .tlink { stroke: var(--link); fill: none; stroke-width: 1; opacity: .22; }
+  .tlink.settled { stroke-width: 1.6; opacity: .42; }
+  .tlink:hover { opacity: .9; stroke-width: 2.4; cursor: pointer; }
+  .tlink.active, .tlink.selected { stroke: var(--accent); opacity: 1; stroke-width: 2.6; }
+  .baseline { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 6; }
+  .sidecap { fill: var(--muted); font: 600 11px ui-sans-serif; letter-spacing: .5px; text-transform: uppercase; }
+
+  /* ---- pedagogy: info icons, help button, legend ---- */
+  .info {
+    cursor: help; flex: none; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--line);
+    color: var(--muted); font: 600 10px ui-sans-serif; display: inline-flex; align-items: center;
+    justify-content: center; user-select: none;
+  }
+  .info:hover { color: var(--ink); border-color: var(--muted); }
+  .loghdr .info { margin-left: 6px; opacity: .5; }
+  .loghdr:hover .info { opacity: 1; }
+  .helpbtn {
+    cursor: pointer; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--muted); font: 600 12px ui-sans-serif;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .helpbtn:hover { color: var(--ink); border-color: var(--muted); }
+  #legend {
+    position: absolute; inset: 0; background: rgba(10,13,18,.86); display: none; z-index: 5;
+    align-items: center; justify-content: center; backdrop-filter: blur(2px);
+  }
+  #legend.open { display: flex; }
+  .legcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; max-width: 560px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+  .legcard h3 { margin: 0 0 4px; font-size: 14px; }
+  .legcard p.sub { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  .legcard h4 { margin: 14px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .legrow { display: grid; grid-template-columns: 84px 1fr; gap: 4px 12px; font-size: 12.5px; margin-bottom: 4px; align-items: baseline; }
+  .legrow .lk { font-family: ui-monospace, monospace; color: var(--muted); }
+  .legclose { float: right; cursor: pointer; color: var(--muted); border: none; background: none; font-size: 20px; line-height: 1; }
+  .legclose:hover { color: var(--ink); }
+
+  /* ---- compaction board (modal) ---- */
+  #board { position: absolute; inset: 0; background: rgba(10,13,18,.9); display: none; z-index: 6; flex-direction: column; backdrop-filter: blur(2px); }
+  #board.open { display: flex; }
+  .bdhead { display: flex; align-items: baseline; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .bdhead h3 { margin: 0; font-size: 14px; }
+  .bdhead .sub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+  .bdhead .x { margin-left: auto; cursor: pointer; color: var(--muted); border: none; background: none; font-size: 22px; line-height: 1; }
+  .bdhead .x:hover { color: var(--ink); }
+  .bdtrack { flex: 1; overflow: auto; display: flex; align-items: stretch; gap: 0; padding: 18px; }
+  .bdcol { flex: none; width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; }
+  .bdcol.rejected { opacity: .55; }
+  .bdcol h4 { margin: 0 0 2px; font-size: 12px; font-family: ui-monospace, monospace; }
+  .bdcol .meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .bdcol .cost { font-weight: 600; color: var(--ink); background: var(--panel-2); border-radius: 4px; padding: 1px 6px; }
+  .bdcol .verdict { padding: 1px 6px; border-radius: 4px; font: 600 9.5px ui-monospace, monospace; }
+  .bdcol .verdict.ok { background: #243; color: var(--add); }
+  .bdcol .verdict.no { background: #422; color: var(--remove); }
+  .bdcol ul { list-style: none; margin: 0; padding: 0; overflow: auto; }
+  .bdcol li { font: 11px ui-monospace, monospace; padding: 4px 6px; margin-bottom: 4px; border-radius: 5px; background: var(--panel-2); border-left: 3px solid var(--line); }
+  .bdcol li.add { border-left-color: var(--add); } .bdcol li.remove { border-left-color: var(--remove); } .bdcol li.mod { border-left-color: var(--mod); }
+  .bdcol li.gone { opacity: .35; text-decoration: line-through; }
+  .bdcol li.intl { opacity: .5; border-left-color: #333b46; }
+  .bdcol li .d { color: var(--muted); display: block; font-size: 10px; }
+  .bdarrow { flex: none; align-self: center; color: var(--muted); padding: 0 6px; font-size: 20px; }
+
+  /* ---- output (final changelog) dock ---- */
+  #outpanel { width: 0; flex: none; border-left: 1px solid var(--line); background: var(--panel); overflow: hidden; transition: width .2s ease; display: flex; flex-direction: column; }
+  #outpanel.open { width: 340px; }
+  #outpanel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0; padding: 11px 14px 4px; display: flex; align-items: center; }
+  #outpanel h2 .grow { flex: 1; }
+  #outbody { flex: 1; overflow: auto; padding: 4px 14px 14px; font: 12px/1.5 ui-monospace, monospace; }
+  #outbody .obul { margin: 0; white-space: pre-wrap; }
+  #outbody .ogrp { transition: opacity .25s; margin-bottom: 7px; padding: 2px 4px; border-radius: 4px; }
+  #outbody .ogrp.pending { display: none; }
+  #outbody .ogrp.cur { background: #2a2410; }
+  #outbody .ohead { color: var(--accent); margin-bottom: 8px; }
+  #outbody .opath { color: var(--ink); font-weight: 600; }
+  #outbody .empty { font-family: ui-sans-serif; color: var(--muted); }
+  .outbtn { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  .outbtn:hover { border-color: var(--muted); }
+  .outbtn.on { background: var(--left); color: #06121f; border-color: var(--left); font-weight: 600; }
+
+  /* ---- edit list ---- */
+  ul.edits li .etitle { font-weight: 600; }
+  ul.edits li .edetail { color: var(--muted); display: block; font-size: 11px; margin-top: 2px; word-break: break-word; }
+  ul.edits li .etags { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; }
+  ul.edits li .etag { font: 9px ui-monospace, monospace; background: #243; color: var(--add); padding: 1px 5px; border-radius: 4px; }
+  ul.edits li.remove .etag { background: #422; color: var(--remove); }
+  ul.edits li.mod .etag { background: #443; color: var(--mod); }
+  .editsub { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
+  .internal-toggle { cursor: pointer; color: var(--muted); font-size: 11.5px; margin: 8px 0 4px; user-select: none; }
+  .internal-toggle:hover { color: var(--ink); }
+  ul.edits.int li { opacity: .6; border-left-color: #333b46; }
+  ul.edits.int li .etitle { font-weight: 400; }
+  .ovhead { cursor: grab; }
+  .ovhead.dragging { cursor: grabbing; }
+</style>
+</head>
+<body>
+<header>
+  <div class="titlerow">
+    <h1>binoc replay</h1>
+    <span class="snap" id="snapFrom"></span><span class="snap">→</span><span class="snap" id="snapTo"></span>
+    <span class="phase" id="phase">ready</span>
+    <span class="helpbtn" id="helpBtn" title="What am I looking at?">?</span>
+  </div>
+  <div class="steprow">
+    <span class="tag" id="stepTag" style="visibility:hidden">·</span>
+    <div id="stepText"><span class="empty">Press play to begin.</span></div>
+  </div>
+</header>
+<main>
+  <div id="log"><h2>Steps</h2></div>
+  <div id="stage">
+    <svg id="svg" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="overlay">
+      <div class="ovhead" id="ovHead"><h2 id="ovTitle">Inspector</h2><button class="x" id="ovClose" title="Close">×</button></div>
+      <div class="ovbody" id="ovBody"></div>
+    </div>
+    <div id="board">
+      <div class="bdhead"><h3>Compaction</h3><span class="sub" id="bdSub"></span><button class="x" id="bdClose">×</button></div>
+      <div class="bdtrack" id="bdTrack"></div>
+    </div>
+    <div id="legend">
+      <div class="legcard">
+        <button class="legclose" id="legClose">×</button>
+        <h3>How binoc builds a changeset</h3>
+        <p class="sub">Two snapshot trees grow from the roots (bottom) upward; faint lines are
+          correspondence links between matching items. The engine runs rounds of rules until nothing
+          changes, then writes &amp; compacts the edits that explain each link.</p>
+        <h4>Phases</h4>
+        <div class="legrow"><span class="lk" style="color:var(--c-expand)">expand</span><span>Unpack a container (directory, archive) into child items — one tree level.</span></div>
+        <div class="legrow"><span class="lk" style="color:var(--c-parse)">parse</span><span>Read a leaf's bytes into a typed artifact (CSV → table) that later rules can use.</span></div>
+        <div class="legrow"><span class="lk" style="color:var(--c-link)">link</span><span>A pair rule proposes that a left item corresponds to a right item (by name, content…).</span></div>
+        <div class="legrow"><span class="lk" style="color:var(--c-write)">write</span><span>An edit-list writer emits the edits that turn the left item into the right item.</span></div>
+        <div class="legrow"><span class="lk" style="color:var(--c-compact)">compact</span><span>A compaction rule simplifies an edit list when the result is cheaper.</span></div>
+        <h4>Node icons</h4>
+        <div class="legrow"><span class="lk">📁 / 🗜</span><span>directory · archive (container that expands into children)</span></div>
+        <div class="legrow"><span class="lk">▦ / 📄</span><span>tabular (CSV-like) · text/other leaf file</span></div>
+        <h4>Controls</h4>
+        <div class="legrow"><span class="lk">play · ◀ ▶</span><span>play/pause and step; ← → keys and the scrubber also work.</span></div>
+        <div class="legrow"><span class="lk">scroll · drag</span><span>zoom and pan the trees; double-click to reset the view.</span></div>
+        <div class="legrow"><span class="lk">click</span><span>inspect a node or link; stepping follows the current item automatically.</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="outpanel">
+    <h2><span class="grow">Final changelog</span></h2>
+    <div id="outbody"></div>
+  </div>
+</main>
+<footer>
+  <button id="toStart" title="Restart">⏮</button>
+  <button id="back" title="Step back">◀</button>
+  <button id="play" class="primary" title="Play / pause">▶</button>
+  <button id="fwd" title="Step forward">▶❘</button>
+  <input id="scrub" type="range" min="-1" max="0" value="-1">
+  <span id="counter">0 / 0</span>
+  <label class="speed">speed<input id="speed" type="range" min="1" max="10" value="5" style="width:80px;accent-color:var(--left);"></label>
+  <button class="outbtn" id="outBtn" title="Show the changelog this run produces">📄 Output</button>
+</footer>
+
+<script type="application/json" id="trace-data">__BINOC_TRACE_JSON__</script>
+<script>
+"use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
+const trace = JSON.parse(document.getElementById("trace-data").textContent);
+const steps = trace.steps || [];
+
+// short = hover tooltip on the kind chip; long = the per-step info icon.
+const KIND_INFO = {
+  expand: { tag: "EXP", short: "Expand: unpack a container into child items", long: "An expand rule decomposes a container node (directory, archive…) into child nodes — one level of the tree grows." },
+  parse: { tag: "PRS", short: "Parse: read an item into a typed artifact", long: "A parse rule reads a leaf's bytes into a structured artifact (e.g. a CSV becomes a table) that pair rules and writers can consume." },
+  link_add: { tag: "LNK", short: "Link: propose a correspondence between two items", long: "A pair rule proposes that a left item corresponds to a right item — matched by name, content hash, etc. — creating a link between the trees." },
+  link_upgrade: { tag: "UPG", short: "Upgrade: a stronger rule revises a link", long: "A higher-priority pair rule replaces the evidence/proposer of an existing link (e.g. a content match overriding a weaker name match)." },
+  write: { tag: "WRT", short: "Write: explain a link as a list of edits", long: "An edit-list writer compares the two linked items and emits the edits that turn the left one into the right one." },
+  compact: { tag: "CMP", short: "Compact: simplify an edit list if cheaper", long: "A compaction rule rewrites an edit list into a cheaper equivalent (e.g. many row ops collapse into one aligned diff). It is kept only if it lowers the cost." },
+};
+const kindTag = k => (KIND_INFO[k] && KIND_INFO[k].tag) || k.slice(0, 3).toUpperCase();
+
+const base = p => { if (!p) return "<root>"; const i = p.lastIndexOf("/"); return i >= 0 ? p.slice(i + 1) : p; };
+function el(name, attrs, parent) {
+  const e = document.createElementNS(SVGNS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+const leftById = {}; trace.left.forEach(n => leftById[n.index] = n);
+const rightById = {}; trace.right.forEach(n => rightById[n.index] = n);
+const nodeOf = (side, idx) => side === "left" ? leftById[idx] : rightById[idx];
+const linkById = {}; trace.links.forEach(lk => linkById[lk.index] = lk);
+
+// ---- node icon kind ---------------------------------------------------------
+function nodeKind(n) {
+  const it = (n.item_type || "").toLowerCase();
+  const p = (n.path || "").toLowerCase();
+  if (/\.(zip|tar|tgz|tar\.gz|gz|7z|jar|whl)$/.test(p) || it.includes("archive")) return "zip";
+  if (n.is_dir || it === "directory" || it === "container" || it === "tree") return "dir";
+  if (it.includes("tabular") || it.includes("spreadsheet") || /\.(csv|tsv|xlsx?|parquet)$/.test(p)) return "sheet";
+  if (it.includes("text") || it.includes("document") || /\.(txt|md|json|ya?ml|xml|html?|log)$/.test(p)) return "doc";
+  return "file";
+}
+// glyph path data drawn in a 24x24 box (stroke icons)
+const GLYPHS = {
+  dir:   ["M3,8 a2,2 0 0 1 2,-2 h5 l2,2 h7 a2,2 0 0 1 2,2 v7 a2,2 0 0 1 -2,2 h-16 a2,2 0 0 1 -2,-2 z"],
+  zip:   ["M4,7 h7 l2,2 h7 v10 a1,1 0 0 1 -1,1 h-15 a1,1 0 0 1 -1,-1 z", "M11,9 v11", "M9.5,11 h3 M9.5,14 h3 M9.5,17 h3"],
+  sheet: ["M5,4 h14 v16 h-14 z", "M5,10 h14", "M5,15 h14", "M11,4 v16"],
+  doc:   ["M7,3 h8 l4,4 v14 h-12 z", "M15,3 v4 h4", "M9,12 h7 M9,15 h7 M9,18 h4"],
+  file:  ["M7,3 h8 l4,4 v14 h-12 z", "M15,3 v4 h4"],
+};
+function appendGlyph(group, kind) {
+  const g = el("g", { class: "glyph", transform: "scale(0.6) translate(-12,-12)" }, group);
+  (GLYPHS[kind] || GLYPHS.file).forEach(d => el("path", { d }, g));
+}
+
+// ---- per-side layout (root at bottom, grows upward) -------------------------
+function layoutSide(nodes) {
+  if (!nodes.length) return { maxDepth: 0, maxLeaf: 0 };
+  const children = nodes.map(() => []);
+  nodes.forEach(n => { if (n.parent !== null && n.parent !== undefined) children[n.parent].push(n.index); });
+  const depth = nodes.map(() => 0);
+  nodes.forEach(n => { depth[n.index] = (n.parent === null || n.parent === undefined) ? 0 : depth[n.parent] + 1; });
+  let nextLeaf = 0, maxDepth = 0;
+  const lx = nodes.map(() => 0);
+  function assign(i) {
+    maxDepth = Math.max(maxDepth, depth[i]);
+    const kids = children[i];
+    if (!kids.length) { lx[i] = nextLeaf++; return; }
+    kids.forEach(assign);
+    lx[i] = kids.reduce((s, k) => s + lx[k], 0) / kids.length;
+  }
+  nodes.forEach(n => { if (n.parent === null || n.parent === undefined) assign(n.index); });
+  nodes.forEach(n => { n._leaf = lx[n.index]; n._depth = depth[n.index]; });
+  return { maxDepth, maxLeaf: Math.max(0, nextLeaf - 1) };
+}
+const L = layoutSide(trace.left);
+const R = layoutSide(trace.right);
+const maxDepth = Math.max(1, L.maxDepth, R.maxDepth);
+
+const PAD = 50, MIDGAP = 90;
+let W = 1100, H = 620, sideW = 400, levelGap = 200;
+
+const svg = document.getElementById("svg");
+const gRoot = el("g", {}, svg);   // pan/zoom transform applies here
+const gLinks = el("g", {}, gRoot);
+const gEdges = el("g", {}, gRoot);
+const gNodes = el("g", {}, gRoot);
+const gOver = el("g", {}, gRoot);
+if (trace.left.length > 8 || trace.right.length > 8) svg.classList.add("dense");
+const baseLeft = el("line", { class: "baseline" }, gOver);
+const baseRight = el("line", { class: "baseline" }, gOver);
+const capFrom = el("text", { class: "sidecap" }, gOver); capFrom.textContent = "from";
+const capTo = el("text", { class: "sidecap" }, gOver); capTo.textContent = "to";
+
+function buildEdges(nodes, side) {
+  nodes.forEach(n => { if (n.parent !== null && n.parent !== undefined) n._edge = el("path", { class: `tedge ${side} hidden` }, gEdges); });
+}
+buildEdges(trace.left, "left");
+buildEdges(trace.right, "right");
+
+function buildNodes(nodes, side) {
+  nodes.forEach(n => {
+    const g = el("g", { class: `node ${side} hidden` }, gNodes);
+    el("rect", { class: "chip", x: -13, y: -12, width: 26, height: 24, rx: 6 }, g);
+    appendGlyph(g, nodeKind(n));
+    const t = el("text", { class: "nlabel", x: 0, y: -18, "text-anchor": "middle" }, g);
+    t.textContent = base(n.path);
+    n._g = g;
+    g.addEventListener("click", e => { e.stopPropagation(); openOverlay({ type: "node", side, n }); });
+  });
+}
+buildNodes(trace.left, "left");
+buildNodes(trace.right, "right");
+
+trace.links.forEach(lk => {
+  const a = nodeOf("left", lk.left), b = nodeOf("right", lk.right);
+  if (!a || !b) return;
+  lk._path = el("path", { class: `tlink hidden ${lk.settled ? "settled" : ""}` }, gLinks);
+  lk._path.addEventListener("click", e => { e.stopPropagation(); openOverlay({ type: "link", lk }); });
+});
+svg.addEventListener("click", () => { if (!suppressClick) closeOverlay(); });
+
+// ---- pan / zoom -------------------------------------------------------------
+let view = { tx: 0, ty: 0, scale: 1 };
+let suppressClick = false;
+function applyView() { gRoot.setAttribute("transform", `translate(${view.tx},${view.ty}) scale(${view.scale})`); }
+function clientToSvg(x, y) {
+  const pt = svg.createSVGPoint(); pt.x = x; pt.y = y;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const p = clientToSvg(e.clientX, e.clientY);
+  const wx = (p.x - view.tx) / view.scale, wy = (p.y - view.ty) / view.scale;
+  view.scale = Math.min(7, Math.max(0.4, view.scale * Math.exp(-e.deltaY * 0.0015)));
+  view.tx = p.x - wx * view.scale; view.ty = p.y - wy * view.scale;
+  applyView();
+}, { passive: false });
+let dragging = false, lastX = 0, lastY = 0, movedDist = 0;
+svg.addEventListener("mousedown", e => {
+  if (e.target.closest(".node") || e.target.closest(".tlink")) return;
+  dragging = true; movedDist = 0; lastX = e.clientX; lastY = e.clientY; svg.classList.add("panning");
+});
+window.addEventListener("mousemove", e => {
+  if (!dragging) return;
+  const ctm = svg.getScreenCTM();
+  view.tx += (e.clientX - lastX) / ctm.a; view.ty += (e.clientY - lastY) / ctm.d;
+  movedDist += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
+  lastX = e.clientX; lastY = e.clientY; applyView();
+});
+window.addEventListener("mouseup", () => {
+  if (dragging) { suppressClick = movedDist > 4; setTimeout(() => suppressClick = false, 0); }
+  dragging = false; svg.classList.remove("panning");
+});
+svg.addEventListener("dblclick", () => { view = { tx: 0, ty: 0, scale: 1 }; applyView(); });
+
+// ---- (re)layout -------------------------------------------------------------
+function place(nodes, info, xStart) {
+  const span = Math.max(1, info.maxLeaf);
+  nodes.forEach(n => {
+    n.x = xStart + (info.maxLeaf === 0 ? sideW / 2 : (n._leaf / span) * sideW);
+    n.y = H - PAD - n._depth * levelGap;
+  });
+}
+function relayout() {
+  const stage = document.getElementById("stage");
+  W = Math.max(720, stage.clientWidth);
+  H = Math.max(360, stage.clientHeight);
+  sideW = (W - MIDGAP) / 2 - PAD * 1.5;
+  levelGap = (H * 0.82 - PAD) / maxDepth;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  place(trace.left, L, PAD);
+  place(trace.right, R, PAD + sideW + MIDGAP);
+
+  for (const [nodes, side] of [[trace.left, "left"], [trace.right, "right"]]) {
+    nodes.forEach(n => {
+      n._g.setAttribute("transform", `translate(${n.x},${n.y})`);
+      if (n._edge) {
+        const p = nodeOf(side, n.parent);
+        const my = (p.y + n.y) / 2;
+        n._edge.setAttribute("d", `M${p.x},${p.y} C${p.x},${my} ${n.x},${my} ${n.x},${n.y}`);
+      }
+    });
+  }
+  trace.links.forEach(lk => {
+    if (!lk._path) return;
+    const a = nodeOf("left", lk.left), b = nodeOf("right", lk.right);
+    // Bow each cross-link downward so links between same-height nodes don't
+    // lie flat across the node row. Control points hang below each endpoint.
+    const dx = Math.abs(b.x - a.x);
+    const room = (H - PAD) - Math.max(a.y, b.y);
+    const bow = Math.max(26, Math.min(dx * 0.28, room * 0.7, 150));
+    lk._path.setAttribute("d", `M${a.x},${a.y} C${a.x},${a.y + bow} ${b.x},${b.y + bow} ${b.x},${b.y}`);
+  });
+
+  const by = H - PAD + 24;
+  baseLeft.setAttribute("x1", PAD - 16); baseLeft.setAttribute("y1", by);
+  baseLeft.setAttribute("x2", PAD + sideW + 16); baseLeft.setAttribute("y2", by);
+  baseRight.setAttribute("x1", PAD + sideW + MIDGAP - 16); baseRight.setAttribute("y1", by);
+  baseRight.setAttribute("x2", W - PAD + 16); baseRight.setAttribute("y2", by);
+  capFrom.setAttribute("x", PAD); capFrom.setAttribute("y", by + 16);
+  capTo.setAttribute("x", PAD + sideW + MIDGAP); capTo.setAttribute("y", by + 16);
+}
+window.addEventListener("resize", relayout);
+
+// ---- timeline state ---------------------------------------------------------
+let cursor = -1;
+let selection = null;     // {type, ...} subject shown in overlay
+let overlayOpen = false;
+let playing = false, timer = null;
+
+const scrub = document.getElementById("scrub");
+scrub.max = String(steps.length - 1);
+
+function nodeVisible(n)  { return n.parent === null || n.parent === undefined || n.born_step <= cursor; }
+function linkVisible(lk) { return lk.born_step <= cursor; }
+
+function editsForLink(idx) {
+  let edits = null;
+  for (let i = 0; i <= cursor; i++) {
+    const s = steps[i];
+    if (s.link !== idx) continue;
+    if (s.kind === "write") edits = s.edits;
+    else if (s.kind === "compact" && s.accepted) edits = s.after;
+  }
+  return edits;
+}
+
+// the node/link a step is "about" (for auto-follow selection)
+function stepSubject(s) {
+  if (!s) return null;
+  if (s.kind === "expand" || s.kind === "parse") return { type: "node", side: s.side, n: nodeOf(s.side, s.node) };
+  if (s.link !== undefined && linkById[s.link]) return { type: "link", lk: linkById[s.link] };
+  return null;
+}
+
+function phaseLabel(s) {
+  if (!s) return "ready";
+  if (s.kind === "write") return "writing edit lists";
+  if (s.kind === "compact") return "compacting edit lists";
+  return `round ${s.round} · ${s.kind.replace("_", " ")}`;
+}
+function describe(s) {
+  if (!s) return '<span class="empty">Press play to begin.</span>';
+  const ln = i => base(nodeOf("left", i)?.path ?? "");
+  const rn = i => base(nodeOf("right", i)?.path ?? "");
+  const rule = `<span class="rule">${s.rule || s.writer || ""}</span>`;
+  switch (s.kind) {
+    case "expand": return `${rule} expanded <b>${base(nodeOf(s.side, s.node)?.path)}</b> into ${s.children.length} child${s.children.length === 1 ? "" : "ren"}.`;
+    case "parse": return `${rule} parsed <b>${base(nodeOf(s.side, s.node)?.path)}</b> as <code>${s.format}</code>${s.children && s.children.length ? ` (+${s.children.length} children)` : ""}.`;
+    case "link_add": return `${rule} linked <b>${ln(s.left)}</b> ↔ <b>${rn(s.right)}</b> <i>(${s.evidence}${s.settled ? ", settled" : ""})</i>.`;
+    case "link_upgrade": return `${rule} upgraded a link: <i>${s.old_evidence}</i> → <i>${s.new_evidence}</i>.`;
+    case "write": return `${rule} wrote ${s.edits.length} edit${s.edits.length === 1 ? "" : "s"} for link #${s.link}.`;
+    case "compact": return `${rule} ${s.accepted ? "compacted" : "considered (rejected)"} link #${s.link}: ${s.before.length} → ${s.after.length} edits.`;
+  }
+  return s.kind;
+}
+function subjShort(s) {
+  const ln = i => base(nodeOf("left", i)?.path ?? ""), rn = i => base(nodeOf("right", i)?.path ?? "");
+  switch (s.kind) {
+    case "expand": case "parse": return base(nodeOf(s.side, s.node)?.path);
+    case "link_add": case "link_upgrade": return `${ln(s.left)} ↔ ${rn(s.right)}`;
+    case "write": case "compact": return `link #${s.link}`;
+  }
+  return "";
+}
+
+// ---- tiered step log --------------------------------------------------------
+const PHASE_INFO = {
+  round: "A saturation round: every expand / parse / pair rule runs once. Rounds repeat until a full pass changes nothing.",
+  write: KIND_INFO.write.long,
+  compact: KIND_INFO.compact.long,
+};
+const logEl = document.getElementById("log");
+const rowEls = [];          // rowEls[stepIndex] -> row element (compaction steps of one link share a row)
+const groupOfStep = [];     // groupOfStep[stepIndex] -> group element
+const compLinkSteps = {};   // link index -> [stepIndex, …] of its compaction steps
+(function buildLog() {
+  let curKey = null, itemsEl = null, groupEl = null, count = 0, countEl = null;
+  const compRowByLink = {};
+  function groupInfo(s) {
+    if (s.kind === "write") return ["write", "Edit-list writing"];
+    if (s.kind === "compact") return ["compact", "Compaction"];
+    return ["round" + s.round, "Round " + s.round];
+  }
+  steps.forEach((s, i) => {
+    const [key, label] = groupInfo(s);
+    if (key !== curKey) {
+      if (countEl) countEl.textContent = count;
+      curKey = key; count = 0;
+      groupEl = document.createElement("div"); groupEl.className = "loggroup";
+      const hdr = document.createElement("div"); hdr.className = "loghdr";
+      const phaseKey = key.startsWith("round") ? "round" : key;
+      hdr.innerHTML = `<span class="tw">▾</span><span>${label}</span>` +
+        `<span class="info" title="${PHASE_INFO[phaseKey] || ""}">i</span><span class="gcount"></span>`;
+      countEl = hdr.querySelector(".gcount");
+      hdr.querySelector(".info").addEventListener("click", e => e.stopPropagation());
+      hdr.addEventListener("click", () => groupEl.classList.toggle("collapsed"));
+      itemsEl = document.createElement("div"); itemsEl.className = "logitems";
+      groupEl.appendChild(hdr); groupEl.appendChild(itemsEl);
+      logEl.appendChild(groupEl);
+    }
+    groupOfStep[i] = groupEl;
+    // Compaction: one row per artifact-link; clicking opens the rewrite board.
+    if (s.kind === "compact") {
+      (compLinkSteps[s.link] = compLinkSteps[s.link] || []).push(i);
+      if (compRowByLink[s.link]) { rowEls[i] = compRowByLink[s.link]; return; }
+      count++;
+      const row = document.createElement("div"); row.className = "logrow";
+      row.innerHTML = `<span class="tag compact" title="${KIND_INFO.compact.short}">${kindTag("compact")}</span>` +
+        `<span class="subj">link #${s.link}</span>`;
+      row.addEventListener("click", () => { stop(); const sts = compLinkSteps[s.link]; setCursor(sts[sts.length - 1]); openBoard(s.link); });
+      itemsEl.appendChild(row); compRowByLink[s.link] = row; rowEls[i] = row;
+      return;
+    }
+    count++;
+    const info = KIND_INFO[s.kind] || {};
+    const row = document.createElement("div"); row.className = "logrow";
+    row.innerHTML = `<span class="tag ${s.kind}" title="${info.short || ""}">${kindTag(s.kind)}</span>` +
+      `<span class="subj">${subjShort(s)}</span>`;
+    row.addEventListener("click", () => { stop(); setCursor(i); });
+    itemsEl.appendChild(row); rowEls[i] = row;
+  });
+  if (countEl) countEl.textContent = count;
+})();
+
+// ---- overlay ----------------------------------------------------------------
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function fmtVal(v) {
+  if (v && typeof v === "object" && Array.isArray(v.values)) return "[" + v.values.join(", ") + (v.truncated ? ", …" : "") + "]";
+  if (Array.isArray(v)) return "[" + v.join(", ") + "]";
+  return String(v);
+}
+function prettyVerb(verb) {
+  const b = verb.includes(".") ? verb.split(".").slice(1).join(".") : verb;
+  return b.replace(/[_-]/g, " ").replace(/^./, c => c.toUpperCase());
+}
+// Turn a raw edit into { cls, title, detail (plain text), tags, internal }.
+function humanizeEdit(e) {
+  const p = e.params || {};
+  let title = prettyVerb(e.verb), detail = "";
+  switch (e.verb) {
+    case "tabular.add_row": title = "Add row"; detail = `at index ${p.index}: ${fmtVal(p.values)}`; break;
+    case "tabular.remove_row": title = "Remove row"; detail = `at index ${p.index}` + (p.values ? `: ${fmtVal(p.values)}` : ""); break;
+    case "tabular.edit_cell": title = "Edit cell"; detail = `row ${p.row}, column “${p.column}”: ${p.from} → ${p.to}`; break;
+    case "tabular.set_headers": title = "Set headers"; detail = `${fmtVal(p.from)} → ${fmtVal(p.to)}`; break;
+    case "tabular.reorder_columns": title = "Reorder columns"; detail = `→ ${fmtVal(p.order)}`; break;
+    case "tabular.row_alignment_basis": title = "Row-alignment basis"; detail = `${(p.columns || []).join(", ")} · ${(p.left || []).length}→${(p.right || []).length} rows`; break;
+    case "binary.contents-differ": title = "Contents differ"; break;
+    case "container.add_child": title = "Add child"; detail = p.name || ""; break;
+    case "container.remove_child": title = "Remove child"; detail = p.name || ""; break;
+    default: {
+      const ks = Object.keys(p);
+      if (ks.length) detail = ks.slice(0, 4).map(k => `${k}: ${typeof p[k] === "object" ? fmtVal(p[k]) : p[k]}`).join(" · ");
+    }
+  }
+  const tags = (e.projection && e.projection.hint && e.projection.hint.tags) || [];
+  let cls = "mod";
+  if (tags.some(t => /addition|add/.test(t)) || /add_row|add_child|insert/.test(e.verb)) cls = "add";
+  else if (tags.some(t => /removal|delete/.test(t)) || /remove|delete|drop/.test(e.verb)) cls = "remove";
+  return { cls, title, detail, tags, internal: !(e.projection && e.projection.visible) };
+}
+function editLi(h) {
+  const tags = h.tags.map(t => `<span class="etag">${esc(t.replace(/^binoc\./, ""))}</span>`).join("");
+  return `<li class="${h.cls}"><span class="etitle">${esc(h.title)}</span>`
+    + (h.detail ? `<span class="edetail">${esc(h.detail)}</span>` : "")
+    + (tags ? `<div class="etags">${tags}</div>` : "") + "</li>";
+}
+function editsHtml(edits) {
+  if (!edits) return '<div class="empty">No edits yet — the writer runs after the rounds finish.</div>';
+  if (!edits.length) return '<div class="empty">Empty — the two items are identical (or the link is settled).</div>';
+  const H = edits.map(humanizeEdit);
+  const vis = H.filter(h => !h.internal), int = H.filter(h => h.internal);
+  let html = `<p class="editsub">${vis.length} change${vis.length === 1 ? "" : "s"} that turn the “from” item into the “to” item.</p>`;
+  html += vis.length ? `<ul class="edits">${vis.map(editLi).join("")}</ul>` : '<div class="empty">No user-facing changes.</div>';
+  if (int.length) {
+    html += `<div class="internal-toggle" data-int>▸ ${int.length} internal step${int.length === 1 ? "" : "s"} (alignment scaffolding)</div>`;
+    html += `<ul class="edits int" style="display:none">${int.map(editLi).join("")}</ul>`;
+  }
+  return html;
+}
+function renderOverlay() {
+  const ov = document.getElementById("overlay");
+  ov.classList.toggle("open", overlayOpen);
+  if (!overlayOpen || !selection) return;
+  const title = document.getElementById("ovTitle"), body = document.getElementById("ovBody");
+  if (selection.type === "node") {
+    const n = selection.n;
+    title.textContent = "Node";
+    body.innerHTML = `<dl class="kv">
+      <dt>side</dt><dd>${selection.side}</dd>
+      <dt>path</dt><dd>${n.path || "&lt;root&gt;"}</dd>
+      <dt>type</dt><dd>${n.item_type || (n.is_dir ? "container" : "leaf")}</dd>
+      <dt>node #</dt><dd>${n.index}</dd></dl>`;
+  } else {
+    const lk = selection.lk;
+    title.textContent = `Link #${lk.index}`;
+    body.innerHTML = `<dl class="kv">
+      <dt>from</dt><dd>${nodeOf("left", lk.left)?.path || "&lt;root&gt;"}</dd>
+      <dt>to</dt><dd>${nodeOf("right", lk.right)?.path || "&lt;root&gt;"}</dd>
+      <dt>evidence</dt><dd>${lk.evidence}</dd>
+      <dt>proposer</dt><dd>${lk.proposer}</dd>
+      <dt>settled</dt><dd>${lk.settled}</dd></dl>
+      <div class="editstitle">Edit list</div>${editsHtml(editsForLink(lk.index))}`;
+  }
+  const toggle = body.querySelector(".internal-toggle");
+  if (toggle) toggle.addEventListener("click", () => {
+    const ul = toggle.nextElementSibling, show = ul.style.display === "none";
+    ul.style.display = show ? "" : "none";
+    toggle.textContent = (show ? "▾ " : "▸ ") + toggle.textContent.slice(2);
+  });
+}
+function openOverlay(sel) { selection = sel; overlayOpen = true; render(); }
+function closeOverlay() { overlayOpen = false; render(); }
+document.getElementById("ovClose").addEventListener("click", e => { e.stopPropagation(); closeOverlay(); });
+
+// ---- cost function (mirrors binoc-core/src/correspondence/cost.rs) ----------
+function valueSize(v) {
+  if (v === null || typeof v === "boolean" || typeof v === "number") return 1;
+  if (typeof v === "string") return 1 + Math.floor(v.length / 16);
+  if (Array.isArray(v)) return 1 + v.reduce((s, x) => s + valueSize(x), 0);
+  if (typeof v === "object") return 1 + Object.values(v).reduce((s, x) => s + 1 + valueSize(x), 0);
+  return 1;
+}
+const listCost = edits => edits.reduce((s, e) => s + 1 + valueSize(e.params || {}), 0);
+
+// ---- compaction board (Trello-style: the edit stack shrinking left→right) ---
+const boardEl = document.getElementById("board");
+function boardEditLi(h) {
+  return `<li class="${h.cls}${h.internal ? " intl" : ""}">${esc(h.title)}`
+    + (h.detail ? `<span class="d">${esc(h.detail)}</span>` : "") + "</li>";
+}
+function openBoard(link) {
+  const idx = compLinkSteps[link] || [];
+  if (!idx.length) return;
+  const sts = idx.map(i => steps[i]), lk = linkById[link];
+  document.getElementById("bdSub").textContent =
+    `link #${link} · ${nodeOf("right", lk.right)?.path || nodeOf("left", lk.left)?.path || "<root>"}`;
+  const cols = [{ label: "Written", edits: sts[0].before }];
+  sts.forEach(s => cols.push({ label: s.rule.replace(/^binoc\.compact\./, ""), accepted: s.accepted, edits: s.accepted ? s.after : s.before }));
+  const track = document.getElementById("bdTrack");
+  track.innerHTML = "";
+  cols.forEach((c, ci) => {
+    if (ci > 0) { const a = document.createElement("div"); a.className = "bdarrow"; a.textContent = "→"; track.appendChild(a); }
+    const vis = c.edits.filter(e => e.projection && e.projection.visible).length;
+    const verdict = ci === 0 ? "" : (c.accepted ? '<span class="verdict ok">kept</span>' : '<span class="verdict no">rejected</span>');
+    const col = document.createElement("div");
+    col.className = "bdcol" + (c.accepted === false ? " rejected" : "");
+    col.innerHTML = `<h4>${esc(c.label)}</h4>`
+      + `<div class="meta"><span class="cost">cost ${listCost(c.edits)}</span>`
+      + `<span>${vis} change${vis === 1 ? "" : "s"} · ${c.edits.length} ops</span>${verdict}</div>`
+      + `<ul>${c.edits.map(e => boardEditLi(humanizeEdit(e))).join("")}</ul>`;
+    track.appendChild(col);
+  });
+  legend.classList.remove("open");
+  boardEl.classList.add("open");
+}
+function closeBoard() { boardEl.classList.remove("open"); }
+document.getElementById("bdClose").addEventListener("click", closeBoard);
+boardEl.addEventListener("click", e => { if (e.target === boardEl) closeBoard(); });
+
+// ---- main render ------------------------------------------------------------
+function render() {
+  const cur = steps[cursor];
+  // One unified highlight: the current selection (which auto-follows the step,
+  // or is set by a click). Children of an expand/parse selection glow too.
+  const selNode = selection && selection.type === "node" ? selection.side + ":" + selection.n.index : null;
+  const selLink = selection && selection.type === "link" ? selection.lk.index : -1;
+  const kids = new Set();
+  if (cur && (cur.kind === "expand" || cur.kind === "parse") && selNode === cur.side + ":" + cur.node)
+    (cur.children || []).forEach(c => kids.add(cur.side + ":" + c));
+
+  for (const side of ["left", "right"]) {
+    (side === "left" ? trace.left : trace.right).forEach(n => {
+      const vis = nodeVisible(n);
+      n._g.classList.toggle("hidden", !vis);
+      if (n._edge) n._edge.classList.toggle("hidden", !vis);
+      const key = side + ":" + n.index;
+      n._g.classList.toggle("selected", selNode === key);
+      n._g.classList.toggle("born", kids.has(key));
+    });
+  }
+  trace.links.forEach(lk => {
+    if (!lk._path) return;
+    lk._path.classList.toggle("hidden", !linkVisible(lk));
+    lk._path.classList.toggle("selected", lk.index === selLink);
+  });
+
+  document.getElementById("phase").textContent = phaseLabel(cur);
+  document.getElementById("stepText").innerHTML = describe(cur);
+  const tag = document.getElementById("stepTag");
+  if (cur) {
+    const ki = KIND_INFO[cur.kind] || {};
+    tag.style.visibility = "visible"; tag.className = "tag " + cur.kind;
+    tag.textContent = kindTag(cur.kind); tag.title = ki.short || "";
+  } else tag.style.visibility = "hidden";
+  document.getElementById("counter").textContent = `${cursor + 1} / ${steps.length}`;
+  scrub.value = String(cursor);
+
+  // step log highlight + scroll (compaction steps of one link share a row)
+  rowEls.forEach(r => r && r.classList.remove("current"));
+  const cr = rowEls[cursor];
+  if (cr) { cr.classList.add("current"); groupOfStep[cursor].classList.remove("collapsed"); cr.scrollIntoView({ block: "nearest" }); }
+
+  renderOverlay();
+  renderOutput();
+}
+
+// ---- controls ---------------------------------------------------------------
+function setCursor(c) {
+  cursor = Math.max(-1, Math.min(steps.length - 1, c));
+  // Stepping selects the step's subject — one unified concept with clicking.
+  selection = stepSubject(steps[cursor]);
+  render();
+}
+function stepFwd() { if (cursor < steps.length - 1) setCursor(cursor + 1); else stop(); }
+function stepBack() { setCursor(cursor - 1); }
+function delayMs() { return 720 - (parseInt(document.getElementById("speed").value, 10) - 1) * 68; }
+function tick() { if (cursor >= steps.length - 1) { stop(); return; } stepFwd(); timer = setTimeout(tick, delayMs()); }
+function play() { if (playing) return; if (cursor >= steps.length - 1) setCursor(-1); playing = true; document.getElementById("play").textContent = "⏸"; timer = setTimeout(tick, delayMs()); }
+function stop() { playing = false; document.getElementById("play").textContent = "▶"; if (timer) clearTimeout(timer); timer = null; }
+
+document.getElementById("play").addEventListener("click", () => playing ? stop() : play());
+document.getElementById("fwd").addEventListener("click", () => { stop(); stepFwd(); });
+document.getElementById("back").addEventListener("click", () => { stop(); stepBack(); });
+document.getElementById("toStart").addEventListener("click", () => { stop(); setCursor(-1); });
+scrub.addEventListener("input", () => { stop(); setCursor(parseInt(scrub.value, 10)); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { legend.classList.remove("open"); closeBoard(); if (overlayOpen) closeOverlay(); }
+  else if (e.key === " ") { e.preventDefault(); playing ? stop() : play(); }
+  else if (e.key === "ArrowRight") { stop(); stepFwd(); }
+  else if (e.key === "ArrowLeft") { stop(); stepBack(); }
+});
+
+// ---- final changelog output panel -------------------------------------------
+const outPanel = document.getElementById("outpanel"), outBody = document.getElementById("outbody"), outBtn = document.getElementById("outBtn");
+let outOpen = false;
+// earliest write step that touches a path (so a bullet reveals as its link is written)
+const writeStepOfPath = {};
+steps.forEach((s, i) => {
+  if (s.kind !== "write") return;
+  const lk = linkById[s.link]; if (!lk) return;
+  [nodeOf("left", lk.left)?.path, nodeOf("right", lk.right)?.path].forEach(p => {
+    if (p != null && writeStepOfPath[p] === undefined) writeStepOfPath[p] = i;
+  });
+});
+const firstWrite = steps.findIndex(s => s.kind === "write");
+// parse the rendered markdown into a header + top-level bullets (with sub-lines)
+let outHeader = "";
+const outBullets = [];
+if (trace.output) {
+  let cur = null;
+  for (const line of trace.output.split("\n")) {
+    const m = line.match(/^- \*\*(.+?)\*\*/);
+    if (m) { cur = { path: m[1], lines: [line] }; outBullets.push(cur); }
+    else if (cur && /^\s+\S/.test(line)) cur.lines.push(line);
+    else if (!cur && line.startsWith("# ")) outHeader = line.replace(/^#\s*/, "");
+  }
+}
+function mdLine(line) {
+  const indent = line.match(/^\s*/)[0].length;
+  let t = esc(line.trim().replace(/^- /, "")).replace(/\*\*(.+?)\*\*/g, '<span class="opath">$1</span>');
+  return `<div class="obul" style="padding-left:${Math.max(0, indent - 2) * 6}px">${t}</div>`;
+}
+function renderOutput() {
+  if (!outOpen) return;
+  if (!trace.output) { outBody.innerHTML = '<div class="empty">No rendered changelog in this trace. Re-run <code>binoc diff … --trace</code> with the updated CLI to include it.</div>'; return; }
+  const s = steps[cursor];
+  const curPath = s && (s.kind === "write" || s.kind === "compact") && linkById[s.link]
+    ? nodeOf("right", linkById[s.link].right)?.path : null;
+  let html = outHeader ? `<div class="ogrp"><div class="obul ohead opath">${esc(outHeader)}</div></div>` : "";
+  outBullets.forEach(b => {
+    const at = writeStepOfPath[b.path];
+    const revealAt = at !== undefined ? at : (firstWrite < 0 ? 0 : steps.length - 1);
+    const pending = cursor < revealAt;
+    html += `<div class="ogrp${pending ? " pending" : ""}${b.path === curPath ? " cur" : ""}">${b.lines.map(mdLine).join("")}</div>`;
+  });
+  outBody.innerHTML = html;
+  const c = outBody.querySelector(".cur");
+  if (c) c.scrollIntoView({ block: "nearest" });
+}
+function toggleOutput() {
+  outOpen = !outOpen;
+  outPanel.classList.toggle("open", outOpen);
+  outBtn.classList.toggle("on", outOpen);
+  renderOutput();
+  setTimeout(relayout, 220);   // let the width transition finish before re-laying out
+}
+outBtn.addEventListener("click", toggleOutput);
+
+// ---- legend / help ----------------------------------------------------------
+const legend = document.getElementById("legend");
+document.getElementById("helpBtn").addEventListener("click", () => legend.classList.add("open"));
+document.getElementById("legClose").addEventListener("click", () => legend.classList.remove("open"));
+legend.addEventListener("click", e => { if (e.target === legend) legend.classList.remove("open"); });
+
+// ---- draggable inspector overlay --------------------------------------------
+(function () {
+  const ov = document.getElementById("overlay"), head = document.getElementById("ovHead");
+  let dragging = false, startX = 0, startY = 0, ox = 0, oy = 0;
+  head.addEventListener("mousedown", e => {
+    if (e.target.closest(".x")) return;
+    dragging = true; head.classList.add("dragging");
+    const r = ov.getBoundingClientRect(), pr = ov.parentElement.getBoundingClientRect();
+    ox = r.left - pr.left; oy = r.top - pr.top; startX = e.clientX; startY = e.clientY;
+    ov.style.right = "auto"; ov.style.bottom = "auto"; ov.style.left = ox + "px"; ov.style.top = oy + "px";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    ov.style.left = (ox + e.clientX - startX) + "px";
+    ov.style.top = (oy + e.clientY - startY) + "px";
+  });
+  window.addEventListener("mouseup", () => { dragging = false; head.classList.remove("dragging"); });
+})();
+
+document.getElementById("snapFrom").textContent = trace.from_snapshot || "(from)";
+document.getElementById("snapTo").textContent = trace.to_snapshot || "(to)";
+relayout();
+render();
+</script>
+</body>
+</html>

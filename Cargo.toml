@@ -8,6 +8,13 @@ members = [
     "model-plugins/binoc-sqlite",
     "model-plugins/binoc-row-reorder",
     "model-plugins/binoc-stat-binary",
+    "model-plugins/binoc-excel",
+    "model-plugins/binoc-parquet",
+    "model-plugins/binoc-avro",
+    "model-plugins/binoc-dbf",
+    "model-plugins/binoc-binformats",
+    "model-plugins/binoc-xml",
+    "model-plugins/binoc-shapefile",
 ]
 default-members = [
     "binoc-sdk",
@@ -17,6 +24,13 @@ default-members = [
     "model-plugins/binoc-sqlite",
     "model-plugins/binoc-row-reorder",
     "model-plugins/binoc-stat-binary",
+    "model-plugins/binoc-excel",
+    "model-plugins/binoc-parquet",
+    "model-plugins/binoc-avro",
+    "model-plugins/binoc-dbf",
+    "model-plugins/binoc-binformats",
+    "model-plugins/binoc-xml",
+    "model-plugins/binoc-shapefile",
 ]
 resolver = "2"
 

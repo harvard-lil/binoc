@@ -1,0 +1,8 @@
+[vector]
+name = "geojson-feature-cell-change"
+description = "A GeoJSON FeatureCollection where one feature's property changes; transcoded to a tabular artifact with the geometry as a nested cell"
+tags = ["geojson", "tabular", "nested", "cell-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

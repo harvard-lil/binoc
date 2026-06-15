@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "name": "string",
+    "id": "number"
+  },
+  "version": 1,
+  "name": "Parks"
+}

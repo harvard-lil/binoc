@@ -1,0 +1,6 @@
+name = "example service"
+replicas = 3
+
+[settings]
+timeout = 30
+retries = 2

@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,24 +13,29 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "outer.zip",
         "children": [
           {
             "action": "modify",
-            "item_type": "item",
-            "path": "outer.zip/inner.zip",
+            "item_type": "file",
+            "path": "outer.zip/>inner.zip",
             "children": [
               {
                 "action": "modify",
                 "item_type": "tabular",
-                "path": "outer.zip/inner.zip/data.csv",
+                "path": "outer.zip/>inner.zip/>data.csv",
+                "sources": [
+                  {
+                    "path": "outer.zip/>inner.zip/>data.csv",
+                    "side": "from",
+                    "evidence": "binoc.pair.name",
+                    "action": "modify"
+                  }
+                ],
                 "summary": [
                   {
-                    "uint": 1
-                  },
-                  {
-                    "text": " edit"
+                    "text": "1 row added"
                   }
                 ],
                 "tags": [

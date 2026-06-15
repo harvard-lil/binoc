@@ -1,0 +1,8 @@
+[vector]
+name = "json-records-nested-value"
+description = "JSON records with a nested object cell; the nested value changes and is reported as a single equality-based cell edit (not recursed)"
+tags = ["json", "records", "tabular", "nested", "cell-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

@@ -4,5 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **archive.tar.gz/data.csv**: 1 edit
-- **archive.tar.gz/hello.txt**: 1 edit
+- **archive.tar.gz/>data.csv**: 1 row added
+  - Rows added
+    - row 3: 'gamma', '3'
+- **archive.tar.gz/>hello.txt**: 1 line added

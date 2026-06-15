@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,29 +13,54 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular_collection",
+        "item_type": "tabular",
         "path": "data.sas7bdat",
+        "sources": [
+          {
+            "path": "data.sas7bdat",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "Column added: 'score'"
           }
         ],
         "tags": [
           "binoc.column-addition",
-          "binoc.schema-change",
-          "binoc.table-change",
-          "binoc.tabular-collection-change"
+          "binoc.schema-change"
         ],
         "details": {
           "edits": [
             {
               "params": {
-                "table": "data"
+                "from": [
+                  "id",
+                  "name"
+                ],
+                "to": [
+                  "id",
+                  "name",
+                  "score"
+                ]
               },
-              "verb": "tabular_collection.change_table"
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "score",
+                "values": {
+                  "total_values": 2,
+                  "truncated": false,
+                  "values": [
+                    "10",
+                    "20"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
             }
           ]
         }

@@ -6,8 +6,17 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
+| 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers; rendering deferred) |
+| 2026-06-15 | [Multi-Input Claims: Grouping Sibling Files into One Logical Dataset](2026-06-15-multi_input_file_sets_and_shapefile_fusion.md) | Proposed |
+| 2026-06-15 | [Composable Per-Artifact Writers: the Artifact Is the Rendering Unit](2026-06-15-composable_per_artifact_writers.md) | Proposed |
+| 2026-06-14 | [Typed Records: a Greenfield `tabular` Artifact and a Generic `structured_document`](2026-06-14-typed_record_tabular_and_structured_document.md) | Accepted |
+| 2026-06-14 | [Parsed Children and Decompose Boundaries (CFM-69)](2026-06-14-parsed_children_and_decompose_boundaries.md) | Accepted |
+| 2026-06-14 | [Default Markdown Is A Changelog, Not An IR Dump](2026-06-14-default_markdown_changelog_policy.md) | Implemented |
+| 2026-06-13 | [Stable ABI Tier Assessment for CFM-27b](2026-06-13-stable_abi_tier_cfm_27b.md) | Implemented |
+| 2026-06-13 | [Derive Parse-Rule Link Gating from Pair Reads](2026-06-13-derived_requires_link.md) | Implemented |
+| 2026-06-13 | [CFM-44 Measured Correspondence Performance](2026-06-13-cfm_44_measured_correspondence_performance.md) | Implemented |
 | 2026-06-12 | [Tiered Plugin Surface During Pre-1.0: In-Process Proposed Tier, ABI Stable Tier](2026-06-12-tiered_plugin_surface_pre_1_0.md) | Accepted |
-| 2026-06-12 | [Stacked Table Writer Stopgap Before CFM-26](2026-06-12-stacked_table_writer_stopgap_pre_cfm_26.md) | Implemented |
+| 2026-06-12 | [Retired Stacked Table Writer Stopgap](2026-06-12-stacked_table_writer_stopgap_pre_cfm_26.md) | Retired by CFM-45 |
 | 2026-06-12 | [Invariant and Lint Tiers: Harness, Mechanical, Agent](2026-06-12-invariant_and_lint_tiers.md) | Implemented |
 | 2026-06-12 | [Correspondence-First Migration Completion](2026-06-12-correspondence_first_migration_completion.md) | Implemented |
 | 2026-06-12 | [Correspondence-First Engine: Two Trees, Links, and Edit-List Compaction](2026-06-12-correspondence_first_engine.md) | Accepted (prototype validated; migration gated by structural projection) |

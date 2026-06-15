@@ -5,4 +5,5 @@ tags = ["sqlite", "table-addition"]
 
 [expected]
 root_action = "modify"
-has_tags = ["binoc-sqlite.table-addition", "binoc.schema-change"]
+# An added table is now an added child node under the database container.
+has_tags = ["binoc.content-changed"]

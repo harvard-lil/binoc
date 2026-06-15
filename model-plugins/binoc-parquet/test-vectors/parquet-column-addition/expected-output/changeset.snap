@@ -1,0 +1,73 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.parquet",
+        "sources": [
+          {
+            "path": "data.parquet",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Column added: 'in_stock'"
+          }
+        ],
+        "tags": [
+          "binoc.column-addition",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "id",
+                  "name",
+                  "price"
+                ],
+                "to": [
+                  "id",
+                  "name",
+                  "price",
+                  "in_stock"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "in_stock",
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    true,
+                    false,
+                    true
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

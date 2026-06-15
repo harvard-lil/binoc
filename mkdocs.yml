@@ -112,6 +112,7 @@ nav:
   - Start here: start-here.md
   - Tutorial: tutorial.md
   - Examples: users/explanation/test-vectors-gallery.md
+  - Visual replays: users/explanation/replays.md
   - For Binoc Users:
       - How-to:
           - Diff two snapshots: users/howto/diff-two-snapshots.md
@@ -152,6 +153,7 @@ nav:
       - How-to:
           - Cut a release: core-developers/howto/cut-a-release.md
           - Contribute to binoc: core-developers/howto/contribute-to-binoc.md
+          - Work on performance optimization: core-developers/howto/performance-optimization.md
           - Write and maintain docs: core-developers/howto/write-docs.md
       - Research:
           - Prior art and architecture precedents: core-developers/research/precedents.md
@@ -163,8 +165,17 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact': adr/2026-06-15-tiered_artifact_metadata.md
+          - 'Multi-Input File Sets: Grouping Sibling Files into One Logical Dataset': adr/2026-06-15-multi_input_file_sets_and_shapefile_fusion.md
+          - 'Composable Per-Artifact Writers: the Artifact Is the Rendering Unit': adr/2026-06-15-composable_per_artifact_writers.md
+          - 'Typed Records: a Greenfield `tabular` Artifact and a Generic `structured_document`': adr/2026-06-14-typed_record_tabular_and_structured_document.md
+          - 'Parsed Children and Decompose Boundaries (CFM-69)': adr/2026-06-14-parsed_children_and_decompose_boundaries.md
+          - 'Default Markdown Is A Changelog, Not An IR Dump': adr/2026-06-14-default_markdown_changelog_policy.md
+          - 'Stable ABI Tier Assessment for CFM-27b': adr/2026-06-13-stable_abi_tier_cfm_27b.md
+          - 'Derive Parse-Rule Link Gating from Pair Reads': adr/2026-06-13-derived_requires_link.md
+          - 'CFM-44 Measured Correspondence Performance': adr/2026-06-13-cfm_44_measured_correspondence_performance.md
           - 'Tiered Plugin Surface During Pre-1.0: In-Process Proposed Tier, ABI Stable Tier': adr/2026-06-12-tiered_plugin_surface_pre_1_0.md
-          - 'Stacked Table Writer Stopgap Before CFM-26': adr/2026-06-12-stacked_table_writer_stopgap_pre_cfm_26.md
+          - 'Retired Stacked Table Writer Stopgap': adr/2026-06-12-stacked_table_writer_stopgap_pre_cfm_26.md
           - 'Invariant and Lint Tiers: Harness, Mechanical, Agent': adr/2026-06-12-invariant_and_lint_tiers.md
           - 'Correspondence-First Migration Completion': adr/2026-06-12-correspondence_first_migration_completion.md
           - 'Correspondence-First Engine: Two Trees, Links, and Edit-List Compaction': adr/2026-06-12-correspondence_first_engine.md

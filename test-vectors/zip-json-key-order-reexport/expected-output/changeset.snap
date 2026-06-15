@@ -1,0 +1,103 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "file",
+        "path": "archive.zip",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "json",
+            "path": "archive.zip/>metadata.json",
+            "sources": [
+              {
+                "path": "archive.zip/>metadata.json",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Document serialization changed"
+              }
+            ],
+            "tags": [
+              "binoc.document-serialization-change",
+              "binoc.serialization-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "kinds": [
+                      "object_key_order",
+                      "formatting"
+                    ],
+                    "left": {
+                      "byte_len": 82,
+                      "line_ending": "lf",
+                      "object_key_orders": [
+                        {
+                          "keys": [
+                            "id",
+                            "name"
+                          ],
+                          "path": "$.schema"
+                        },
+                        {
+                          "keys": [
+                            "dataset",
+                            "issued",
+                            "schema"
+                          ],
+                          "path": "$"
+                        }
+                      ],
+                      "trailing_newline": true
+                    },
+                    "right": {
+                      "byte_len": 110,
+                      "indentation": "2 spaces",
+                      "line_ending": "lf",
+                      "object_key_orders": [
+                        {
+                          "keys": [
+                            "name",
+                            "id"
+                          ],
+                          "path": "$.schema"
+                        },
+                        {
+                          "keys": [
+                            "schema",
+                            "issued",
+                            "dataset"
+                          ],
+                          "path": "$"
+                        }
+                      ],
+                      "trailing_newline": true
+                    }
+                  },
+                  "verb": "document.serialization_change"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

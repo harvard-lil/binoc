@@ -5,9 +5,10 @@ tags = ["sqlite", "multi-table", "row-addition", "table-addition"]
 
 [expected]
 root_action = "modify"
+# Tables are now child nodes (`data.sqlite/>table`): the changed `users` table
+# renders a row addition via the stdlib tabular writer, and the new `orders`
+# table renders as an added child node.
 has_tags = [
-    "binoc.tabular-collection-change",
-    "binoc.table-change",
-    "binoc.table-addition",
     "binoc.row-addition",
+    "binoc.content-changed",
 ]

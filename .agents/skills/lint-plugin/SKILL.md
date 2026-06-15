@@ -1,6 +1,6 @@
 ---
 name: lint-plugin
-description: Review checklist for binoc correspondence rule packs, renderers, and core changes. Verifies the invariants mechanical lints cannot: descriptor honesty, deterministic proposals, security, settled behavior, layering, and projection/extract honesty.
+description: Review checklist for binoc correspondence rule packs, renderers, and core changes. Verifies the invariants mechanical lints cannot: descriptor honesty, deterministic proposals, security, settled behavior, layering, projection/extract honesty, and the recurring model-to-surface failure modes that produce layering regressions.
 ---
 
 # Lint a binoc plugin or rule pack
@@ -27,6 +27,60 @@ or AGENTS.md rule; `smell` = legal but worth a question), `file:line`, the
 contract it offends, and the smallest suggested fix. If everything passes, say
 which checks you ran. Silence is not a clean bill.
 
+## Recurring failure modes: the model-to-surface gap
+
+Read this lens before the itemized checks below. The engine's internal model
+— immutable side trees, a many-to-many link relation, open-vocabulary edit
+lists — is deliberately richer and cleaner than the surfaces it feeds: the
+public `DiffNode` tree, each rule family's seam, the projection. Nearly every
+layering regression in this codebase has been the *same move* under a new
+disguise: when the model cannot yet express a fact in the right place, the gap
+gets bridged in the wrong layer instead of the model being taught to say it.
+These recur. Confirm none reappear in the change under review, and name which
+one a finding is when it does.
+
+- **Downstream re-derivation of a fact no upstream rule saw.** When a needed
+  fact is a *conjunction* observed at different times ("moved AND modified",
+  "unlinked AND leaf"), the temptation is to recompute it at the convenient
+  downstream spot — core projection — which re-imports the vocabulary that
+  layer is supposed to be ignorant of. The core `binoc.*` tag leak reopened
+  three times this way. Tell: a literal semantic tag, format, or extension
+  check inside `binoc-core` projection or cost. Fix: emit it from a projection
+  annotator (the layer that actually sees the conjunction), never from core.
+- **Internal mechanics leaking into the public IR.** When the public IR cannot
+  represent what the engine knows, the gap gets papered with a `details` key
+  carrying an engine-internal count or workaround — and the count sometimes
+  reaches the user-visible summary. `projection_line_count` /
+  "N projected change" / `source_paths`-in-`details` is the standing example
+  (many-to-one provenance the tree could not state; tracked for repair as
+  CFM-60). Tell: a `details` entry naming an engine concept rather than a fact
+  about the data, or a summary built from an internal counter. Ask: is this a
+  real fact, or a representational gap that belongs in the IR instead of hidden
+  here?
+- **A god-pass resurrected inside another family's seam.** A rule doing a
+  different family's job because it is expedient — section detection inside the
+  tabular *writer* (`write_stacked_table_edits`), early-returning past the
+  naive edit vocabulary with count-derived tags. That is the exact
+  total-pattern recognizer the engine was built to dissolve, re-formed one
+  layer down. Tell: an early `return` in a writer/compaction/annotator that
+  emits summary-level tags instead of vocabulary edits, or any rule producing
+  what should be another family's artifact. Fix: move the work to the right
+  family (a parse rule producing the artifact) and let the generic path own
+  the comparison.
+- **Out-of-band identity that parallels the links.** Correspondence and
+  identity live in the link store; a separate map keyed by logical path or
+  item identity means something is reconstructing correspondence on the side.
+  `config.row_keys` keyed by right `logical_path` is the current mild instance
+  — tolerable because paths are stable on one side, but watch for it growing
+  into pairing logic. Tell: a `BTreeMap<path, …>` consulted during
+  pairing/writing whose key is really an item identity. Ask: should this be a
+  link query?
+
+The common root: the model is more principled than the surface, and expedience
+bridges the gap in the wrong direction. The correct fix is almost always to
+make the model express the fact (annotator, artifact, IR field, link query),
+not to compute it where it is convenient to read.
+
 ## 1. Layering
 
 - `binoc-core` stays type-ignorant. Core code must not mention file formats,
@@ -47,12 +101,33 @@ including values from error, diagnostic, and fallback branches.
 
 - Expand rules: selectors match what the rule can actually expand; outputs use
   stable logical child paths; diagnostics are bounded and factual.
-- Parse rules: input selectors, output artifact format, and `requires_link`
-  match the parser's real behavior. A parser must not claim generic formats it
-  cannot parse deterministically.
-- Pair rules: `PairDescriptor.emits` contains every possible evidence string.
-  The driver fails closed on undeclared evidence, but vectors may not cover
-  every branch. Declarations are facts, not aspirations.
+- Parse rules: input selectors and output artifact format match the parser's
+  real behavior. A parser must not claim generic formats it cannot parse
+  deterministically. (Whether a parse rule runs pre-link is no longer declared
+  per-rule; it is derived from whether some pair rule's `reads` consumes the
+  rule's output format — see `docs/adr/2026-06-13-derived_requires_link.md`.)
+  - **Parsed-child shape (CFM-69 convention).** A parser that decomposes its
+    input emits child nodes only for substructure that *could plausibly have
+    shipped as a separate file* — tables, sheets, named sections, top-level
+    archive members. Rows, cells, array elements, and record fields are
+    artifact-internal edits, never child nodes. A single-table source is a
+    **leaf**: it publishes one `tabular_v1` on the file node and returns no
+    children. A multi-member source is a **container**: it returns
+    `ParseOutput` with empty parent bytes (no parent artifact) and one
+    `ParsedChild` per member. Child logical paths use
+    `binoc_sdk::decompose_child` (the `/>` boundary) — never a hand-rolled `#`
+    or `::` separator — and use intrinsic identity for the child name (SQL
+    table / sheet / dataset name, detected title) where the format provides it,
+    falling back to positional `name_1`, `name_2` only when it does not. The
+    parent container must not also publish a whole-input artifact, or the
+    parent and its children will double-report the same changes (see the
+    parent-residual-edit invariant in `check_changeset_invariants`). See
+    `docs/adr/2026-06-14-parsed_children_and_decompose_boundaries.md`.
+- Pair rules: `PairDescriptor.emits` contains every possible evidence string,
+  and `PairDescriptor.reads` declares every artifact format the rule consumes
+  pre-link (this drives parse-rule scheduling). The driver fails closed on
+  undeclared evidence, but vectors may not cover every branch. Declarations are
+  facts, not aspirations.
 - Writers: claimed artifact formats, verbs, item types, tags, details, and
   extract aspects match the emitted projection. A writer that owns a projected
   node must also own or deliberately delegate extraction semantics.

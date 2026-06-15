@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use binoc_sdk::*;
 
-use crate::correspondence::{driver as correspondence_driver, CorrespondenceEngineConfig};
+use crate::correspondence::driver::DescriptionCost;
+use crate::correspondence::{
+    driver as correspondence_driver, CorrespondenceEngineConfig, RunTrace,
+};
 use crate::data_access::LocalDataAccess;
 
 const MAX_CHANGESET_DIAGNOSTICS: usize = 16;
@@ -16,6 +19,17 @@ const MAX_CHANGESET_DIAGNOSTICS: usize = 16;
 pub struct Controller {
     correspondence_engine: CorrespondenceEngineConfig,
     dataset_config: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiffMetrics {
+    pub description_cost: DescriptionCost,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiffRun {
+    pub changeset: Changeset,
+    pub metrics: DiffMetrics,
 }
 
 impl Controller {
@@ -36,6 +50,13 @@ impl Controller {
 
     /// Diff two snapshots and produce a changeset.
     pub fn diff(&self, from_path: &str, to_path: &str) -> BinocResult<Changeset> {
+        Ok(self.diff_with_metrics(from_path, to_path)?.changeset)
+    }
+
+    /// Diff two snapshots and produce a changeset with harness-oriented run
+    /// metrics. Metrics are derived from the correspondence run before the
+    /// public changeset strips transient fields.
+    pub fn diff_with_metrics(&self, from_path: &str, to_path: &str) -> BinocResult<DiffRun> {
         let data = Arc::new(LocalDataAccess::new_for_diff(
             Path::new(from_path),
             Path::new(to_path),
@@ -59,13 +80,61 @@ impl Controller {
             )?);
         }
         let run = correspondence_driver::run(&config, left, right, data.as_ref())?;
+        let description_cost = run.description_cost();
         let mut changeset = run.project().to_changeset(from_path, to_path);
         changeset.diagnostics.extend(setup_diagnostics);
         changeset.diagnostics.extend(run.diagnostics);
         changeset.hoist_node_diagnostics();
         changeset.dedupe_and_cap_diagnostics(MAX_CHANGESET_DIAGNOSTICS);
         changeset.strip_transient();
-        Ok(changeset)
+        Ok(DiffRun {
+            changeset,
+            metrics: DiffMetrics { description_cost },
+        })
+    }
+
+    /// Diff two snapshots and produce a changeset together with a full replay
+    /// [`RunTrace`] of the correspondence run (every expand/parse/link/write/
+    /// compaction step). Runs serially for deterministic step ordering; use for
+    /// debugging and visualization rather than throughput.
+    pub fn diff_with_trace(
+        &self,
+        from_path: &str,
+        to_path: &str,
+    ) -> BinocResult<(Changeset, RunTrace)> {
+        let data = Arc::new(LocalDataAccess::new_for_diff(
+            Path::new(from_path),
+            Path::new(to_path),
+        )?);
+        let pair = Self::make_root_pair(from_path, to_path, &data)?;
+        let left = pair
+            .left
+            .ok_or_else(|| BinocError::Other("correspondence root has no left item".into()))?;
+        let right = pair
+            .right
+            .ok_or_else(|| BinocError::Other("correspondence root has no right item".into()))?;
+        let mut config = self.correspondence_engine.clone();
+        let mut setup_diagnostics = Vec::new();
+        if let Some(configurator) = config.dataset_configurator.clone() {
+            setup_diagnostics.extend(configurator.configure(
+                &mut config,
+                &self.dataset_config,
+                &left,
+                &right,
+                data.as_ref(),
+            )?);
+        }
+        let (run, mut trace) =
+            correspondence_driver::run_traced(&config, left, right, data.as_ref())?;
+        let mut changeset = run.project().to_changeset(from_path, to_path);
+        changeset.diagnostics.extend(setup_diagnostics);
+        changeset.diagnostics.extend(run.diagnostics);
+        changeset.hoist_node_diagnostics();
+        changeset.dedupe_and_cap_diagnostics(MAX_CHANGESET_DIAGNOSTICS);
+        changeset.strip_transient();
+        trace.from_snapshot = from_path.to_string();
+        trace.to_snapshot = to_path.to_string();
+        Ok((changeset, trace))
     }
 
     /// Diff an ordered snapshot sequence and produce one changeset per
@@ -164,7 +233,7 @@ impl Controller {
         let line = candidates
             .iter()
             .copied()
-            .find(|line| line.source_path.as_deref() == target.source_path.as_deref())
+            .find(|line| line.sources == target.sources)
             .or_else(|| candidates.first().copied())
             .ok_or_else(|| {
                 BinocError::Extract(format!(

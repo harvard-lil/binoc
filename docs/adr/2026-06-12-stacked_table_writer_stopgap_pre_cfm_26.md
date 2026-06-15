@@ -1,7 +1,7 @@
-# Stacked Table Writer Stopgap Before CFM-26
+# Retired Stacked Table Writer Stopgap
 
 **Date:** 2026-06-12
-**Status:** Implemented
+**Status:** Retired by CFM-45
 
 ## Context
 
@@ -17,20 +17,20 @@ edits. This preserves the existing `csv-stacked-tables` manifest behavior
 through the correspondence engine without adding a separate
 `tabular_collection_v1` parse rule for CSV regions yet.
 
+CFM-45 retired that heuristic. Stacked CSV detection now lives in
+`binoc.parse.csv_stacked_tables`, which publishes a `tabular_collection_v1`
+manifest for unambiguous CSV regions and creates synthetic child table nodes
+with per-table `tabular_v1` artifacts. `binoc.write.tabular_collection` owns
+the table-by-name comparison through the same SDK helper used by the SQLite
+collection writer, while ordinary tabular writers own per-table content
+details. Ambiguous stacked layouts again emit `binoc.table_splitter.ambiguous`
+as a suggestion diagnostic and fall through to ordinary tabular comparison.
+
 ## Decision
 
-Bless `write_stacked_table_edits` as a temporary CFM-26 deletion bridge. It is
-allowed to become the only stacked-table implementation when the legacy
-`table_splitter` and `table_collection_analyzer` path is deleted, but only as
-a documented stopgap.
-
-The replacement remains Phase 3 work: a real stacked-table parse rule should
-produce `tabular_collection_v1` artifacts and per-table artifacts, after which
-the generic tabular collection writer can own the comparison.
-
-The legacy `binoc.table_splitter.ambiguous` suggestion behavior is intentionally
-not preserved by the stopgap. That lost diagnostic must be restored or
-explicitly retired when the real parse-rule replacement lands.
+Keep this ADR as a historical record of the short-lived bridge, but do not
+preserve the bridge in code. The writer must not detect stacked table sections
+from a `tabular_v1` artifact; section detection belongs to parse rules.
 
 ## Alternatives Considered
 

@@ -4,6 +4,10 @@
 //! functions. The host loads them via `libloading` and calls them with
 //! JSON-serialized requests/responses, avoiding Rust ABI compatibility
 //! requirements.
+//!
+//! As of CFM-27b, renderers are the only graduated stable ABI family. Rule
+//! families remain in-process until their trait shapes and vocabularies satisfy
+//! the graduation signal recorded in the tiered plugin surface ADR.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +27,10 @@ pub struct PluginDescription {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenderRequest {
+    /// Complete projected changesets. Renderer-facing vocabularies inside the
+    /// IR remain open strings: actions, item types, tags, source evidence,
+    /// detail-block kinds, global-claim verbs, and edit verbs must flow through
+    /// the renderer ABI unchanged.
     pub changesets: Vec<crate::ir::Changeset>,
     pub config: serde_json::Value,
 }
@@ -58,13 +66,11 @@ pub enum RenderResponse {
 #[macro_export]
 macro_rules! export_plugin {
     (@out_descs $($out:ty),*) => {{
-        let mut descs = Vec::new();
-        $(
-            descs.push($crate::Renderer::descriptor(
+        vec![
+            $($crate::Renderer::descriptor(
                 &<$out as ::std::default::Default>::default(),
-            ));
-        )*
-        descs
+            )),*
+        ]
     }};
 
     (@renderer_fns $($out:ty),+) => {
@@ -136,4 +142,123 @@ macro_rules! export_plugin {
             Ok(())
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::{c_char, CStr, CString};
+
+    use serde_json::json;
+
+    use crate::{
+        correspondence::Edit, BinocResult, Changeset, DiffNode, Renderer, RendererDescriptor, Side,
+        Source,
+    };
+
+    #[derive(Default)]
+    struct EchoRenderer;
+
+    impl Renderer for EchoRenderer {
+        fn descriptor(&self) -> RendererDescriptor {
+            RendererDescriptor::new("test.echo", "echo")
+        }
+
+        fn render(
+            &self,
+            changesets: &[Changeset],
+            config: &serde_json::Value,
+        ) -> BinocResult<String> {
+            let root = changesets
+                .first()
+                .and_then(|changeset| changeset.root.as_ref())
+                .expect("test request has a root node");
+            let source = root.sources.first().expect("test request has a source");
+            let edits = root
+                .details
+                .get("edits")
+                .and_then(|value| value.as_array())
+                .expect("test request has edits");
+            let edit_verb = edits
+                .first()
+                .and_then(|edit| edit.get("verb"))
+                .and_then(|verb| verb.as_str())
+                .expect("test request edit has verb");
+
+            Ok(json!({
+                "action": root.action,
+                "item_type": root.item_type,
+                "tag": root.tags.iter().next(),
+                "source_evidence": source.evidence,
+                "source_action": source.action,
+                "edit_verb": edit_verb,
+                "config_seen": config["mode"],
+            })
+            .to_string())
+        }
+    }
+
+    crate::export_plugin! {
+        module: abi_test_plugin,
+        renderers: [EchoRenderer],
+    }
+
+    unsafe fn take_owned_abi_string(ptr: *mut c_char) -> String {
+        assert!(!ptr.is_null());
+        let value = unsafe { CStr::from_ptr(ptr) }
+            .to_str()
+            .expect("ABI string is UTF-8")
+            .to_string();
+        unsafe { _binoc_free_string(ptr) };
+        value
+    }
+
+    #[test]
+    fn renderer_abi_preserves_open_ir_vocabulary() {
+        let description_json = unsafe { take_owned_abi_string(_binoc_plugin_describe()) };
+        let description: crate::plugin_abi::PluginDescription =
+            serde_json::from_str(&description_json).expect("plugin description");
+        assert_eq!(description.sdk_version, crate::SDK_VERSION);
+        assert_eq!(description.renderers.len(), 1);
+        assert_eq!(description.renderers[0].name, "test.echo");
+
+        let edit = Edit::new(
+            "third_party.frobnicate",
+            json!({ "mode": "unknown-to-host" }),
+        );
+        let node = DiffNode::new(
+            "third_party.rebalance",
+            "third_party.dataset",
+            "current/data.bin",
+        )
+        .with_tag("third_party.semantic")
+        .with_source(
+            Source::new("previous/data.bin", Side::From)
+                .with_evidence("third_party.pair.bespoke")
+                .with_action("third_party.source_action"),
+        )
+        .with_detail("edits", json!([edit]));
+        let request = crate::plugin_abi::RenderRequest {
+            changesets: vec![Changeset::new("left", "right", Some(node))],
+            config: json!({ "mode": "parity" }),
+        };
+        let request_json = serde_json::to_string(&request).expect("request JSON");
+        let request_cstring = CString::new(request_json).expect("request has no nul");
+
+        let response_json =
+            unsafe { take_owned_abi_string(_binoc_renderer_render(0, request_cstring.as_ptr())) };
+        let response: crate::plugin_abi::RenderResponse =
+            serde_json::from_str(&response_json).expect("render response");
+        let crate::plugin_abi::RenderResponse::Ok { output } = response else {
+            panic!("renderer ABI returned an error");
+        };
+        let output: serde_json::Value = serde_json::from_str(&output).expect("renderer output");
+
+        assert_eq!(output["action"], "third_party.rebalance");
+        assert_eq!(output["item_type"], "third_party.dataset");
+        assert_eq!(output["tag"], "third_party.semantic");
+        assert_eq!(output["source_evidence"], "third_party.pair.bespoke");
+        assert_eq!(output["source_action"], "third_party.source_action");
+        assert_eq!(output["edit_verb"], "third_party.frobnicate");
+        assert_eq!(output["config_seen"], "parity");
+    }
 }

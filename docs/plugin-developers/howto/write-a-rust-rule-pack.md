@@ -50,7 +50,6 @@ impl ParseRule for FastaParseRule {
                 ..NodeMatch::default()
             },
             output: tabular_v1(),
-            requires_link: true,
             fires_beneath_settled: false,
         }
     }

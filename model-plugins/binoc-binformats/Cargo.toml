@@ -1,0 +1,37 @@
+[package]
+name = "binoc-binformats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "binformats correspondence rule pack for Binoc"
+publish = false
+
+[lib]
+name = "binoc_binformats"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+test-support = ["dep:binoc-stdlib"]
+
+[dependencies]
+binoc-sdk = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
+ciborium = "0.2.2"
+rmp-serde = "1.3.1"
+bson = { version = "3.1.0", features = ["serde"] }
+plist = "1.9.0"
+ion-rs = "0.18.1"
+
+[dev-dependencies]
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-binformats = { path = ".", features = ["test-support"] }
+tempfile = "3"

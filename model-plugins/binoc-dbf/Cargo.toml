@@ -1,0 +1,33 @@
+[package]
+name = "binoc-dbf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "dbf correspondence rule pack for Binoc"
+publish = false
+
+[lib]
+name = "binoc_dbf"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+test-support = ["dep:binoc-stdlib"]
+
+[dependencies]
+binoc-sdk = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
+dbase = "0.7.0"
+
+[dev-dependencies]
+binoc-core = { workspace = true }
+binoc-sdk = { workspace = true, features = ["test-support"] }
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-dbf = { path = ".", features = ["test-support"] }
+tempfile = "3"

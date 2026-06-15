@@ -4,4 +4,12 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.csv**: 5 edits
+- **data.csv**: 5 cells changed
+  - Sources
+    - data.csv (from, modify, binoc.pair.name)
+  - Changed cells
+    - row 1, column 'score': '10' -> '11'
+    - row 2, column 'score': '20' -> '21'
+    - row 3, column 'score': '30' -> '31'
+    - row 4, column 'score': '40' -> '41'
+    - row 5, column 'score': '50' -> '51'

@@ -11,7 +11,7 @@ class TestDiffNode:
         assert node.action == 'modify'
         assert node.item_type == 'file'
         assert node.path == 'data.csv'
-        assert node.source_path is None
+        assert node.sources == []
         assert node.tags == []
         assert node.children == []
         assert len(node) == 0
@@ -22,12 +22,14 @@ class TestDiffNode:
             'modify',
             'directory',
             'root',
-            source_path='old/root',
+            sources=[{'path': 'old/root', 'side': 'from', 'action': 'move'}],
             tags=['binoc.test', 'binoc.other'],
             details={'count': 42, 'name': 'test'},
             children=[child],
         )
-        assert node.source_path == 'old/root'
+        assert node.sources == [
+            {'path': 'old/root', 'side': 'from', 'evidence': None, 'action': 'move'}
+        ]
         assert set(node.tags) == {'binoc.test', 'binoc.other'}
         assert node.details['count'] == 42
         assert node.details['name'] == 'test'
@@ -93,10 +95,12 @@ class TestDiffNode:
             {'package': 'example.plugin', 'key': 'note', 'value': ['one', 'two']}
         ]
 
-    def test_with_source_path(self):
+    def test_with_source(self):
         node = binoc.DiffNode('move', 'file', 'new.txt')
-        moved = node.with_source_path('old.txt')
-        assert moved.source_path == 'old.txt'
+        moved = node.with_source('old.txt', 'from', None, 'move')
+        assert moved.sources == [
+            {'path': 'old.txt', 'side': 'from', 'evidence': None, 'action': 'move'}
+        ]
 
     def test_node_count(self):
         tree = binoc.DiffNode(
@@ -160,6 +164,7 @@ class TestDiffNode:
         assert d['action'] == 'modify'
         assert d['item_type'] == 'file'
         assert d['path'] == 'data.csv'
+        assert d['sources'] == []
         assert 'binoc.test' in d['tags']
         assert d['details']['lines'] == 10
         assert isinstance(d['children'], list)
@@ -278,6 +283,7 @@ class TestChangeset:
         assert d['from_snapshot'] == 'a'
         assert d['to_snapshot'] == 'b'
         assert d['root']['action'] == 'add'
+        assert d['claims'] == []
         assert d['diagnostics'] == []
 
     def test_diagnostics_round_trip(self):

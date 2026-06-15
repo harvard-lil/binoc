@@ -1,0 +1,4 @@
+[
+  {"id": 1, "name": "alice", "meta": {"role": "admin", "tags": ["x", "y"]}},
+  {"id": 2, "name": "bob", "meta": {"role": "user", "tags": ["z"]}}
+]

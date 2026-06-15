@@ -4,6 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **archive.zip**: 0 edits
-- **archive.zip/data.txt**: 1 edit
-- **archive.zip/extra.txt**: Added
+- **archive.zip/>data.txt**: 1 line added; 1 line removed
+  - Line changes
+    - line 1: 'hello from zip A' -> 'hello from zip B'
+- **archive.zip/>extra.txt**: Added

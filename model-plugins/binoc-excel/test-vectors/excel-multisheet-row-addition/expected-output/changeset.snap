@@ -1,0 +1,63 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "Excel workbook",
+        "path": "data.xlsx",
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.xlsx/>Employees",
+            "sources": [
+              {
+                "path": "data.xlsx/>Employees",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added"
+              }
+            ],
+            "tags": [
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 3,
+                      "truncated": false,
+                      "values": [
+                        3.0,
+                        "Carol",
+                        60000.0
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

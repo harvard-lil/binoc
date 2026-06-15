@@ -1,0 +1,3 @@
+{"id": 1, "label": "alpha", "score": 72.0, "active": true, "note": null}
+{"id": 2, "label": "beta", "score": 88.5, "active": false, "note": "draft"}
+{"id": 3, "label": "gamma", "score": 64.25, "active": true, "note": "new"}

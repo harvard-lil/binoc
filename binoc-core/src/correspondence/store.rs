@@ -47,6 +47,10 @@ impl SideTree {
         &self.nodes[index as usize]
     }
 
+    pub fn node_mut(&mut self, index: u32) -> &mut SideNode {
+        &mut self.nodes[index as usize]
+    }
+
     pub fn add_child(&mut self, parent: u32, item: ItemRef, projection: ProjectionHint) -> u32 {
         let index = self.nodes.len() as u32;
         self.nodes.push(SideNode {

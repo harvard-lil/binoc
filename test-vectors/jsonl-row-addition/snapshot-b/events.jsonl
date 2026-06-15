@@ -1,0 +1,3 @@
+{"id": 1, "event": "create", "actor": "alice"}
+{"id": 2, "event": "update", "actor": "bob"}
+{"id": 3, "event": "delete", "actor": "carol"}

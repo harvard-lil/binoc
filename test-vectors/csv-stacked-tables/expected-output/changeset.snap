@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,31 +13,51 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular_collection",
+        "item_type": "stacked tables",
         "path": "data.csv",
-        "summary": [
+        "children": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
-          }
-        ],
-        "tags": [
-          "binoc.row-addition",
-          "binoc.table-change",
-          "binoc.tabular-collection-change"
-        ],
-        "details": {
-          "edits": [
-            {
-              "params": {
-                "table": "table_2"
-              },
-              "verb": "tabular_collection.change_table"
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.csv/>table_2",
+            "sources": [
+              {
+                "path": "data.csv/>table_2",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added"
+              }
+            ],
+            "tags": [
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "index": 2,
+                    "values": {
+                      "total_values": 4,
+                      "truncated": false,
+                      "values": [
+                        "761003",
+                        "Gamma",
+                        "Core Pharma",
+                        "2026-03-05"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
     ]
   }

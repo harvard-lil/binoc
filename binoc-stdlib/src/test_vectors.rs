@@ -13,15 +13,16 @@
 //! [`materialize_snapshots`] go through the same walker so tests and
 //! `just materialize` build identical trees.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use binoc_core::config::{DatasetConfig, OutputConfig};
 use binoc_core::controller::Controller;
+use binoc_core::correspondence::{DescriptionCost, LinkDescriptionCost};
 use binoc_sdk::ir::DiffNode;
 use binoc_sdk::Changeset;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::renderers::markdown;
 
@@ -289,11 +290,12 @@ pub fn run_vector(
     vectors_root: &Path,
     materializers: &[&dyn VectorMaterializer],
 ) {
-    run_vector_with_correspondence_engine_config(
+    run_vector_inner(
         vector_dir,
         vectors_root,
         materializers,
         crate::correspondence::engine_config_for_dataset_config,
+        CostBaselineMode::CheckStdlibBaseline,
     );
 }
 
@@ -305,6 +307,22 @@ pub fn run_vector_with_correspondence_engine_config(
     vectors_root: &Path,
     materializers: &[&dyn VectorMaterializer],
     config_builder: impl FnOnce(&serde_json::Value) -> binoc_sdk::CorrespondenceEngineConfig,
+) -> Changeset {
+    run_vector_inner(
+        vector_dir,
+        vectors_root,
+        materializers,
+        config_builder,
+        CostBaselineMode::ObserveOnly,
+    )
+}
+
+fn run_vector_inner(
+    vector_dir: &Path,
+    vectors_root: &Path,
+    materializers: &[&dyn VectorMaterializer],
+    config_builder: impl FnOnce(&serde_json::Value) -> binoc_sdk::CorrespondenceEngineConfig,
+    cost_baseline_mode: CostBaselineMode,
 ) -> Changeset {
     let manifest = load_manifest(vectors_root, vector_dir);
     let config = build_config(&manifest);
@@ -320,14 +338,21 @@ pub fn run_vector_with_correspondence_engine_config(
     let controller = Controller::new(config_builder(&config.dataset))
         .with_dataset_config(config.dataset.clone());
 
-    let changeset = controller
-        .diff(diff_a.to_str().unwrap(), diff_b.to_str().unwrap())
+    let run = controller
+        .diff_with_metrics(diff_a.to_str().unwrap(), diff_b.to_str().unwrap())
         .unwrap_or_else(|e| {
             panic!(
                 "Correspondence diff failed for {}: {e}",
                 manifest.vector.name
             )
         });
+    let changeset = run.changeset;
+    record_description_cost(
+        vectors_root,
+        &manifest.vector.name,
+        &run.metrics.description_cost,
+        cost_baseline_mode,
+    );
 
     check_changeset_invariants(&manifest.vector.name, &changeset);
     if let Some(expected) = &manifest.expected {
@@ -351,6 +376,224 @@ pub fn run_vector_with_correspondence_engine_config(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+const DESCRIPTION_COST_BASELINE_FILE: &str = "description-cost-baselines.toml";
+const DESCRIPTION_COST_REGRESSION_MIN_UNITS: u64 = 2;
+const DESCRIPTION_COST_REGRESSION_PCT: f64 = 0.05;
+const UPDATE_DESCRIPTION_COST_BASELINE_ENV: &str = "BINOC_UPDATE_DESCRIPTION_COST_BASELINE";
+
+#[derive(Debug, Clone, Copy)]
+enum CostBaselineMode {
+    CheckStdlibBaseline,
+    ObserveOnly,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct DescriptionCostBaselineFile {
+    #[serde(default)]
+    vectors: Vec<NamedDescriptionCostBaseline>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NamedDescriptionCostBaseline {
+    name: String,
+    #[serde(flatten)]
+    cost: DescriptionCost,
+}
+
+fn record_description_cost(
+    vectors_root: &Path,
+    vector_name: &str,
+    observed: &DescriptionCost,
+    mode: CostBaselineMode,
+) {
+    eprintln!(
+        "description_cost: vector={vector_name} total={} edit_cost={} links={}",
+        observed.description_cost, observed.edit_cost, observed.link_count
+    );
+
+    if !matches!(mode, CostBaselineMode::CheckStdlibBaseline) {
+        return;
+    }
+
+    let path = vectors_root.join(DESCRIPTION_COST_BASELINE_FILE);
+    if std::env::var_os(UPDATE_DESCRIPTION_COST_BASELINE_ENV).is_some() {
+        update_description_cost_baseline(&path, vector_name, observed);
+        return;
+    }
+
+    let baseline_file = load_description_cost_baseline(&path);
+    let Some(baseline) = baseline_file
+        .vectors
+        .iter()
+        .find(|entry| entry.name == vector_name)
+    else {
+        eprintln!(
+            "warning: binoc-cost: [{vector_name}] missing description-cost baseline in {}",
+            path.display()
+        );
+        return;
+    };
+
+    for warning in description_cost_warnings(vector_name, &baseline.cost, observed) {
+        eprintln!("warning: binoc-cost: {warning}");
+    }
+}
+
+fn load_description_cost_baseline(path: &Path) -> DescriptionCostBaselineFile {
+    if !path.exists() {
+        return DescriptionCostBaselineFile::default();
+    }
+    let contents = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+    toml::from_str(&contents).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse description-cost baseline {}: {e}",
+            path.display()
+        )
+    })
+}
+
+fn update_description_cost_baseline(path: &Path, vector_name: &str, observed: &DescriptionCost) {
+    let mut baseline_file = load_description_cost_baseline(path);
+    baseline_file
+        .vectors
+        .retain(|entry| entry.name != vector_name);
+    baseline_file.vectors.push(NamedDescriptionCostBaseline {
+        name: vector_name.to_string(),
+        cost: observed.clone(),
+    });
+    baseline_file
+        .vectors
+        .sort_by(|left, right| left.name.cmp(&right.name));
+    let mut contents =
+        "# Description-cost baselines for stdlib test vectors.\n# Cost = sum(binoc-core correspondence cost::cost(edit_list)) + link_count.\n# Refresh with BINOC_UPDATE_DESCRIPTION_COST_BASELINE=1 cargo test -p binoc-stdlib --test test_vectors.\n\n"
+            .to_string();
+    contents.push_str(
+        &toml::to_string_pretty(&baseline_file)
+            .expect("description-cost baseline should serialize"),
+    );
+    std::fs::write(path, contents)
+        .unwrap_or_else(|e| panic!("Failed to write {}: {e}", path.display()));
+}
+
+fn description_cost_warnings(
+    vector_name: &str,
+    baseline: &DescriptionCost,
+    observed: &DescriptionCost,
+) -> Vec<String> {
+    let allowed = description_cost_threshold(baseline.description_cost);
+    if observed.description_cost <= baseline.description_cost + allowed {
+        return Vec::new();
+    }
+
+    let mut warning = format!(
+        "[{vector_name}] description_cost regressed from {} to {} (allowed +{}); edit_cost {} -> {}, link_count {} -> {}",
+        baseline.description_cost,
+        observed.description_cost,
+        allowed,
+        baseline.edit_cost,
+        observed.edit_cost,
+        baseline.link_count,
+        observed.link_count
+    );
+
+    let link_details = link_change_details(&baseline.links, &observed.links);
+    if !link_details.is_empty() {
+        warning.push_str("; ");
+        warning.push_str(&link_details.join("; "));
+    }
+
+    if baseline.compaction_accepted != observed.compaction_accepted {
+        warning.push_str(&format!(
+            "; compaction_accepted {:?} -> {:?}",
+            baseline.compaction_accepted, observed.compaction_accepted
+        ));
+    }
+    if baseline.compaction_rejected != observed.compaction_rejected {
+        warning.push_str(&format!(
+            "; compaction_rejected {:?} -> {:?}",
+            baseline.compaction_rejected, observed.compaction_rejected
+        ));
+    }
+    if baseline.unwritten_links != observed.unwritten_links {
+        warning.push_str(&format!(
+            "; unwritten_links {:?} -> {:?}",
+            baseline.unwritten_links, observed.unwritten_links
+        ));
+    }
+
+    vec![warning]
+}
+
+fn description_cost_threshold(baseline: u64) -> u64 {
+    let relative = ((baseline as f64) * DESCRIPTION_COST_REGRESSION_PCT).ceil() as u64;
+    DESCRIPTION_COST_REGRESSION_MIN_UNITS.max(relative)
+}
+
+fn link_change_details(
+    baseline: &[LinkDescriptionCost],
+    observed: &[LinkDescriptionCost],
+) -> Vec<String> {
+    let before = link_cost_map(baseline);
+    let after = link_cost_map(observed);
+    let mut details = Vec::new();
+
+    for (key, old) in &before {
+        match after.get(key) {
+            Some(new) => {
+                if old.edit_cost != new.edit_cost
+                    || old.edit_count != new.edit_count
+                    || old.writer != new.writer
+                    || old.settled != new.settled
+                {
+                    details.push(format!(
+                        "link changed {} edit_cost {} -> {}, edit_count {} -> {}, writer {:?} -> {:?}, settled {} -> {}",
+                        link_label(new),
+                        old.edit_cost,
+                        new.edit_cost,
+                        old.edit_count,
+                        new.edit_count,
+                        old.writer,
+                        new.writer,
+                        old.settled,
+                        new.settled
+                    ));
+                }
+            }
+            None => details.push(format!("link removed {}", link_label(old))),
+        }
+    }
+    for (key, new) in &after {
+        if !before.contains_key(key) {
+            details.push(format!("link added {}", link_label(new)));
+        }
+    }
+
+    details
+}
+
+fn link_cost_map(links: &[LinkDescriptionCost]) -> BTreeMap<String, &LinkDescriptionCost> {
+    links
+        .iter()
+        .map(|link| {
+            (
+                format!(
+                    "{}\x1f{}\x1f{}\x1f{}",
+                    link.left_path, link.right_path, link.evidence, link.proposer
+                ),
+                link,
+            )
+        })
+        .collect()
+}
+
+fn link_label(link: &LinkDescriptionCost) -> String {
+    format!(
+        "'{}' -> '{}' [{} by {}]",
+        link.left_path, link.right_path, link.evidence, link.proposer
+    )
+}
 
 fn diff_roots(snap_a: &Path, snap_b: &Path, root_file: &Option<String>) -> (PathBuf, PathBuf) {
     match root_file {
@@ -585,6 +828,53 @@ pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
             assert!(seen.insert(*path), "[{name}] Duplicate leaf path: '{path}'");
         }
     }
+
+    check_no_parent_child_edit_duplication(name, root);
+}
+
+/// Collect the JSON edit objects (`{ "verb", "params" }`) recorded under a
+/// node's `details["edits"]`.
+fn node_edits(node: &DiffNode) -> Vec<&serde_json::Value> {
+    node.details
+        .get("edits")
+        .and_then(|edits| edits.as_array())
+        .map(|edits| edits.iter().collect())
+        .unwrap_or_default()
+}
+
+/// A parent node's own edits must not restate edits that already appear on any
+/// of its descendants. Once a multi-table or container source decomposes into
+/// child nodes, each child carries its own content edits; the parent should only
+/// carry residual (membership-level) edits, never a copy of what a child already
+/// reports. This guards the double-count the dropped collection manifest used to
+/// cause (see the CFM-69 ADR invariant).
+fn check_no_parent_child_edit_duplication(name: &str, node: &DiffNode) {
+    let parent_edits = node_edits(node);
+    if !parent_edits.is_empty() {
+        let mut descendant_edits: HashSet<String> = HashSet::new();
+        for child in &node.children {
+            collect_descendant_edits(child, &mut descendant_edits);
+        }
+        for edit in parent_edits {
+            assert!(
+                !descendant_edits.contains(&edit.to_string()),
+                "[{name}] Parent node '{}' restates a child edit: {edit}",
+                node.path
+            );
+        }
+    }
+    for child in &node.children {
+        check_no_parent_child_edit_duplication(name, child);
+    }
+}
+
+fn collect_descendant_edits(node: &DiffNode, out: &mut HashSet<String>) {
+    for edit in node_edits(node) {
+        out.insert(edit.to_string());
+    }
+    for child in &node.children {
+        collect_descendant_edits(child, out);
+    }
 }
 
 fn collect_invariant_violations<'a>(node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {
@@ -669,5 +959,72 @@ fn check_assertions(
             has_sig_tag,
             "[{name}] Expected significance '{significance}' but no matching tags. All tags: {all_tags:?}, sig_tags: {sig_tags:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod cost_baseline_tests {
+    use super::*;
+
+    fn link(
+        left_path: &str,
+        right_path: &str,
+        edit_cost: u64,
+        writer: Option<&str>,
+    ) -> LinkDescriptionCost {
+        LinkDescriptionCost {
+            index: 0,
+            left_path: left_path.into(),
+            right_path: right_path.into(),
+            evidence: "test.evidence".into(),
+            proposer: "test.pair".into(),
+            writer: writer.map(str::to_string),
+            settled: false,
+            edit_count: 1,
+            edit_cost,
+        }
+    }
+
+    fn cost(
+        description_cost: u64,
+        edit_cost: u64,
+        links: Vec<LinkDescriptionCost>,
+    ) -> DescriptionCost {
+        DescriptionCost {
+            description_cost,
+            edit_cost,
+            link_count: links.len() as u64,
+            links,
+            compaction_accepted: BTreeMap::new(),
+            compaction_rejected: BTreeMap::new(),
+            unwritten_links: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn description_cost_within_threshold_does_not_warn() {
+        let baseline = cost(100, 98, vec![link("a.csv", "a.csv", 98, Some("writer"))]);
+        let observed = cost(105, 103, vec![link("a.csv", "a.csv", 103, Some("writer"))]);
+
+        assert!(description_cost_warnings("small-change", &baseline, &observed).is_empty());
+    }
+
+    #[test]
+    fn deliberately_cost_regressed_path_warns_with_link_and_compaction_context() {
+        let mut baseline = cost(10, 9, vec![link("a.csv", "a.csv", 9, Some("old.writer"))]);
+        baseline.compaction_accepted.insert("compact".into(), 1);
+
+        let mut observed = cost(20, 19, vec![link("a.csv", "a.csv", 19, Some("new.writer"))]);
+        observed.compaction_accepted.insert("compact".into(), 0);
+
+        let warnings = description_cost_warnings("cost-regressed-fixture", &baseline, &observed);
+
+        assert_eq!(warnings.len(), 1);
+        let warning = &warnings[0];
+        assert!(warning.contains("description_cost regressed from 10 to 20"));
+        assert!(warning.contains("link changed 'a.csv' -> 'a.csv'"));
+        assert!(warning.contains("edit_cost 9 -> 19"));
+        assert!(warning.contains("writer Some(\"old.writer\") -> Some(\"new.writer\")"));
+        assert!(warning.contains("compaction_accepted"));
     }
 }

@@ -59,10 +59,13 @@ fn load_tabular(
         .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))
 }
 
-fn row_multiset(rows: &[Vec<String>]) -> BTreeMap<Vec<String>, usize> {
+fn row_multiset(rows: &[Vec<Value>]) -> BTreeMap<Vec<String>, usize> {
     let mut bag = BTreeMap::new();
     for row in rows {
-        *bag.entry(row.clone()).or_insert(0) += 1;
+        // Key on each cell's canonical JSON so the multiset distinguishes types
+        // (Value isn't Ord, so it can't key a BTreeMap directly).
+        let key: Vec<String> = row.iter().map(|v| v.to_json().to_string()).collect();
+        *bag.entry(key).or_insert(0) += 1;
     }
     bag
 }

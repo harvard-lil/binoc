@@ -13,7 +13,7 @@ publish = false
 [features]
 default = ["test-vectors"]
 # test-vectors: expose run_vector/discover_vectors so plugins can run test vectors without duplicating harness code.
-test-vectors = ["insta", "toml", "rayon", "binoc-sdk/test-support"]
+test-vectors = ["insta", "rayon", "binoc-sdk/test-support"]
 
 [[bin]]
 name = "materialize-test-vectors"
@@ -39,5 +39,8 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tar = "0.4.46"
 flate2 = "1"
 insta = { version = "1.46.3", features = ["json"], optional = true }
-toml = { version = "1.0.4", optional = true }
+toml = "1.0.4"
 rayon = { version = "1", optional = true }
+serde_yaml = "0.9.34"
+rust-ini = "0.21"
+rust-strings = "0.6.5"

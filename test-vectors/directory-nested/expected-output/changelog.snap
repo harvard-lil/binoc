@@ -4,7 +4,10 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data**: 0 edits
-- **data/records.csv**: 1 edit
+- **data/records.csv**: 1 row added
+  - Rows added
+    - row 3: '3', 'Charlie'
 - **data/extra.csv**: Added
-- **docs/readme.txt**: 1 edit
+- **docs/readme.txt**: 2 lines added; 1 line removed
+  - Line changes
+    - line 1: 'Version 1 readme' -> 'Version 2 readme'

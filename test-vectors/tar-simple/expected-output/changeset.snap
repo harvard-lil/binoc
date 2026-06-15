@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,19 +13,24 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "archive.tar.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "tabular",
-            "path": "archive.tar.gz/data.csv",
+            "path": "archive.tar.gz/>data.csv",
+            "sources": [
+              {
+                "path": "archive.tar.gz/>data.csv",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "1 row added"
               }
             ],
             "tags": [
@@ -52,13 +58,18 @@ expression: "&stable_changeset"
           {
             "action": "modify",
             "item_type": "text",
-            "path": "archive.tar.gz/hello.txt",
+            "path": "archive.tar.gz/>hello.txt",
+            "sources": [
+              {
+                "path": "archive.tar.gz/>hello.txt",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "1 line added"
               }
             ],
             "tags": [

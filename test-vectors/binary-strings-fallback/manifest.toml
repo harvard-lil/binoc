@@ -1,0 +1,9 @@
+[vector]
+name = "binary-strings-fallback"
+description = "Two opaque binary blobs with differing hashes. The change is hash-driven (binoc.content-changed), and an additive extracted-strings projection (binoc.strings-changed) surfaces added/removed printable runs without deciding equality."
+tags = ["modify", "binary", "strings"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.content-changed", "binoc.strings-changed"]

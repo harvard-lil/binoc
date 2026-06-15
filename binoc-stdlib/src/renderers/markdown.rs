@@ -95,6 +95,8 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
             changeset.from_snapshot, changeset.to_snapshot
         ));
 
+        format_claims_section(&mut out, changeset);
+
         if let Some(root) = &changeset.root {
             let tag_to_group = build_tag_map(&config.groups);
             let mut by_group: Vec<Vec<&DiffNode>> = vec![Vec::new(); config.groups.len()];
@@ -144,6 +146,23 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
     }
 
     out
+}
+
+fn format_claims_section(out: &mut String, changeset: &Changeset) {
+    if changeset.claims.is_empty() {
+        return;
+    }
+
+    out.push_str("Claims\n\n");
+    for claim in &changeset.claims {
+        out.push_str("- ");
+        match &claim.summary {
+            Some(summary) => out.push_str(&render_summary(summary)),
+            None => out.push_str(&claim.verb),
+        }
+        out.push('\n');
+    }
+    out.push('\n');
 }
 
 fn display_diagnostics(diagnostics: &[Diagnostic], max_diagnostics: usize) -> Vec<&Diagnostic> {
@@ -223,6 +242,7 @@ fn collect_reportable_nodes<'a>(
     let is_reportable = node.summary.is_some()
         || !node.tags.is_empty()
         || (node.children.is_empty() && node.action != "identical");
+    let is_reportable = is_reportable && !is_pure_bookkeeping_container(node);
 
     // A `move` node with content detail is reported as one unit: the move
     // headline plus a trailing content summary. Detail can live in children or
@@ -257,6 +277,23 @@ fn collect_reportable_nodes<'a>(
     }
 }
 
+fn is_pure_bookkeeping_container(node: &DiffNode) -> bool {
+    if node.children.is_empty() || node.action != "modify" {
+        return false;
+    }
+    let has_visible_edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .is_some_and(|edits| !edits.is_empty());
+    if has_visible_edits {
+        return false;
+    }
+    node.summary
+        .as_ref()
+        .is_none_or(|summary| summary.plain_text() == "0 edits")
+}
+
 fn format_node(
     out: &mut String,
     node: &DiffNode,
@@ -285,8 +322,40 @@ fn format_node(
         }
     }
 
+    render_sources(out, node, config);
     render_annotations(out, node, config, detail_budget);
     render_detail_blocks(out, node, path, config, detail_budget);
+    render_known_edit_details(out, node, config, detail_budget);
+}
+
+fn render_sources(out: &mut String, node: &DiffNode, config: &MarkdownRendererConfig) {
+    if config.verbosity != Verbosity::Full || node.sources.is_empty() {
+        return;
+    }
+
+    out.push_str("  - Sources\n");
+    for source in &node.sources {
+        out.push_str("    - ");
+        out.push_str(&source.path);
+        out.push_str(" (");
+        out.push_str(source_side_label(source.side));
+        if let Some(action) = &source.action {
+            out.push_str(", ");
+            out.push_str(action);
+        }
+        if let Some(evidence) = &source.evidence {
+            out.push_str(", ");
+            out.push_str(evidence);
+        }
+        out.push_str(")\n");
+    }
+}
+
+fn source_side_label(side: Side) -> &'static str {
+    match side {
+        Side::From => "from",
+        Side::To => "to",
+    }
 }
 
 fn should_group_move_children(node: &DiffNode) -> bool {
@@ -522,12 +591,16 @@ fn fallback_summary(node: &DiffNode) -> Summary {
         "add" => format!("New {item_type}").into(),
         "remove" => format!("{} removed", capitalize(item_type)).into(),
         "modify" => format!("{} modified", capitalize(item_type)).into(),
-        "move" => match &node.source_path {
-            Some(src) => Summary::new().text("Moved from ").path(src, Side::From),
+        "move" => match node.primary_from_source() {
+            Some(src) => Summary::new()
+                .text("Moved from ")
+                .path(src.path.clone(), src.side),
             None => format!("{} moved", capitalize(item_type)).into(),
         },
-        "copy" => match &node.source_path {
-            Some(src) => Summary::new().text("Copied from ").path(src, Side::From),
+        "copy" => match node.primary_from_source() {
+            Some(src) => Summary::new()
+                .text("Copied from ")
+                .path(src.path.clone(), src.side),
             None => format!("{} copied", capitalize(item_type)).into(),
         },
         "reorder" => format!("{} reordered", capitalize(item_type)).into(),
@@ -605,6 +678,280 @@ fn render_detail_blocks(
     }
 }
 
+fn render_known_edit_details(
+    out: &mut String,
+    node: &DiffNode,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    if config.verbosity == Verbosity::Summary || !node.detail_blocks.is_empty() {
+        return;
+    }
+    let Some(edits) = node.details.get("edits").and_then(|value| value.as_array()) else {
+        return;
+    };
+    render_tabular_cell_details(out, edits, config, detail_budget);
+    render_tabular_row_details(out, edits, config, detail_budget);
+    render_text_line_details(out, edits, config, detail_budget);
+    render_binary_strings_details(out, edits, config, detail_budget);
+}
+
+/// Render the additive extracted-strings projection attached to a
+/// `binary.contents-differ` edit. This is layered on top of the
+/// "binary content changed" fact (the summary already states it); here we list
+/// the added/removed printable runs so an otherwise-unreadable file gets a
+/// strings-level diff.
+fn render_binary_strings_details(
+    out: &mut String,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let Some(strings) = edits
+        .iter()
+        .find(|edit| edit.get("verb").and_then(|v| v.as_str()) == Some("binary.contents-differ"))
+        .and_then(|edit| edit.get("params"))
+        .and_then(|params| params.get("strings"))
+    else {
+        return;
+    };
+    for (key, count_key, label) in [
+        ("added", "added_count", "Extracted strings added"),
+        ("removed", "removed_count", "Extracted strings removed"),
+    ] {
+        let examples = strings
+            .get(key)
+            .and_then(|value| value.as_array())
+            .cloned()
+            .unwrap_or_default();
+        if examples.is_empty() {
+            continue;
+        }
+        let total = strings
+            .get(count_key)
+            .and_then(|value| value.as_u64())
+            .map(|value| value as usize)
+            .unwrap_or(examples.len());
+        let shown = example_count(examples.len(), config);
+        if !detail_budget.push_line(
+            out,
+            format!("  - {label}{}\n", showing_suffix(shown, total)),
+        ) {
+            return;
+        }
+        for example in examples.into_iter().take(shown) {
+            let text = example.as_str().unwrap_or("");
+            let (text, truncated) = truncate_text(text, config.max_value_chars);
+            let suffix = if truncated { "..." } else { "" };
+            if !detail_budget.push_line(out, format!("    - '{text}'{suffix}\n")) {
+                return;
+            }
+        }
+    }
+}
+
+fn render_tabular_cell_details(
+    out: &mut String,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let cells: Vec<&serde_json::Value> = edits
+        .iter()
+        .filter(|edit| edit.get("verb").and_then(|v| v.as_str()) == Some("tabular.edit_cell"))
+        .collect();
+    if cells.is_empty() {
+        return;
+    }
+    let shown = example_count(cells.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!("  - Changed cells{}\n", showing_suffix(shown, cells.len())),
+    ) {
+        return;
+    }
+    for edit in cells.into_iter().take(shown) {
+        let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+        let example = DetailExample {
+            locator: edit_locator(params, &["key", "row", "column"]),
+            before: params.get("from").map(value_preview_from_json),
+            after: params.get("to").map(value_preview_from_json),
+            fields: BTreeMap::new(),
+        };
+        let line = format_tabular_cell_example(&example, config);
+        if !detail_budget.push_line(out, format!("    - {line}\n")) {
+            return;
+        }
+    }
+}
+
+fn render_tabular_row_details(
+    out: &mut String,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    for (verb, label) in [
+        ("tabular.add_row", "Rows added"),
+        ("tabular.remove_row", "Rows removed"),
+    ] {
+        let rows: Vec<&serde_json::Value> = edits
+            .iter()
+            .filter(|edit| edit.get("verb").and_then(|v| v.as_str()) == Some(verb))
+            .collect();
+        if rows.is_empty() {
+            continue;
+        }
+        let shown = example_count(rows.len(), config);
+        if !detail_budget.push_line(
+            out,
+            format!("  - {label}{}\n", showing_suffix(shown, rows.len())),
+        ) {
+            return;
+        }
+        for edit in rows.into_iter().take(shown) {
+            let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+            let locator = row_locator_text(params, config);
+            let values = params
+                .get("values")
+                .and_then(|value| value.get("values"))
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .take(config.max_examples_per_block.max(1))
+                        .map(|value| format_scalar_value(value, config))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .filter(|values| !values.is_empty())
+                .unwrap_or_else(|| "values omitted".into());
+            let line = if locator.is_empty() {
+                values
+            } else {
+                format!("{locator}: {values}")
+            };
+            if !detail_budget.push_line(out, format!("    - {line}\n")) {
+                return;
+            }
+        }
+    }
+}
+
+fn render_text_line_details(
+    out: &mut String,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let Some(edit) = edits
+        .iter()
+        .find(|edit| edit.get("verb").and_then(|v| v.as_str()) == Some("text.replace_lines"))
+    else {
+        return;
+    };
+    let examples = edit
+        .get("params")
+        .and_then(|params| params.get("examples"))
+        .and_then(|examples| examples.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if examples.is_empty() {
+        return;
+    }
+    let shown = example_count(examples.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!(
+            "  - Line changes{}\n",
+            showing_suffix(shown, examples.len())
+        ),
+    ) {
+        return;
+    }
+    for example in examples.into_iter().take(shown) {
+        let line = example.get("line").and_then(|value| value.as_u64());
+        let from = example
+            .get("from")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        let to = example
+            .get("to")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        let prefix = line
+            .map(|line| format!("line {line}: "))
+            .unwrap_or_default();
+        let (from, from_truncated) = truncate_text(from, config.max_value_chars);
+        let (to, to_truncated) = truncate_text(to, config.max_value_chars);
+        let suffix = if from_truncated || to_truncated {
+            "..."
+        } else {
+            ""
+        };
+        if !detail_budget.push_line(out, format!("    - {prefix}'{from}' -> '{to}'{suffix}\n")) {
+            return;
+        }
+    }
+}
+
+fn example_count(total: usize, config: &MarkdownRendererConfig) -> usize {
+    if config.verbosity == Verbosity::Full {
+        total
+    } else {
+        total.min(config.max_examples_per_block)
+    }
+}
+
+fn showing_suffix(shown: usize, total: usize) -> String {
+    if shown < total {
+        format!(" (showing {shown} of {total})")
+    } else {
+        String::new()
+    }
+}
+
+fn edit_locator(params: &serde_json::Value, keys: &[&str]) -> BTreeMap<String, serde_json::Value> {
+    keys.iter()
+        .filter_map(|key| {
+            params
+                .get(*key)
+                .map(|value| ((*key).to_string(), value.clone()))
+        })
+        .collect()
+}
+
+fn value_preview_from_json(value: &serde_json::Value) -> ValuePreview {
+    ValuePreview {
+        value: value.clone(),
+        media_type: value.as_str().map(|_| "text/plain".into()),
+        truncated: false,
+    }
+}
+
+fn row_locator_text(params: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    if let Some(key) = params.get("key").and_then(|value| value.as_object()) {
+        let parts = key
+            .iter()
+            .map(|(column, value)| {
+                format!(
+                    "{} {}",
+                    truncate_text(column, config.max_value_chars).0,
+                    format_key_value(value, config)
+                )
+            })
+            .collect::<Vec<_>>();
+        if !parts.is_empty() {
+            return format!("key {}", parts.join(", "));
+        }
+    }
+    params
+        .get("index")
+        .and_then(|value| value.as_u64())
+        .map(|index| format!("row {}", index + 1))
+        .unwrap_or_default()
+}
+
 fn format_detail_example(
     block: &DetailBlock,
     example: &DetailExample,
@@ -648,14 +995,12 @@ fn format_tabular_cell_example(example: &DetailExample, config: &MarkdownRendere
         }
         let parts: Vec<String> = map
             .iter()
-            .filter_map(|(column, value)| {
-                value.as_str().map(|text| {
-                    format!(
-                        "{} '{}'",
-                        truncate_text(column, config.max_value_chars).0,
-                        truncate_text(text, config.max_value_chars).0
-                    )
-                })
+            .map(|(column, value)| {
+                format!(
+                    "{} {}",
+                    truncate_text(column, config.max_value_chars).0,
+                    format_key_value(value, config)
+                )
             })
             .collect();
         if parts.is_empty() {
@@ -720,6 +1065,32 @@ fn format_value_preview(value: &ValuePreview, config: &MarkdownRendererConfig) -
                 truncated
             }
         }
+    }
+}
+
+/// Render a JSON scalar for inline display. Strings are quoted and truncated
+/// (matching the legacy all-string output); other scalars render bare so typed
+/// cells (numbers, bools, null, nested) do not vanish.
+fn format_scalar_value(value: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    match value {
+        serde_json::Value::String(text) => {
+            format!("'{}'", truncate_text(text, config.max_value_chars).0)
+        }
+        other => {
+            let raw = serde_json::to_string(other).unwrap_or_else(|_| "null".into());
+            truncate_text(&raw, config.max_value_chars).0
+        }
+    }
+}
+
+/// Render a key column's value (string bare, other scalars via their JSON form)
+/// for locator text like `key id '5'` / `key id 5`.
+fn format_key_value(value: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    match value {
+        serde_json::Value::String(text) => {
+            format!("'{}'", truncate_text(text, config.max_value_chars).0)
+        }
+        other => serde_json::to_string(other).unwrap_or_else(|_| "null".into()),
     }
 }
 
@@ -956,6 +1327,44 @@ mod tests {
     }
 
     #[test]
+    fn binary_strings_projection_renders_added_and_removed_runs() {
+        // The additive extracted-strings projection on a binary.contents-differ
+        // edit should surface added/removed runs in Examples/Full verbosity,
+        // layered under the "binary content changed" summary.
+        let node = DiffNode::new("modify", "file", "firmware.bin")
+            .with_summary(
+                "Binary content changed; 1 extracted string added, 1 extracted string removed",
+            )
+            .with_tag("binoc.content-changed")
+            .with_tag("binoc.strings-changed")
+            .with_detail(
+                "edits",
+                serde_json::json!([{
+                    "verb": "binary.contents-differ",
+                    "params": {
+                        "strings": {
+                            "added": ["version=2.0.0"],
+                            "removed": ["version=1.0.0"],
+                            "added_count": 1,
+                            "removed_count": 1,
+                        }
+                    }
+                }]),
+            );
+        let changeset = Changeset::new("v1", "v2", Some(node));
+        let config = MarkdownRendererConfig {
+            verbosity: Verbosity::Full,
+            ..Default::default()
+        };
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("Binary content changed"), "got:\n{md}");
+        assert!(md.contains("Extracted strings added"), "got:\n{md}");
+        assert!(md.contains("'version=2.0.0'"), "got:\n{md}");
+        assert!(md.contains("Extracted strings removed"), "got:\n{md}");
+        assert!(md.contains("'version=1.0.0'"), "got:\n{md}");
+    }
+
+    #[test]
     fn move_with_children_renders_as_paired_bullets() {
         // A `move` node carrying its own content-change children should
         // be reported as two stacked top-level bullets under the same
@@ -966,7 +1375,7 @@ mod tests {
             .with_summary("Column added: 'email'")
             .with_tag("binoc.column-addition");
         let move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source_path("data.csv")
+            .with_source(Source::new("data.csv", Side::From).with_action("move"))
             .with_summary("Moved from data.csv (modified)")
             .with_tag("binoc.move")
             .with_tag("binoc.move.modified")
@@ -1000,7 +1409,7 @@ mod tests {
         // A CSV rename+modify produces a move node with no children but
         // `annotations.tabular_summary` set by TabularAnalyzer.
         let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source_path("data.csv")
+            .with_source(Source::new("data.csv", Side::From).with_action("move"))
             .with_summary("Moved from data.csv (modified)")
             .with_tag("binoc.move")
             .with_tag("binoc.move.modified")
@@ -1041,7 +1450,7 @@ mod tests {
         // no tabular_summary, but `annotations.content_summary` from
         // the controller's re-dispatch merge.
         let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
-            .with_source_path("notes.txt")
+            .with_source(Source::new("notes.txt", Side::From).with_action("move"))
             .with_summary("Moved from notes.txt (modified)")
             .with_tag("binoc.move")
             .with_tag("binoc.move.modified")
@@ -1072,7 +1481,7 @@ mod tests {
     #[test]
     fn move_trailer_prefers_tabular_over_content_summary() {
         let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source_path("data.csv")
+            .with_source(Source::new("data.csv", Side::From).with_action("move"))
             .with_summary("Moved from data.csv (modified)")
             .with_tag("binoc.move");
         move_node.annotate_from(
@@ -1102,7 +1511,7 @@ mod tests {
     #[test]
     fn folder_move_descends_into_children_instead_of_grouping() {
         let node = DiffNode::new("move", "directory", "docs-v2")
-            .with_source_path("docs-v1")
+            .with_source(Source::new("docs-v1", Side::From).with_action("move"))
             .with_summary("Folder moved from docs-v1")
             .with_tag("binoc.move")
             .with_tag("binoc.folder-move")
@@ -1137,7 +1546,10 @@ mod tests {
             "v2",
             Some(DiffNode::new("modify", "directory", "").with_children(vec![
                 DiffNode::new("move", "directory", "FoodData_Central_csv_2026-04-30")
-                    .with_source_path("FoodData_Central_csv_2025-12-18")
+                    .with_source(
+                        Source::new("FoodData_Central_csv_2025-12-18", Side::From)
+                            .with_action("move"),
+                    )
                     .with_summary(
                         Summary::new()
                             .text("Folder moved from ")

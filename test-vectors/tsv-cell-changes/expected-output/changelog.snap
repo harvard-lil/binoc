@@ -4,4 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tsv**: 2 edits
+- **data.tsv**: 2 cells changed
+  - Changed cells
+    - row 1, column 'age': '30' -> '31'
+    - row 2, column 'city': 'Boston' -> 'Cambridge'

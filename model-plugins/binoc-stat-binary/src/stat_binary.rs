@@ -22,17 +22,19 @@ pub struct Sas7bdatParseRule;
 #[derive(Default)]
 pub struct XptParseRule;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ParsedTable {
+/// A parsed single-table file: the `tabular_v1` payload (carrying tier-1 column
+/// metadata and tier-2 table metadata) plus the tier-3 [`ParserMetadata`] bag
+/// that rides as a second artifact on the same node.
+struct ParsedLeaf {
     tabular: TabularData,
-    metadata: serde_json::Value,
+    parser_metadata: ParserMetadata,
 }
 
 trait StatBinaryFormat {
     const NAME: &'static str;
     const EXTENSIONS: &'static [&'static str];
 
-    fn parse(path: &Path) -> BinocResult<ParsedTable>;
+    fn parse(path: &Path) -> BinocResult<ParsedLeaf>;
 }
 
 struct StataFormat;
@@ -42,7 +44,7 @@ impl StatBinaryFormat for StataFormat {
     const NAME: &'static str = "binoc-stat-binary.stata";
     const EXTENSIONS: &'static [&'static str] = &[".dta"];
 
-    fn parse(path: &Path) -> BinocResult<ParsedTable> {
+    fn parse(path: &Path) -> BinocResult<ParsedLeaf> {
         parse_stata(path)
     }
 }
@@ -51,12 +53,12 @@ impl StatBinaryFormat for Sas7bdatFormat {
     const NAME: &'static str = "binoc-stat-binary.sas7bdat";
     const EXTENSIONS: &'static [&'static str] = &[".sas7bdat"];
 
-    fn parse(path: &Path) -> BinocResult<ParsedTable> {
+    fn parse(path: &Path) -> BinocResult<ParsedLeaf> {
         parse_sas7bdat(path)
     }
 }
 
-macro_rules! impl_collection_parse_rule {
+macro_rules! impl_leaf_parse_rule {
     ($rule:ty, $format:ty) => {
         impl ParseRule for $rule {
             fn descriptor(&self) -> ParseDescriptor {
@@ -70,8 +72,7 @@ macro_rules! impl_collection_parse_rule {
                             .collect(),
                         media_types: Vec::new(),
                     },
-                    output: tabular_collection_v1(),
-                    requires_link: true,
+                    output: tabular_v1(),
                     fires_beneath_settled: false,
                 }
             }
@@ -79,19 +80,33 @@ macro_rules! impl_collection_parse_rule {
             fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
                 let path = data.local_path(item)?;
                 let parsed = <$format>::parse(&path)?;
-                let collection = single_table_collection(&item.logical_path, parsed);
-                serde_json::to_vec(&collection)
-                    .map(ParseOutput::from)
-                    .map_err(|e| {
-                        BinocError::Other(format!("serialize stat-binary collection artifact: {e}"))
-                    })
+                // A `.dta`/`.sas7bdat` file is a single dataset: emit a LEAF
+                // `tabular_v1` on the file node (tier-1/tier-2 metadata ride
+                // inside it), with the tier-3 `parser_metadata_v1` bag as a
+                // second artifact on the same node.
+                let bytes = serde_json::to_vec(&parsed.tabular).map_err(|e| {
+                    BinocError::Other(format!("serialize stat-binary tabular artifact: {e}"))
+                })?;
+                let metadata_bytes = serde_json::to_vec(&parsed.parser_metadata).map_err(|e| {
+                    BinocError::Other(format!("serialize stat-binary parser metadata: {e}"))
+                })?;
+                Ok(ParseOutput {
+                    bytes,
+                    diagnostics: Vec::new(),
+                    children: Vec::new(),
+                    artifacts: vec![ParsedArtifact {
+                        format: parser_metadata_v1(),
+                        bytes: metadata_bytes,
+                    }],
+                    projection: ProjectionHint::default(),
+                })
             }
         }
     };
 }
 
-impl_collection_parse_rule!(StataParseRule, StataFormat);
-impl_collection_parse_rule!(Sas7bdatParseRule, Sas7bdatFormat);
+impl_leaf_parse_rule!(StataParseRule, StataFormat);
+impl_leaf_parse_rule!(Sas7bdatParseRule, Sas7bdatFormat);
 
 impl ParseRule for XptParseRule {
     fn descriptor(&self) -> ParseDescriptor {
@@ -102,8 +117,7 @@ impl ParseRule for XptParseRule {
                 extensions: vec![".xpt".into()],
                 media_types: Vec::new(),
             },
-            output: tabular_collection_v1(),
-            requires_link: true,
+            output: tabular_v1(),
             fires_beneath_settled: false,
         }
     }
@@ -111,36 +125,27 @@ impl ParseRule for XptParseRule {
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let path = data.local_path(item)?;
         let parsed = parse_xpt(&path)?;
-        serde_json::to_vec(&xpt_collection_from_file(&item.logical_path, &parsed))
-            .map(ParseOutput::from)
-            .map_err(|e| BinocError::Other(format!("serialize xpt collection artifact: {e}")))
+        // A SAS transport file is a container of one or more named datasets:
+        // emit one `tabular_v1` CHILD per dataset (each carrying tier-1/tier-2
+        // metadata) and no primary artifact. File-level facts ride as a tier-3
+        // `parser_metadata_v1` bag on the container node itself.
+        let children = xpt_children(&item.logical_path, &parsed)?;
+        let metadata_bytes = serde_json::to_vec(&parsed.parser_metadata)
+            .map_err(|e| BinocError::Other(format!("serialize xpt parser metadata: {e}")))?;
+        Ok(ParseOutput {
+            bytes: Vec::new(),
+            diagnostics: Vec::new(),
+            children,
+            artifacts: vec![ParsedArtifact {
+                format: parser_metadata_v1(),
+                bytes: metadata_bytes,
+            }],
+            projection: ProjectionHint::default().item_type("SAS transport file"),
+        })
     }
 }
 
-fn single_table_collection(logical_path: &str, parsed: ParsedTable) -> TabularCollectionData {
-    let logical_name = std::path::Path::new(logical_path)
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().to_string())
-        .unwrap_or_else(|| "table".into());
-    TabularCollectionData {
-        tables: vec![TableMember {
-            logical_name,
-            node_path: logical_path.into(),
-            source: TableSourceLocation {
-                item_path: logical_path.into(),
-                kind: "stat_binary_table".into(),
-                locator: BTreeMap::new(),
-            },
-            shape: TableShape {
-                columns: parsed.tabular.headers,
-                row_count: Some(parsed.tabular.rows.len() as u64),
-            },
-            metadata: BTreeMap::from([("metadata".into(), parsed.metadata)]),
-        }],
-    }
-}
-
-fn parse_stata(path: &Path) -> BinocResult<ParsedTable> {
+fn parse_stata(path: &Path) -> BinocResult<ParsedLeaf> {
     let header_reader = DtaReader::new()
         .from_path(path)
         .map_err(|e| BinocError::Other(format!("stata: {e}")))?;
@@ -159,10 +164,22 @@ fn parse_stata(path: &Path) -> BinocResult<ParsedTable> {
         .into_record_reader()
         .map_err(|e| BinocError::Other(format!("stata: {e}")))?;
     let schema = record_reader.schema().clone();
-    let headers = schema
+    let headers: Vec<String> = schema
         .variables()
         .iter()
         .map(|variable| variable.name().to_string())
+        .collect();
+    // Tier 1: per-column label / display format / value-label set name.
+    let column_metadata: Vec<serde_json::Value> = schema
+        .variables()
+        .iter()
+        .map(|variable| {
+            column_meta_object([
+                ("label", Some(variable.label())),
+                ("format", Some(variable.format())),
+                ("value_label_set", Some(variable.value_label_name())),
+            ])
+        })
         .collect();
 
     let mut rows = Vec::new();
@@ -173,13 +190,14 @@ fn parse_stata(path: &Path) -> BinocResult<ParsedTable> {
         rows.push(record.values().iter().map(stata_value_to_string).collect());
     }
 
+    // Drain the remaining reader stages to reach the value-label dictionaries,
+    // which are file-level (tier 3): referenced by columns but stored once.
     let mut long_string_reader = record_reader
         .into_long_string_reader()
         .map_err(|e| BinocError::Other(format!("stata: {e}")))?;
     long_string_reader
         .skip_to_end()
         .map_err(|e| BinocError::Other(format!("stata: {e}")))?;
-
     let mut value_label_reader = long_string_reader
         .into_value_label_reader()
         .map_err(|e| BinocError::Other(format!("stata: {e}")))?;
@@ -191,40 +209,28 @@ fn parse_stata(path: &Path) -> BinocResult<ParsedTable> {
         value_labels.insert(set.name().to_string(), value_label_set_json(&set));
     }
 
-    let variable_labels: BTreeMap<String, serde_json::Value> = schema
-        .variables()
-        .iter()
-        .filter_map(|variable| {
-            let has_metadata = !variable.label().is_empty()
-                || !variable.format().is_empty()
-                || !variable.value_label_name().is_empty();
-            has_metadata.then(|| {
-                (
-                    variable.name().to_string(),
-                    serde_json::json!({
-                        "label": empty_to_null(variable.label()),
-                        "format": empty_to_null(variable.format()),
-                        "value_label_set": empty_to_null(variable.value_label_name()),
-                    }),
-                )
-            })
-        })
-        .collect();
-
-    Ok(ParsedTable {
-        tabular: TabularData { headers, rows },
-        metadata: serde_json::json!({
-            "format": "stata_dta",
-            "release": header.release().to_string(),
+    let tabular = TabularData::from_string_rows(headers, rows)
+        .with_column_metadata(column_metadata)
+        // Tier 2: this single table's own label.
+        .with_table_metadata(serde_json::json!({
             "dataset_label": empty_to_null(header.dataset_label()),
-            "columns": variable_labels,
+        }));
+    // Tier 3: how the file is encoded plus its value-label dictionaries.
+    let parser_metadata = ParserMetadata::new(
+        "stata_dta",
+        serde_json::json!({
+            "release": header.release().to_string(),
             "value_labels": value_labels,
             "cell_encoding": "values flattened to display strings; Stata missing values use '.', '.a' ... '.z'; value labels are metadata only",
         }),
+    );
+    Ok(ParsedLeaf {
+        tabular,
+        parser_metadata,
     })
 }
 
-fn parse_sas7bdat(path: &Path) -> BinocResult<ParsedTable> {
+fn parse_sas7bdat(path: &Path) -> BinocResult<ParsedLeaf> {
     let mut reader =
         sas7bdat::SasReader::open(path).map_err(|e| BinocError::Other(format!("sas7bdat: {e}")))?;
     let metadata = reader.metadata().clone();
@@ -233,23 +239,16 @@ fn parse_sas7bdat(path: &Path) -> BinocResult<ParsedTable> {
         .iter()
         .map(|variable| variable.name.trim_end().to_string())
         .collect();
-    let columns: BTreeMap<String, serde_json::Value> = metadata
+    // Tier 1: per-column label / display format / value-label set name.
+    let column_metadata: Vec<serde_json::Value> = metadata
         .variables
         .iter()
-        .filter_map(|variable| {
-            let has_metadata = variable.label.is_some()
-                || variable.format.is_some()
-                || variable.value_labels.is_some();
-            has_metadata.then(|| {
-                (
-                    variable.name.trim_end().to_string(),
-                    serde_json::json!({
-                        "label": variable.label,
-                        "format": variable.format.as_ref().map(|format| &format.name),
-                        "value_label_set": variable.value_labels,
-                    }),
-                )
-            })
+        .map(|variable| {
+            column_meta_object([
+                ("label", variable.label.as_deref()),
+                ("format", variable.format.as_ref().map(|f| f.name.as_str())),
+                ("value_label_set", variable.value_labels.as_deref()),
+            ])
         })
         .collect();
 
@@ -264,15 +263,29 @@ fn parse_sas7bdat(path: &Path) -> BinocResult<ParsedTable> {
         rows.push(row.values().iter().map(sas7_cell_to_string).collect());
     }
 
-    Ok(ParsedTable {
-        tabular: TabularData { headers, rows },
-        metadata: serde_json::json!({
-            "format": "sas7bdat",
+    let version = &metadata.version;
+    let tabular = TabularData::from_string_rows(headers, rows)
+        .with_column_metadata(column_metadata)
+        // Tier 2: this table's name and label.
+        .with_table_metadata(serde_json::json!({
             "dataset_name": metadata.table_name,
             "dataset_label": metadata.file_label,
-            "columns": columns,
+        }));
+    // Tier 3: physical file-format facts.
+    let parser_metadata = ParserMetadata::new(
+        "sas7bdat",
+        serde_json::json!({
+            "version": format!("{}.{}.{}", version.major, version.minor, version.revision),
+            "compression": format!("{:?}", metadata.compression),
+            "endianness": format!("{:?}", metadata.endianness),
+            "file_encoding": metadata.file_encoding,
+            "vendor": format!("{:?}", metadata.vendor),
             "cell_encoding": "values flattened to display strings; SAS missing values use '.', '.A' ... where available; value labels are metadata only",
         }),
+    );
+    Ok(ParsedLeaf {
+        tabular,
+        parser_metadata,
     })
 }
 
@@ -281,62 +294,49 @@ struct ParsedXptDataset {
     logical_name: String,
     node_name: String,
     tabular: TabularData,
-    metadata: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedXptFile {
     datasets: Vec<ParsedXptDataset>,
-    metadata: serde_json::Value,
+    parser_metadata: ParserMetadata,
 }
 
-fn xpt_collection_from_file(logical_path: &str, file: &ParsedXptFile) -> TabularCollectionData {
-    TabularCollectionData {
-        tables: file
-            .datasets
-            .iter()
-            .map(|dataset| {
-                let dataset_name = dataset.metadata["dataset_name"]
-                    .as_str()
-                    .unwrap_or(dataset.logical_name.as_str())
-                    .to_string();
-                let dataset_index = dataset.metadata["dataset_index"]
-                    .as_u64()
-                    .expect("xpt dataset index is present");
-                let dataset_label = dataset.metadata["dataset_label"].clone();
-                TableMember {
-                    logical_name: dataset.logical_name.clone(),
-                    node_path: xpt_table_node_path(logical_path, &dataset.node_name),
-                    source: TableSourceLocation {
-                        item_path: logical_path.into(),
-                        kind: "sas_xport_dataset".into(),
-                        locator: BTreeMap::from([
-                            ("dataset_name".into(), serde_json::json!(dataset_name)),
-                            ("dataset_index".into(), serde_json::json!(dataset_index)),
-                        ]),
-                    },
-                    shape: TableShape {
-                        columns: dataset.tabular.headers.clone(),
-                        row_count: Some(dataset.tabular.rows.len() as u64),
-                    },
-                    metadata: BTreeMap::from([
-                        ("dataset_label".into(), dataset_label),
-                        ("node_name".into(), serde_json::json!(dataset.node_name)),
-                    ]),
-                }
-            })
-            .collect(),
+/// Build one `tabular_v1` child node per dataset in the SAS transport file.
+///
+/// The dataset name (de-duplicated into `node_name`) is the stable logical name;
+/// child paths join the file node with `/>` via [`decompose_child`].
+fn xpt_children(logical_path: &str, file: &ParsedXptFile) -> BinocResult<Vec<ParsedChild>> {
+    let mut children = Vec::with_capacity(file.datasets.len());
+    for dataset in &file.datasets {
+        let child_path = decompose_child(logical_path, &dataset.node_name);
+        let bytes = serde_json::to_vec(&dataset.tabular)
+            .map_err(|e| BinocError::Other(format!("serialize xpt dataset artifact: {e}")))?;
+        children.push(ParsedChild {
+            item: ItemRef {
+                logical_path: child_path.clone(),
+                is_dir: false,
+                content_hash: Some(blake3::hash(&bytes).to_hex().to_string()),
+                size: Some(bytes.len() as u64),
+                media_type: Some("application/vnd.binoc.tabular+json".into()),
+                projection_hint: ProjectionHint::default().item_type("tabular"),
+                handle: child_path,
+            },
+            artifacts: vec![ParsedArtifact {
+                format: tabular_v1(),
+                bytes,
+            }],
+        });
     }
-}
-
-fn xpt_table_node_path(logical_path: &str, node_name: &str) -> String {
-    format!("{logical_path}::{node_name}")
+    Ok(children)
 }
 
 fn parse_xpt(path: &Path) -> BinocResult<ParsedXptFile> {
     let file = std::fs::File::open(path).map_err(BinocError::Io)?;
     let reader =
         XportReader::from_file(file).map_err(|e| BinocError::Other(format!("xpt: {e}")))?;
+    // File-level (tier 3): captured before `next_dataset` consumes the reader.
+    let sas_version = reader.metadata().sas_version().to_string();
 
     let mut datasets = Vec::new();
     let mut dataset_names = Vec::new();
@@ -352,21 +352,15 @@ fn parse_xpt(path: &Path) -> BinocResult<ParsedXptFile> {
             .iter()
             .map(|variable| variable.full_name().to_string())
             .collect();
-        let columns: BTreeMap<String, serde_json::Value> = schema
+        // Tier 1: per-column label / display format.
+        let column_metadata: Vec<serde_json::Value> = schema
             .variables()
             .iter()
-            .filter_map(|variable| {
-                let has_metadata =
-                    !variable.full_label().is_empty() || !variable.full_format().is_empty();
-                has_metadata.then(|| {
-                    (
-                        variable.full_name().to_string(),
-                        serde_json::json!({
-                            "label": empty_to_null(variable.full_label()),
-                            "format": empty_to_null(variable.full_format()),
-                        }),
-                    )
-                })
+            .map(|variable| {
+                column_meta_object([
+                    ("label", Some(variable.full_label())),
+                    ("format", Some(variable.full_format())),
+                ])
             })
             .collect();
 
@@ -383,18 +377,18 @@ fn parse_xpt(path: &Path) -> BinocResult<ParsedXptFile> {
             dataset_name.clone()
         };
         dataset_names.push(logical_name.clone());
+        // Tier 2: this dataset's own identity within the transport file.
+        let table_metadata = serde_json::json!({
+            "dataset_name": empty_to_null(&dataset_name),
+            "dataset_label": empty_to_null(schema.dataset_label()),
+            "dataset_index": index + 1,
+        });
         datasets.push(ParsedXptDataset {
             logical_name,
             node_name: String::new(),
-            tabular: TabularData { headers, rows },
-            metadata: serde_json::json!({
-                "format": "sas_xport",
-                "dataset_index": index + 1,
-                "dataset_name": dataset_name,
-                "dataset_label": empty_to_null(schema.dataset_label()),
-                "columns": columns,
-                "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
-            }),
+            tabular: TabularData::from_string_rows(headers, rows)
+                .with_column_metadata(column_metadata)
+                .with_table_metadata(table_metadata),
         });
 
         next_dataset = dataset
@@ -420,47 +414,28 @@ fn parse_xpt(path: &Path) -> BinocResult<ParsedXptFile> {
         };
     }
 
-    let dataset_inventory = datasets
+    // Tier 3: file-format identity plus a light inventory of member datasets.
+    let inventory: Vec<serde_json::Value> = datasets
         .iter()
         .map(|dataset| {
             serde_json::json!({
-                "dataset_index": dataset.metadata["dataset_index"].clone(),
-                "dataset_name": dataset.metadata["dataset_name"].clone(),
-                "dataset_label": dataset.metadata["dataset_label"].clone(),
-                "logical_name": dataset.logical_name.clone(),
-                "node_name": dataset.node_name.clone(),
-                "columns": dataset.tabular.headers.clone(),
-                "rows": dataset.tabular.rows.len(),
+                "logical_name": dataset.logical_name,
+                "node_name": dataset.node_name,
             })
         })
-        .collect::<Vec<_>>();
-
-    for dataset in &mut datasets {
-        let metadata = dataset
-            .metadata
-            .as_object_mut()
-            .expect("xpt dataset metadata is an object");
-        metadata.insert(
-            "logical_name".into(),
-            serde_json::json!(dataset.logical_name.clone()),
-        );
-        metadata.insert(
-            "node_name".into(),
-            serde_json::json!(dataset.node_name.clone()),
-        );
-        metadata.insert(
-            "datasets".into(),
-            serde_json::json!(dataset_inventory.clone()),
-        );
-    }
-
-    Ok(ParsedXptFile {
-        metadata: serde_json::json!({
-            "format": "sas_xport",
-            "datasets": dataset_inventory,
+        .collect();
+    let parser_metadata = ParserMetadata::new(
+        "sas_xport",
+        serde_json::json!({
+            "sas_version": empty_to_null(&sas_version),
+            "datasets": inventory,
             "cell_encoding": "values flattened to display strings; numeric NaN is treated as SAS missing '.'",
         }),
+    );
+
+    Ok(ParsedXptFile {
         datasets,
+        parser_metadata,
     })
 }
 
@@ -533,6 +508,29 @@ fn format_float(value: f64) -> String {
     }
 }
 
+/// Build one column's tier-1 metadata object from `(key, value)` pairs. A pair
+/// whose value is `None` or empty becomes a JSON `null`; when every value is
+/// null the whole column collapses to `Null`, so columns with no metadata stay
+/// cheap and a generic consumer sees a parallel-to-`headers` array of objects.
+fn column_meta_object<const N: usize>(entries: [(&str, Option<&str>); N]) -> serde_json::Value {
+    let map: serde_json::Map<String, serde_json::Value> = entries
+        .into_iter()
+        .map(|(key, value)| {
+            let value = match value {
+                Some(text) if !text.is_empty() => serde_json::Value::String(text.to_string()),
+                _ => serde_json::Value::Null,
+            };
+            (key.to_string(), value)
+        })
+        .collect();
+    if map.values().all(serde_json::Value::is_null) {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::Object(map)
+    }
+}
+
+/// Flatten a Stata value-label set into a `{ value: label }` JSON object.
 fn value_label_set_json(set: &ValueLabelSet) -> serde_json::Value {
     let entries: BTreeMap<String, String> = set
         .entries()
@@ -542,6 +540,7 @@ fn value_label_set_json(set: &ValueLabelSet) -> serde_json::Value {
     serde_json::json!(entries)
 }
 
+/// Map an empty string to JSON `null`, otherwise a JSON string.
 fn empty_to_null(value: &str) -> serde_json::Value {
     if value.is_empty() {
         serde_json::Value::Null
@@ -673,12 +672,27 @@ mod tests {
         write_simple_dta(&path, false);
 
         let parsed = parse_stata(&path).unwrap();
-        assert_eq!(parsed.tabular.headers, vec!["id", "name"]);
-        assert_eq!(parsed.tabular.rows, vec![vec!["1", "Alice"]]);
+        let tabular = &parsed.tabular;
+        assert_eq!(tabular.headers, vec!["id", "name"]);
         assert_eq!(
-            parsed.metadata["columns"]["id"]["label"],
+            tabular.rows,
+            vec![vec![
+                binoc_sdk::Value::String("1".into()),
+                binoc_sdk::Value::String("Alice".into())
+            ]]
+        );
+        // Tier 1: the `id` column's label rides on the tabular artifact.
+        assert_eq!(
+            tabular.column_metadata[0]["label"],
             serde_json::json!("Identifier")
         );
+        // Tier 2: the dataset label rides as table metadata.
+        assert_eq!(
+            tabular.table_metadata["dataset_label"],
+            serde_json::json!("test table")
+        );
+        // Tier 3: the source-format identity rides as a separate artifact.
+        assert_eq!(parsed.parser_metadata.format, "stata_dta");
     }
 
     #[test]

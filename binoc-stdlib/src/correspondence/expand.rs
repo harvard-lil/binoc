@@ -2,19 +2,33 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use binoc_sdk::{
-    file_name, BinocError, BinocResult, DataAccess, Diagnostic, ExpandDescriptor, ExpandOutput,
-    ExpandRule, ItemRef, NodeMatch, ProjectionHint,
+    decompose_child, file_name, member_child, BinocError, BinocResult, DataAccess, Diagnostic,
+    ExpandDescriptor, ExpandOutput, ExpandRule, ItemRef, NodeMatch, ProjectionHint,
 };
 
 const GZIP_MAX_BYTES: u64 = 256 * 1024 * 1024;
 const ARCHIVE_MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
 const ARCHIVE_MAX_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
-fn child_logical(parent: &str, name: &str) -> String {
-    if parent.is_empty() {
-        name.to_string()
-    } else {
-        format!("{parent}/{name}")
+/// Which separator the immediate children of an expansion hang off.
+///
+/// Directory traversal reveals an already-navigable tree, so its members use
+/// `/`. An archive extraction is a decompose boundary (binoc opened a format to
+/// reveal the members), so the immediate members use `/>`. Deeper nesting inside
+/// an extracted tree is produced by [`DirectoryExpand`] re-firing on the dir
+/// child nodes, which correctly uses `/`.
+#[derive(Clone, Copy)]
+enum ChildSep {
+    Member,
+    Decompose,
+}
+
+impl ChildSep {
+    fn join(self, parent: &str, name: &str) -> String {
+        match self {
+            ChildSep::Member => member_child(parent, name),
+            ChildSep::Decompose => decompose_child(parent, name),
+        }
     }
 }
 
@@ -55,6 +69,7 @@ fn hash_and_size(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, 
 fn expand_physical_dir(
     dir: &Path,
     parent_logical: &str,
+    sep: ChildSep,
     data: &dyn DataAccess,
 ) -> BinocResult<Vec<ItemRef>> {
     let mut children = Vec::new();
@@ -67,7 +82,7 @@ fn expand_physical_dir(
         let name = entry.file_name().to_string_lossy().to_string();
         children.push(make_child(
             entry.path(),
-            child_logical(parent_logical, &name),
+            sep.join(parent_logical, &name),
             data,
         )?);
     }
@@ -90,7 +105,7 @@ impl ExpandRule for DirectoryExpand {
 
     fn expand(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ExpandOutput> {
         let physical = data.local_path(item)?;
-        expand_physical_dir(&physical, &item.logical_path, data).map(Into::into)
+        expand_physical_dir(&physical, &item.logical_path, ChildSep::Member, data).map(Into::into)
     }
 }
 
@@ -113,7 +128,8 @@ impl ExpandRule for ZipExpand {
         let physical = data.local_path(item)?;
         let workspace = data.workspace()?;
         let diagnostics = extract_zip(&physical, &workspace)?;
-        let children = expand_physical_dir(&workspace, &item.logical_path, data)?;
+        let children =
+            expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
         Ok(ExpandOutput {
             children,
             diagnostics,
@@ -192,7 +208,8 @@ impl ExpandRule for TarExpand {
             } else {
                 extract_tar(file, &workspace)?
             };
-        let children = expand_physical_dir(&workspace, &item.logical_path, data)?;
+        let children =
+            expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
         Ok(ExpandOutput {
             children,
             diagnostics,
@@ -234,7 +251,7 @@ impl ExpandRule for GzipExpand {
         let workspace = data.workspace()?;
         let physical = workspace.join(inner_name);
         std::fs::write(&physical, &output).map_err(BinocError::Io)?;
-        let logical = child_logical(&item.logical_path, inner_name);
+        let logical = decompose_child(&item.logical_path, inner_name);
         let mut child = data.register_local(&physical, &logical)?;
         child.content_hash = Some(blake3::hash(&output).to_hex().to_string());
         child.size = Some(output.len() as u64);

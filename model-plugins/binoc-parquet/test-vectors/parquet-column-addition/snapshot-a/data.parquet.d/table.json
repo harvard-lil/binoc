@@ -1,0 +1,12 @@
+{
+  "columns": [
+    { "name": "id", "type": "int64" },
+    { "name": "name", "type": "utf8" },
+    { "name": "price", "type": "double" }
+  ],
+  "rows": [
+    [1, "widget", 9.99],
+    [2, "gadget", 14.5],
+    [3, "gizmo", 3.25]
+  ]
+}

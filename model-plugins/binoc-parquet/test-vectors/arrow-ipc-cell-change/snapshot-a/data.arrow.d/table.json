@@ -1,0 +1,13 @@
+{
+  "columns": [
+    { "name": "id", "type": "int64" },
+    { "name": "name", "type": "utf8" },
+    { "name": "price", "type": "double" },
+    { "name": "active", "type": "boolean" }
+  ],
+  "rows": [
+    [1, "widget", 9.99, true],
+    [2, "gadget", 14.5, false],
+    [3, "gizmo", 3.25, true]
+  ]
+}

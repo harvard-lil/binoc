@@ -1,0 +1,4 @@
+# XML correspondence-rule vectors. Each snapshot commits its `.xml` text
+# directly (XML is text, so no VectorMaterializer is needed — same as the
+# plist/ion vectors in binoc-binformats). The binoc-xml parse rule transcodes
+# each document into a `structured_document_v1` artifact tagged `format: "xml"`.

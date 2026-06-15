@@ -2,9 +2,9 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::Read;
 
 use binoc_sdk::{
-    file_name, BinocError, BinocResult, DataAccess, Diagnostic, EngineView, FileCorrespondenceRule,
-    FileSelector, ItemRef, LinkProposal, NodeId, PairDescriptor, PairOutput, PairRule,
-    ProjectionHint, TreeSide,
+    file_name, tabular_v1, BinocError, BinocResult, DataAccess, Diagnostic, EngineView,
+    FileCorrespondenceRule, FileSelector, ItemRef, LinkProposal, NodeId, PairDescriptor,
+    PairOutput, PairRule, ProjectionHint, TabularData, TreeSide,
 };
 use regex::Regex;
 
@@ -17,6 +17,7 @@ impl PairRule for RootPair {
         PairDescriptor {
             name: "binoc.pair.root".into(),
             emits: vec!["binoc.pair.root".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -49,13 +50,14 @@ impl PairRule for HashPair {
         PairDescriptor {
             name: "binoc.pair.hash".into(),
             emits: vec!["binoc.pair.hash".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
 
     fn propose(&self, view: &dyn EngineView, data: &dyn DataAccess) -> BinocResult<PairOutput> {
         let mut proposals = Vec::new();
-        let mut right_by_hash: BTreeMap<String, Vec<NodeId>> = BTreeMap::new();
+        let mut right_by_hash: BTreeMap<String, HashCandidateBucket> = BTreeMap::new();
         let mut right_by_path: BTreeMap<&str, (NodeId, String)> = BTreeMap::new();
         for id in view.nodes(TreeSide::Right) {
             let item = view.item(id);
@@ -63,7 +65,10 @@ impl PairRule for HashPair {
                 continue;
             }
             let hash = item.resolve_hash(data)?;
-            right_by_hash.entry(hash.clone()).or_default().push(id);
+            right_by_hash
+                .entry(hash.clone())
+                .or_default()
+                .push(id, file_name(&item.logical_path).to_string());
             right_by_path.insert(&item.logical_path, (id, hash));
         }
 
@@ -90,32 +95,27 @@ impl PairRule for HashPair {
             }
         }
 
+        for bucket in right_by_hash.values_mut() {
+            bucket.sort_by_path(view);
+        }
+
         for id in view.nodes(TreeSide::Left) {
             let item = view.item(id);
             if item.is_dir || used_left.contains(&id.index) || view.is_linked(id) {
                 continue;
             }
             let hash = item.resolve_hash(data)?;
-            let Some(candidates) = right_by_hash.get(&hash) else {
+            let Some(candidates) = right_by_hash.get_mut(&hash) else {
                 continue;
             };
             let left_name = file_name(&item.logical_path);
-            let mut available: Vec<NodeId> = candidates
-                .iter()
-                .copied()
-                .filter(|id| !used_right.contains(&id.index) && !view.is_linked(*id))
-                .collect();
-            available.sort_by(|a, b| {
-                let a_name_match = file_name(&view.item(*a).logical_path) == left_name;
-                let b_name_match = file_name(&view.item(*b).logical_path) == left_name;
-                b_name_match
-                    .cmp(&a_name_match)
-                    .then_with(|| view.item(*a).logical_path.cmp(&view.item(*b).logical_path))
-            });
-            if let Some(right_id) = available.first() {
+            if let Some(right_id) = candidates
+                .next_for_name(left_name, &used_right, view)
+                .or_else(|| candidates.next_any(&used_right, view))
+            {
                 let mut projection = move_projection_hint();
                 if archive_like(&item.logical_path)
-                    || archive_like(&view.item(*right_id).logical_path)
+                    || archive_like(&view.item(right_id).logical_path)
                 {
                     projection = projection.tag("binoc.folder-move");
                 }
@@ -135,6 +135,63 @@ impl PairRule for HashPair {
     }
 }
 
+#[derive(Default)]
+struct HashCandidateBucket {
+    all: Vec<NodeId>,
+    by_name: BTreeMap<String, Vec<NodeId>>,
+    next_all: usize,
+    next_by_name: BTreeMap<String, usize>,
+}
+
+impl HashCandidateBucket {
+    fn push(&mut self, id: NodeId, name: String) {
+        self.all.push(id);
+        self.by_name.entry(name).or_default().push(id);
+    }
+
+    fn sort_by_path(&mut self, view: &dyn EngineView) {
+        let by_path = |left: &NodeId, right: &NodeId| {
+            view.item(*left)
+                .logical_path
+                .cmp(&view.item(*right).logical_path)
+        };
+        self.all.sort_by(by_path);
+        for candidates in self.by_name.values_mut() {
+            candidates.sort_by(by_path);
+        }
+    }
+
+    fn next_for_name(
+        &mut self,
+        name: &str,
+        used_right: &BTreeSet<u32>,
+        view: &dyn EngineView,
+    ) -> Option<NodeId> {
+        let candidates = self.by_name.get(name)?;
+        let cursor = self.next_by_name.entry(name.to_string()).or_insert(0);
+        next_unused(candidates, cursor, used_right, view)
+    }
+
+    fn next_any(&mut self, used_right: &BTreeSet<u32>, view: &dyn EngineView) -> Option<NodeId> {
+        next_unused(&self.all, &mut self.next_all, used_right, view)
+    }
+}
+
+fn next_unused(
+    candidates: &[NodeId],
+    cursor: &mut usize,
+    used_right: &BTreeSet<u32>,
+    view: &dyn EngineView,
+) -> Option<NodeId> {
+    while let Some(id) = candidates.get(*cursor).copied() {
+        *cursor += 1;
+        if !used_right.contains(&id.index) && !view.is_linked(id) {
+            return Some(id);
+        }
+    }
+    None
+}
+
 pub struct CopyPair;
 
 impl PairRule for CopyPair {
@@ -142,6 +199,7 @@ impl PairRule for CopyPair {
         PairDescriptor {
             name: "binoc.pair.copy".into(),
             emits: vec!["binoc.pair.copy".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -193,6 +251,7 @@ impl PairRule for DeclaredPair {
         PairDescriptor {
             name: "binoc.pair.declared".into(),
             emits: vec!["binoc.pair.declared".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -416,6 +475,7 @@ impl PairRule for NameUnderPairedParent {
         PairDescriptor {
             name: "binoc.pair.name".into(),
             emits: vec!["binoc.pair.name".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -477,6 +537,7 @@ impl PairRule for FuzzyPair {
         PairDescriptor {
             name: "binoc.pair.fuzzy".into(),
             emits: vec!["binoc.pair.fuzzy".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }
@@ -611,6 +672,211 @@ impl PairRule for FuzzyPair {
     }
 }
 
+/// Pairs unlinked single-table leaves by their PARSED tabular content, so a
+/// table reformatted across serializations (e.g. `data.csv` -> `data.tsv`)
+/// reads as one reformatted-and-edited table instead of a remove + add.
+///
+/// The prefilter is "both leaves carry a `tabular_v1` artifact", which routes
+/// tabular renames around `FuzzyPair`'s same-suffix gate. Scoring is
+/// format-independent: it combines header-name set overlap with sampled-row
+/// cell-token overlap, both Jaccard-style, so CSV and TSV encodings of the same
+/// table score high. Scope is strictly the symmetric single-table leaf case
+/// (`tabular_v1` <-> `tabular_v1`); stacked tables and collections are left to
+/// other rules.
+pub struct TabularPair {
+    pub threshold: f64,
+    /// Upper bound on `removes * adds` candidate pairs before the O(n*m)
+    /// content scan is skipped (with a diagnostic) so a large migration can't
+    /// explode.
+    pub candidate_limit: usize,
+    /// Rows sampled per table when scoring cell-token overlap.
+    pub row_sample: usize,
+}
+
+impl Default for TabularPair {
+    fn default() -> Self {
+        Self {
+            threshold: 0.5,
+            candidate_limit: 400,
+            row_sample: 64,
+        }
+    }
+}
+
+impl PairRule for TabularPair {
+    fn descriptor(&self) -> PairDescriptor {
+        PairDescriptor {
+            name: "binoc.pair.tabular".into(),
+            emits: vec!["binoc.pair.tabular".into()],
+            reads: vec![tabular_v1()],
+            sees_beneath_settled: false,
+        }
+    }
+
+    fn propose(&self, view: &dyn EngineView, data: &dyn DataAccess) -> BinocResult<PairOutput> {
+        let unlinked_tabular_leaves = |side| -> BinocResult<Vec<(NodeId, TabularData)>> {
+            let mut out = Vec::new();
+            for id in view.nodes(side) {
+                let item = view.item(id);
+                if item.is_dir || view.is_linked(id) || view.has_children(id) {
+                    continue;
+                }
+                let Some(bytes) = view.artifact_bytes(id, &tabular_v1(), data)? else {
+                    continue;
+                };
+                let table: TabularData = serde_json::from_slice(&bytes)
+                    .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))?;
+                out.push((id, table));
+            }
+            Ok(out)
+        };
+        let removes = unlinked_tabular_leaves(TreeSide::Left)?;
+        let adds = unlinked_tabular_leaves(TreeSide::Right)?;
+        if removes.is_empty() || adds.is_empty() {
+            return Ok(Vec::new().into());
+        }
+        let candidate_count = removes.len().saturating_mul(adds.len());
+        if candidate_count > self.candidate_limit {
+            return Ok(PairOutput {
+                proposals: Vec::new(),
+                diagnostics: vec![Diagnostic::suggestion(
+                    "binoc.tabular_pair_limit",
+                    format!(
+                        "Skipped tabular reformat detection for {candidate_count} candidate pairs over limit {}",
+                        self.candidate_limit
+                    ),
+                )],
+            });
+        }
+
+        struct Scored {
+            left: NodeId,
+            right: NodeId,
+            score: f64,
+        }
+        let mut scored = Vec::new();
+        for (left, left_table) in &removes {
+            let left_features = TableFeatures::new(left_table, self.row_sample);
+            for (right, right_table) in &adds {
+                let right_features = TableFeatures::new(right_table, self.row_sample);
+                scored.push(Scored {
+                    left: *left,
+                    right: *right,
+                    score: left_features.similarity(&right_features),
+                });
+            }
+        }
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    (
+                        &view.item(a.left).logical_path,
+                        &view.item(a.right).logical_path,
+                    )
+                        .cmp(&(
+                            &view.item(b.left).logical_path,
+                            &view.item(b.right).logical_path,
+                        ))
+                })
+        });
+        let mut used_left = BTreeSet::new();
+        let mut used_right = BTreeSet::new();
+        let mut proposals = Vec::new();
+        for candidate in scored {
+            if candidate.score < self.threshold {
+                break;
+            }
+            if used_left.contains(&candidate.left.index)
+                || used_right.contains(&candidate.right.index)
+            {
+                continue;
+            }
+            used_left.insert(candidate.left.index);
+            used_right.insert(candidate.right.index);
+            let mut projection = move_projection_hint();
+            if serialization_differs(
+                &view.item(candidate.left).logical_path,
+                &view.item(candidate.right).logical_path,
+            ) {
+                projection = projection.tag("binoc.serialization-change");
+            }
+            proposals.push(LinkProposal {
+                left: candidate.left.index,
+                right: candidate.right.index,
+                evidence: "binoc.pair.tabular".into(),
+                settled: false,
+                projection,
+            });
+        }
+        Ok(proposals.into())
+    }
+}
+
+/// Format-independent fingerprint of a single table for similarity scoring.
+struct TableFeatures {
+    headers: BTreeSet<String>,
+    cell_tokens: BTreeSet<String>,
+}
+
+impl TableFeatures {
+    fn new(table: &TabularData, row_sample: usize) -> Self {
+        let headers = table
+            .headers
+            .iter()
+            .map(|header| header.trim().to_ascii_lowercase())
+            .filter(|header| !header.is_empty())
+            .collect();
+        let mut cell_tokens = BTreeSet::new();
+        for row in table.rows.iter().take(row_sample) {
+            for cell in row {
+                for token in cell.as_text().split(|ch: char| !ch.is_alphanumeric()) {
+                    if !token.is_empty() {
+                        cell_tokens.insert(token.to_ascii_lowercase());
+                    }
+                }
+            }
+        }
+        Self {
+            headers,
+            cell_tokens,
+        }
+    }
+
+    /// Mean of header-name and cell-token Jaccard overlap. Equal weighting keeps
+    /// a table recognizable when only one of schema or data drifts.
+    fn similarity(&self, other: &TableFeatures) -> f64 {
+        0.5 * jaccard(&self.headers, &other.headers)
+            + 0.5 * jaccard(&self.cell_tokens, &other.cell_tokens)
+    }
+}
+
+fn jaccard(left: &BTreeSet<String>, right: &BTreeSet<String>) -> f64 {
+    if left.is_empty() && right.is_empty() {
+        return 1.0;
+    }
+    let intersection = left.intersection(right).count();
+    let union = left.len() + right.len() - intersection;
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f64 / union as f64
+    }
+}
+
+/// True when two logical paths carry different file extensions, signalling a
+/// serialization/format change (e.g. `.csv` vs `.tsv`).
+fn serialization_differs(left: &str, right: &str) -> bool {
+    fn ext(path: &str) -> Option<String> {
+        file_name(path)
+            .rsplit_once('.')
+            .map(|(_, ext)| ext.to_ascii_lowercase())
+    }
+    let (left_ext, right_ext) = (ext(left), ext(right));
+    left_ext != right_ext
+}
+
 pub struct ContainerFromChildEvidence {
     pub threshold: f64,
 }
@@ -626,6 +892,7 @@ impl PairRule for ContainerFromChildEvidence {
         PairDescriptor {
             name: "binoc.pair.container_from_children".into(),
             emits: vec!["binoc.pair.container_from_children".into()],
+            reads: vec![],
             sees_beneath_settled: false,
         }
     }

@@ -4,13 +4,12 @@ use std::sync::Arc;
 
 use binoc_sdk::{CoreRule, CorrespondenceEngineConfig};
 
-pub use sqlite::{SqliteCollectionWriter, SqliteParseRule};
+pub use sqlite::SqliteParseRule;
 
 pub fn register_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
     config
         .rules
         .insert(0, CoreRule::Parse(Arc::new(SqliteParseRule)));
-    config.writers.insert(0, Arc::new(SqliteCollectionWriter));
 }
 
 #[cfg(feature = "python")]

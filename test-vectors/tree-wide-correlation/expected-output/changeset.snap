@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,14 +15,21 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "text",
         "path": "gamma-renamed.txt",
-        "source_path": "outer.zip/inner.zip/gamma.txt",
+        "sources": [
+          {
+            "path": "outer.zip/>inner.zip/>gamma.txt",
+            "side": "from",
+            "evidence": "binoc.pair.hash",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
             "text": "Moved from "
           },
           {
             "path": {
-              "value": "outer.zip/inner.zip/gamma.txt",
+              "value": "outer.zip/>inner.zip/>gamma.txt",
               "snapshot": "from"
             }
           }
@@ -34,7 +42,14 @@ expression: "&stable_changeset"
         "action": "copy",
         "item_type": "text",
         "path": "kept-copy.txt",
-        "source_path": "kept.txt",
+        "sources": [
+          {
+            "path": "kept.txt",
+            "side": "from",
+            "evidence": "binoc.pair.copy",
+            "action": "copy"
+          }
+        ],
         "summary": [
           {
             "text": "Copied from "
@@ -54,7 +69,14 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "file",
         "path": "merged.bin",
-        "source_path": "dup.bin",
+        "sources": [
+          {
+            "path": "dup.bin",
+            "side": "from",
+            "evidence": "binoc.pair.hash",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
             "text": "Moved from "
@@ -74,6 +96,14 @@ expression: "&stable_changeset"
         "action": "modify",
         "item_type": "file",
         "path": "outer.zip",
+        "sources": [
+          {
+            "path": "outer.zip",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
             "uint": 0
@@ -86,8 +116,15 @@ expression: "&stable_changeset"
           {
             "action": "move",
             "item_type": "text",
-            "path": "outer.zip/alpha-renamed.txt",
-            "source_path": "alpha.txt",
+            "path": "outer.zip/>alpha-renamed.txt",
+            "sources": [
+              {
+                "path": "alpha.txt",
+                "side": "from",
+                "evidence": "binoc.pair.hash",
+                "action": "move"
+              }
+            ],
             "summary": [
               {
                 "text": "Moved from "
@@ -105,21 +142,28 @@ expression: "&stable_changeset"
           },
           {
             "action": "modify",
-            "item_type": "item",
-            "path": "outer.zip/inner.zip",
+            "item_type": "file",
+            "path": "outer.zip/>inner.zip",
             "children": [
               {
                 "action": "move",
                 "item_type": "text",
-                "path": "outer.zip/inner.zip/beta-renamed.txt",
-                "source_path": "outer.zip/beta.txt",
+                "path": "outer.zip/>inner.zip/>beta-renamed.txt",
+                "sources": [
+                  {
+                    "path": "outer.zip/>beta.txt",
+                    "side": "from",
+                    "evidence": "binoc.pair.hash",
+                    "action": "move"
+                  }
+                ],
                 "summary": [
                   {
                     "text": "Moved from "
                   },
                   {
                     "path": {
-                      "value": "outer.zip/beta.txt",
+                      "value": "outer.zip/>beta.txt",
                       "snapshot": "from"
                     }
                   }
@@ -133,8 +177,15 @@ expression: "&stable_changeset"
           {
             "action": "copy",
             "item_type": "text",
-            "path": "outer.zip/kept-copy.txt",
-            "source_path": "kept.txt",
+            "path": "outer.zip/>kept-copy.txt",
+            "sources": [
+              {
+                "path": "kept.txt",
+                "side": "from",
+                "evidence": "binoc.pair.copy",
+                "action": "copy"
+              }
+            ],
             "summary": [
               {
                 "text": "Copied from "
@@ -153,7 +204,14 @@ expression: "&stable_changeset"
           {
             "action": "remove",
             "item_type": "file",
-            "path": "outer.zip/dup-b.bin",
+            "path": "outer.zip/>dup-b.bin",
+            "sources": [
+              {
+                "path": "outer.zip/>dup-b.bin",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
             "summary": [
               {
                 "text": "Removed"

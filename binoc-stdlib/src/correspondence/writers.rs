@@ -1,18 +1,34 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use binoc_sdk::{
-    file_name, tabular_collection_v1, tabular_extract, tabular_v1, BinocError, BinocResult,
+    file_name, structured_document_v1, tabular_extract, tabular_v1, BinocError, BinocResult,
     DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractResult, IdentityFailurePolicy,
-    LinkCtx, NodeId, NodeMatch, ShapeFilter, TableMember, TabularCollectionData, TabularData,
-    TabularDataPair, WriteOutput, WriterDescriptor,
+    LinkCtx, NodeId, NodeMatch, ShapeFilter, StructuredDocument, TabularData, TabularDataPair,
+    Value, WriteOutput, WriterDescriptor,
 };
+use rust_strings::{strings, BytesConfig, Encoding};
 use serde_json::json;
 use similar::{ChangeTag, TextDiff};
+
+use super::parse::JsonSourceFacts;
 
 const MAX_CAPTURED_VALUES: usize = 16;
 const MAX_VALUE_PREVIEW_BYTES: usize = 120;
 const MAX_TEXT_LINE_EXAMPLES: usize = 8;
 const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
+const MAX_JSON_CHANGE_EXAMPLES: usize = 16;
+const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
+
+/// Minimum run length (in characters) for an extracted-strings fallback. Matches
+/// the conventional `strings(1)` default; fixed so extraction is deterministic.
+const STRINGS_MIN_LENGTH: usize = 4;
+/// Cap on the number of distinct added/removed string examples surfaced per
+/// side, so the strings projection stays bounded for large binaries.
+const MAX_STRINGS_EXAMPLES: usize = 32;
+/// Cap on total bytes scanned per side when extracting strings, so the
+/// projection stays bounded for very large binaries. Extraction beyond this
+/// prefix is skipped and flagged via `scan_truncated`.
+const MAX_STRINGS_SCAN_BYTES: usize = 1 << 20; // 1 MiB
 
 pub struct ContainerWriter;
 
@@ -76,12 +92,6 @@ impl EditListWriter for TabularWriter {
 
         let mut edits = Vec::new();
         let mut diagnostics = Vec::new();
-        if let Some(collection_edits) = write_stacked_table_edits(&left, &right) {
-            return Ok(Some(WriteOutput {
-                edits: collection_edits,
-                diagnostics,
-            }));
-        }
         if left.headers != right.headers {
             edits.push(
                 Edit::new(
@@ -152,14 +162,8 @@ impl EditListWriter for TabularWriter {
             for column in &common {
                 let left_index = left.column_index(column).expect("common column");
                 let right_index = right.column_index(column).expect("common column");
-                let left_value = left.rows[index]
-                    .get(left_index)
-                    .map(String::as_str)
-                    .unwrap_or("");
-                let right_value = right.rows[index]
-                    .get(right_index)
-                    .map(String::as_str)
-                    .unwrap_or("");
+                let left_value = left.rows[index].get(left_index).unwrap_or(&Value::Null);
+                let right_value = right.rows[index].get(right_index).unwrap_or(&Value::Null);
                 if left_value != right_value {
                     edits.push(cell_edit(json!({
                         "row": index,
@@ -273,7 +277,7 @@ fn table_key_quality(table: &TabularData, keys: &[String]) -> KeyQuality {
             quality.has_null = true;
             continue;
         };
-        *counts.entry(key).or_insert(0usize) += 1;
+        *counts.entry(key.signature).or_insert(0usize) += 1;
     }
     quality.has_duplicate = counts.values().any(|count| *count > 1);
     quality
@@ -346,49 +350,58 @@ fn table_has_complete_unique_keys(table: &TabularData, keys: &[String]) -> bool 
         let Some(key) = row_key(table, keys, row) else {
             return false;
         };
-        if !seen.insert(key) {
+        if !seen.insert(key.signature) {
             return false;
         }
     }
     true
 }
 
-fn row_key(table: &TabularData, keys: &[String], row: &[String]) -> Option<Vec<String>> {
+/// A row's identity key: a `signature` of the cells' flat text for
+/// grouping/ordering (so ordering matches the legacy all-string behavior) plus
+/// the typed cell `values` for rendering.
+#[derive(Debug, Clone)]
+struct RowKey {
+    signature: Vec<String>,
+    values: Vec<Value>,
+}
+
+fn row_key(table: &TabularData, keys: &[String], row: &[Value]) -> Option<RowKey> {
     let mut values = Vec::with_capacity(keys.len());
+    let mut signature = Vec::with_capacity(keys.len());
     for key in keys {
-        let value = row
-            .get(table.column_index(key)?)
-            .cloned()
-            .unwrap_or_default();
-        if value.is_empty() {
+        let value = row.get(table.column_index(key)?).unwrap_or(&Value::Null);
+        if value.is_blank() {
             return None;
         }
-        values.push(value);
+        signature.push(value.as_text().into_owned());
+        values.push(value.clone());
     }
-    Some(values)
+    Some(RowKey { signature, values })
 }
 
 fn unique_rows_by_key<'a>(
     table: &'a TabularData,
     keys: &[String],
-) -> BTreeMap<Vec<String>, (usize, &'a Vec<String>)> {
+) -> BTreeMap<Vec<String>, (RowKey, usize, &'a Vec<Value>)> {
     let mut counts = BTreeMap::new();
     let mut rows = BTreeMap::new();
     for (index, row) in table.rows.iter().enumerate() {
         let Some(key) = row_key(table, keys, row) else {
             continue;
         };
-        *counts.entry(key.clone()).or_insert(0usize) += 1;
-        rows.entry(key).or_insert((index, row));
+        *counts.entry(key.signature.clone()).or_insert(0usize) += 1;
+        rows.entry(key.signature.clone())
+            .or_insert((key, index, row));
     }
-    rows.retain(|key, _| counts.get(key).copied().unwrap_or(0) == 1);
+    rows.retain(|sig, _| counts.get(sig).copied().unwrap_or(0) == 1);
     rows
 }
 
-fn key_json(keys: &[String], values: &[String]) -> serde_json::Value {
+fn key_json(keys: &[String], values: &[Value]) -> serde_json::Value {
     let mut object = serde_json::Map::new();
     for (key, value) in keys.iter().zip(values) {
-        object.insert(key.clone(), json!(value));
+        object.insert(key.clone(), value.to_json());
     }
     serde_json::Value::Object(object)
 }
@@ -404,19 +417,19 @@ fn write_keyed_row_edits(
     let left_keys: BTreeSet<Vec<String>> = left_rows.keys().cloned().collect();
     let right_keys: BTreeSet<Vec<String>> = right_rows.keys().cloned().collect();
 
-    for key in left_keys.difference(&right_keys) {
-        let (index, row) = left_rows.get(key).expect("known left key");
+    for sig in left_keys.difference(&right_keys) {
+        let (key, index, row) = left_rows.get(sig).expect("known left key");
         edits.push(row_remove_edit(json!({
             "index": index,
-            "key": key_json(keys, key),
+            "key": key_json(keys, &key.values),
             "values": capture_row(row)
         })));
     }
-    for key in right_keys.difference(&left_keys) {
-        let (index, row) = right_rows.get(key).expect("known right key");
+    for sig in right_keys.difference(&left_keys) {
+        let (key, index, row) = right_rows.get(sig).expect("known right key");
         edits.push(row_add_edit(json!({
             "index": index,
-            "key": key_json(keys, key),
+            "key": key_json(keys, &key.values),
             "values": capture_row(row)
         })));
     }
@@ -426,17 +439,17 @@ fn write_keyed_row_edits(
         .iter()
         .filter(|header| right.headers.contains(header) && !keys.contains(header))
         .collect();
-    for key in left_keys.intersection(&right_keys) {
-        let (_, left_row) = left_rows.get(key).expect("known left key");
-        let (_, right_row) = right_rows.get(key).expect("known right key");
+    for sig in left_keys.intersection(&right_keys) {
+        let (key, _, left_row) = left_rows.get(sig).expect("known left key");
+        let (_, _, right_row) = right_rows.get(sig).expect("known right key");
         for column in &common {
             let left_index = left.column_index(column).expect("common column");
             let right_index = right.column_index(column).expect("common column");
-            let left_value = left_row.get(left_index).map(String::as_str).unwrap_or("");
-            let right_value = right_row.get(right_index).map(String::as_str).unwrap_or("");
+            let left_value = left_row.get(left_index).unwrap_or(&Value::Null);
+            let right_value = right_row.get(right_index).unwrap_or(&Value::Null);
             if left_value != right_value {
                 edits.push(cell_edit(json!({
-                    "key": key_json(keys, key),
+                    "key": key_json(keys, &key.values),
                     "column": column,
                     "from": value_preview(left_value),
                     "to": value_preview(right_value)
@@ -446,11 +459,11 @@ fn write_keyed_row_edits(
     }
 }
 
-fn capture_row(row: &[String]) -> serde_json::Value {
-    let values: Vec<String> = row
+fn capture_row(row: &[Value]) -> serde_json::Value {
+    let values: Vec<serde_json::Value> = row
         .iter()
         .take(MAX_CAPTURED_VALUES)
-        .map(|value| value_preview(value))
+        .map(value_preview)
         .collect();
     json!({
         "values": values,
@@ -485,19 +498,19 @@ fn row_alignment_basis(left: &TabularData, right: &TabularData, common: &[&Strin
     .hidden()
 }
 
-fn row_signature(table: &TabularData, row: &[String], common: &[&String]) -> String {
+fn row_signature(table: &TabularData, row: &[Value], common: &[&String]) -> String {
     let mut hasher = blake3::Hasher::new();
     for column in common {
         let index = table.column_index(column).expect("common column");
-        let value = row.get(index).map(String::as_str).unwrap_or("");
-        hasher.update(&(value.len() as u64).to_le_bytes());
-        hasher.update(value.as_bytes());
+        row.get(index)
+            .unwrap_or(&Value::Null)
+            .hash_into(&mut hasher);
     }
     hasher.finalize().to_hex().to_string()
 }
 
-fn capture_values(values: Vec<&str>) -> serde_json::Value {
-    let preview: Vec<String> = values
+fn capture_values(values: Vec<&Value>) -> serde_json::Value {
+    let preview: Vec<serde_json::Value> = values
         .iter()
         .take(MAX_CAPTURED_VALUES)
         .map(|value| value_preview(value))
@@ -509,7 +522,17 @@ fn capture_values(values: Vec<&str>) -> serde_json::Value {
     })
 }
 
-fn value_preview(value: &str) -> String {
+/// A previewed cell value as JSON. String cells are truncated and stay JSON
+/// strings (preserving CSV byte-stability); all other variants pass through as
+/// their natural JSON.
+fn value_preview(value: &Value) -> serde_json::Value {
+    match value {
+        Value::String(s) => serde_json::Value::String(truncate_preview(s)),
+        other => other.to_json(),
+    }
+}
+
+fn truncate_preview(value: &str) -> String {
     if value.len() <= MAX_VALUE_PREVIEW_BYTES {
         return value.to_string();
     }
@@ -538,268 +561,273 @@ fn cell_edit(params: serde_json::Value) -> Edit {
         .with_tag("binoc.cell-change")
 }
 
-#[derive(Debug)]
-struct StackedSection {
-    name: String,
-    headers: Vec<String>,
-    rows: Vec<Vec<String>>,
-}
-
-fn write_stacked_table_edits(left: &TabularData, right: &TabularData) -> Option<Vec<Edit>> {
-    let left_sections = detect_stacked_sections(left);
-    let right_sections = detect_stacked_sections(right);
-    if left_sections.len() < 2 && right_sections.len() < 2 {
-        return None;
-    }
-
-    let left_by_name = left_sections
-        .iter()
-        .map(|section| (section.name.as_str(), section))
-        .collect::<BTreeMap<_, _>>();
-    let right_by_name = right_sections
-        .iter()
-        .map(|section| (section.name.as_str(), section))
-        .collect::<BTreeMap<_, _>>();
-    let names = left_by_name
-        .keys()
-        .chain(right_by_name.keys())
-        .copied()
-        .collect::<BTreeSet<_>>();
-
-    let mut edits = Vec::new();
-    for name in names {
-        match (left_by_name.get(name), right_by_name.get(name)) {
-            (Some(left), Some(right))
-                if left.headers == right.headers && left.rows == right.rows => {}
-            (Some(left), Some(right)) => {
-                let mut edit =
-                    Edit::new("tabular_collection.change_table", json!({ "table": name }))
-                        .with_item_type("tabular_collection")
-                        .with_tag("binoc.tabular-collection-change")
-                        .with_tag("binoc.table-change");
-                if right.rows.len() > left.rows.len() {
-                    edit = edit.with_tag("binoc.row-addition");
-                }
-                if left.rows.len() > right.rows.len() {
-                    edit = edit.with_tag("binoc.row-removal");
-                }
-                if left.headers != right.headers {
-                    edit = edit.with_tag("binoc.schema-change");
-                }
-                edits.push(edit);
-            }
-            (Some(_), None) => edits.push(
-                Edit::new("tabular_collection.remove_table", json!({ "table": name }))
-                    .with_item_type("tabular_collection")
-                    .with_tag("binoc.tabular-collection-change")
-                    .with_tag("binoc.table-removal"),
-            ),
-            (None, Some(_)) => edits.push(
-                Edit::new("tabular_collection.add_table", json!({ "table": name }))
-                    .with_item_type("tabular_collection")
-                    .with_tag("binoc.tabular-collection-change")
-                    .with_tag("binoc.table-addition"),
-            ),
-            (None, None) => {}
-        }
-    }
-
-    Some(edits)
-}
-
-fn detect_stacked_sections(table: &TabularData) -> Vec<StackedSection> {
-    let rows = raw_rows(table);
-    let mut sections = Vec::new();
-    let mut i = 0;
-    while i < rows.len() {
-        while i < rows.len() && normalized_width(&rows[i]) <= 1 {
-            i += 1;
-        }
-        if i >= rows.len() {
-            break;
-        }
-        let width = normalized_width(&rows[i]);
-        if width < 2 || !looks_like_header(&rows[i]) {
-            i += 1;
-            continue;
-        }
-        let headers = trim_to_width(&rows[i], width);
-        let mut section_rows = Vec::new();
-        let mut j = i + 1;
-        while j < rows.len() {
-            let row_width = normalized_width(&rows[j]);
-            if row_width == 0 || row_width != width {
-                break;
-            }
-            let row = trim_to_width(&rows[j], width);
-            if row != headers {
-                section_rows.push(row);
-            }
-            j += 1;
-        }
-        if !section_rows.is_empty() {
-            sections.push(StackedSection {
-                name: format!("table_{}", sections.len() + 1),
-                headers,
-                rows: section_rows,
-            });
-        }
-        i = j + 1;
-    }
-    sections
-}
-
-fn raw_rows(table: &TabularData) -> Vec<Vec<String>> {
-    let mut rows = Vec::with_capacity(table.rows.len() + 1);
-    rows.push(table.headers.clone());
-    rows.extend(table.rows.clone());
-    rows
-}
-
-fn normalized_width(row: &[String]) -> usize {
-    row.iter()
-        .rposition(|cell| !cell.trim().is_empty())
-        .map(|index| index + 1)
-        .unwrap_or(0)
-}
-
-fn trim_to_width(row: &[String], width: usize) -> Vec<String> {
-    (0..width)
-        .map(|index| row.get(index).cloned().unwrap_or_default())
-        .collect()
-}
-
-fn looks_like_header(row: &[String]) -> bool {
-    let width = normalized_width(row);
-    if width < 2 {
-        return false;
-    }
-    let trimmed = trim_to_width(row, width);
-    let non_empty = trimmed
-        .iter()
-        .filter(|cell| !cell.trim().is_empty())
-        .count();
-    let unique = trimmed.iter().collect::<BTreeSet<_>>().len();
-    non_empty == width && unique == width
-}
-
 pub struct FallbackWriter;
 
 pub struct TextWriter;
 
-pub struct TabularCollectionWriter;
+/// Diffs the generic `structured_document` artifact (JSON, YAML, TOML, INI,
+/// CBOR, MessagePack, BSON, Plist, Ion, ...). The emitted `item_type` is the
+/// document's source format, and the vocabulary is format-neutral
+/// (`document.value_change` / `document.serialization_change`).
+pub struct StructuredDocumentWriter;
 
-impl EditListWriter for TabularCollectionWriter {
+impl EditListWriter for StructuredDocumentWriter {
     fn descriptor(&self) -> WriterDescriptor {
         WriterDescriptor {
-            name: "binoc.write.tabular_collection".into(),
-            formats: vec![tabular_collection_v1()],
+            name: "binoc.write.structured_document".into(),
+            formats: vec![structured_document_v1()],
             input: NodeMatch::default(),
-            shape: ShapeFilter::Any,
+            shape: ShapeFilter::Leaf,
         }
     }
 
     fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
         let (Some(left), Some(right)) = (
-            load_tabular_collection(ctx, ctx.link.left, data)?,
-            load_tabular_collection(ctx, ctx.link.right, data)?,
+            load_structured_document(ctx, ctx.link.left, data)?,
+            load_structured_document(ctx, ctx.link.right, data)?,
         ) else {
             return Ok(None);
         };
-        if left == right {
-            return Ok(Some(Vec::new().into()));
-        }
-
-        let left_tables = left
-            .tables
-            .iter()
-            .map(|table| (table.logical_name.as_str(), table))
-            .collect::<BTreeMap<_, _>>();
-        let right_tables = right
-            .tables
-            .iter()
-            .map(|table| (table.logical_name.as_str(), table))
-            .collect::<BTreeMap<_, _>>();
-        let names = left_tables
-            .keys()
-            .chain(right_tables.keys())
-            .copied()
-            .collect::<BTreeSet<_>>();
-
-        let mut edits = Vec::new();
-        for name in names {
-            match (left_tables.get(name), right_tables.get(name)) {
-                (Some(left_table), Some(right_table)) if *left_table == *right_table => {}
-                (Some(left_table), Some(right_table)) => {
-                    let mut edit =
-                        Edit::new("tabular_collection.change_table", json!({ "table": name }))
-                            .with_item_type("tabular_collection")
-                            .with_tag("binoc.tabular-collection-change")
-                            .with_tag("binoc.table-change");
-                    if right_table.shape.row_count > left_table.shape.row_count {
-                        edit = edit.with_tag("binoc.row-addition");
-                    }
-                    if left_table.shape.row_count > right_table.shape.row_count {
-                        edit = edit.with_tag("binoc.row-removal");
-                    }
-                    let added_columns = columns_added(left_table, right_table);
-                    let removed_columns = columns_added(right_table, left_table);
-                    if !added_columns.is_empty() {
-                        edit = edit
-                            .with_tag("binoc.column-addition")
-                            .with_tag("binoc.schema-change");
-                    }
-                    if !removed_columns.is_empty() {
-                        edit = edit
-                            .with_tag("binoc.column-removal")
-                            .with_tag("binoc.schema-change");
-                    }
-                    edits.push(edit);
-                }
-                (Some(_), None) => edits.push(
-                    Edit::new("tabular_collection.remove_table", json!({ "table": name }))
-                        .with_item_type("tabular_collection")
-                        .with_tag("binoc.tabular-collection-change")
-                        .with_tag("binoc.table-removal"),
-                ),
-                (None, Some(_)) => edits.push(
-                    Edit::new("tabular_collection.add_table", json!({ "table": name }))
-                        .with_item_type("tabular_collection")
-                        .with_tag("binoc.tabular-collection-change")
-                        .with_tag("binoc.table-addition"),
-                ),
-                (None, None) => {}
+        // The node's item_type is the document's source format (json, yaml,
+        // toml, cbor, ...) so the output names the format honestly.
+        let item_type = if right.format.is_empty() {
+            left.format.clone()
+        } else {
+            right.format.clone()
+        };
+        if left.value == right.value {
+            let left_bytes = data.read_bytes(ctx.view.item(ctx.link.left))?;
+            let right_bytes = data.read_bytes(ctx.view.item(ctx.link.right))?;
+            if left_bytes == right_bytes {
+                return Ok(Some(Vec::new().into()));
             }
+            return Ok(Some(
+                vec![Edit::new(
+                    "document.serialization_change",
+                    json!({
+                        "kinds": json_serialization_change_kinds(&left, &right),
+                        "left": &left.source,
+                        "right": &right.source,
+                    }),
+                )
+                .with_item_type(item_type)
+                .with_tag("binoc.serialization-change")
+                .with_tag("binoc.document-serialization-change")
+                .with_summary("Document serialization changed")]
+                .into(),
+            ));
         }
 
-        Ok(Some(edits.into()))
+        let changes = json_value_changes(&left.value, &right.value);
+        Ok(Some(
+            vec![
+                Edit::new(
+                    "document.value_change",
+                    json!({
+                        "changes": changes,
+                        "examples_truncated": json_change_count(&left.value, &right.value) > MAX_JSON_CHANGE_EXAMPLES,
+                    }),
+                )
+                .with_item_type(item_type)
+                .with_tag("binoc.content-changed")
+                .with_tag("binoc.document-value-change")
+                .with_summary("Document values changed"),
+            ]
+            .into(),
+        ))
     }
 }
 
-fn load_tabular_collection(
+fn load_structured_document(
     ctx: &LinkCtx<'_>,
     id: NodeId,
     data: &dyn DataAccess,
-) -> BinocResult<Option<TabularCollectionData>> {
+) -> BinocResult<Option<StructuredDocument>> {
     let Some(bytes) = ctx
         .view
-        .artifact_bytes(id, &tabular_collection_v1(), data)?
+        .artifact_bytes(id, &structured_document_v1(), data)?
     else {
         return Ok(None);
     };
     serde_json::from_slice(&bytes)
         .map(Some)
-        .map_err(|err| BinocError::Other(format!("decode tabular collection artifact: {err}")))
+        .map_err(|err| BinocError::Other(format!("decode structured document artifact: {err}")))
 }
 
-fn columns_added(left: &TableMember, right: &TableMember) -> Vec<String> {
-    right
-        .shape
-        .columns
-        .iter()
-        .filter(|column| !left.shape.columns.contains(*column))
-        .cloned()
-        .collect()
+fn json_source_facts(doc: &StructuredDocument) -> JsonSourceFacts {
+    serde_json::from_value(doc.source.clone()).unwrap_or(JsonSourceFacts {
+        byte_len: 0,
+        trailing_newline: false,
+        line_ending: None,
+        indentation: None,
+        object_key_orders: Vec::new(),
+    })
+}
+
+fn json_serialization_change_kinds(
+    left: &StructuredDocument,
+    right: &StructuredDocument,
+) -> Vec<&'static str> {
+    let left = json_source_facts(left);
+    let right = json_source_facts(right);
+    let mut kinds = Vec::new();
+    if left.object_key_orders != right.object_key_orders {
+        kinds.push("object_key_order");
+    }
+    if left.line_ending != right.line_ending
+        || left.indentation != right.indentation
+        || left.trailing_newline != right.trailing_newline
+        || left.byte_len != right.byte_len
+    {
+        kinds.push("formatting");
+    }
+    if kinds.is_empty() {
+        kinds.push("serialization");
+    }
+    kinds
+}
+
+fn json_value_changes(
+    left: &serde_json::Value,
+    right: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    let mut changes = Vec::new();
+    collect_json_value_changes("$", left, right, &mut changes, MAX_JSON_CHANGE_EXAMPLES);
+    changes
+}
+
+fn json_change_count(left: &serde_json::Value, right: &serde_json::Value) -> usize {
+    let mut changes = Vec::new();
+    collect_json_value_changes("$", left, right, &mut changes, usize::MAX);
+    changes.len()
+}
+
+fn collect_json_value_changes(
+    path: &str,
+    left: &serde_json::Value,
+    right: &serde_json::Value,
+    changes: &mut Vec<serde_json::Value>,
+    limit: usize,
+) {
+    if left == right || changes.len() >= limit {
+        return;
+    }
+    match (left, right) {
+        (serde_json::Value::Object(left_map), serde_json::Value::Object(right_map)) => {
+            for key in left_map.keys() {
+                if !right_map.contains_key(key) {
+                    push_json_change(
+                        changes,
+                        limit,
+                        "remove",
+                        &json_child_path(path, key),
+                        Some(&left_map[key]),
+                        None,
+                    );
+                }
+            }
+            for key in right_map.keys() {
+                if !left_map.contains_key(key) {
+                    push_json_change(
+                        changes,
+                        limit,
+                        "add",
+                        &json_child_path(path, key),
+                        None,
+                        Some(&right_map[key]),
+                    );
+                }
+            }
+            for key in left_map.keys().filter(|key| right_map.contains_key(*key)) {
+                collect_json_value_changes(
+                    &json_child_path(path, key),
+                    &left_map[key],
+                    &right_map[key],
+                    changes,
+                    limit,
+                );
+            }
+        }
+        (serde_json::Value::Array(left_items), serde_json::Value::Array(right_items)) => {
+            if left_items.len() != right_items.len() {
+                push_json_change(
+                    changes,
+                    limit,
+                    "array_length",
+                    path,
+                    Some(&json!(left_items.len())),
+                    Some(&json!(right_items.len())),
+                );
+            }
+            let common = left_items.len().min(right_items.len());
+            for index in 0..common {
+                collect_json_value_changes(
+                    &format!("{path}[{index}]"),
+                    &left_items[index],
+                    &right_items[index],
+                    changes,
+                    limit,
+                );
+            }
+            for (index, item) in left_items.iter().enumerate().skip(common) {
+                push_json_change(
+                    changes,
+                    limit,
+                    "remove",
+                    &format!("{path}[{index}]"),
+                    Some(item),
+                    None,
+                );
+            }
+            for (index, item) in right_items.iter().enumerate().skip(common) {
+                push_json_change(
+                    changes,
+                    limit,
+                    "add",
+                    &format!("{path}[{index}]"),
+                    None,
+                    Some(item),
+                );
+            }
+        }
+        _ => push_json_change(changes, limit, "replace", path, Some(left), Some(right)),
+    }
+}
+
+fn push_json_change(
+    changes: &mut Vec<serde_json::Value>,
+    limit: usize,
+    kind: &str,
+    path: &str,
+    from: Option<&serde_json::Value>,
+    to: Option<&serde_json::Value>,
+) {
+    if changes.len() >= limit {
+        return;
+    }
+    changes.push(json!({
+        "kind": kind,
+        "path": path,
+        "from": from.map(json_value_preview),
+        "to": to.map(json_value_preview),
+    }));
+}
+
+fn json_value_preview(value: &serde_json::Value) -> String {
+    serde_json::to_string(value)
+        .map(|text| truncate_preview(&text))
+        .unwrap_or_else(|_| "<unrenderable>".into())
+}
+
+fn json_child_path(parent: &str, key: &str) -> String {
+    if key
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    {
+        format!("{parent}.{key}")
+    } else {
+        format!("{parent}[{}]", serde_json::to_string(key).expect("string"))
+    }
 }
 
 impl EditListWriter for TextWriter {
@@ -809,7 +837,7 @@ impl EditListWriter for TextWriter {
             formats: vec![],
             input: NodeMatch {
                 is_dir: Some(false),
-                extensions: vec![".txt".into(), ".md".into()],
+                extensions: vec![".txt".into(), ".md".into(), ".vcf".into()],
                 ..NodeMatch::default()
             },
             shape: ShapeFilter::Leaf,
@@ -824,11 +852,35 @@ impl EditListWriter for TextWriter {
         if left_bytes == right_bytes {
             return Ok(Some(Vec::new().into()));
         }
-        let left_text = String::from_utf8_lossy(&left_bytes);
-        let right_text = String::from_utf8_lossy(&right_bytes);
+
+        let left_facts = TextFacts::from_bytes(&left_bytes);
+        let right_facts = TextFacts::from_bytes(&right_bytes);
+        let mut edits = text_fact_edits(&left_facts, &right_facts);
+        if left_facts.normalized_text == right_facts.normalized_text {
+            return Ok(Some(edits.into()));
+        }
+        if whitespace_signature(&left_facts.normalized_text)
+            == whitespace_signature(&right_facts.normalized_text)
+        {
+            edits.push(
+                Edit::new(
+                    "text.whitespace_only_changed",
+                    json!({
+                        "left_line_count": left_facts.lines.len(),
+                        "right_line_count": right_facts.lines.len(),
+                    }),
+                )
+                .with_item_type("text")
+                .with_tag("binoc.whitespace-only-change"),
+            );
+            return Ok(Some(edits.into()));
+        }
+
+        let left_text = left_facts.normalized_text.as_str();
+        let right_text = right_facts.normalized_text.as_str();
         let left_lines: Vec<&str> = left_text.lines().collect();
         let right_lines: Vec<&str> = right_text.lines().collect();
-        let diff = TextDiff::from_lines(&left_text, &right_text);
+        let diff = TextDiff::from_lines(left_text, right_text);
         let mut lines_added = 0u64;
         let mut lines_removed = 0u64;
         for change in diff.iter_all_changes() {
@@ -844,8 +896,8 @@ impl EditListWriter for TextWriter {
             if left_lines[index] != right_lines[index] {
                 examples.push(json!({
                     "line": index + 1,
-                    "from": value_preview(left_lines[index]),
-                    "to": value_preview(right_lines[index]),
+                    "from": truncate_preview(left_lines[index]),
+                    "to": truncate_preview(right_lines[index]),
                 }));
             }
             if examples.len() >= MAX_TEXT_LINE_EXAMPLES {
@@ -871,7 +923,8 @@ impl EditListWriter for TextWriter {
         if lines_removed > 0 {
             edit = edit.with_tag("binoc.lines-removed");
         }
-        Ok(Some(vec![edit].into()))
+        edits.push(edit);
+        Ok(Some(edits.into()))
     }
 
     fn extract(
@@ -902,6 +955,101 @@ impl EditListWriter for TextWriter {
             _ => None,
         })
     }
+}
+
+#[derive(Debug, Clone)]
+struct TextFacts {
+    has_utf8_bom: bool,
+    utf8_valid: bool,
+    line_ending: &'static str,
+    normalized_text: String,
+    lines: Vec<String>,
+}
+
+impl TextFacts {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let has_utf8_bom = bytes.starts_with(UTF8_BOM);
+        let body = if has_utf8_bom {
+            &bytes[UTF8_BOM.len()..]
+        } else {
+            bytes
+        };
+        let utf8_valid = std::str::from_utf8(body).is_ok();
+        let text = String::from_utf8_lossy(body).into_owned();
+        let line_ending = detect_line_ending(&text);
+        let normalized_text = normalize_line_endings(&text);
+        let lines = normalized_text.lines().map(str::to_string).collect();
+        Self {
+            has_utf8_bom,
+            utf8_valid,
+            line_ending,
+            normalized_text,
+            lines,
+        }
+    }
+}
+
+fn text_fact_edits(left: &TextFacts, right: &TextFacts) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    if left.line_ending != right.line_ending {
+        edits.push(
+            Edit::new(
+                "text.line_endings_changed",
+                json!({ "from": left.line_ending, "to": right.line_ending }),
+            )
+            .with_item_type("text")
+            .with_tag("binoc.line-ending-change"),
+        );
+    }
+    if left.has_utf8_bom != right.has_utf8_bom {
+        edits.push(
+            Edit::new(
+                "text.bom_changed",
+                json!({ "from": left.has_utf8_bom, "to": right.has_utf8_bom }),
+            )
+            .with_item_type("text")
+            .with_tag("binoc.bom-change")
+            .with_tag("binoc.encoding-change"),
+        );
+    }
+    if left.utf8_valid != right.utf8_valid {
+        edits.push(
+            Edit::new(
+                "text.encoding_changed",
+                json!({ "from_utf8_valid": left.utf8_valid, "to_utf8_valid": right.utf8_valid }),
+            )
+            .with_item_type("text")
+            .with_tag("binoc.encoding-change"),
+        );
+    }
+    edits
+}
+
+fn detect_line_ending(text: &str) -> &'static str {
+    let crlf = text.matches("\r\n").count();
+    let total_lf = text.matches('\n').count();
+    let lone_lf = total_lf.saturating_sub(crlf);
+    let bytes = text.as_bytes();
+    let lone_cr = bytes
+        .iter()
+        .enumerate()
+        .filter(|(index, byte)| **byte == b'\r' && bytes.get(index + 1).copied() != Some(b'\n'))
+        .count();
+    match (crlf > 0, lone_lf > 0, lone_cr > 0) {
+        (false, false, false) => "none",
+        (true, false, false) => "crlf",
+        (false, true, false) => "lf",
+        (false, false, true) => "cr",
+        _ => "mixed",
+    }
+}
+
+fn normalize_line_endings(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+fn whitespace_signature(text: &str) -> Vec<&str> {
+    text.split_whitespace().collect()
 }
 
 fn ensure_trailing_newline(text: &str) -> String {
@@ -942,15 +1090,145 @@ impl EditListWriter for FallbackWriter {
         if left.is_dir || right.is_dir {
             return Ok(Some(Vec::new().into()));
         }
+        // The BLAKE3/byte hash is the SOLE equality oracle. Equal hash ⇒ no
+        // change, regardless of any extracted strings.
         if left.resolve_hash(data)? == right.resolve_hash(data)? {
-            Ok(Some(Vec::new().into()))
-        } else {
-            Ok(Some(
-                vec![Edit::new("binary.contents-differ", json!({}))
-                    .with_item_type("file")
-                    .with_tag("binoc.content-changed")]
-                .into(),
-            ))
+            return Ok(Some(Vec::new().into()));
         }
+        // Hashes differ: the binary content changed. This fact stands on its
+        // own. The strings diff below is a purely ADDITIVE projection layered
+        // on top — it never decides equality and never suppresses this fact
+        // (e.g. a PDF whose only change is an embedded timestamp still reports
+        // "binary content changed" even if extracted strings are identical).
+        let mut edit = Edit::new("binary.contents-differ", json!({}))
+            .with_item_type("file")
+            .with_tag("binoc.content-changed");
+
+        let left_bytes = data.read_bytes(left)?;
+        let right_bytes = data.read_bytes(right)?;
+        if let Some(strings_diff) = extract_strings_diff(&left_bytes, &right_bytes) {
+            edit.params = json!({ "strings": strings_diff.params });
+            edit = edit
+                .with_tag("binoc.strings-changed")
+                .with_summary(strings_diff.summary);
+        }
+
+        Ok(Some(vec![edit].into()))
     }
+}
+
+/// A bounded, deterministic extracted-strings diff between two opaque binary
+/// leaves whose byte hashes already differ.
+struct StringsDiff {
+    params: serde_json::Value,
+    summary: String,
+}
+
+/// Extract printable string runs from each side and diff them, so a renderer
+/// can show a strings-level view of otherwise-unreadable files.
+///
+/// ADDITIVE ONLY: the caller invokes this exclusively when the byte hashes
+/// already differ. This function never reports equality; if the extracted
+/// strings happen to match on both sides it reports an empty added/removed set
+/// (and the renderer can note that non-string bytes changed), but the
+/// underlying "binary content changed" fact is unaffected.
+///
+/// Determinism: fixed [`STRINGS_MIN_LENGTH`], ASCII + UTF-16LE encodings,
+/// stable lexicographic ordering, and a per-side scan/example cap. Returns
+/// `None` only when extraction yields nothing on either side (e.g. a file with
+/// no printable runs), in which case the bare "binary content changed" edit is
+/// emitted unadorned.
+fn extract_strings_diff(left_bytes: &[u8], right_bytes: &[u8]) -> Option<StringsDiff> {
+    let (left, left_truncated) = extract_strings(left_bytes);
+    let (right, right_truncated) = extract_strings(right_bytes);
+    if left.is_empty() && right.is_empty() {
+        return None;
+    }
+
+    // Stable, deduplicated set difference over the extracted runs.
+    let added: Vec<&String> = right.difference(&left).collect();
+    let removed: Vec<&String> = left.difference(&right).collect();
+
+    let added_total = added.len();
+    let removed_total = removed.len();
+    let added_examples: Vec<String> = added
+        .iter()
+        .take(MAX_STRINGS_EXAMPLES)
+        .map(|s| truncate_preview(s))
+        .collect();
+    let removed_examples: Vec<String> = removed
+        .iter()
+        .take(MAX_STRINGS_EXAMPLES)
+        .map(|s| truncate_preview(s))
+        .collect();
+
+    let summary = match (added_total, removed_total) {
+        (0, 0) => "Binary content changed (extracted strings unchanged)".to_string(),
+        (a, 0) => format!(
+            "Binary content changed; {}",
+            count_phrase(a, "extracted string added", "extracted strings added")
+        ),
+        (0, r) => format!(
+            "Binary content changed; {}",
+            count_phrase(r, "extracted string removed", "extracted strings removed")
+        ),
+        (a, r) => format!(
+            "Binary content changed; {}, {}",
+            count_phrase(a, "extracted string added", "extracted strings added"),
+            count_phrase(r, "extracted string removed", "extracted strings removed")
+        ),
+    };
+
+    let params = json!({
+        "min_length": STRINGS_MIN_LENGTH,
+        "left_count": left.len(),
+        "right_count": right.len(),
+        "added_count": added_total,
+        "removed_count": removed_total,
+        "added": added_examples,
+        "removed": removed_examples,
+        "examples_truncated": added_total > MAX_STRINGS_EXAMPLES
+            || removed_total > MAX_STRINGS_EXAMPLES,
+        "scan_truncated": left_truncated || right_truncated,
+    });
+
+    Some(StringsDiff { params, summary })
+}
+
+fn count_phrase(count: usize, singular: &str, plural: &str) -> String {
+    if count == 1 {
+        format!("1 {singular}")
+    } else {
+        format!("{count} {plural}")
+    }
+}
+
+/// Extract the set of printable string runs from a byte buffer, scanning at most
+/// [`MAX_STRINGS_SCAN_BYTES`]. Returns the deduplicated, sorted runs and a flag
+/// indicating whether the buffer was truncated before extraction.
+fn extract_strings(bytes: &[u8]) -> (BTreeSet<String>, bool) {
+    let truncated = bytes.len() > MAX_STRINGS_SCAN_BYTES;
+    let scanned = &bytes[..bytes.len().min(MAX_STRINGS_SCAN_BYTES)];
+    let config = BytesConfig::new(scanned.to_vec())
+        .with_min_length(STRINGS_MIN_LENGTH)
+        .with_encoding(Encoding::ASCII)
+        .with_encoding(Encoding::UTF16LE);
+    // `strings` only errors on I/O against a file source; a byte buffer cannot
+    // fail, so an empty extraction is the only "no strings" outcome.
+    let extracted = strings(&config).unwrap_or_default();
+    let set = extracted
+        .into_iter()
+        .map(|(text, _offset)| sanitize_run(&text))
+        .collect();
+    (set, truncated)
+}
+
+/// Normalize whitespace control characters (`\t`, `\n`, `\r`) that
+/// `rust-strings` treats as printable into visible escapes, so the strings
+/// projection is single-line and safe for any renderer. Deterministic and
+/// order-preserving.
+fn sanitize_run(text: &str) -> String {
+    text.replace('\t', "\\t")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
 }

@@ -1,0 +1,3 @@
+# Shapefile geometry (.shp) is built from .shp.d dirs (geometry.json: type + features).
+# The parser reads .shp alone and emits a structured_document summary
+# (feature_count, geometry_type, bbox) tagged format: "shapefile".

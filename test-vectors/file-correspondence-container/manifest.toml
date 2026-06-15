@@ -1,7 +1,7 @@
 [vector]
 name = "file-correspondence-container"
-description = "Config declares a correspondence between zip containers, which is unsupported; the rule is ignored with a warning diagnostic"
-tags = ["zip", "file-correspondence", "diagnostics"]
+description = "Config declares a correspondence between renamed zip containers"
+tags = ["zip", "file-correspondence", "declared-correspondence", "container"]
 
 [config.dataset.files]
 [[config.dataset.files.correspondences]]

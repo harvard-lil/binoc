@@ -1,0 +1,8 @@
+[vector]
+name = "ini-value-change"
+description = "An INI value changes; transcoded to a structured_document and reported as a value change"
+tags = ["ini", "structured-document", "value-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

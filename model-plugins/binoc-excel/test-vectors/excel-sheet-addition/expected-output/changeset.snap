@@ -1,0 +1,59 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "Excel workbook",
+        "path": "data.xlsx",
+        "sources": [
+          {
+            "path": "data.xlsx",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "uint": 0
+          },
+          {
+            "text": " edits"
+          }
+        ],
+        "children": [
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data.xlsx/>Inventory",
+            "sources": [
+              {
+                "path": "data.xlsx/>Inventory",
+                "side": "to",
+                "action": "add"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

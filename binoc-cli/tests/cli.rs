@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 
 fn vectors_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -35,7 +36,9 @@ fn diff_default_stdout_is_markdown() {
         .success()
         .stdout(predicates::str::contains("# Changelog:"))
         .stdout(predicates::str::contains("story.txt"))
-        .stdout(predicates::str::contains("1 edit"));
+        .stdout(predicates::str::contains("2 lines added; 1 line removed"))
+        .stdout(predicates::str::contains("Claims: none").not())
+        .stdout(predicates::str::contains("Sources").not());
 }
 
 #[test]
@@ -89,7 +92,9 @@ fn diff_csv_column_addition_markdown() {
         .assert()
         .success()
         .stdout(predicates::str::contains("data.csv"))
-        .stdout(predicates::str::contains("2 edits"));
+        .stdout(predicates::str::contains("Column added: 'email'"))
+        .stdout(predicates::str::contains("Claims: none").not())
+        .stdout(predicates::str::contains("Sources").not());
 }
 
 #[test]

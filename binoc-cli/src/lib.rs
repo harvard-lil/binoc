@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -53,6 +54,27 @@ enum Commands {
         /// a file via -o.
         #[arg(long, short)]
         quiet: bool,
+        /// Write a detailed replay trace (JSON) of the correspondence run to
+        /// this path: every expand/parse/link/write/compaction step plus the
+        /// final side trees and links. Requires exactly two snapshots. Convert
+        /// it to an interactive HTML replay with `binoc replay`.
+        #[arg(long)]
+        trace: Option<PathBuf>,
+    },
+    /// Render a saved run trace as a self-contained HTML replay.
+    ///
+    /// Reads a trace JSON produced by `binoc diff --trace` and writes a single
+    /// standalone HTML file that animates the comparison: the two snapshot
+    /// trees growing from the bottom up, links forming between them, and the
+    /// per-link edit lists building and compacting, with play/step/scrub
+    /// controls and a detail inspector.
+    Replay {
+        /// Path to a trace JSON file produced by `binoc diff --trace`.
+        trace: PathBuf,
+        /// Output HTML path. Defaults to the trace path with a `.html`
+        /// extension.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
     },
     /// Generate a human-readable changelog from one or more saved changesets.
     ///
@@ -226,7 +248,7 @@ fn write_outputs(
     if !quiet {
         let fmt = resolve_format_name(stdout_format, resolved)?;
         let text = render(&fmt, changesets, config)?;
-        print!("{text}");
+        write_stdout_text(&text)?;
     }
 
     for raw in output_specs {
@@ -242,6 +264,32 @@ fn write_outputs(
     }
 
     Ok(())
+}
+
+fn write_stdout_text(text: &str) -> std::io::Result<()> {
+    let mut stdout = std::io::stdout().lock();
+    stdout.write_all(text.as_bytes())?;
+    stdout.flush()
+}
+
+/// Write `bytes` to `path`, creating parent directories as needed.
+fn write_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    std::fs::write(path, bytes)
+}
+
+/// Embed a run-trace JSON into the standalone replay viewer template. The JSON
+/// is escaped so a `</script>` (or any `</...`) inside string data — e.g. a
+/// snapshot path — cannot terminate the embedding `<script>` element; JSON
+/// treats `\/` as `/`, so parsing is unaffected.
+fn render_replay_html(trace_json: &str) -> String {
+    const TEMPLATE: &str = include_str!("../templates/replay.html");
+    let escaped = trace_json.replace("</", "<\\/");
+    TEMPLATE.replace("__BINOC_TRACE_JSON__", &escaped)
 }
 
 fn resolve_renderers_only(
@@ -286,6 +334,7 @@ pub fn run(
             output,
             format,
             quiet,
+            trace,
         } => {
             let dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
@@ -299,7 +348,34 @@ pub fn run(
                 .iter()
                 .map(|path| path.to_string_lossy().to_string())
                 .collect();
-            let changesets = controller.diff_many(&snapshots)?;
+
+            let changesets = match &trace {
+                Some(trace_path) => {
+                    if snapshots.len() != 2 {
+                        return Err(BinocError::Config(format!(
+                            "--trace requires exactly two snapshots, got {}",
+                            snapshots.len()
+                        ))
+                        .into());
+                    }
+                    let (changeset, mut run_trace) =
+                        controller.diff_with_trace(&snapshots[0], &snapshots[1])?;
+                    // Attach the final rendered changelog so the replay can show
+                    // the end product the run produced.
+                    let md = resolve_format_name("markdown", &resolved)
+                        .ok()
+                        .and_then(|fmt| {
+                            render(&fmt, std::slice::from_ref(&changeset), &dataset_config).ok()
+                        });
+                    run_trace.output = md;
+                    write_file(
+                        trace_path,
+                        serde_json::to_string_pretty(&run_trace)?.as_bytes(),
+                    )?;
+                    vec![changeset]
+                }
+                None => controller.diff_many(&snapshots)?,
+            };
 
             write_outputs(
                 &output,
@@ -309,6 +385,21 @@ pub fn run(
                 &dataset_config,
                 &resolved,
             )?;
+        }
+        Commands::Replay { trace, output } => {
+            let data = std::fs::read_to_string(&trace)?;
+            // Validate the input really is a trace so bad files fail loudly
+            // rather than producing an empty viewer.
+            let _: binoc_core::correspondence::RunTrace =
+                serde_json::from_str(&data).map_err(|e| {
+                    BinocError::Other(format!("{} is not a valid run trace: {e}", trace.display()))
+                })?;
+            let html = render_replay_html(&data);
+            let out_path = output.unwrap_or_else(|| trace.with_extension("html"));
+            write_file(&out_path, html.as_bytes())?;
+            if !out_path.as_os_str().is_empty() {
+                eprintln!("Wrote replay to {}", out_path.display());
+            }
         }
         Commands::Changelog {
             changesets: changeset_paths,
@@ -378,11 +469,12 @@ pub fn run(
             match controller.extract(&changeset, &node, &aspect, &snap_a, &snap_b) {
                 Ok(result) => match result {
                     ExtractResult::Text(text) => {
-                        print!("{text}");
+                        write_stdout_text(&text)?;
                     }
                     ExtractResult::Binary(bytes) => {
-                        use std::io::Write;
-                        std::io::stdout().write_all(&bytes)?;
+                        let mut stdout = std::io::stdout().lock();
+                        stdout.write_all(&bytes)?;
+                        stdout.flush()?;
                     }
                 },
                 Err(e) => {

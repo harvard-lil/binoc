@@ -11,7 +11,7 @@ use crate::types::{ArtifactDescriptor, ItemPair};
 /// without understanding *why* the path appears (rename, copy,
 /// cross-reference, ...). It is a property of the value, not an encoding of
 /// any one concept. See ADR 2026-06-03-structured-summary-segments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Side {
@@ -278,6 +278,47 @@ impl Annotation {
     }
 }
 
+/// Renderer-visible provenance for a projected diff node.
+///
+/// Most nodes have one source. Move and copy nodes use a `from` source whose
+/// path differs from the projected node path; many-to-one projections such as
+/// merges and deduplications carry multiple sources.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct Source {
+    /// Logical path of the source item.
+    pub path: String,
+    /// Snapshot side where `path` resolves.
+    pub side: Side,
+    /// Open evidence string from the rule/link that established provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<String>,
+    /// Open action associated with this source in the projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+}
+
+impl Source {
+    pub fn new(path: impl Into<String>, side: Side) -> Self {
+        Self {
+            path: path.into(),
+            side,
+            evidence: None,
+            action: None,
+        }
+    }
+
+    pub fn with_evidence(mut self, evidence: impl Into<String>) -> Self {
+        self.evidence = Some(evidence.into());
+        self
+    }
+
+    pub fn with_action(mut self, action: impl Into<String>) -> Self {
+        self.action = Some(action.into());
+        self
+    }
+}
+
 /// A node in the projected diff tree — the durable changeset structure
 /// consumed by renderers, serializers, and bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -295,9 +336,9 @@ pub struct DiffNode {
     /// like "archive.zip/data/file.csv").
     pub path: String,
 
-    /// For moves/renames: the original path.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_path: Option<String>,
+    /// Renderer-visible provenance for this projected node.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<Source>,
 
     /// Optional structured one-liner describing the change. Set during
     /// projection; renderers format each [`Segment`] by its
@@ -363,7 +404,7 @@ impl DiffNode {
             action: action.into(),
             item_type: item_type.into(),
             path: path.into(),
-            source_path: None,
+            sources: Vec::new(),
             summary: None,
             tags: BTreeSet::new(),
             children: Vec::new(),
@@ -411,8 +452,14 @@ impl DiffNode {
         self
     }
 
-    pub fn with_source_path(mut self, source: impl Into<String>) -> Self {
-        self.source_path = Some(source.into());
+    pub fn with_source(mut self, source: Source) -> Self {
+        self.push_source(source);
+        self
+    }
+
+    pub fn with_sources(mut self, sources: Vec<Source>) -> Self {
+        self.sources = sources;
+        self.normalize_sources();
         self
     }
 
@@ -438,6 +485,20 @@ impl DiffNode {
             diagnostic
         };
         self.diagnostics.push(diagnostic.normalized());
+    }
+
+    pub fn push_source(&mut self, source: Source) {
+        self.sources.push(source);
+        self.normalize_sources();
+    }
+
+    pub fn primary_from_source(&self) -> Option<&Source> {
+        self.sources.iter().find(|source| source.side == Side::From)
+    }
+
+    fn normalize_sources(&mut self) {
+        self.sources.sort();
+        self.sources.dedup();
     }
 
     pub fn annotate_from(
@@ -501,6 +562,34 @@ impl DiffNode {
         self.artifacts.clear();
         for child in &mut self.children {
             child.strip_transient();
+        }
+    }
+}
+
+/// Reserved run-scoped claim slot.
+///
+/// The shape is intentionally provisional pending the CFM-41 global-claim
+/// prototype. It gives renderers and serialized changesets a stable place for
+/// non-tree claims without committing the claim vocabulary yet.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct GlobalClaim {
+    /// Open claim verb such as a future global find/replace action.
+    pub verb: String,
+    /// Claim-specific structured parameters.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub params: BTreeMap<String, serde_json::Value>,
+    /// Optional renderer-facing summary for the claim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<Summary>,
+}
+
+impl GlobalClaim {
+    pub fn new(verb: impl Into<String>) -> Self {
+        Self {
+            verb: verb.into(),
+            params: BTreeMap::new(),
+            summary: None,
         }
     }
 }
@@ -640,6 +729,12 @@ impl ExtractHint {
 pub struct Changeset {
     pub from_snapshot: String,
     pub to_snapshot: String,
+    /// Run-scoped claims that do not belong to one tree node.
+    ///
+    /// Reserved for the CFM-41 global-claim prototype; empty in current engine
+    /// output.
+    #[serde(default)]
+    pub claims: Vec<GlobalClaim>,
     pub root: Option<DiffNode>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, String>,
@@ -652,6 +747,7 @@ impl Changeset {
         Self {
             from_snapshot: from.into(),
             to_snapshot: to.into(),
+            claims: Vec::new(),
             root,
             metadata: BTreeMap::new(),
             diagnostics: Vec::new(),
@@ -708,7 +804,7 @@ mod tests {
         assert_eq!(node.action, "modify");
         assert_eq!(node.item_type, "file");
         assert_eq!(node.path, "path/to/file.csv");
-        assert!(node.source_path.is_none());
+        assert!(node.sources.is_empty());
         assert!(node.tags.is_empty());
         assert!(node.children.is_empty());
         assert!(node.details.is_empty());
@@ -725,7 +821,7 @@ mod tests {
             .with_detail("lines_changed", serde_json::json!(42))
             .with_annotation_from("binoc", "note", serde_json::json!("check distribution"))
             .with_children(vec![child])
-            .with_source_path("old/dir");
+            .with_source(Source::new("old/dir", Side::From).with_action("move"));
 
         assert_eq!(node.tags.len(), 2);
         assert!(node.tags.contains("binoc.column-reorder"));
@@ -742,7 +838,9 @@ mod tests {
         assert!(node.detail_blocks.is_empty());
         assert_eq!(node.children.len(), 1);
         assert_eq!(node.children[0].path, "child.txt");
-        assert_eq!(node.source_path.as_deref(), Some("old/dir"));
+        assert_eq!(node.sources.len(), 1);
+        assert_eq!(node.sources[0].path, "old/dir");
+        assert_eq!(node.sources[0].side, Side::From);
     }
 
     #[test]
@@ -832,13 +930,13 @@ mod tests {
                         ExtractHint::new("cells_changed").with_label("All changed cells"),
                     ),
             )
-            .with_source_path("old/path.csv");
+            .with_source(Source::new("old/path.csv", Side::From).with_action("move"));
         let json = serde_json::to_string(&node).unwrap();
         let restored: DiffNode = serde_json::from_str(&json).unwrap();
         assert_eq!(node.action, restored.action);
         assert_eq!(node.item_type, restored.item_type);
         assert_eq!(node.path, restored.path);
-        assert_eq!(node.source_path, restored.source_path);
+        assert_eq!(node.sources, restored.sources);
         assert_eq!(node.tags, restored.tags);
         assert_eq!(node.details, restored.details);
         assert_eq!(restored.detail_blocks.len(), 1);
@@ -854,6 +952,7 @@ mod tests {
         let changeset = Changeset::new("v1", "v2", Some(root));
         assert_eq!(changeset.from_snapshot, "v1");
         assert_eq!(changeset.to_snapshot, "v2");
+        assert!(changeset.claims.is_empty());
         assert_eq!(changeset.node_count(), 3);
     }
 

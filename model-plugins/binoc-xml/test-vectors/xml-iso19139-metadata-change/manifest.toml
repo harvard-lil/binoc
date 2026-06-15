@@ -1,0 +1,8 @@
+[vector]
+name = "xml-iso19139-metadata-change"
+description = "An ISO 19139 geospatial metadata record (deeply nested element tree) changes one nested value; transcoded to a structured_document and reported as a value change"
+tags = ["xml", "structured-document", "value-change", "iso19139"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

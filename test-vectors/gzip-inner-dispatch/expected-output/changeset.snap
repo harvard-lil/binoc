@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,19 +13,24 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "census.txt.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "text",
-            "path": "census.txt.gz/census.txt",
+            "path": "census.txt.gz/>census.txt",
+            "sources": [
+              {
+                "path": "census.txt.gz/>census.txt",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 1
-              },
-              {
-                "text": " edit"
+                "text": "1 line added; 1 line removed"
               }
             ],
             "tags": [
@@ -58,19 +64,24 @@ expression: "&stable_changeset"
       },
       {
         "action": "modify",
-        "item_type": "item",
+        "item_type": "file",
         "path": "data.csv.gz",
         "children": [
           {
             "action": "modify",
             "item_type": "tabular",
-            "path": "data.csv.gz/data.csv",
+            "path": "data.csv.gz/>data.csv",
+            "sources": [
+              {
+                "path": "data.csv.gz/>data.csv",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
             "summary": [
               {
-                "uint": 2
-              },
-              {
-                "text": " edits"
+                "text": "1 row added; 1 cell changed"
               }
             ],
             "tags": [

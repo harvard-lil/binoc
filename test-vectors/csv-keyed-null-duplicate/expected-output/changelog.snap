@@ -4,7 +4,11 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.csv**: 14 edits
+- **data.csv**: 14 cells changed
+  - Changed cells (showing 3 of 14)
+    - row 1, column 'id': 'a' -> 'b'
+    - row 1, column 'name': 'Alice' -> 'Bob'
+    - row 1, column 'score': '10' -> '21'
 
 ## Warnings
 

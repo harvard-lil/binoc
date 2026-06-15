@@ -1,0 +1,22 @@
+[vector]
+name = "zip-declared-container"
+description = "Config declares a correspondence between nested zip containers and preserves inner CSV content detail"
+tags = ["zip", "file-correspondence", "declared-correspondence", "container"]
+
+[config.dataset.files]
+[[config.dataset.files.correspondences]]
+name = "inner-archive-pair"
+key = "records"
+logical_path = "outer.zip/>records.zip"
+on_null_key = "diagnostic"
+on_duplicate_key = "diagnostic"
+
+[config.dataset.files.correspondences.left]
+path_regex = "^outer\\.zip/>records-old\\.zip$"
+
+[config.dataset.files.correspondences.right]
+path_regex = "^outer\\.zip/>records\\.zip$"
+
+[expected]
+child_count = 1
+has_tags = ["binoc.declared-correspondence", "binoc.cell-change"]

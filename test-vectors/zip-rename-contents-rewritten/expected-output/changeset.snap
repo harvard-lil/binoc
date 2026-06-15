@@ -5,10 +5,19 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
     "path": "",
+    "sources": [
+      {
+        "path": "",
+        "side": "from",
+        "evidence": "binoc.pair.root",
+        "action": "modify"
+      }
+    ],
     "summary": [
       {
         "uint": 0
@@ -22,6 +31,13 @@ expression: "&stable_changeset"
         "action": "remove",
         "item_type": "file",
         "path": "data.zip",
+        "sources": [
+          {
+            "path": "data.zip",
+            "side": "from",
+            "action": "remove"
+          }
+        ],
         "summary": [
           {
             "text": "Removed"
@@ -31,7 +47,14 @@ expression: "&stable_changeset"
           {
             "action": "remove",
             "item_type": "tabular",
-            "path": "data.zip/x.csv",
+            "path": "data.zip/>x.csv",
+            "sources": [
+              {
+                "path": "data.zip/>x.csv",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
             "summary": [
               {
                 "text": "Removed"
@@ -44,7 +67,14 @@ expression: "&stable_changeset"
           {
             "action": "remove",
             "item_type": "tabular",
-            "path": "data.zip/y.csv",
+            "path": "data.zip/>y.csv",
+            "sources": [
+              {
+                "path": "data.zip/>y.csv",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
             "summary": [
               {
                 "text": "Removed"
@@ -57,7 +87,14 @@ expression: "&stable_changeset"
           {
             "action": "remove",
             "item_type": "tabular",
-            "path": "data.zip/z.csv",
+            "path": "data.zip/>z.csv",
+            "sources": [
+              {
+                "path": "data.zip/>z.csv",
+                "side": "from",
+                "action": "remove"
+              }
+            ],
             "summary": [
               {
                 "text": "Removed"
@@ -73,6 +110,13 @@ expression: "&stable_changeset"
         "action": "add",
         "item_type": "file",
         "path": "archive.zip",
+        "sources": [
+          {
+            "path": "archive.zip",
+            "side": "to",
+            "action": "add"
+          }
+        ],
         "summary": [
           {
             "text": "Added"
@@ -82,7 +126,14 @@ expression: "&stable_changeset"
           {
             "action": "add",
             "item_type": "tabular",
-            "path": "archive.zip/p.csv",
+            "path": "archive.zip/>p.csv",
+            "sources": [
+              {
+                "path": "archive.zip/>p.csv",
+                "side": "to",
+                "action": "add"
+              }
+            ],
             "summary": [
               {
                 "text": "Added"
@@ -95,7 +146,14 @@ expression: "&stable_changeset"
           {
             "action": "add",
             "item_type": "tabular",
-            "path": "archive.zip/q.csv",
+            "path": "archive.zip/>q.csv",
+            "sources": [
+              {
+                "path": "archive.zip/>q.csv",
+                "side": "to",
+                "action": "add"
+              }
+            ],
             "summary": [
               {
                 "text": "Added"
@@ -108,7 +166,14 @@ expression: "&stable_changeset"
           {
             "action": "add",
             "item_type": "tabular",
-            "path": "archive.zip/r.csv",
+            "path": "archive.zip/>r.csv",
+            "sources": [
+              {
+                "path": "archive.zip/>r.csv",
+                "side": "to",
+                "action": "add"
+              }
+            ],
             "summary": [
               {
                 "text": "Added"

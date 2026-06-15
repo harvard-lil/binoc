@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.json**: 2 cells changed
+  - Changed cells
+    - row 1, column 'score': 85 -> 92
+    - row 2, column 'score': 90 -> 88

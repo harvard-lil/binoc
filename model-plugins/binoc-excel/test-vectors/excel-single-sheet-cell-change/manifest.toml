@@ -1,0 +1,8 @@
+[vector]
+name = "excel-single-sheet-cell-change"
+description = "Single-sheet workbook; one numeric cell changes 85 -> 92"
+tags = ["excel", "cell-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

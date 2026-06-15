@@ -1,0 +1,13 @@
+{
+  "fields": [
+    {"name": "id", "type": "Numeric"},
+    {"name": "label", "type": "Character"},
+    {"name": "score", "type": "Numeric"},
+    {"name": "active", "type": "Logical"}
+  ],
+  "rows": [
+    [1, "alpha", 72.0, true],
+    [2, "beta", 88.5, false],
+    [3, "gamma", 64.25, true]
+  ]
+}

@@ -4,11 +4,10 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **gamma-renamed.txt**: Moved from outer.zip/inner.zip/gamma.txt
+- **gamma-renamed.txt**: Moved from outer.zip/>inner.zip/>gamma.txt
 - **kept-copy.txt**: Copied from kept.txt
 - **merged.bin**: Moved from dup.bin
-- **outer.zip**: 0 edits
-- **outer.zip/alpha-renamed.txt**: Moved from alpha.txt
-- **outer.zip/inner.zip/beta-renamed.txt**: Moved from outer.zip/beta.txt
-- **outer.zip/kept-copy.txt**: Copied from kept.txt
-- **outer.zip/dup-b.bin**: Removed
+- **outer.zip/>alpha-renamed.txt**: Moved from alpha.txt
+- **outer.zip/>inner.zip/>beta-renamed.txt**: Moved from outer.zip/>beta.txt
+- **outer.zip/>kept-copy.txt**: Copied from kept.txt
+- **outer.zip/>dup-b.bin**: Removed

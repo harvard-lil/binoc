@@ -1,0 +1,2 @@
+{"id": 1, "event": "create", "actor": "alice"}
+{"id": 2, "event": "update", "actor": "bob"}

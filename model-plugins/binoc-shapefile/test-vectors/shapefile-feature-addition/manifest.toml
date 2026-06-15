@@ -1,0 +1,8 @@
+[vector]
+name = "shapefile-feature-addition"
+description = "A .shp gains a feature and its bounding box grows; transcoded to a structured_document and reported as a value change"
+tags = ["shapefile", "structured-document", "value-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

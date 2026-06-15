@@ -4,4 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.csv**: 1 edit
+- **data.csv**: 1 row added
+  - Rows added
+    - row 3: 'Charlie', '35'

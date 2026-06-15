@@ -1,0 +1,9 @@
+[vector]
+name = "json-key-order-reexport"
+description = "JSON object key order and pretty-printing changed without semantic value changes"
+tags = ["json", "serialization", "key-order"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.serialization-change", "binoc.document-serialization-change"]

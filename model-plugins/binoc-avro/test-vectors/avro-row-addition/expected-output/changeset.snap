@@ -1,0 +1,58 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.avro",
+        "sources": [
+          {
+            "path": "data.avro",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row added"
+          }
+        ],
+        "tags": [
+          "binoc.row-addition"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "index": 2,
+                "values": {
+                  "total_values": 5,
+                  "truncated": false,
+                  "values": [
+                    3,
+                    "gamma",
+                    64.25,
+                    true,
+                    "new"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

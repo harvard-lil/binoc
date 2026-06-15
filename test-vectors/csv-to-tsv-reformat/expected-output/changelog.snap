@@ -1,0 +1,11 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.tsv**: 1 row added; 1 cell changed
+  - Changed cells
+    - row 2, column 'age': '25' -> '26'
+  - Rows added
+    - row 4: 'Dave', '41', 'Austin'

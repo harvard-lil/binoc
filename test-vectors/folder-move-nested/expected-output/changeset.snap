@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,7 +15,14 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "directory",
         "path": "documentation",
-        "source_path": "docs",
+        "sources": [
+          {
+            "path": "docs",
+            "side": "from",
+            "evidence": "binoc.pair.container_from_children",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
             "text": "Moved from "

@@ -1,0 +1,9 @@
+[vector]
+name = "jsonld-value-change"
+description = "A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is reported with item_type jsonld"
+tags = ["json", "jsonld", "structured-document"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

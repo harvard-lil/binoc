@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,19 +15,17 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "text",
         "path": "meeting-notes-v2.txt",
-        "source_path": "notes.txt",
+        "sources": [
+          {
+            "path": "notes.txt",
+            "side": "from",
+            "evidence": "binoc.pair.fuzzy",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
-            "text": "Moved from "
-          },
-          {
-            "path": {
-              "value": "notes.txt",
-              "snapshot": "from"
-            }
-          },
-          {
-            "text": " (modified)"
+            "text": "2 lines added"
           }
         ],
         "tags": [

@@ -1,9 +1,12 @@
 # binoc-sqlite
 
 SQLite correspondence rule pack for [Binoc](https://github.com/example/binoc).
-Diffs `.sqlite` / `.sqlite3` / `.db` files as standard tabular collections: a
-database is a table set, and each SQLite table publishes normal Binoc tabular
-data for row, column, and cell analysis.
+Diffs `.sqlite` / `.sqlite3` / `.db` files by decomposing each database into its
+tables. The database node becomes a plain container (like a zip), and every SQL
+table is published as a **child node** — `data.sqlite/>customers` — carrying
+normal Binoc `binoc.tabular.v1` data for row, column, and cell analysis. The SQL
+table name is used verbatim as the child name, since it is the table's intrinsic
+identity.
 
 ## Install
 
@@ -35,21 +38,26 @@ Example output:
 ```markdown
 # Changelog: /tmp/demo/snapshot-a → /tmp/demo/snapshot-b
 
-- **data.sqlite**: Table t changed: 1 row added
-- **data.sqlite::t**: 1 row added
+- **data.sqlite/>t**: 1 row added
+  - Rows added
+    - row 2: 2
 ```
 
 Without the plugin, the same files are reported through the byte-level fallback.
 
 ## What it compares
 
-- **Table set**: tables added/removed/changed via `binoc.tabular_collection.v1`.
-- **Schema**: columns added/removed, SQLite column type changes.
-- **Table content**: row count and cell changes via per-table `binoc.tabular.v1`.
+The plugin registers a single parse rule that turns each database into a
+container of `binoc.tabular.v1` table children. All diffing is then handled by
+the stdlib pair rules and tabular writer operating on those child nodes:
 
-Tags emitted include `binoc-sqlite.row-addition`,
-`binoc-sqlite.table-addition`, `binoc-sqlite.schema-change`, etc. Configure
-renderer grouping in your dataset config; see the main docs'
+- **Table set**: a table added, removed, or renamed renders as a child node
+  added, removed, or moved under the database container.
+- **Table content**: row, column, and cell changes render on the table child via
+  the stdlib tabular writer (e.g. `binoc.row-addition`, `binoc.column-addition`,
+  `binoc.schema-change`).
+
+Configure renderer grouping in your dataset config; see the main docs'
 [Plugin model](../../docs/plugin-developers/explanation/plugin-model.md).
 
 ## Development

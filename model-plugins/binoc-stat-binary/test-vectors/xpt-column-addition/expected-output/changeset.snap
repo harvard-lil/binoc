@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,32 +13,64 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular_collection",
+        "item_type": "SAS transport file",
         "path": "data.xpt",
-        "summary": [
+        "children": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
-          }
-        ],
-        "tags": [
-          "binoc.column-addition",
-          "binoc.schema-change",
-          "binoc.table-change",
-          "binoc.tabular-collection-change"
-        ],
-        "details": {
-          "edits": [
-            {
-              "params": {
-                "table": "BINOCTST"
-              },
-              "verb": "tabular_collection.change_table"
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.xpt/>BINOCTST",
+            "sources": [
+              {
+                "path": "data.xpt/>BINOCTST",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Column added: 'score'"
+              }
+            ],
+            "tags": [
+              "binoc.column-addition",
+              "binoc.schema-change"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "from": [
+                      "id",
+                      "name"
+                    ],
+                    "to": [
+                      "id",
+                      "name",
+                      "score"
+                    ]
+                  },
+                  "verb": "tabular.set_headers"
+                },
+                {
+                  "params": {
+                    "name": "score",
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        "9",
+                        "7"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_column"
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       }
     ]
   }

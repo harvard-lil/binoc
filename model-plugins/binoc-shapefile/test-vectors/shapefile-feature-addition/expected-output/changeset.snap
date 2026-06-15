@@ -1,0 +1,68 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "shapefile",
+        "path": "data.shp",
+        "sources": [
+          {
+            "path": "data.shp",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Document values changed"
+          }
+        ],
+        "tags": [
+          "binoc.content-changed",
+          "binoc.document-value-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "3.0",
+                    "kind": "replace",
+                    "path": "$.bbox.max_x",
+                    "to": "6.0"
+                  },
+                  {
+                    "from": "3.0",
+                    "kind": "replace",
+                    "path": "$.bbox.max_y",
+                    "to": "6.0"
+                  },
+                  {
+                    "from": "2",
+                    "kind": "replace",
+                    "path": "$.feature_count",
+                    "to": "3"
+                  }
+                ],
+                "examples_truncated": false
+              },
+              "verb": "document.value_change"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

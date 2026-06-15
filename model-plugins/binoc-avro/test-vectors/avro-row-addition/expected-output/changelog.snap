@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.avro**: 1 row added
+  - Rows added
+    - row 3: 3, 'gamma', 64.25

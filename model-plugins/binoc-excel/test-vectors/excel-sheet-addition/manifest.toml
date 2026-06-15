@@ -1,0 +1,10 @@
+[vector]
+name = "excel-sheet-addition"
+description = "Snapshot B adds a whole new sheet to a multi-sheet workbook"
+tags = ["excel", "sheet-addition"]
+
+[expected]
+root_action = "modify"
+# A new sheet is now an added child node under the workbook container, surfaced
+# via the ordinary pair rules rather than a collection-manifest tag.
+has_tags = ["binoc.content-changed"]

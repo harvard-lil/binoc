@@ -4,6 +4,14 @@
   "description": "A structured description of how to get from one snapshot to the next.",
   "type": "object",
   "properties": {
+    "claims": {
+      "description": "Run-scoped claims that do not belong to one tree node.\n\nReserved for the CFM-41 global-claim prototype; empty in current engine\noutput.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/GlobalClaim"
+      }
+    },
     "diagnostics": {
       "type": "array",
       "items": {
@@ -302,12 +310,12 @@
             }
           ]
         },
-        "source_path": {
-          "description": "For moves/renames: the original path.",
-          "type": [
-            "string",
-            "null"
-          ]
+        "sources": {
+          "description": "Renderer-visible provenance for this projected node.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
         },
         "summary": {
           "description": "Optional structured one-liner describing the change. Set during\nprojection; renderers format each [`Segment`] by its\ntype. Build it with [`Summary`]'s builder, or pass a plain string —\n`impl Into<Summary>` wraps it as a single [`Segment::Text`].",
@@ -352,6 +360,35 @@
       },
       "required": [
         "aspect"
+      ]
+    },
+    "GlobalClaim": {
+      "description": "Reserved run-scoped claim slot.\n\nThe shape is intentionally provisional pending the CFM-41 global-claim\nprototype. It gives renderers and serialized changesets a stable place for\nnon-tree claims without committing the claim vocabulary yet.",
+      "type": "object",
+      "properties": {
+        "params": {
+          "description": "Claim-specific structured parameters.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "summary": {
+          "description": "Optional renderer-facing summary for the claim.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Summary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verb": {
+          "description": "Open claim verb such as a future global find/replace action.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verb"
       ]
     },
     "ItemPair": {
@@ -544,6 +581,38 @@
           "type": "string",
           "const": "to"
         }
+      ]
+    },
+    "Source": {
+      "description": "Renderer-visible provenance for a projected diff node.\n\nMost nodes have one source. Move and copy nodes use a `from` source whose\npath differs from the projected node path; many-to-one projections such as\nmerges and deduplications carry multiple sources.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Open action associated with this source in the projection.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "description": "Open evidence string from the rule/link that established provenance.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Logical path of the source item.",
+          "type": "string"
+        },
+        "side": {
+          "description": "Snapshot side where `path` resolves.",
+          "$ref": "#/$defs/Side"
+        }
+      },
+      "required": [
+        "path",
+        "side"
       ]
     },
     "Summary": {

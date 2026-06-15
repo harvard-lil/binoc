@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use binoc_core::controller::Controller;
-use binoc_sdk::Changeset;
+use binoc_sdk::{Changeset, Side};
 
 fn setup_test_dir() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
@@ -239,7 +239,10 @@ fn test_move_detection() {
     );
 
     let move_node = move_node.unwrap();
-    assert!(move_node.source_path.is_some());
+    assert!(move_node
+        .sources
+        .iter()
+        .any(|source| source.side == Side::From));
 }
 
 #[test]
@@ -279,11 +282,11 @@ fn test_zip_comparison() {
         archive_node
             .children
             .iter()
-            .any(|c| c.path == "archive.zip/data.txt")
+            .any(|c| c.path == "archive.zip/>data.txt")
             && archive_node
                 .children
                 .iter()
-                .any(|c| c.path == "archive.zip/extra.txt"),
+                .any(|c| c.path == "archive.zip/>extra.txt"),
         "zip should have diffed contents"
     );
 }
@@ -607,6 +610,9 @@ fn test_csv_rename_modify_detected_as_move() {
         .iter()
         .find(|c| c.action == "move")
         .expect("expected a move child");
-    assert_eq!(move_node.source_path.as_deref(), Some("data.csv"));
+    assert!(move_node
+        .sources
+        .iter()
+        .any(|source| source.side == Side::From && source.path == "data.csv"));
     assert_eq!(move_node.path, "data_v2.csv");
 }

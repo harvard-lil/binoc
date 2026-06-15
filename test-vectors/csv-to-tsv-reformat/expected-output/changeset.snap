@@ -1,0 +1,70 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "move",
+        "item_type": "tabular",
+        "path": "data.tsv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.tabular",
+            "action": "move"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row added; 1 cell changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.content-changed",
+          "binoc.move",
+          "binoc.move.modified",
+          "binoc.row-addition",
+          "binoc.serialization-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "age",
+                "from": "25",
+                "row": 1,
+                "to": "26"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "index": 3,
+                "values": {
+                  "total_values": 3,
+                  "truncated": false,
+                  "values": [
+                    "Dave",
+                    "41",
+                    "Austin"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **outer.zip/>records.zip**: Moved from outer.zip/>records-old.zip
+- **outer.zip/>records.zip**: 1 cell changed

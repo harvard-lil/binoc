@@ -1,0 +1,2 @@
+# Binary serialization vectors. CBOR/MessagePack/BSON artifacts are built from
+# .<fmt>.d/source.json by BinFormatsMaterializer; plist commits XML text directly.

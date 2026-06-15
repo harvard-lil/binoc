@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -14,7 +15,14 @@ expression: "&stable_changeset"
         "action": "move",
         "item_type": "file",
         "path": "archive.zip",
-        "source_path": "data.zip",
+        "sources": [
+          {
+            "path": "data.zip",
+            "side": "from",
+            "evidence": "binoc.pair.declared",
+            "action": "move"
+          }
+        ],
         "summary": [
           {
             "text": "Moved from "

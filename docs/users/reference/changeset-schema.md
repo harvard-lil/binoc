@@ -59,6 +59,7 @@ A structured description of how to get from one snapshot to the next.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `claims` | array of [`GlobalClaim`](#globalclaim) | no | Run-scoped claims that do not belong to one tree node. Reserved for the CFM-41 global-claim prototype; empty in current engine output. |
 | `diagnostics` | array of [`Diagnostic`](#diagnostic) | no |  |
 | `from_snapshot` | string | yes |  |
 | `metadata` | object (map of string → string) | no |  |
@@ -81,7 +82,7 @@ A node in the projected diff tree — the durable changeset structure consumed b
 | `item_type` | string | yes | Open string: "directory", "file", "tabular", "zip_archive", etc. No built-in types — conventions, not enforcement. |
 | `path` | string | yes | Location within snapshot (logical path, including interior paths like "archive.zip/data/file.csv"). |
 | `source_items` | [`ItemPair`](#itempair) \| null | no | The original item pair associated with this projected node when one is available. Session-scoped working data: available during a live run for rules and extractors that need to re-read source data. Callers writing changeset output must strip this via [`DiffNode::strip_transient`] before serializing. |
-| `source_path` | string \| null | no | For moves/renames: the original path. |
+| `sources` | array of [`Source`](#source) | no | Renderer-visible provenance for this projected node. |
 | `summary` | [`Summary`](#summary) \| null | no | Optional structured one-liner describing the change. Set during projection; renderers format each [`Segment`] by its type. Build it with [`Summary`]'s builder, or pass a plain string — `impl Into<Summary>` wraps it as a single [`Segment::Text`]. |
 | `tags` | array of string | no | Open bag of semantic tags, namespaced by convention. e.g. "binoc.column-reorder", "biobinoc.gap-change" |
 
@@ -200,6 +201,16 @@ Pointer to an extract aspect that can return exhaustive content.
 | `aspect` | string | yes | Aspect name accepted by `binoc extract`. |
 | `label` | string \| null | no |  |
 
+### `GlobalClaim`
+
+Reserved run-scoped claim slot. The shape is intentionally provisional pending the CFM-41 global-claim prototype. It gives renderers and serialized changesets a stable place for non-tree claims without committing the claim vocabulary yet.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `params` | object (free-form) | no | Claim-specific structured parameters. |
+| `summary` | [`Summary`](#summary) \| null | no | Optional renderer-facing summary for the claim. |
+| `verb` | string | yes | Open claim verb such as a future global find/replace action. |
+
 ### `ProjectionHint`
 
 Product-facing projection metadata supplied by rules, not inferred by core.
@@ -218,6 +229,17 @@ Product-facing projection metadata supplied by rules, not inferred by core.
 ### `Side`
 
 *(unrecognised schema shape)*
+
+### `Source`
+
+Renderer-visible provenance for a projected diff node. Most nodes have one source. Move and copy nodes use a `from` source whose path differs from the projected node path; many-to-one projections such as merges and deduplications carry multiple sources.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `action` | string \| null | no | Open action associated with this source in the projection. |
+| `evidence` | string \| null | no | Open evidence string from the rule/link that established provenance. |
+| `path` | string | yes | Logical path of the source item. |
+| `side` | [`Side`](#side) | yes | Snapshot side where `path` resolves. |
 
 ### `Summary`
 

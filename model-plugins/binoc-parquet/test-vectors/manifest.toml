@@ -1,0 +1,2 @@
+# Parquet files are built from .parquet.d dirs (a single table.json per dir;
+# see binoc_parquet::test_support::ParquetMaterializer for the staging format).

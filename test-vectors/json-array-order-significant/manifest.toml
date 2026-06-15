@@ -1,0 +1,9 @@
+[vector]
+name = "json-array-order-significant"
+description = "JSON array order changes are semantic content changes in stage 1"
+tags = ["json", "array-order", "content-change"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

@@ -193,6 +193,17 @@ project's C10 posture: no path traversal, bounded output, and no silent
 truncation. Zip and tar rules need per-entry and total output caps; gzip cap
 overflow is an error or reportable diagnostic, never a partial diff.
 
+Parse and expand failures are contained to the node being processed when the
+error is not classified as a hard policy violation. The driver records an
+error-severity diagnostic at `rule:side:path`, marks that rule attempt complete
+for the node, and leaves the node in the side tree without the missing children
+or artifact so existing residual/fallback writers can still describe the
+correspondence. This keeps one corrupt member from aborting the rest of a
+changelog. `BinocError::PathPolicy` remains hard because it is the current
+distinct security-policy error class. Decompression-cap overflows do not yet
+have a distinct fatal error variant; until one exists, they follow the same
+reportable diagnostic path as other rule-local failures.
+
 ### Pass 2 — edit-list compaction
 
 Every link gets an **edit list**: the description of what changed across

@@ -8,7 +8,7 @@ snapshot-b. Every leaf is byte-identical.
 
 `CorrelationDetector` rewrites each leaf as `binoc.move`. The default-strict
 `FolderMoveDetector` then rolls the whole tree up into a single
-`binoc.folder-move` node at `documentation` whose `source_path` is `docs`.
+`binoc.folder-move` node at `documentation` whose first source is `docs`.
 """
 tags = ["folder-move", "rollup", "nested", "directory"]
 

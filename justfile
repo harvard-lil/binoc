@@ -12,7 +12,7 @@ build-release:
 
 # Run binoc CLI with latest source (auto-rebuilds if needed).
 binoc *ARGS:
-    uv run --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-stat-binary --with ./model-plugins/binoc-html binoc {{ARGS}}
+    uv run --refresh-package binoc --with ./binoc-python --with ./model-plugins/binoc-sqlite --with ./model-plugins/binoc-stat-binary --with ./model-plugins/binoc-html binoc {{ARGS}}
 
 # Auto-format Rust and Python code.
 fmt:
@@ -32,7 +32,13 @@ check:
 # hide. See binoc_sdk::lints for the invariant/lint tier scheme and
 # .agents/skills/lint-plugin/SKILL.md for the judgment-level checklist.
 lint:
-    cargo test -p binoc-core -p binoc-stdlib -p binoc-sqlite -p binoc-row-reorder --test lints -- --nocapture
+    cargo test -p binoc-core -p binoc-stdlib -p binoc-sqlite -p binoc-row-reorder -p binoc-excel -p binoc-parquet -p binoc-avro -p binoc-dbf -p binoc-binformats --test lints -- --nocapture
+
+# Emit correspondence engine performance reports as JSONL. With no args, uses
+# the deterministic synthetic fixture; pass `--left A --right B` for real
+# snapshots. Timing fields are noisy; structural fields should be stable.
+perf *ARGS:
+    cargo run --release -q -p binoc-stdlib --bin perf_report -- {{ARGS}}
 
 # Run all tests: Rust crates + Python binding tests.
 # Note: no --all-features here. The test-vectors feature is already activated via
@@ -47,7 +53,7 @@ test:
 
 # Aggregate docs generators. Each sub-recipe is cache-aware and skips work when
 # inputs are unchanged. See docs/adr/2026-04-17-documentation_platform_and_info_design.md §6.
-docs: docs-tutorial docs-cli docs-adr-index docs-plugin-catalog docs-schema docs-sdk docs-vectors
+docs: docs-tutorial docs-cli docs-adr-index docs-plugin-catalog docs-schema docs-sdk docs-vectors docs-replays
 
 # Regenerate docs/tutorial.md by re-running all embedded code blocks. Showboat
 # runs in a uv tool env that includes ./binoc-python, so visible `binoc`
@@ -109,6 +115,16 @@ docs-vectors:
     #!/usr/bin/env bash
     set -euo pipefail
     uv run --quiet --script scripts/build_test_vector_gallery.py
+
+# Regenerate the interactive HTML replays under docs/users/explanation/replays/
+# and the docs/users/explanation/replays.md index from a curated set of shared
+# vectors. Materializes first (replays run `binoc diff --trace` over the built
+# snapshots, then `binoc replay`). The generated HTML is gitignored; the index
+# page is committed. See scripts/build_replays.py for the featured set.
+docs-replays: materialize
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --quiet --script scripts/build_replays.py
 
 # Regenerate docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 docs-plugin-catalog:
@@ -201,6 +217,11 @@ snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-sqlite --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-row-reorder --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-stat-binary --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-excel --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-parquet --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-avro --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-dbf --test test_vectors
+    INSTA_UPDATE=always cargo test -p binoc-binformats --test test_vectors
 
 # Materialize test-vectors/ into test-vectors-materialized/ for every workspace
 # crate that ships vectors (same builders the test harness uses). Each plugin

@@ -29,6 +29,7 @@ required-features = ["test-support"]
 
 [dependencies]
 binoc-sdk = { workspace = true }
+blake3 = "1.8.5"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

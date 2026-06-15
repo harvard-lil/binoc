@@ -1,0 +1,8 @@
+[vector]
+name = "bson-value-change"
+description = "A BSON scalar value changes; transcoded to a structured_document and reported as a value change"
+tags = ["bson", "structured-document", "value-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.content-changed", "binoc.document-value-change"]

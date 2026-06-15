@@ -5,6 +5,7 @@ expression: "&stable_changeset"
 {
   "from_snapshot": "snapshot-a",
   "to_snapshot": "snapshot-b",
+  "claims": [],
   "root": {
     "action": "modify",
     "item_type": "directory",
@@ -12,41 +13,85 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "tabular_collection",
+        "item_type": "SQLite database",
         "path": "data.sqlite",
+        "sources": [
+          {
+            "path": "data.sqlite",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
         "summary": [
           {
-            "uint": 2
+            "uint": 0
           },
           {
             "text": " edits"
           }
         ],
-        "tags": [
-          "binoc-sqlite.row-addition",
-          "binoc-sqlite.table-addition",
-          "binoc.row-addition",
-          "binoc.schema-change",
-          "binoc.table-addition",
-          "binoc.table-change",
-          "binoc.tabular-collection-change"
-        ],
-        "details": {
-          "edits": [
-            {
-              "params": {
-                "table": "orders"
-              },
-              "verb": "sqlite.add_table"
-            },
-            {
-              "params": {
-                "table": "users"
-              },
-              "verb": "sqlite.change_table"
+        "children": [
+          {
+            "action": "modify",
+            "item_type": "tabular",
+            "path": "data.sqlite/>users",
+            "sources": [
+              {
+                "path": "data.sqlite/>users",
+                "side": "from",
+                "evidence": "binoc.pair.name",
+                "action": "modify"
+              }
+            ],
+            "summary": [
+              {
+                "text": "1 row added"
+              }
+            ],
+            "tags": [
+              "binoc.row-addition"
+            ],
+            "details": {
+              "edits": [
+                {
+                  "params": {
+                    "index": 1,
+                    "values": {
+                      "total_values": 2,
+                      "truncated": false,
+                      "values": [
+                        2,
+                        "Bob"
+                      ]
+                    }
+                  },
+                  "verb": "tabular.add_row"
+                }
+              ]
             }
-          ]
-        }
+          },
+          {
+            "action": "add",
+            "item_type": "tabular",
+            "path": "data.sqlite/>orders",
+            "sources": [
+              {
+                "path": "data.sqlite/>orders",
+                "side": "to",
+                "action": "add"
+              }
+            ],
+            "summary": [
+              {
+                "text": "Added"
+              }
+            ],
+            "tags": [
+              "binoc.content-changed"
+            ]
+          }
+        ]
       }
     ]
   }

@@ -4,12 +4,11 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **(root)**: 0 edits
 - **data.zip**: Removed
-- **data.zip/x.csv**: Removed
-- **data.zip/y.csv**: Removed
-- **data.zip/z.csv**: Removed
+- **data.zip/>x.csv**: Removed
+- **data.zip/>y.csv**: Removed
+- **data.zip/>z.csv**: Removed
 - **archive.zip**: Added
-- **archive.zip/p.csv**: Added
-- **archive.zip/q.csv**: Added
-- **archive.zip/r.csv**: Added
+- **archive.zip/>p.csv**: Added
+- **archive.zip/>q.csv**: Added
+- **archive.zip/>r.csv**: Added
