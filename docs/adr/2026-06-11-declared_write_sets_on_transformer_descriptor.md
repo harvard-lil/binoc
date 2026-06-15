@@ -1,7 +1,7 @@
 # Declared Write-Sets on TransformerDescriptor
 
 **Date:** 2026-06-11
-**Status:** Implemented
+**Status:** Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md) — `TransformerDescriptor` was removed in the migration; the write-set discipline carried over to rule descriptors and is mechanized in [Invariant and Lint Tiers](2026-06-12-invariant_and_lint_tiers.md)
 
 ## Context
 

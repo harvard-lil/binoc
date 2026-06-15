@@ -19,8 +19,8 @@ the **shapefile**:
 | `.sbn`/`.sbx` | no | ESRI spatial index |
 
 Shapefiles are not niche: geospatial vector data is a large fraction of open
-government data (Census TIGER alone is ~25% of data.gov datasets — see
-[`research/data-gov-inventory-analysis.md`](../../research/data-gov-inventory-analysis.md)).
+government data (Census TIGER alone is ~25% of data.gov datasets — see the
+[data.gov inventory analysis](../core-developers/research/data-gov-inventory-analysis.md)).
 And the pattern recurs well beyond shapefiles: GeoTIFF + world file
 (`.tif`/`.tfw`), ENVI raster (`.hdr`/`.dat`), NIfTI (`.hdr`/`.img`), and others
 are all "one dataset, several sibling files."

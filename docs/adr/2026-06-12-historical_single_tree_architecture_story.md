@@ -21,7 +21,7 @@ audience: core contributor
     [ADR index](README.md); for the maintained prose see the
     [architecture overview](../plugin-developers/explanation/architecture.md),
     [correspondence-first engine ADR](2026-06-12-correspondence_first_engine.md),
-    and [migration completion ADR](2026-06-12-correspondence_first_migration_completion.md).
+    and the [engine-overhaul retrospective](2026-06-15-engine_overhaul_retrospective.md).
     Sources: the codebase and the ADR decision record, as of June 2026.
 
 ---
@@ -571,13 +571,13 @@ future feature.
 The companion prior-art survey — which existing tools are the strongest
 argument against building binoc from scratch, and which systems have the most
 to teach its architecture — lives in its own research note:
-**[Prior art and architecture precedents](precedents.md)**.
+**[Prior art and architecture precedents](../core-developers/research/precedents.md)**.
 
 ---
 
 *Companion material: the
-[architecture overview](../../plugin-developers/explanation/architecture.md)
+[architecture overview](../plugin-developers/explanation/architecture.md)
 and the rest of the explanation set (the project's own telling), the
-[ADR index](../../adr/README.md) (the decision record), and `test-vectors/`
+[ADR index](README.md) (the decision record), and `test-vectors/`
 (the de-facto spec). This is generated analysis, not project documentation —
 poke holes in it too.*

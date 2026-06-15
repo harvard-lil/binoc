@@ -274,8 +274,8 @@ owned by the real stdlib writers/compaction rules.
 
 This model was adopted as *direction*, then validated by a minimal
 clean-room prototype. The prototype crates were retired after migration; their
-durable findings are preserved in
-[Correspondence-First Migration Completion](2026-06-12-correspondence_first_migration_completion.md).
+durable findings are preserved in this ADR and the
+[engine-overhaul retrospective](2026-06-15-engine_overhaul_retrospective.md).
 The hardened prototype demonstrated the key bet — robust, general
 composability of independently authored rules — on the discriminator vectors
 and the full mappable test-vector corpus.

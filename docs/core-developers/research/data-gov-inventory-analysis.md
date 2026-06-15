@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-15
 **Status:** Research / exploratory
-**Analysis script:** [`scripts/analyze_data_gov_inventory.py`](../scripts/analyze_data_gov_inventory.py)
+**Analysis script:** `scripts/analyze_data_gov_inventory.py` (in the repo)
 
 ## What this is
 

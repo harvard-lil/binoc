@@ -12,6 +12,14 @@ two suspected costs: pair rules re-propose over the whole `EngineView` every
 round, and expand/parse rules run serially even though each node's rule call
 is independent.
 
+The migration cutover was measured first, to size the gap CFM-44 had to close.
+On a synthetic 1,000-file / 20-directory **debug** fixture the legacy single-tree
+engine ran in 56.3 ms and the correspondence engine in 146.6 ms (2.60×). That
+slower baseline was accepted in exchange for correctness and architectural
+simplicity, on the expectation that measured optimization — this ADR — would
+recover the gap where a profile justified it, focusing on parallel subtrees,
+dirty-set rescans, and analysis caches.
+
 Before changing the scheduling model, we added a focused run-report path and
 `performance-baseline` harness. `just perf` generates deterministic
 directory/CSV fixtures, runs the driver in serial and candidate modes, and
