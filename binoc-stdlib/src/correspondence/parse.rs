@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 
 use binoc_sdk::{
     decompose_child, structured_document_v1, tabular_v1, BinocError, BinocResult, DataAccess,
-    Diagnostic, ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact,
-    ParsedChild, ProjectionHint, StructuredDocument, Summary, TabularData,
+    ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact, ParsedChild,
+    ProjectionHint, StructuredDocument, TabularData,
 };
 use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 
@@ -61,34 +61,28 @@ impl ParseRule for CsvParse {
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
         let tabular = parse_csv_bytes(&bytes, delimiter_for(item))?;
-        let detection = detect_stacked_sections(&tabular);
-        let is_ambiguous = detection.ambiguous_reason.is_some();
-        let diagnostics: Vec<Diagnostic> = detection
-            .ambiguous_reason
-            .into_iter()
-            .map(|reason| Diagnostic::suggestion("binoc.table_splitter.ambiguous", reason))
-            .collect();
+        let sections = detect_stacked_sections(&tabular);
 
-        // Ambiguous or fewer than two clean sections: a plain CSV is a single
-        // table, emitted as a LEAF `tabular_v1` artifact with no children.
-        if is_ambiguous || detection.sections.len() < 2 {
+        // Fewer than two qualifying regions: a plain CSV is a single table,
+        // emitted as a LEAF `tabular_v1` artifact with no children.
+        if sections.len() < 2 {
             let bytes = serde_json::to_vec(&tabular)
                 .map_err(|err| BinocError::Other(format!("serialize tabular artifact: {err}")))?;
             return Ok(ParseOutput {
                 bytes,
-                diagnostics,
+                diagnostics: Vec::new(),
                 children: Vec::new(),
                 artifacts: Vec::new(),
                 projection: ProjectionHint::default(),
             });
         }
 
-        // Two or more clean stacked tables: a CONTAINER parse — no parent
+        // Two or more qualifying stacked regions: a CONTAINER parse — no parent
         // artifact, one `tabular_v1` child node per detected section.
-        let children = children_from_sections(&item.logical_path, &detection.sections);
+        let children = children_from_sections(&item.logical_path, &sections);
         Ok(ParseOutput {
             bytes: Vec::new(),
-            diagnostics,
+            diagnostics: Vec::new(),
             children,
             artifacts: Vec::new(),
             projection: ProjectionHint::default().item_type("stacked tables"),
@@ -732,148 +726,73 @@ fn parse_csv_bytes(bytes: &[u8], delimiter: u8) -> BinocResult<TabularData> {
 
 #[derive(Debug, Clone)]
 struct StackedSection {
-    title: Option<String>,
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
 }
 
-#[derive(Debug, Clone)]
-struct StackedDetection {
-    sections: Vec<StackedSection>,
-    ambiguous_reason: Option<Summary>,
-}
-
-fn detect_stacked_sections(table: &TabularData) -> StackedDetection {
-    let rows = raw_rows(table);
-    let mut sections = Vec::new();
-    let mut wide_unclaimed = Vec::new();
-    let mut i = 0;
-
-    while i < rows.len() {
-        let mut title_rows = Vec::new();
-        while i < rows.len() {
-            let width = normalized_width(&rows[i]);
-            if width == 0 {
-                i += 1;
-            } else if width == 1 {
-                title_rows.push(i);
-                i += 1;
-            } else {
-                break;
-            }
-        }
-        if i >= rows.len() {
-            break;
-        }
-
-        let width = normalized_width(&rows[i]);
-        if width < 2 || !looks_like_header(&rows[i]) {
-            if width > 1 {
-                wide_unclaimed.push(i + 1);
-            }
-            i += 1;
-            continue;
-        }
-
-        let header_row = i;
-        let headers = trim_to_width(&rows[header_row], width);
-        let mut section_rows = Vec::new();
-        let mut j = i + 1;
-        while j < rows.len() {
-            let row_width = normalized_width(&rows[j]);
-            if row_width == 0 || row_width != width {
-                break;
-            }
-            let row = trim_to_width(&rows[j], width);
-            if row != headers {
-                section_rows.push(row);
-            }
-            j += 1;
-        }
-
-        if section_rows.is_empty() {
-            wide_unclaimed.push(header_row + 1);
-            i = header_row + 1;
-            continue;
-        }
-
-        sections.push(StackedSection {
-            title: title_from_rows(&rows, &title_rows),
-            headers,
-            rows: section_rows,
-        });
-        i = j;
-    }
-
-    // Only treat unclaimed wide rows as a genuine ambiguous *stacked* layout
-    // when there is positive evidence of stacking beyond the row-width
-    // heuristic: at least one section is introduced by a banner/title row (a
-    // width-1 caption above its header). A plain flat table with a few ragged
-    // rows can otherwise be chopped into header-led "sections" whose "headers"
-    // are really data rows — that is not a stacked layout and must not surface
-    // the splitter suggestion (false positive on showcase brfss-prevalence /
-    // fda-purple-book flat tables, neither of which carries banner rows).
-    let looks_genuinely_stacked =
-        sections.len() >= 2 && sections.iter().any(|section| section.title.is_some());
-    let ambiguous_reason = if looks_genuinely_stacked && !wide_unclaimed.is_empty() {
-        let plural = if wide_unclaimed.len() == 1 { "" } else { "s" };
-        let mut summary = Summary::new().text(format!(
-            "The CSV has stacked table-like regions, but row{plural} "
-        ));
-        summary.extend(bounded_index_list(&wide_unclaimed));
-        Some(summary.text(" outside any clear rectangle; leaving it as one table."))
-    } else {
-        None
-    };
-
-    StackedDetection {
-        sections,
-        ambiguous_reason,
-    }
-}
-
-/// Maximum number of concrete row indices listed inline in a diagnostic
-/// message before the rest are summarized as a remaining count, so a large
-/// input can never produce an unbounded message string.
-const MAX_INLINE_INDICES: usize = 5;
-
-/// Render a list of 1-based row indices as typed [`Summary`] segments for inline
-/// use in a diagnostic message, capped at [`MAX_INLINE_INDICES`] concrete
-/// entries (each a digit-grouped [`Segment::Uint`]) plus an `and N more` suffix.
-/// Keeps per-row diagnostic messages bounded on large inputs.
-fn bounded_index_list(indices: &[usize]) -> Summary {
-    let mut summary = Summary::new();
-    for (position, index) in indices.iter().take(MAX_INLINE_INDICES).enumerate() {
-        if position > 0 {
-            summary = summary.text(", ");
-        }
-        summary = summary.uint(*index as u64);
-    }
-    if indices.len() > MAX_INLINE_INDICES {
-        summary = summary
-            .text(", and ")
-            .uint((indices.len() - MAX_INLINE_INDICES) as u64)
-            .text(" more");
-    }
-    summary
-}
-
-/// Build one `tabular_v1` child node per detected stacked section.
+/// Split a CSV into stacked sub-tables, or report it as a single flat table.
 ///
-/// Child name is the section title where one was detected (sanitized to a stable
-/// token), else a positional `table_N` fallback. Names are de-duplicated so the
-/// resulting `/>`-joined logical paths stay unique.
+/// This is an intentionally **conservative placeholder**, not a real
+/// table-discovery algorithm. Its sole job is to stop the previous heuristic
+/// from shredding flat tables: it fires only on an obvious, unambiguous stack
+/// and otherwise leaves the file as one table. A proper implementation (handling
+/// preamble, footnotes, ragged real-world data, fixed-width layouts, etc.) is
+/// future work — see `docs/core-developers/research/csv-table-extraction.md`
+/// (the ExtracTable / Pytheas survey) for the planned approach.
+///
+/// The rule: partition the rows into **regions** of consecutive rows sharing the
+/// same [`normalized_width`]. Blank rows (`normalized_width == 0`) are
+/// transparent — they neither start, extend, nor break a region. The file is a
+/// stack only if there are between 2 and 5 regions inclusive and every region
+/// has more than 10 rows (≥ 11, counting its header). When it qualifies, each
+/// region's first row is the header and the rest are data rows, trimmed to the
+/// region width. Otherwise an empty `Vec` is returned (a single flat table).
+fn detect_stacked_sections(table: &TabularData) -> Vec<StackedSection> {
+    let rows = raw_rows(table);
+
+    // Partition into regions of consecutive same-width rows, skipping blanks.
+    let mut regions: Vec<Vec<Vec<String>>> = Vec::new();
+    let mut current_width: Option<usize> = None;
+    for row in &rows {
+        let width = normalized_width(row);
+        if width == 0 {
+            // Blank rows are transparent.
+            continue;
+        }
+        if current_width == Some(width) {
+            regions
+                .last_mut()
+                .expect("current_width set implies a region exists")
+                .push(trim_to_width(row, width));
+        } else {
+            current_width = Some(width);
+            regions.push(vec![trim_to_width(row, width)]);
+        }
+    }
+
+    // Qualify: 2..=5 regions, each with more than 10 rows (header included).
+    if !(2..=5).contains(&regions.len()) || regions.iter().any(|region| region.len() <= 10) {
+        return Vec::new();
+    }
+
+    regions
+        .into_iter()
+        .map(|mut region| {
+            let headers = region.remove(0);
+            StackedSection {
+                headers,
+                rows: region,
+            }
+        })
+        .collect()
+}
+
+/// Build one `tabular_v1` child node per detected stacked section, named
+/// positionally `table_1`, `table_2`, ….
 fn children_from_sections(parent_path: &str, sections: &[StackedSection]) -> Vec<ParsedChild> {
     let mut children = Vec::new();
-    let mut used_names: BTreeSet<String> = BTreeSet::new();
     for (index, section) in sections.iter().enumerate() {
-        let base = section
-            .title
-            .as_deref()
-            .map(sanitize_name)
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| format!("table_{}", index + 1));
-        let name = unique_name(base, &mut used_names);
+        let name = format!("table_{}", index + 1);
         let logical_path = decompose_child(parent_path, &name);
         let table = TabularData::from_string_rows(section.headers.clone(), section.rows.clone());
         let bytes = serde_json::to_vec(&table)
@@ -895,38 +814,6 @@ fn children_from_sections(parent_path: &str, sections: &[StackedSection]) -> Vec
         });
     }
     children
-}
-
-/// Reduce a detected section title to a stable, path-safe token: ASCII
-/// alphanumerics kept, every other run collapsed to a single `_`.
-fn sanitize_name(title: &str) -> String {
-    let mut out = String::new();
-    let mut last_underscore = false;
-    for ch in title.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-            last_underscore = false;
-        } else if !last_underscore {
-            out.push('_');
-            last_underscore = true;
-        }
-    }
-    out.trim_matches('_').to_string()
-}
-
-/// Ensure `base` is unique within `used`, appending `_2`, `_3`, … on collision.
-fn unique_name(base: String, used: &mut BTreeSet<String>) -> String {
-    if used.insert(base.clone()) {
-        return base;
-    }
-    let mut suffix = 2;
-    loop {
-        let candidate = format!("{base}_{suffix}");
-        if used.insert(candidate.clone()) {
-            return candidate;
-        }
-        suffix += 1;
-    }
 }
 
 fn raw_rows(table: &TabularData) -> Vec<Vec<String>> {
@@ -957,111 +844,99 @@ fn trim_to_width(row: &[String], width: usize) -> Vec<String> {
         .collect()
 }
 
-fn looks_like_header(row: &[String]) -> bool {
-    let width = normalized_width(row);
-    if width < 2 {
-        return false;
-    }
-    let cells = trim_to_width(row, width);
-    let non_empty = cells.iter().filter(|cell| !cell.is_empty()).count();
-    if non_empty < 2 {
-        return false;
-    }
-    let unique = cells
-        .iter()
-        .filter(|cell| !cell.is_empty())
-        .collect::<BTreeSet<_>>();
-    if unique.len() != non_empty {
-        return false;
-    }
-    let numericish = cells.iter().filter(|cell| is_numericish(cell)).count();
-    numericish * 2 < non_empty
-}
-
-fn is_numericish(cell: &str) -> bool {
-    let trimmed = cell.trim();
-    !trimmed.is_empty()
-        && trimmed
-            .chars()
-            .all(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | ',' | '$' | '%'))
-}
-
-fn title_from_rows(rows: &[Vec<String>], title_rows: &[usize]) -> Option<String> {
-    let parts = title_rows
-        .iter()
-        .filter_map(|index| rows.get(*index)?.first())
-        .map(|cell| cell.trim())
-        .filter(|cell| !cell.is_empty())
-        .collect::<Vec<_>>();
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts.join(" / "))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn detect(csv: &str) -> StackedDetection {
+    fn detect(csv: &str) -> Vec<StackedSection> {
         let table = parse_csv_bytes(csv.as_bytes(), b',').expect("parse csv");
         detect_stacked_sections(&table)
     }
 
+    /// Build a CSV body of `count` rows, each `width` comma-separated cells,
+    /// the first row a header. Cell values are unique enough to be valid rows.
+    fn region(prefix: &str, width: usize, count: usize) -> String {
+        let mut out = String::new();
+        let header: Vec<String> = (0..width).map(|c| format!("{prefix}_h{c}")).collect();
+        out.push_str(&header.join(","));
+        out.push('\n');
+        for r in 0..count.saturating_sub(1) {
+            let cells: Vec<String> = (0..width).map(|c| format!("{prefix}_{r}_{c}")).collect();
+            out.push_str(&cells.join(","));
+            out.push('\n');
+        }
+        out
+    }
+
     #[test]
-    fn flat_wide_csv_does_not_emit_ambiguous_suggestion() {
-        // A plain flat table whose mostly-unique text rows let the width
-        // heuristic chop it into header-led "sections" (the second "header" is
-        // really a data row) and strand a couple of ragged rows. With no banner
-        // rows it is not a stacked layout, so no splitter suggestion fires.
+    fn flat_ragged_csv_is_not_stacked() {
+        // A plain flat table with a few ragged rows (brfss / fda shape). Width
+        // varies row-to-row, so it never forms 2..=5 fat uniform regions: a
+        // single flat table, no splitting.
         let csv = "State,Topic,Response,Break_Out,Sample_Size\n\
                    Alabama,Health Status,Excellent,Overall,1234\n\
                    Alaska,Diabetes,Yes,Age 18-24,extra,cell\n\
                    Arizona,Smoking,Current,Female,Male,Other,More\n\
                    Arkansas,Health Status,Good,Overall,2345\n\
                    California,Diabetes,No,Age 25-34,3456\n";
-        let detection = detect(csv);
-        // The heuristic still chops it (multiple sections, stray wide rows) ...
-        assert!(detection.sections.len() >= 2);
-        // ... but with no banner rows it must not surface as ambiguous.
-        assert!(
-            detection.ambiguous_reason.is_none(),
-            "flat table wrongly flagged ambiguous: {:?}",
-            detection.ambiguous_reason
-        );
+        assert!(detect(csv).is_empty());
     }
 
     #[test]
-    fn genuinely_stacked_csv_still_emits_ambiguous_suggestion() {
-        // Banner row ("Report") above the first table is positive evidence of a
-        // stacked layout; with a stray wide row it stays genuinely ambiguous.
-        let csv = "Report\nA,B\n1,2\n\n100,200,300\nC,D\n3,4\n";
-        let detection = detect(csv);
-        let reason = detection
-            .ambiguous_reason
-            .expect("genuinely stacked CSV should stay ambiguous");
-        assert!(
-            reason.plain_text().contains("outside any clear rectangle"),
-            "{reason}"
+    fn flat_rectangular_csv_is_not_stacked() {
+        // A uniform-width table (with an internal blank line) is one region, so
+        // it is not a stack even though it is large.
+        let mut csv = region("a", 4, 30);
+        csv.push('\n'); // transparent blank line inside the single region
+        csv.push_str(
+            &region("b", 4, 5)
+                .lines()
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join("\n"),
         );
+        let sections = detect(&csv);
+        assert!(sections.is_empty(), "single-width file must stay flat");
     }
 
     #[test]
-    fn bounded_index_list_caps_inline_indices() {
-        assert_eq!(bounded_index_list(&[3]).plain_text(), "3");
-        assert_eq!(bounded_index_list(&[3, 4, 5]).plain_text(), "3, 4, 5");
-        // More than the cap collapses the tail into a remaining count so the
-        // message can never grow unbounded on large inputs.
-        let many: Vec<usize> = (1..=12).collect();
+    fn genuine_two_region_stack_splits() {
+        // Region A: width 3, 12 rows. Blank line. Region B: width 5, 14 rows.
+        let mut csv = region("a", 3, 12);
+        csv.push('\n');
+        csv.push_str(&region("b", 5, 14));
+        let sections = detect(&csv);
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].headers, vec!["a_h0", "a_h1", "a_h2"]);
+        assert_eq!(sections[0].rows.len(), 11);
         assert_eq!(
-            bounded_index_list(&many).plain_text(),
-            "1, 2, 3, 4, 5, and 7 more",
-            "expected a capped list with a remaining count"
+            sections[1].headers,
+            vec!["b_h0", "b_h1", "b_h2", "b_h3", "b_h4"]
         );
-        // Indices are typed `Uint` segments, so a renderer digit-groups them
-        // rather than reparsing prose — a five-digit row index stays a count.
-        let big = bounded_index_list(&[12345]);
-        assert_eq!(big.segments(), &[binoc_sdk::Segment::Uint(12345)]);
+        assert_eq!(sections[1].rows.len(), 13);
+    }
+
+    #[test]
+    fn regions_with_too_few_rows_are_not_stacked() {
+        // Two regions of different widths but each only 8 rows (≤ 10): below the
+        // size floor, so not a stack.
+        let mut csv = region("a", 3, 8);
+        csv.push('\n');
+        csv.push_str(&region("b", 5, 8));
+        assert!(detect(&csv).is_empty());
+    }
+
+    #[test]
+    fn more_than_five_regions_is_not_stacked() {
+        // Six fat regions of alternating widths exceeds the 5-region cap.
+        let widths = [3usize, 4, 3, 4, 3, 4];
+        let mut csv = String::new();
+        for (i, w) in widths.iter().enumerate() {
+            if i > 0 {
+                csv.push('\n');
+            }
+            csv.push_str(&region(&format!("r{i}"), *w, 12));
+        }
+        assert!(detect(&csv).is_empty());
     }
 }

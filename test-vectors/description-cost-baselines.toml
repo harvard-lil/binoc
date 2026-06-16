@@ -442,8 +442,8 @@ edit_cost = 0
 
 [[vectors.links]]
 index = 2
-left_path = "data.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations"
-right_path = "data.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations"
+left_path = "data.csv/>table_1"
+right_path = "data.csv/>table_1"
 evidence = "binoc.pair.hash"
 proposer = "binoc.pair.hash"
 settled = true

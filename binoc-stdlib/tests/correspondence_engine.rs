@@ -105,6 +105,7 @@ fn settled_archive_link_short_circuits_expansion_and_parse() {
     let config = binoc_stdlib::correspondence::engine_config_with_options(
         binoc_stdlib::correspondence::CorrespondenceOptions {
             expand_renamed_unchanged_collections: false,
+            ..Default::default()
         },
     );
 
@@ -665,7 +666,7 @@ fn unsafe_zip_entry_skip_surfaces_diagnostic() {
     let config = CorrespondenceEngineConfig {
         rules: vec![
             CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
-            CoreRule::Expand(Arc::new(expand::ZipExpand)),
+            CoreRule::Expand(Arc::new(expand::ZipExpand::default())),
             CoreRule::Pair(Arc::new(pair::RootPair)),
         ],
         writers: vec![Arc::new(writers::FallbackWriter)],
@@ -682,6 +683,118 @@ fn unsafe_zip_entry_skip_surfaces_diagnostic() {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == "binoc.archive_entry_skipped"));
+}
+
+/// A tiny configured cap below the real entry size makes expansion overflow,
+/// which the engine surfaces as a `binoc.rule.expand_failed` error diagnostic
+/// (and degrades the node to a binary diff) — never a silent partial expand.
+#[test]
+fn low_archive_cap_triggers_overflow_diagnostic() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    // 64 bytes of payload, well over the 8-byte cap below.
+    let payload = vec![b'a'; 64];
+    write_zip_with_entries(&left.join("archive.zip"), &[("data.txt", &payload)]);
+    write_zip_with_entries(&right.join("archive.zip"), &[("data.txt", &payload)]);
+
+    let tiny_caps = expand::ExpandCaps {
+        gzip_max_bytes: 8,
+        archive_max_entry_bytes: 8,
+        archive_max_total_bytes: 8,
+    };
+    let config = CorrespondenceEngineConfig {
+        rules: vec![
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::ZipExpand { caps: tiny_caps })),
+            CoreRule::Pair(Arc::new(pair::RootPair)),
+            CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+        ],
+        writers: vec![Arc::new(writers::FallbackWriter)],
+        compaction: vec![],
+        annotators: vec![],
+        identity_extractors: vec![],
+        row_keys: Default::default(),
+        row_identity_policies: Default::default(),
+        root_projection: ProjectionHint::default().item_type("directory"),
+        dataset_configurator: None,
+    };
+    let changeset = diff_with_config(&left, &right, config);
+    let overflow = changeset
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code == "binoc.rule.expand_failed"
+                && diagnostic.severity == DiagnosticSeverity::Error
+        })
+        .expect("cap overflow should surface an expand_failed error");
+    let message = overflow.message.plain_text();
+    assert!(
+        message.contains("decompression cap") && message.contains("max_archive_entry_bytes"),
+        "overflow message should name the raisable knob: {message:?}"
+    );
+}
+
+/// The same archive that a low cap rejects expands cleanly once the cap is
+/// raised above the real entry size — proving the cap is the only gate.
+#[test]
+fn raised_archive_cap_allows_expansion() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    write_zip_with_entries(
+        &left.join("archive.zip"),
+        &[("data.txt", b"old contents\n")],
+    );
+    write_zip_with_entries(
+        &right.join("archive.zip"),
+        &[("data.txt", b"new contents\n")],
+    );
+
+    // A cap of 4 KiB sits comfortably above the ~13-byte entries; the same
+    // archive would be rejected by an 8-byte cap (see the test above).
+    let caps = expand::ExpandCaps {
+        gzip_max_bytes: 4096,
+        archive_max_entry_bytes: 4096,
+        archive_max_total_bytes: 4096,
+    };
+    let config = CorrespondenceEngineConfig {
+        rules: vec![
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::ZipExpand { caps })),
+            CoreRule::Pair(Arc::new(pair::RootPair)),
+            CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
+            CoreRule::Parse(Arc::new(parse::CsvParse)),
+        ],
+        writers: vec![
+            Arc::new(writers::TextWriter),
+            Arc::new(writers::FallbackWriter),
+        ],
+        compaction: vec![],
+        annotators: vec![],
+        identity_extractors: vec![],
+        row_keys: Default::default(),
+        row_identity_policies: Default::default(),
+        root_projection: ProjectionHint::default().item_type("directory"),
+        dataset_configurator: None,
+    };
+    let changeset = diff_with_config(&left, &right, config);
+    assert!(
+        !changeset
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "binoc.rule.expand_failed"),
+        "raised cap should not overflow: {:?}",
+        changeset.diagnostics
+    );
+    // The inner file expanded and is visible as a decompose child of the zip.
+    let root = changeset.root.expect("root");
+    let inner = find(&root, "archive.zip/>data.txt").expect("expanded inner file");
+    assert_eq!(inner.action, "modify");
 }
 
 #[test]
@@ -816,20 +929,28 @@ fn stacked_csv_decomposes_into_table_children() {
 }
 
 #[test]
-fn ambiguous_stacked_csv_surfaces_splitter_suggestion_and_falls_back_to_tabular() {
+fn flat_ragged_csv_stays_single_table_and_does_not_split() {
+    // Regression test for the over-splitting bug: a flat, ragged real-world
+    // table (brfss / fda shape — varying row widths, text-y "header-like" data
+    // rows) must stay ONE `tabular` node. The old width-change heuristic shredded
+    // such files into many positional `table_N` children that then mis-paired
+    // across snapshots; the conservative placeholder leaves them intact.
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
     let right = temp.path().join("right");
     fs::create_dir_all(&left).unwrap();
     fs::create_dir_all(&right).unwrap();
-    fs::write(
-        left.join("data.csv"),
-        "Report\nA,B\n1,2\n\n100,200,300\nC,D\n3,4\n",
-    )
-    .unwrap();
+    let flat = "State,Topic,Response,Break_Out,Sample_Size\n\
+                Alabama,Health Status,Excellent,Overall,1234\n\
+                Alaska,Diabetes,Yes,Age 18-24,extra,cell\n\
+                Arizona,Smoking,Current,Female,Male,Other,More\n\
+                Arkansas,Health Status,Good,Overall,2345\n\
+                California,Diabetes,No,Age 25-34,3456\n";
+    fs::write(left.join("data.csv"), flat).unwrap();
     fs::write(
         right.join("data.csv"),
-        "Report\nA,B\n1,2\n\n100,200,300\nC,D\n9,5\n",
+        // One cell edit, otherwise identical shape.
+        flat.replace("Excellent", "Very Good"),
     )
     .unwrap();
 
@@ -842,22 +963,23 @@ fn ambiguous_stacked_csv_surfaces_splitter_suggestion_and_falls_back_to_tabular(
     assert_eq!(result.stats.fires_of("binoc.parse.csv"), 2);
     let mut changeset = result.project().to_changeset("snapshot-a", "snapshot-b");
     changeset.diagnostics.extend(result.diagnostics);
+    // No splitter diagnostic of any kind survives.
     assert!(
-        changeset.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == "binoc.table_splitter.ambiguous"
-                && diagnostic.severity == DiagnosticSeverity::Suggestion
-                && diagnostic
-                    .message
-                    .plain_text()
-                    .contains("outside any clear rectangle")
-        }),
-        "diagnostics: {:?}",
+        !changeset
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.starts_with("binoc.table_splitter")),
+        "unexpected splitter diagnostic: {:?}",
         changeset.diagnostics
     );
     let root = changeset.root.expect("root");
     let node = find(&root, "data.csv").expect("data.csv");
+    // A single flat tabular node, with no decomposed `table_N` children.
     assert_eq!(node.item_type, "tabular");
-    assert!(node.tags.contains("binoc.cell-change"));
+    assert!(
+        find(&root, "data.csv/>table_1").is_none(),
+        "flat table was wrongly split into children"
+    );
 }
 
 #[test]

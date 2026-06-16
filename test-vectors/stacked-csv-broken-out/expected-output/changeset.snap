@@ -17,7 +17,7 @@ expression: "&stable_changeset"
         "path": "changes.csv",
         "sources": [
           {
-            "path": "report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations",
+            "path": "report.csv/>table_1",
             "side": "from",
             "evidence": "binoc.pair.tabular",
             "action": "move"
@@ -29,7 +29,7 @@ expression: "&stable_changeset"
           },
           {
             "path": {
-              "value": "report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations",
+              "value": "report.csv/>table_1",
               "snapshot": "from"
             }
           }

@@ -4,6 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **changes.csv**: Moved from report.csv/>purple_book_monthly_report_approved_drug_products_with_therapeutic_equivalence_evaluations
+- **changes.csv**: Moved from report.csv/>table_1
 - **products.csv**: Reshaped from report.csv (stacked tables → tabular)
 - **report.csv/>table_2**: Removed

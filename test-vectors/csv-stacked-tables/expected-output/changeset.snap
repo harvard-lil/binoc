@@ -40,15 +40,15 @@ expression: "&stable_changeset"
               "edits": [
                 {
                   "params": {
-                    "index": 2,
+                    "index": 11,
                     "values": {
                       "total_values": 4,
                       "truncated": false,
                       "values": [
-                        "761003",
-                        "Gamma",
-                        "Core Pharma",
-                        "2026-03-05"
+                        "761012",
+                        "Mu",
+                        "Mu Pharma",
+                        "2026-12-08"
                       ]
                     }
                   },
