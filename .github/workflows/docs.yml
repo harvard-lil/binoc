@@ -30,6 +30,24 @@ jobs:
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
+      # The browser-demo wasm build compiles bundled SQLite (rusqlite) for
+      # wasm32-wasip1, which needs a WASI sysroot and a wasm-targeting clang.
+      # The WASI SDK bundles both. The justfile's docs-browser-demo recipe
+      # picks these up via WASI_SYSROOT / CC_wasm32_wasip1 (consumed by the
+      # `cc` crate); locally they come from `brew install wasi-libc llvm`.
+      - name: Install WASI SDK (for the SQLite browser-demo wasm build)
+        run: |
+          set -euo pipefail
+          tag=wasi-sdk-33
+          asset=wasi-sdk-33.0-x86_64-linux
+          curl -fsSL -o /tmp/wasi-sdk.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/${tag}/${asset}.tar.gz"
+          sudo mkdir -p /opt/wasi-sdk
+          sudo tar -xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+          echo "WASI_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot" >> "$GITHUB_ENV"
+          echo "CC_wasm32_wasip1=/opt/wasi-sdk/bin/clang" >> "$GITHUB_ENV"
+          echo "AR_wasm32_wasip1=/opt/wasi-sdk/bin/llvm-ar" >> "$GITHUB_ENV"
+
       # Regenerate every docs input the same way contributors do locally, so
       # CI and local flows stay in lockstep. See ADR
       # 2026-04-17-documentation_platform_and_info_design.md §6.
