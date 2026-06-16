@@ -34,6 +34,13 @@ default-members = [
 ]
 resolver = "2"
 
+# Optimized build that keeps symbols + line numbers for sampling profilers
+# (samply). Use via `cargo build --profile profiling` or `just profile-diff`;
+# see docs/core-developers/howto/performance-optimization.md.
+[profile.profiling]
+inherits = "release"
+debug = "line-tables-only"
+
 [workspace.package]
 version = "0.2.0"
 edition = "2021"

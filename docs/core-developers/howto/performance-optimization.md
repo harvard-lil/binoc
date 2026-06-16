@@ -94,6 +94,34 @@ The report includes `resources.user_cpu_ms`, `resources.system_cpu_ms`,
 `max_rss_kb` is the process high-water mark after the run; use `--mode serial`
 or `--mode parallel_parse` when you need single-mode attribution.
 
+## Drill into a hot phase with a sampling profiler
+
+`perf_report` attributes time to *phases* (`expand_ms`, `parse_ms`, `pair_ms`)
+and to each rule (`rule_elapsed_nanos`). That is enough to tell you *which phase*
+dominates, but not *which function* inside it. When a phase looks pathological,
+switch to a sampling profiler for function-level attribution. The two tools
+compose: **`just perf` finds the hot phase; the profiler finds the hot
+function.**
+
+```bash
+just profile-diff data/snapshots/foo/2025-01 data/snapshots/foo/2025-02
+just profile-diff LEFT RIGHT path/to/dataset.binoc.yaml   # with a config
+```
+
+`profile-diff` builds the native `binoc-cli` under the `profiling` Cargo profile
+(release optimizations plus line-table symbols, so the flame graph is readable
+without distorting timings) and records it with
+[samply](https://github.com/mstange/samply), which opens the Firefox Profiler
+UI. Install once with `cargo install samply`.
+
+Profile the **real CLI command**, not `perf_report`: `perf_report` always runs
+the default engine config, so it cannot measure a keyed/`--config` run — the
+exact path most likely to be slow on real data. Reach for sampling when phase
+metrics point at one phase but not at one rule, when the cost is suspected in
+shared helpers (CSV field parsing, row-key construction, changeset
+serialization) that span rules, or when wall time is large but per-rule numbers
+look unremarkable.
+
 ## Scaling dimensions
 
 The synthetic fixture has three knobs:

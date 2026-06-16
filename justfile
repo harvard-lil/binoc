@@ -40,6 +40,18 @@ lint:
 perf *ARGS:
     cargo run --release -q -p binoc-stdlib --bin perf_report -- {{ARGS}}
 
+# Sample a real `binoc diff` with a profiler to find the hot *function* once
+# `just perf` has shown the hot *phase*. Builds the native CLI with the
+# `profiling` profile (release + line-table symbols) and records with samply,
+# which opens the Firefox Profiler UI. Requires samply (`cargo install samply`).
+#
+#   just profile-diff LEFT RIGHT                 # default config
+#   just profile-diff LEFT RIGHT path/to.yaml    # with a dataset config
+profile-diff LEFT RIGHT CONFIG="":
+    command -v samply >/dev/null || {{ '{ echo "samply not found; run: cargo install samply" >&2; exit 1; }' }}
+    cargo build --profile profiling -q -p binoc-cli
+    samply record -- ./target/profiling/binoc-cli diff {{ if CONFIG != "" { "--config " + CONFIG } else { "" } }} {{LEFT}} {{RIGHT}} --format json -q
+
 # Run all tests: Rust crates + Python binding tests.
 # Note: no --all-features here. The test-vectors feature is already activated via
 # dev-dependencies, and --all-features would enable binoc-sqlite's "python" feature,
