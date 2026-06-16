@@ -205,18 +205,12 @@ impl CorrespondenceRunResult {
         })?;
         let link = self.store.links.link(link_index);
         let view = CoreEngineView::new(&self.store, false);
-        let link_ref = view.link_ref(link_index);
-        let path = &self.store.right.node(link.right).item.logical_path;
-        let ctx = LinkCtx {
-            view: &view,
-            link: link_ref,
-            row_keys: config.row_keys.get(path).map(Vec::as_slice).unwrap_or(&[]),
-            row_identity_policies: config
-                .row_identity_policies
-                .get(path)
-                .copied()
-                .unwrap_or_default(),
-        };
+        let ctx = link_ctx(
+            &view,
+            view.link_ref(link_index),
+            &self.store.right.node(link.right).item.logical_path,
+            config,
+        );
         let edits = self
             .edit_lists
             .get(&link_index)
@@ -349,21 +343,15 @@ fn run_inner(
     let mut expanded: BTreeSet<(u8, u32)> = BTreeSet::new();
     // A *successful* parse memoizes per (node, output format): first claim wins
     // for that format on that node, so no other same-format rule re-parses it.
-    let mut parsed: BTreeSet<(u8, u32, binoc_sdk::ArtifactFormat)> = BTreeSet::new();
+    let mut parsed: BTreeSet<ParseClaim> = BTreeSet::new();
     // A *declined* parse memoizes per (node, output format, RULE) so the same
     // rule is not retried, while leaving the format free for a different rule.
     // This is what lets a fusing claim decline a bare/invalid group and still
     // have the single-input parser (same output format) claim the node (CFM-83).
-    let mut declined: BTreeSet<(u8, u32, binoc_sdk::ArtifactFormat, String)> = BTreeSet::new();
+    let mut declined: BTreeSet<Decline> = BTreeSet::new();
 
     fn key(side: TreeSide, index: u32) -> (u8, u32) {
-        (
-            match side {
-                TreeSide::Left => 0,
-                TreeSide::Right => 1,
-            },
-            index,
-        )
+        (side_code(side), index)
     }
 
     // Per-round rule processing order (CFM-83). Parse rules are attempted
@@ -510,19 +498,13 @@ fn run_inner(
                     let mut jobs = Vec::new();
                     for side in [TreeSide::Left, TreeSide::Right] {
                         for index in 0..frontier_of(side) {
-                            let parsed_key = (key(side, index).0, index, descriptor.output.clone());
-                            if parsed.contains(&parsed_key) {
+                            let claim = ParseClaim::new(side, index, descriptor.output.clone());
+                            if parsed.contains(&claim) {
                                 continue;
                             }
                             // This rule already declined this node — don't retry
                             // it (but a different same-format rule still may).
-                            let declined_key = (
-                                parsed_key.0,
-                                parsed_key.1,
-                                parsed_key.2.clone(),
-                                descriptor.name.clone(),
-                            );
-                            if declined.contains(&declined_key) {
+                            if declined.contains(&claim.declined_by(&descriptor.name)) {
                                 continue;
                             }
                             // A node already folded into a fusing result node is
@@ -566,7 +548,7 @@ fn run_inner(
                             }
                             jobs.push(ParseJob {
                                 id,
-                                parsed_key,
+                                claim,
                                 beneath,
                                 group,
                                 member_indices,
@@ -595,12 +577,7 @@ fn run_inner(
                                 );
                                 // Rule-scoped: an erroring rule does not block a
                                 // different same-format rule from trying the node.
-                                declined.insert((
-                                    result.parsed_key.0,
-                                    result.parsed_key.1,
-                                    result.parsed_key.2.clone(),
-                                    descriptor.name.clone(),
-                                ));
+                                declined.insert(result.claim.declined_by(&descriptor.name));
                                 continue;
                             }
                         };
@@ -619,12 +596,7 @@ fn run_inner(
                         // shapefile fusing claim to release a bare/invalid group to
                         // the single-input parser (CFM-83).
                         if output.bytes.is_empty() && output.children.is_empty() {
-                            declined.insert((
-                                result.parsed_key.0,
-                                result.parsed_key.1,
-                                result.parsed_key.2.clone(),
-                                descriptor.name.clone(),
-                            ));
+                            declined.insert(result.claim.declined_by(&descriptor.name));
                             continue;
                         }
                         // Let the parse rule name the node it just decomposed
@@ -702,7 +674,7 @@ fn run_inner(
                                 .tree_mut(result.id.side)
                                 .subsume(member_index, result.id.index);
                         }
-                        parsed.insert(result.parsed_key);
+                        parsed.insert(result.claim);
                         stats.record_fire(
                             round,
                             &descriptor.name,
@@ -871,14 +843,7 @@ fn run_inner(
         trace.as_deref_mut(),
     )?;
 
-    compact_edit_lists(
-        config,
-        &store,
-        &mut edit_lists,
-        &mut stats,
-        data,
-        trace.as_deref_mut(),
-    )?;
+    compact_edit_lists(config, &store, &mut edit_lists, &mut stats, data, trace)?;
 
     Ok(CorrespondenceRunResult {
         store,
@@ -888,6 +853,31 @@ fn run_inner(
         claims,
         stats,
     })
+}
+
+/// Build a `LinkCtx` for one link. Centralizes the per-link row-key and
+/// row-identity-policy lookups (keyed on the right node's logical path) that
+/// every writer/compaction/extract dispatch needs.
+fn link_ctx<'a>(
+    view: &'a dyn EngineView,
+    link: LinkRef,
+    right_path: &str,
+    config: &'a CorrespondenceEngineConfig,
+) -> LinkCtx<'a> {
+    LinkCtx {
+        view,
+        link,
+        row_keys: config
+            .row_keys
+            .get(right_path)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+        row_identity_policies: config
+            .row_identity_policies
+            .get(right_path)
+            .copied()
+            .unwrap_or_default(),
+    }
 }
 
 fn build_edit_lists(
@@ -936,20 +926,12 @@ fn build_edit_lists(
             edit_lists.insert(index, Vec::new());
             continue;
         };
-        let ctx = LinkCtx {
-            view: &view,
-            link: link_ref,
-            row_keys: config
-                .row_keys
-                .get(&store.right.node(link.right).item.logical_path)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]),
-            row_identity_policies: config
-                .row_identity_policies
-                .get(&store.right.node(link.right).item.logical_path)
-                .copied()
-                .unwrap_or_default(),
-        };
+        let ctx = link_ctx(
+            &view,
+            link_ref,
+            &store.right.node(link.right).item.logical_path,
+            config,
+        );
 
         // Dispatch composes, then selects (CFM-81). The link's edit list is
         // the concatenation of:
@@ -1065,20 +1047,12 @@ fn compact_edit_lists(
                 continue;
             }
             let link = store.links.link(*link_index);
-            let ctx = LinkCtx {
-                view: &view,
-                link: view.link_ref(*link_index),
-                row_keys: config
-                    .row_keys
-                    .get(&store.right.node(link.right).item.logical_path)
-                    .map(Vec::as_slice)
-                    .unwrap_or(&[]),
-                row_identity_policies: config
-                    .row_identity_policies
-                    .get(&store.right.node(link.right).item.logical_path)
-                    .copied()
-                    .unwrap_or_default(),
-            };
+            let ctx = link_ctx(
+                &view,
+                view.link_ref(*link_index),
+                &store.right.node(link.right).item.logical_path,
+                config,
+            );
             // Format-scoped compaction (CFM-81): a rule that declares a
             // `format()` sees and rewrites only the provenance-scoped segment
             // of that format, never the whole mixed list. A rule with no
@@ -1160,12 +1134,56 @@ fn run_expand_jobs(
     }
 }
 
+/// Stable side encoding (`Left = 0`, `Right = 1`) used as the leading sort key
+/// for node-scoped memoization sets.
+fn side_code(side: TreeSide) -> u8 {
+    match side {
+        TreeSide::Left => 0,
+        TreeSide::Right => 1,
+    }
+}
+
+/// Memoization key for a *successful* parse: first claim wins per (node, output
+/// format), so no other same-format rule re-parses that node.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ParseClaim {
+    side: u8,
+    index: u32,
+    format: ArtifactFormat,
+}
+
+/// Memoization key for a *declined* parse: scoped to the rule, so the same rule
+/// is not retried while the output format stays free for a different rule
+/// (CFM-83).
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Decline {
+    claim: ParseClaim,
+    rule: String,
+}
+
+impl ParseClaim {
+    fn new(side: TreeSide, index: u32, format: ArtifactFormat) -> Self {
+        ParseClaim {
+            side: side_code(side),
+            index,
+            format,
+        }
+    }
+
+    fn declined_by(&self, rule: &str) -> Decline {
+        Decline {
+            claim: self.clone(),
+            rule: rule.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ParseJob {
     /// The anchor node (the required, defining member — e.g. the `.shp`). The
     /// parse result, artifacts, and any subsumption all attribute to this node.
     id: NodeId,
-    parsed_key: (u8, u32, ArtifactFormat),
+    claim: ParseClaim,
     beneath: bool,
     /// The resolved member group handed to `parse_group`. For a single-input
     /// rule this is just the anchor (`ParseGroup::single`).
@@ -1177,7 +1195,7 @@ struct ParseJob {
 
 struct ParseJobResult {
     id: NodeId,
-    parsed_key: (u8, u32, ArtifactFormat),
+    claim: ParseClaim,
     beneath: bool,
     item: ItemRef,
     member_indices: Vec<u32>,
@@ -1192,7 +1210,7 @@ fn run_parse_jobs(
 ) -> Vec<ParseJobResult> {
     let run_one = |job: &ParseJob| ParseJobResult {
         id: job.id,
-        parsed_key: job.parsed_key.clone(),
+        claim: job.claim.clone(),
         beneath: job.beneath,
         item: job.group.anchor.clone(),
         member_indices: job.member_indices.clone(),
