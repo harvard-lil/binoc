@@ -29,6 +29,7 @@ and `binoc <subcommand> --help` print the same information at the terminal.
 
 * [`binoc`↴](#binoc)
 * [`binoc diff`↴](#binoc-diff)
+* [`binoc replay`↴](#binoc-replay)
 * [`binoc changelog`↴](#binoc-changelog)
 * [`binoc extract`↴](#binoc-extract)
 
@@ -41,6 +42,7 @@ Binoc produces the missing changelog for datasets. It detects, classifies, and r
 ###### **Subcommands:**
 
 * `diff` — Diff an ordered sequence of snapshots and produce a changelog
+* `replay` — Render a saved run trace as a self-contained HTML replay
 * `changelog` — Generate a human-readable changelog from one or more saved changesets
 * `extract` — Extract actual changed data from a changeset node
 
@@ -66,6 +68,25 @@ Runs pairwise comparisons over each consecutive snapshot pair and emits the resu
 
   Default value: `markdown`
 * `-q`, `--quiet` — Suppress stdout. Useful when every rendered output is directed to a file via -o
+* `--trace <TRACE>` — Write a detailed replay trace (JSON) of the correspondence run to this path: every expand/parse/link/write/compaction step plus the final side trees and links. Requires exactly two snapshots. Convert it to an interactive HTML replay with `binoc replay`
+
+
+
+## `binoc replay`
+
+Render a saved run trace as a self-contained HTML replay.
+
+Reads a trace JSON produced by `binoc diff --trace` and writes a single standalone HTML file that animates the comparison: the two snapshot trees growing from the bottom up, links forming between them, and the per-link edit lists building and compacting, with play/step/scrub controls and a detail inspector.
+
+**Usage:** `binoc replay [OPTIONS] <TRACE>`
+
+###### **Arguments:**
+
+* `<TRACE>` — Path to a trace JSON file produced by `binoc diff --trace`
+
+###### **Options:**
+
+* `-o`, `--output <OUTPUT>` — Output HTML path. Defaults to the trace path with a `.html` extension
 
 
 
