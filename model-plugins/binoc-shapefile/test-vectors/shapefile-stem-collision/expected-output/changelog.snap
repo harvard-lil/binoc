@@ -8,7 +8,9 @@ expression: "&md"
   - Changed cells
     - row 2, column 'lanes': 2.0 -> 4.0
 - **roads.shp/>geometry**: Document values changed
+  - Value Change: changes: [{"from":"1.0","kind":"replace","path":"$.bbox.max_x","to":"2.0"},{"from":"1.0","kind":"replace","path":"$.bbox.max_y","to":"2.0"},{"from":"2","kind":"replace",...; examples_truncated: false
 - **roads.v2.shp/>attributes**: 1 cell changed
   - Changed cells
     - row 2, column 'surface': 'gravel' -> 'paved'
 - **roads.v2.shp/>geometry**: Document values changed
+  - Value Change: changes: [{"from":"6.0","kind":"replace","path":"$.bbox.max_x","to":"7.0"},{"from":"6.0","kind":"replace","path":"$.bbox.max_y","to":"7.0"},{"from":"2","kind":"replace",...; examples_truncated: false

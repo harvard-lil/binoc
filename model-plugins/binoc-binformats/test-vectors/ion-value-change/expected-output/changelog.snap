@@ -5,3 +5,4 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.ion**: Document values changed
+  - Value Change: changes: [{"from":"2","kind":"replace","path":"$.settings.retries","to":"7"}]; examples_truncated: false

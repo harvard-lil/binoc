@@ -5,3 +5,4 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **metadata.json**: Document values changed
+  - Value Change: changes: [{"from":"2","kind":"replace","path":"$.ids[1]","to":"3"},{"from":"3","kind":"replace","path":"$.ids[2]","to":"2"}]; examples_truncated: false

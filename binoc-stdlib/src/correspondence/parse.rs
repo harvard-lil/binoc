@@ -60,8 +60,9 @@ impl ParseRule for CsvParse {
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
-        let tabular = parse_csv_bytes(&bytes, delimiter_for(item))?;
-        let sections = detect_stacked_sections(&tabular);
+        let records = parse_csv_records(&bytes, delimiter_for(item))?;
+        let tabular = table_from_csv_records(records.clone());
+        let sections = detect_stacked_sections_from_rows(&records);
 
         // Fewer than two qualifying regions: a plain CSV is a single table,
         // emitted as a LEAF `tabular_v1` artifact with no children.
@@ -697,31 +698,62 @@ fn delimiter_for(item: &ItemRef) -> u8 {
     }
 }
 
+#[cfg(test)]
 fn parse_csv_bytes(bytes: &[u8], delimiter: u8) -> BinocResult<TabularData> {
+    parse_csv_records(bytes, delimiter).map(table_from_csv_records)
+}
+
+fn parse_csv_records(bytes: &[u8], delimiter: u8) -> BinocResult<Vec<Vec<String>>> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(delimiter)
+        .has_headers(false)
         .flexible(true)
         .from_reader(bytes);
-    let headers = reader
-        .byte_headers()
-        .map_err(|err| BinocError::Csv(err.to_string()))?
-        .iter()
-        .map(|field| String::from_utf8_lossy(field).into_owned())
-        .collect();
-    let mut rows = Vec::new();
+    let mut records = Vec::new();
     let mut record = csv::ByteRecord::new();
     while reader
         .read_byte_record(&mut record)
         .map_err(|err| BinocError::Csv(err.to_string()))?
     {
-        rows.push(
+        records.push(
             record
                 .iter()
                 .map(|field| String::from_utf8_lossy(field).into_owned())
                 .collect(),
         );
     }
-    Ok(TabularData::from_string_rows(headers, rows))
+    Ok(records)
+}
+
+fn table_from_csv_records(records: Vec<Vec<String>>) -> TabularData {
+    let Some(first) = records.first() else {
+        return TabularData::from_string_rows(Vec::new(), Vec::new());
+    };
+    let width = records.iter().map(Vec::len).max().unwrap_or(first.len());
+    let headers = complete_csv_headers(first, width);
+    let rows = records.into_iter().skip(1).collect();
+    TabularData::from_string_rows(headers, rows)
+}
+
+fn complete_csv_headers(first: &[String], width: usize) -> Vec<String> {
+    let mut headers = Vec::with_capacity(width);
+    let mut seen = BTreeSet::new();
+    for index in 0..width {
+        let raw = first
+            .get(index)
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("column_{}", index + 1));
+        let mut candidate = raw.clone();
+        let mut suffix = 2usize;
+        while !seen.insert(candidate.clone()) {
+            candidate = format!("{raw}_{suffix}");
+            suffix += 1;
+        }
+        headers.push(candidate);
+    }
+    headers
 }
 
 #[derive(Debug, Clone)]
@@ -747,13 +779,11 @@ struct StackedSection {
 /// has more than 10 rows (≥ 11, counting its header). When it qualifies, each
 /// region's first row is the header and the rest are data rows, trimmed to the
 /// region width. Otherwise an empty `Vec` is returned (a single flat table).
-fn detect_stacked_sections(table: &TabularData) -> Vec<StackedSection> {
-    let rows = raw_rows(table);
-
+fn detect_stacked_sections_from_rows(rows: &[Vec<String>]) -> Vec<StackedSection> {
     // Partition into regions of consecutive same-width rows, skipping blanks.
     let mut regions: Vec<Vec<Vec<String>>> = Vec::new();
     let mut current_width: Option<usize> = None;
-    for row in &rows {
+    for row in rows {
         let width = normalized_width(row);
         if width == 0 {
             // Blank rows are transparent.
@@ -816,17 +846,6 @@ fn children_from_sections(parent_path: &str, sections: &[StackedSection]) -> Vec
     children
 }
 
-fn raw_rows(table: &TabularData) -> Vec<Vec<String>> {
-    std::iter::once(table.headers.clone())
-        .chain(
-            table
-                .rows
-                .iter()
-                .map(|row| row.iter().map(|cell| cell.as_text().into_owned()).collect()),
-        )
-        .collect()
-}
-
 fn normalized_width(row: &[String]) -> usize {
     row.iter()
         .rposition(|cell| !cell.trim().is_empty())
@@ -849,8 +868,8 @@ mod tests {
     use super::*;
 
     fn detect(csv: &str) -> Vec<StackedSection> {
-        let table = parse_csv_bytes(csv.as_bytes(), b',').expect("parse csv");
-        detect_stacked_sections(&table)
+        let records = parse_csv_records(csv.as_bytes(), b',').expect("parse csv");
+        detect_stacked_sections_from_rows(&records)
     }
 
     /// Build a CSV body of `count` rows, each `width` comma-separated cells,
@@ -866,6 +885,27 @@ mod tests {
             out.push('\n');
         }
         out
+    }
+
+    #[test]
+    fn csv_parse_preserves_fields_after_single_cell_banner() {
+        let csv = "Land-Ocean: Global Means\n\
+                   Year,Jan,Feb\n\
+                   1880,-.18,-.24\n";
+        let table = parse_csv_bytes(csv.as_bytes(), b',').expect("parse csv");
+        assert_eq!(
+            table.headers,
+            vec![
+                "Land-Ocean: Global Means".to_string(),
+                "column_2".to_string(),
+                "column_3".to_string()
+            ]
+        );
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0][0].as_text(), "Year");
+        assert_eq!(table.rows[0][1].as_text(), "Jan");
+        assert_eq!(table.rows[0][2].as_text(), "Feb");
+        assert_eq!(table.rows[1][2].as_text(), "-.24");
     }
 
     #[test]

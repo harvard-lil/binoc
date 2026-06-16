@@ -265,7 +265,7 @@ dataset:
         .assert()
         .success()
         .stdout(predicates::str::contains("data.csv"))
-        .stdout(predicates::str::contains("1 edit"));
+        .stdout(predicates::str::contains("2 rows added"));
 }
 
 #[test]

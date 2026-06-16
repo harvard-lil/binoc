@@ -5,3 +5,5 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: Column removed: 'city'
+  - Set Headers: from: ["name","age","city"]; to: ["name","age"]
+  - Remove Column: name: 'city'; values: {"total_values":2,"truncated":false,"values":["NYC","LA"]}

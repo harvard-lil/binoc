@@ -318,7 +318,7 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
         parts.push("Columns reordered".into());
     }
 
-    let rows_added = count_verb(edits, "tabular.add_row");
+    let rows_added = count_verb(edits, "tabular.add_row") + count_appended_rows(edits);
     let rows_removed = count_verb(edits, "tabular.remove_row");
     if rows_added > 0 {
         parts.push(count_phrase(rows_added, "row added", "rows added"));
@@ -370,6 +370,15 @@ fn column_names(edits: &[Edit], verb: &str) -> Vec<String> {
 
 fn count_verb(edits: &[Edit], verb: &str) -> usize {
     edits.iter().filter(|edit| edit.verb == verb).count()
+}
+
+fn count_appended_rows(edits: &[Edit]) -> usize {
+    edits
+        .iter()
+        .filter(|edit| edit.verb == "tabular.append_rows")
+        .filter_map(|edit| edit.params.get("rows").and_then(|value| value.as_array()))
+        .map(Vec::len)
+        .sum()
 }
 
 fn unique_keyed_rows(edits: &[&Edit]) -> BTreeSet<String> {

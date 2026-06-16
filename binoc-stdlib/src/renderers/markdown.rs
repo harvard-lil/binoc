@@ -762,6 +762,177 @@ fn render_known_edit_details(
     // Metadata reads AFTER the primary table/content edits above, so a changelog
     // says "what the table did" then "what its metadata did" (CFM-82).
     render_metadata_details(out, edits, config, detail_budget);
+    render_generic_edit_details(out, node, edits, config, detail_budget);
+}
+
+fn render_generic_edit_details(
+    out: &mut String,
+    node: &DiffNode,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let generic: Vec<&serde_json::Value> = edits
+        .iter()
+        .filter(|edit| {
+            edit.get("verb")
+                .and_then(|value| value.as_str())
+                .is_none_or(|verb| !specialized_detail_verb(verb))
+                && !summary_covered_generic_verb(node, edit)
+        })
+        .collect();
+    if generic.is_empty() {
+        return;
+    }
+    let total = generic.len();
+    let shown = example_count(generic.len(), config);
+    for edit in generic.into_iter().take(shown) {
+        if !render_generic_edit_detail(out, edit, config, detail_budget) {
+            return;
+        }
+    }
+    if shown < total {
+        let _ = detail_budget.push_line(
+            out,
+            format!(
+                "  - Additional edits omitted{}\n",
+                showing_suffix(shown, total)
+            ),
+        );
+    }
+}
+
+fn render_generic_edit_detail(
+    out: &mut String,
+    edit: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let verb = edit
+        .get("verb")
+        .and_then(|value| value.as_str())
+        .unwrap_or("edit");
+    let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+    if verb == "tabular.append_rows" {
+        return render_append_rows_detail(out, params, config, detail_budget);
+    }
+
+    let title = humanize_edit_verb(verb);
+    let detail = format_generic_edit_params(params, config);
+    let line = if detail.is_empty() {
+        title
+    } else {
+        format!("{title}: {detail}")
+    };
+    detail_budget.push_line(out, format!("  - {line}\n"))
+}
+
+fn render_append_rows_detail(
+    out: &mut String,
+    params: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let rows = params
+        .get("rows")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if rows.is_empty() {
+        return detail_budget.push_line(out, "  - Rows added\n".to_string());
+    }
+    let shown = example_count(rows.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!("  - Rows added{}\n", showing_suffix(shown, rows.len())),
+    ) {
+        return false;
+    }
+    let start = params.get("start").and_then(|value| value.as_u64());
+    for (offset, row) in rows.into_iter().take(shown).enumerate() {
+        let locator = start
+            .map(|start| format!("row {}", start + offset as u64 + 1))
+            .unwrap_or_else(|| "row".into());
+        let values = captured_row_values_text(&row, config);
+        if !detail_budget.push_line(out, format!("    - {locator}: {values}\n")) {
+            return false;
+        }
+    }
+    true
+}
+
+fn specialized_detail_verb(verb: &str) -> bool {
+    matches!(
+        verb,
+        "tabular.edit_cell"
+            | "tabular.add_row"
+            | "tabular.remove_row"
+            | "text.replace_lines"
+            | "binary.contents-differ"
+            | "metadata.value_change"
+    )
+}
+
+fn summary_covered_generic_verb(node: &DiffNode, edit: &serde_json::Value) -> bool {
+    let Some(verb) = edit.get("verb").and_then(|value| value.as_str()) else {
+        return false;
+    };
+    matches!(verb, "tabular.rename_column") && node.tags.contains("binoc.column-rename")
+}
+
+fn humanize_edit_verb(verb: &str) -> String {
+    let tail = verb.rsplit_once('.').map(|(_, tail)| tail).unwrap_or(verb);
+    tail.replace(['_', '-'], " ")
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn captured_row_values_text(row: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    row.get("values")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .take(config.max_examples_per_block.max(1))
+                .map(|value| format_scalar_value(value, config))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .filter(|values| !values.is_empty())
+        .unwrap_or_else(|| "values omitted".into())
+}
+
+fn format_generic_edit_params(
+    params: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+) -> String {
+    match params {
+        serde_json::Value::Object(map) => map
+            .iter()
+            .take(config.max_examples_per_block.max(1))
+            .map(|(key, value)| format!("{key}: {}", compact_json_value(value, config)))
+            .collect::<Vec<_>>()
+            .join("; "),
+        serde_json::Value::Null => String::new(),
+        other => compact_json_value(other, config),
+    }
+}
+
+fn compact_json_value(value: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    let rendered = match value {
+        serde_json::Value::String(text) => format!("'{text}'"),
+        other => serde_json::to_string(other).unwrap_or_else(|_| "null".into()),
+    };
+    let (rendered, truncated) = truncate_text(&rendered, config.max_value_chars);
+    format!("{rendered}{}", if truncated { "..." } else { "" })
 }
 
 /// Render `metadata.value_change` edits (column/table/file metadata) as human
@@ -1429,6 +1600,79 @@ mod tests {
         assert!(!md.contains("## "));
         assert!(md.contains("**data.csv**"));
         assert!(md.contains("Column added: 'email'"));
+    }
+
+    #[test]
+    fn to_markdown_renders_unknown_visible_edit_details() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv").with_summary("1 edit");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.append_rows",
+                    "params": {
+                        "start": 2,
+                        "rows": [
+                            { "values": ["south", "2025", "9"] },
+                            { "values": ["east", "2025", "21"] }
+                        ]
+                    }
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("  - Rows added\n"), "got:\n{md}");
+        assert!(
+            md.contains("    - row 3: 'south', '2025', '9'")
+                && md.contains("    - row 4: 'east', '2025', '21'"),
+            "got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn to_markdown_does_not_duplicate_summary_covered_column_rename() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv")
+            .with_summary("Column renamed: 'count' -> 'total'")
+            .with_tag("binoc.column-rename");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.rename_column",
+                    "params": { "from": "count", "to": "total" }
+                },
+                {
+                    "verb": "tabular.append_rows",
+                    "params": {
+                        "start": 3,
+                        "rows": [
+                            { "values": ["south", "2025", "9"] },
+                            { "values": ["east", "2025", "21"] }
+                        ]
+                    }
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("Column renamed: 'count' -> 'total'"),
+            "got:\n{md}"
+        );
+        assert!(!md.contains("Rename Column"), "got:\n{md}");
+        assert!(!md.contains("Other edits"), "got:\n{md}");
+        assert!(md.contains("  - Rows added\n"), "got:\n{md}");
     }
 
     #[test]
