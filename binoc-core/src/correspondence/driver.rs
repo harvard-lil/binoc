@@ -81,6 +81,30 @@ impl RunStats {
         *self.rule_elapsed_nanos.entry(rule.to_string()).or_insert(0) += elapsed.as_nanos();
     }
 
+    /// Record a rule firing: bump the per-rule fire counter (and the
+    /// beneath-settled counter when applicable) and append the `FireEvent`.
+    /// The matching `TraceStep` push stays at the call site because its variant
+    /// differs per rule family.
+    fn record_fire(
+        &mut self,
+        round: u32,
+        rule: &str,
+        kind: &'static str,
+        subject: String,
+        beneath: bool,
+    ) {
+        Self::bump(&mut self.fires, rule);
+        if beneath {
+            Self::bump(&mut self.fires_beneath_settled, rule);
+        }
+        self.events.push(FireEvent {
+            round,
+            rule: rule.to_string(),
+            kind,
+            subject,
+        });
+    }
+
     pub fn fires_of(&self, rule: &str) -> u64 {
         self.fires.get(rule).copied().unwrap_or(0)
     }
@@ -458,16 +482,13 @@ fn run_inner(
                             child_indices.push(child_index);
                         }
                         expanded.insert(key(result.side, result.index));
-                        RunStats::bump(&mut stats.fires, &descriptor.name);
-                        if result.beneath {
-                            RunStats::bump(&mut stats.fires_beneath_settled, &descriptor.name);
-                        }
-                        stats.events.push(FireEvent {
+                        stats.record_fire(
                             round,
-                            rule: descriptor.name.clone(),
-                            kind: "expand",
-                            subject: format!("{}:{}", result.side.label(), path),
-                        });
+                            &descriptor.name,
+                            "expand",
+                            format!("{}:{}", result.side.label(), path),
+                            result.beneath,
+                        );
                         if let Some(trace) = trace.as_deref_mut() {
                             let step = trace.push(TraceStep::Expand {
                                 round,
@@ -682,16 +703,13 @@ fn run_inner(
                                 .subsume(member_index, result.id.index);
                         }
                         parsed.insert(result.parsed_key);
-                        RunStats::bump(&mut stats.fires, &descriptor.name);
-                        if result.beneath {
-                            RunStats::bump(&mut stats.fires_beneath_settled, &descriptor.name);
-                        }
-                        stats.events.push(FireEvent {
+                        stats.record_fire(
                             round,
-                            rule: descriptor.name.clone(),
-                            kind: "parse",
-                            subject: format!("{}:{}", result.id.side.label(), path),
-                        });
+                            &descriptor.name,
+                            "parse",
+                            format!("{}:{}", result.id.side.label(), path),
+                            result.beneath,
+                        );
                         if let Some(trace) = trace.as_deref_mut() {
                             let step = trace.push(TraceStep::Parse {
                                 round,
@@ -756,13 +774,13 @@ fn run_inner(
                         match outcome {
                             ApplyOutcome::Added => {
                                 stats.links_added += 1;
-                                RunStats::bump(&mut stats.fires, &descriptor.name);
-                                stats.events.push(FireEvent {
+                                stats.record_fire(
                                     round,
-                                    rule: descriptor.name.clone(),
-                                    kind: "link-add",
+                                    &descriptor.name,
+                                    "link-add",
                                     subject,
-                                });
+                                    false,
+                                );
                                 if let Some(trace) = trace.as_deref_mut() {
                                     let link = link_index_of(&store, proposal_left, proposal_right);
                                     let step = trace.push(TraceStep::LinkAdd {
@@ -780,13 +798,13 @@ fn run_inner(
                             }
                             ApplyOutcome::Upgraded => {
                                 stats.links_upgraded += 1;
-                                RunStats::bump(&mut stats.fires, &descriptor.name);
-                                stats.events.push(FireEvent {
+                                stats.record_fire(
                                     round,
-                                    rule: descriptor.name.clone(),
-                                    kind: "link-upgrade",
+                                    &descriptor.name,
+                                    "link-upgrade",
                                     subject,
-                                });
+                                    false,
+                                );
                                 if let Some(trace) = trace.as_deref_mut() {
                                     let link = link_index_of(&store, proposal_left, proposal_right);
                                     let revision = store.links.revisions.last();
@@ -844,48 +862,212 @@ fn run_inner(
         }
     }
 
-    let mut edit_lists = BTreeMap::new();
-    {
-        let view = CoreEngineView::new(&store, false);
-        let link_indexes: Vec<usize> = store.links.iter().map(|(index, _)| index).collect();
-        for index in link_indexes {
-            let link = store.links.link(index);
-            if link.settled {
-                edit_lists.insert(index, Vec::new());
-                continue;
-            }
-            let left_id = NodeId {
-                side: TreeSide::Left,
-                index: link.left,
-            };
-            let right_id = NodeId {
-                side: TreeSide::Right,
-                index: link.right,
-            };
-            if !view.visible(left_id) || !view.visible(right_id) {
-                edit_lists.insert(index, Vec::new());
-                continue;
-            }
-            // A subsumed member is folded into a fusing result node; its own link
-            // (e.g. a `roads.dbf` ↔ `roads.dbf` name pairing that formed before
-            // the shapefile claim subsumed it) contributes no edits and is not
-            // dispatched to per-artifact writers (CFM-81 + CFM-83).
-            if store.is_subsumed(left_id) || store.is_subsumed(right_id) {
-                edit_lists.insert(index, Vec::new());
-                continue;
-            }
+    let mut edit_lists = build_edit_lists(
+        config,
+        &store,
+        &mut diagnostics,
+        &mut stats,
+        data,
+        trace.as_deref_mut(),
+    )?;
 
-            let Some(link_ref) = view
-                .links_of(left_id)
-                .into_iter()
-                .find(|l| l.index == index)
-            else {
-                edit_lists.insert(index, Vec::new());
+    compact_edit_lists(
+        config,
+        &store,
+        &mut edit_lists,
+        &mut stats,
+        data,
+        trace.as_deref_mut(),
+    )?;
+
+    Ok(CorrespondenceRunResult {
+        store,
+        edit_lists,
+        annotators: config.annotators.clone(),
+        diagnostics,
+        claims,
+        stats,
+    })
+}
+
+fn build_edit_lists(
+    config: &CorrespondenceEngineConfig,
+    store: &Store,
+    diagnostics: &mut Vec<Diagnostic>,
+    stats: &mut RunStats,
+    data: &dyn DataAccess,
+    mut trace: Option<&mut TraceRecorder>,
+) -> BinocResult<BTreeMap<usize, Vec<Edit>>> {
+    let mut edit_lists = BTreeMap::new();
+    let view = CoreEngineView::new(store, false);
+    let link_indexes: Vec<usize> = store.links.iter().map(|(index, _)| index).collect();
+    for index in link_indexes {
+        let link = store.links.link(index);
+        if link.settled {
+            edit_lists.insert(index, Vec::new());
+            continue;
+        }
+        let left_id = NodeId {
+            side: TreeSide::Left,
+            index: link.left,
+        };
+        let right_id = NodeId {
+            side: TreeSide::Right,
+            index: link.right,
+        };
+        if !view.visible(left_id) || !view.visible(right_id) {
+            edit_lists.insert(index, Vec::new());
+            continue;
+        }
+        // A subsumed member is folded into a fusing result node; its own link
+        // (e.g. a `roads.dbf` ↔ `roads.dbf` name pairing that formed before
+        // the shapefile claim subsumed it) contributes no edits and is not
+        // dispatched to per-artifact writers (CFM-81 + CFM-83).
+        if store.is_subsumed(left_id) || store.is_subsumed(right_id) {
+            edit_lists.insert(index, Vec::new());
+            continue;
+        }
+
+        let Some(link_ref) = view
+            .links_of(left_id)
+            .into_iter()
+            .find(|l| l.index == index)
+        else {
+            edit_lists.insert(index, Vec::new());
+            continue;
+        };
+        let ctx = LinkCtx {
+            view: &view,
+            link: link_ref,
+            row_keys: config
+                .row_keys
+                .get(&store.right.node(link.right).item.logical_path)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
+            row_identity_policies: config
+                .row_identity_policies
+                .get(&store.right.node(link.right).item.logical_path)
+                .copied()
+                .unwrap_or_default(),
+        };
+
+        // Dispatch composes, then selects (CFM-81). The link's edit list is
+        // the concatenation of:
+        //   * one artifact writer per *present* artifact format — within a
+        //     format, registration order picks the first writer that returns
+        //     `Some` (the substitutability / dialect axis);
+        //   * each applicable structural writer (empty `formats`), excluding
+        //     the fallback;
+        //   * the fallback, but only when nothing above claimed the link.
+        // Each contribution's edits are stamped with the producer's
+        // provenance so downstream compaction/extract/summary stay
+        // per-content-type. Ordering is deterministic: artifact formats in
+        // sorted order, then structural writers in registration order.
+        let mut writers_used: BTreeSet<String> = BTreeSet::new();
+        let mut artifact_segments: BTreeMap<ArtifactFormat, Vec<Edit>> = BTreeMap::new();
+        let mut structural_edits: Vec<Edit> = Vec::new();
+        let mut fallback: Option<&Arc<dyn binoc_sdk::EditListWriter>> = None;
+        // A link is "claimed" once any non-fallback writer returns `Some`
+        // (even an empty edit list), exactly as the old first-match loop's
+        // `break` claimed it. The fallback fires only on unclaimed links.
+        let mut claimed = false;
+
+        for writer in &config.writers {
+            let descriptor = writer.descriptor();
+            if !writer_matches(&descriptor, store, left_id, right_id) {
                 continue;
-            };
+            }
+            let is_fallback = descriptor.formats.is_empty() && is_fallback_writer(&descriptor);
+            if is_fallback {
+                // Defer the fallback until we know whether the link was
+                // claimed by anything else.
+                fallback.get_or_insert(writer);
+                continue;
+            }
+            let provenance = writer_provenance(&descriptor);
+            if descriptor.formats.is_empty() {
+                // Structural writer (container/text).
+                if let Some(output) = writer.write(&ctx, data)? {
+                    append_rule_diagnostics(diagnostics, &descriptor.name, output.diagnostics);
+                    claimed = true;
+                    writers_used.insert(descriptor.name.clone());
+                    structural_edits.extend(stamp(output.edits, &provenance));
+                }
+            } else {
+                // Artifact writer. Within a format, the first writer (by
+                // registration order) that returns `Some` wins; later
+                // writers for an already-produced format are skipped.
+                let format = descriptor.formats[0].clone();
+                if artifact_segments.contains_key(&format) {
+                    continue;
+                }
+                if let Some(output) = writer.write(&ctx, data)? {
+                    append_rule_diagnostics(diagnostics, &descriptor.name, output.diagnostics);
+                    claimed = true;
+                    writers_used.insert(descriptor.name.clone());
+                    artifact_segments.insert(format, stamp(output.edits, &provenance));
+                }
+            }
+        }
+
+        // Concatenate in deterministic order: artifact formats sorted, then
+        // structural contributions.
+        let mut composed: Vec<Edit> = Vec::new();
+        for (_format, segment) in artifact_segments {
+            composed.extend(segment);
+        }
+        composed.extend(structural_edits);
+
+        if !claimed {
+            if let Some(writer) = fallback {
+                let descriptor = writer.descriptor();
+                if let Some(output) = writer.write(&ctx, data)? {
+                    append_rule_diagnostics(diagnostics, &descriptor.name, output.diagnostics);
+                    claimed = true;
+                    writers_used.insert(descriptor.name.clone());
+                    composed.extend(stamp(output.edits, &writer_provenance(&descriptor)));
+                }
+            }
+        }
+
+        if let Some(trace) = trace.as_deref_mut() {
+            if !writers_used.is_empty() {
+                trace.push(TraceStep::Write {
+                    writers: writers_used.iter().cloned().collect(),
+                    link: index,
+                    edits: composed.clone(),
+                });
+            }
+        }
+
+        if claimed {
+            stats.writer_used.insert(index, writers_used);
+        } else {
+            stats.unwritten_links.push(index);
+        }
+        edit_lists.insert(index, composed);
+    }
+    Ok(edit_lists)
+}
+
+fn compact_edit_lists(
+    config: &CorrespondenceEngineConfig,
+    store: &Store,
+    edit_lists: &mut BTreeMap<usize, Vec<Edit>>,
+    stats: &mut RunStats,
+    data: &dyn DataAccess,
+    mut trace: Option<&mut TraceRecorder>,
+) -> BinocResult<()> {
+    let view = CoreEngineView::new(store, false);
+    for rule in &config.compaction {
+        for (link_index, edits) in edit_lists.iter_mut() {
+            if edits.is_empty() {
+                continue;
+            }
+            let link = store.links.link(*link_index);
             let ctx = LinkCtx {
                 view: &view,
-                link: link_ref,
+                link: view.link_ref(*link_index),
                 row_keys: config
                     .row_keys
                     .get(&store.right.node(link.right).item.logical_path)
@@ -897,192 +1079,50 @@ fn run_inner(
                     .copied()
                     .unwrap_or_default(),
             };
-
-            // Dispatch composes, then selects (CFM-81). The link's edit list is
-            // the concatenation of:
-            //   * one artifact writer per *present* artifact format — within a
-            //     format, registration order picks the first writer that returns
-            //     `Some` (the substitutability / dialect axis);
-            //   * each applicable structural writer (empty `formats`), excluding
-            //     the fallback;
-            //   * the fallback, but only when nothing above claimed the link.
-            // Each contribution's edits are stamped with the producer's
-            // provenance so downstream compaction/extract/summary stay
-            // per-content-type. Ordering is deterministic: artifact formats in
-            // sorted order, then structural writers in registration order.
-            let mut writers_used: BTreeSet<String> = BTreeSet::new();
-            let mut artifact_segments: BTreeMap<ArtifactFormat, Vec<Edit>> = BTreeMap::new();
-            let mut structural_edits: Vec<Edit> = Vec::new();
-            let mut fallback: Option<&Arc<dyn binoc_sdk::EditListWriter>> = None;
-            // A link is "claimed" once any non-fallback writer returns `Some`
-            // (even an empty edit list), exactly as the old first-match loop's
-            // `break` claimed it. The fallback fires only on unclaimed links.
-            let mut claimed = false;
-
-            for writer in &config.writers {
-                let descriptor = writer.descriptor();
-                if !writer_matches(&descriptor, &store, left_id, right_id) {
-                    continue;
-                }
-                let is_fallback = descriptor.formats.is_empty() && is_fallback_writer(&descriptor);
-                if is_fallback {
-                    // Defer the fallback until we know whether the link was
-                    // claimed by anything else.
-                    fallback.get_or_insert(writer);
-                    continue;
-                }
-                let provenance = writer_provenance(&descriptor);
-                if descriptor.formats.is_empty() {
-                    // Structural writer (container/text).
-                    if let Some(output) = writer.write(&ctx, data)? {
-                        append_rule_diagnostics(
-                            &mut diagnostics,
-                            &descriptor.name,
-                            output.diagnostics,
-                        );
-                        claimed = true;
-                        writers_used.insert(descriptor.name.clone());
-                        structural_edits.extend(stamp(output.edits, &provenance));
-                    }
-                } else {
-                    // Artifact writer. Within a format, the first writer (by
-                    // registration order) that returns `Some` wins; later
-                    // writers for an already-produced format are skipped.
-                    let format = descriptor.formats[0].clone();
-                    if artifact_segments.contains_key(&format) {
-                        continue;
-                    }
-                    if let Some(output) = writer.write(&ctx, data)? {
-                        append_rule_diagnostics(
-                            &mut diagnostics,
-                            &descriptor.name,
-                            output.diagnostics,
-                        );
-                        claimed = true;
-                        writers_used.insert(descriptor.name.clone());
-                        artifact_segments.insert(format, stamp(output.edits, &provenance));
-                    }
-                }
+            // Format-scoped compaction (CFM-81): a rule that declares a
+            // `format()` sees and rewrites only the provenance-scoped segment
+            // of that format, never the whole mixed list. A rule with no
+            // declared format keeps operating on the full list.
+            let scope = rule.format().map(|format| format.to_string());
+            let scoped: Vec<Edit> = match &scope {
+                Some(provenance) => scoped_edits(edits, provenance),
+                None => edits.clone(),
+            };
+            if scoped.is_empty() {
+                continue;
             }
-
-            // Concatenate in deterministic order: artifact formats sorted, then
-            // structural contributions.
-            let mut composed: Vec<Edit> = Vec::new();
-            for (_format, segment) in artifact_segments {
-                composed.extend(segment);
-            }
-            composed.extend(structural_edits);
-
-            if !claimed {
-                if let Some(writer) = fallback {
-                    let descriptor = writer.descriptor();
-                    if let Some(output) = writer.write(&ctx, data)? {
-                        append_rule_diagnostics(
-                            &mut diagnostics,
-                            &descriptor.name,
-                            output.diagnostics,
-                        );
-                        claimed = true;
-                        writers_used.insert(descriptor.name.clone());
-                        composed.extend(stamp(output.edits, &writer_provenance(&descriptor)));
+            if let Some(rewritten_segment) = rule.rewrite(&ctx, &scoped, data)? {
+                // Re-stamp the rewritten segment with its format provenance
+                // (rewrite rules synthesize fresh edits without it), then
+                // splice it back into the full list at the position of the
+                // first edit it replaced — preserving other content types'
+                // edits in place.
+                let rewritten = match &scope {
+                    Some(provenance) => {
+                        splice_scoped(edits, provenance, stamp(rewritten_segment, provenance))
                     }
-                }
-            }
-
-            if let Some(trace) = trace.as_deref_mut() {
-                if !writers_used.is_empty() {
-                    trace.push(TraceStep::Write {
-                        writers: writers_used.iter().cloned().collect(),
-                        link: index,
-                        edits: composed.clone(),
+                    None => rewritten_segment,
+                };
+                let accepted = cost(&rewritten) < cost(edits);
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace.push(TraceStep::Compact {
+                        rule: rule.name().to_string(),
+                        link: *link_index,
+                        accepted,
+                        before: edits.clone(),
+                        after: rewritten.clone(),
                     });
                 }
-            }
-
-            if claimed {
-                stats.writer_used.insert(index, writers_used);
-            } else {
-                stats.unwritten_links.push(index);
-            }
-            edit_lists.insert(index, composed);
-        }
-    }
-
-    {
-        let view = CoreEngineView::new(&store, false);
-        for rule in &config.compaction {
-            for (link_index, edits) in edit_lists.iter_mut() {
-                if edits.is_empty() {
-                    continue;
-                }
-                let link = store.links.link(*link_index);
-                let ctx = LinkCtx {
-                    view: &view,
-                    link: view.link_ref(*link_index),
-                    row_keys: config
-                        .row_keys
-                        .get(&store.right.node(link.right).item.logical_path)
-                        .map(Vec::as_slice)
-                        .unwrap_or(&[]),
-                    row_identity_policies: config
-                        .row_identity_policies
-                        .get(&store.right.node(link.right).item.logical_path)
-                        .copied()
-                        .unwrap_or_default(),
-                };
-                // Format-scoped compaction (CFM-81): a rule that declares a
-                // `format()` sees and rewrites only the provenance-scoped segment
-                // of that format, never the whole mixed list. A rule with no
-                // declared format keeps operating on the full list.
-                let scope = rule.format().map(|format| format.to_string());
-                let scoped: Vec<Edit> = match &scope {
-                    Some(provenance) => scoped_edits(edits, provenance),
-                    None => edits.clone(),
-                };
-                if scoped.is_empty() {
-                    continue;
-                }
-                if let Some(rewritten_segment) = rule.rewrite(&ctx, &scoped, data)? {
-                    // Re-stamp the rewritten segment with its format provenance
-                    // (rewrite rules synthesize fresh edits without it), then
-                    // splice it back into the full list at the position of the
-                    // first edit it replaced — preserving other content types'
-                    // edits in place.
-                    let rewritten = match &scope {
-                        Some(provenance) => {
-                            splice_scoped(edits, provenance, stamp(rewritten_segment, provenance))
-                        }
-                        None => rewritten_segment,
-                    };
-                    let accepted = cost(&rewritten) < cost(edits);
-                    if let Some(trace) = trace.as_deref_mut() {
-                        trace.push(TraceStep::Compact {
-                            rule: rule.name().to_string(),
-                            link: *link_index,
-                            accepted,
-                            before: edits.clone(),
-                            after: rewritten.clone(),
-                        });
-                    }
-                    if accepted {
-                        *edits = rewritten;
-                        RunStats::bump(&mut stats.compaction_accepted, rule.name());
-                    } else {
-                        RunStats::bump(&mut stats.compaction_rejected, rule.name());
-                    }
+                if accepted {
+                    *edits = rewritten;
+                    RunStats::bump(&mut stats.compaction_accepted, rule.name());
+                } else {
+                    RunStats::bump(&mut stats.compaction_rejected, rule.name());
                 }
             }
         }
     }
-
-    Ok(CorrespondenceRunResult {
-        store,
-        edit_lists,
-        annotators: config.annotators.clone(),
-        diagnostics,
-        claims,
-        stats,
-    })
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
