@@ -4,4 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data_v2.csv**: Column added: 'email'
+- **data_v2.csv**:
+  - Moved from data.csv
+  - Column added: 'email'
