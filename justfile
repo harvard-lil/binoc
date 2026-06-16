@@ -152,7 +152,17 @@ docs-browser-demo:
         CARGO_BIN="${CARGO:-cargo}"
         RUSTC_BIN="${RUSTC:-rustc}"
     fi
-    RUSTC="${RUSTC_BIN}" "${CARGO_BIN}" build --quiet -p binoc-cli --target wasm32-wasip1 --release
+    if [ -z "${WASI_SYSROOT:-}" ] && command -v brew >/dev/null 2>&1 && brew --prefix wasi-libc >/dev/null 2>&1; then
+        export WASI_SYSROOT="$(brew --prefix wasi-libc)/share/wasi-sysroot"
+    fi
+    if [ ! -d "${WASI_SYSROOT:-}" ]; then
+        echo "docs-browser-demo with SQLite requires a WASI sysroot. Install wasi-libc or set WASI_SYSROOT." >&2
+        exit 1
+    fi
+    if [ -z "${CC_wasm32_wasip1:-}" ] && command -v brew >/dev/null 2>&1 && brew --prefix llvm >/dev/null 2>&1; then
+        export CC_wasm32_wasip1="$(brew --prefix llvm)/bin/clang"
+    fi
+    RUSTC="${RUSTC_BIN}" "${CARGO_BIN}" build --quiet -p binoc-cli --features sqlite --target wasm32-wasip1 --release
     mkdir -p docs/assets/browser-demo/wasm
     INPUT="target/wasm32-wasip1/release/binoc-cli.wasm"
     OUTPUT="docs/assets/browser-demo/wasm/binoc-cli.wasm"

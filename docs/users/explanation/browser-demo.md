@@ -42,7 +42,6 @@ that virtual filesystem and renders the real command output.
 
 ## Current scope
 
-The current page proves the stdlib path: directory walking, CSV parsing,
-artifact storage, row-key config, correspondence, and Markdown rendering all run
-inside the browser. SQLite remains the next milestone; it needs a WASI-compatible
-SQLite build path before the plugin can be bundled into this wasm binary.
+The current page proves the stdlib and first-party SQLite paths: directory
+walking, CSV parsing, SQLite parsing, artifact storage, row-key config,
+correspondence, and Markdown rendering all run inside the browser.

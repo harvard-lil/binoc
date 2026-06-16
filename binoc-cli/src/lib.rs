@@ -7,7 +7,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
 use binoc_core::output;
-use binoc_sdk::{BinocError, Changeset, ExtractResult, Renderer};
+use binoc_sdk::{BinocError, Changeset, CorrespondenceEngineConfig, ExtractResult, Renderer};
 
 #[derive(Parser)]
 #[command(
@@ -300,9 +300,24 @@ fn resolve_renderers_only(
 }
 
 fn diff_controller(config: &DatasetConfig) -> Controller {
-    Controller::new(binoc_stdlib::correspondence::engine_config_for_dataset_config(&config.dataset))
+    Controller::new(correspondence_engine_config(config))
         .with_dataset_config(config.dataset.clone())
 }
+
+fn correspondence_engine_config(config: &DatasetConfig) -> CorrespondenceEngineConfig {
+    let mut engine =
+        binoc_stdlib::correspondence::engine_config_for_dataset_config(&config.dataset);
+    register_optional_correspondence_rules(&mut engine);
+    engine
+}
+
+#[cfg(feature = "sqlite")]
+fn register_optional_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
+    binoc_sqlite::register_correspondence_rules(config);
+}
+
+#[cfg(not(feature = "sqlite"))]
+fn register_optional_correspondence_rules(_config: &mut CorrespondenceEngineConfig) {}
 
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the
 /// `emit-cli-markdown` binary that regenerates `docs/users/reference/cli.md`) can

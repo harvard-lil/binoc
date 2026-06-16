@@ -484,6 +484,7 @@ dependencies = [
  "assert_cmd",
  "binoc-core",
  "binoc-sdk",
+ "binoc-sqlite",
  "binoc-stdlib",
  "clap",
  "clap-markdown",
