@@ -6,9 +6,50 @@ use binoc_sdk::{
     ExpandDescriptor, ExpandOutput, ExpandRule, ItemRef, NodeMatch, ProjectionHint,
 };
 
-const GZIP_MAX_BYTES: u64 = 256 * 1024 * 1024;
-const ARCHIVE_MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
-const ARCHIVE_MAX_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+/// Default decompression caps. These are bomb-defense bounds, not correctness
+/// limits: they only need to sit comfortably above the largest real bundle we
+/// expect to expand. The previous 256 MB / 512 MB values rejected real
+/// multi-GB government bundles (e.g. the 3.25 GB USDA FoodData Central zip), so
+/// the defaults are raised to GiB scale while staying finite. All three are
+/// overridable per-dataset via [`CorrespondenceConfig`].
+pub const DEFAULT_GZIP_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
+pub const DEFAULT_ARCHIVE_MAX_ENTRY_BYTES: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
+pub const DEFAULT_ARCHIVE_MAX_TOTAL_BYTES: u64 = 8 * 1024 * 1024 * 1024; // 8 GiB
+
+/// Decompression size caps threaded into the archive/gzip expand rules. These
+/// are the runtime values (after applying any per-dataset overrides over the
+/// `DEFAULT_*` constants); see [`crate::correspondence::CorrespondenceOptions`].
+#[derive(Debug, Clone, Copy)]
+pub struct ExpandCaps {
+    /// Max decompressed size of a single gzip stream.
+    pub gzip_max_bytes: u64,
+    /// Max decompressed size of one archive entry.
+    pub archive_max_entry_bytes: u64,
+    /// Max total decompressed size across a whole archive.
+    pub archive_max_total_bytes: u64,
+}
+
+impl Default for ExpandCaps {
+    fn default() -> Self {
+        Self {
+            gzip_max_bytes: DEFAULT_GZIP_MAX_BYTES,
+            archive_max_entry_bytes: DEFAULT_ARCHIVE_MAX_ENTRY_BYTES,
+            archive_max_total_bytes: DEFAULT_ARCHIVE_MAX_TOTAL_BYTES,
+        }
+    }
+}
+
+/// Human-readable name of the config knob that bounds a given cap, named in the
+/// overflow error so a user knows exactly which value to raise.
+const GZIP_CAP_KNOB: &str = "correspondence.max_gzip_bytes";
+const ENTRY_CAP_KNOB: &str = "correspondence.max_archive_entry_bytes";
+const TOTAL_CAP_KNOB: &str = "correspondence.max_archive_total_bytes";
+
+fn cap_overflow_message(what: &str, cap: u64, knob: &str) -> String {
+    format!(
+        "{what} exceeds the {cap}-byte decompression cap; raise `{knob}` in the dataset config to expand it"
+    )
+}
 
 /// Which separator the immediate children of an expansion hang off.
 ///
@@ -109,7 +150,10 @@ impl ExpandRule for DirectoryExpand {
     }
 }
 
-pub struct ZipExpand;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ZipExpand {
+    pub caps: ExpandCaps,
+}
 
 impl ExpandRule for ZipExpand {
     fn descriptor(&self) -> ExpandDescriptor {
@@ -127,7 +171,7 @@ impl ExpandRule for ZipExpand {
     fn expand(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ExpandOutput> {
         let physical = data.local_path(item)?;
         let workspace = data.workspace()?;
-        let diagnostics = extract_zip(&physical, &workspace)?;
+        let diagnostics = extract_zip(&physical, &workspace, self.caps)?;
         let children =
             expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
         Ok(ExpandOutput {
@@ -137,7 +181,7 @@ impl ExpandRule for ZipExpand {
     }
 }
 
-fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<Vec<Diagnostic>> {
+fn extract_zip(zip_path: &Path, dest: &Path, caps: ExpandCaps) -> BinocResult<Vec<Diagnostic>> {
     let file = std::fs::File::open(zip_path).map_err(BinocError::Io)?;
     let mut archive = zip::ZipArchive::new(file).map_err(|err| BinocError::Zip(err.to_string()))?;
     let mut total = 0u64;
@@ -166,24 +210,29 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> BinocResult<Vec<Diagnostic>> {
         }
         let buffer = read_capped(
             &mut entry,
-            ARCHIVE_MAX_ENTRY_BYTES,
-            "zip entry exceeds decompression cap",
+            caps.archive_max_entry_bytes,
+            &cap_overflow_message("zip entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
         )
         .map_err(|err| BinocError::Zip(err.to_string()))?;
         total = total
             .checked_add(buffer.len() as u64)
             .ok_or_else(|| BinocError::Zip("zip output size overflow".into()))?;
-        if total > ARCHIVE_MAX_TOTAL_BYTES {
-            return Err(BinocError::Zip(
-                "zip total output exceeds decompression cap".into(),
-            ));
+        if total > caps.archive_max_total_bytes {
+            return Err(BinocError::Zip(cap_overflow_message(
+                "zip total output",
+                caps.archive_max_total_bytes,
+                TOTAL_CAP_KNOB,
+            )));
         }
         std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
     }
     Ok(diagnostics)
 }
 
-pub struct TarExpand;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TarExpand {
+    pub caps: ExpandCaps,
+}
 
 impl ExpandRule for TarExpand {
     fn descriptor(&self) -> ExpandDescriptor {
@@ -204,9 +253,9 @@ impl ExpandRule for TarExpand {
         let file = std::fs::File::open(&physical).map_err(BinocError::Io)?;
         let diagnostics =
             if item.logical_path.ends_with(".tgz") || item.logical_path.ends_with(".tar.gz") {
-                extract_tar(flate2::read::GzDecoder::new(file), &workspace)?
+                extract_tar(flate2::read::GzDecoder::new(file), &workspace, self.caps)?
             } else {
-                extract_tar(file, &workspace)?
+                extract_tar(file, &workspace, self.caps)?
             };
         let children =
             expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
@@ -217,7 +266,10 @@ impl ExpandRule for TarExpand {
     }
 }
 
-pub struct GzipExpand;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GzipExpand {
+    pub caps: ExpandCaps,
+}
 
 impl ExpandRule for GzipExpand {
     fn descriptor(&self) -> ExpandDescriptor {
@@ -238,14 +290,14 @@ impl ExpandRule for GzipExpand {
             return Ok(Vec::new().into());
         };
         if inner_name.ends_with(".tar") {
-            return TarExpand.expand(item, data);
+            return TarExpand { caps: self.caps }.expand(item, data);
         }
         let bytes = data.read_bytes(item)?;
         let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
         let output = read_capped(
             &mut decoder,
-            GZIP_MAX_BYTES,
-            "gzip output exceeds decompression cap",
+            self.caps.gzip_max_bytes,
+            &cap_overflow_message("gzip output", self.caps.gzip_max_bytes, GZIP_CAP_KNOB),
         )
         .map_err(|err| BinocError::Gzip(err.to_string()))?;
         let workspace = data.workspace()?;
@@ -284,7 +336,7 @@ fn safe_archive_path(path: &Path) -> Option<PathBuf> {
     Some(out)
 }
 
-fn extract_tar<R: Read>(reader: R, dest: &Path) -> BinocResult<Vec<Diagnostic>> {
+fn extract_tar<R: Read>(reader: R, dest: &Path, caps: ExpandCaps) -> BinocResult<Vec<Diagnostic>> {
     let mut archive = tar::Archive::new(reader);
     let mut total = 0u64;
     let mut diagnostics = Vec::new();
@@ -319,17 +371,19 @@ fn extract_tar<R: Read>(reader: R, dest: &Path) -> BinocResult<Vec<Diagnostic>> 
         }
         let buffer = read_capped(
             &mut entry,
-            ARCHIVE_MAX_ENTRY_BYTES,
-            "tar entry exceeds decompression cap",
+            caps.archive_max_entry_bytes,
+            &cap_overflow_message("tar entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
         )
         .map_err(|err| BinocError::Tar(err.to_string()))?;
         total = total
             .checked_add(buffer.len() as u64)
             .ok_or_else(|| BinocError::Tar("tar output size overflow".into()))?;
-        if total > ARCHIVE_MAX_TOTAL_BYTES {
-            return Err(BinocError::Tar(
-                "tar total output exceeds decompression cap".into(),
-            ));
+        if total > caps.archive_max_total_bytes {
+            return Err(BinocError::Tar(cap_overflow_message(
+                "tar total output",
+                caps.archive_max_total_bytes,
+                TOTAL_CAP_KNOB,
+            )));
         }
         std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
     }

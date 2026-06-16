@@ -163,6 +163,29 @@ Set it to `false` for the faster short-circuit posture. In that mode, renamed
 unchanged collections can be settled without looking beneath them, so copy or
 move provenance involving their children may be reported less specifically.
 
+#### Decompression size caps
+
+When binoc expands a `.zip`, `.tar`/`.tgz`, or `.gz`, it bounds the decompressed
+output as a decompression-bomb defense. If a bundle exceeds a cap, expansion
+fails with a clear diagnostic and binoc falls back to comparing the archive as
+opaque bytes — so dataset semantics such as row keys never get applied inside it.
+The defaults sit at GiB scale (per-entry 4 GiB, archive total 8 GiB, gzip
+4 GiB) and handle multi-GB government bundles, but a very large bundle may still
+need a higher ceiling. Each cap is a byte count and can be raised
+independently:
+
+```yaml
+dataset:
+  correspondence:
+    max_archive_entry_bytes: 6442450944   # 6 GiB: largest single member
+    max_archive_total_bytes: 17179869184  # 16 GiB: whole-archive output
+    max_gzip_bytes: 6442450944            # 6 GiB: single .gz stream
+```
+
+Omit a key to keep its default. Raise a cap only as high as your real data
+requires; the bound is what protects you from a maliciously crafted archive
+that expands to far more than its compressed size.
+
 ### `dataset.tables`
 
 Tabular row identity is optional. Without it, `binoc.tabular_analyzer` keeps

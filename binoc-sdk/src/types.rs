@@ -424,6 +424,21 @@ pub struct DatasetSemanticsV1 {
 pub struct CorrespondenceConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expand_renamed_unchanged_collections: Option<bool>,
+    /// Maximum decompressed size of a single gzip stream, in bytes. `None` uses
+    /// the stdlib default. Raise this for legitimately large `.gz` payloads;
+    /// the cap exists only as a decompression-bomb bound, so any value over a
+    /// bundle's real size is safe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_gzip_bytes: Option<u64>,
+    /// Maximum decompressed size of a single archive entry (one member of a
+    /// `.zip`/`.tar`/`.tgz`), in bytes. `None` uses the stdlib default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_archive_entry_bytes: Option<u64>,
+    /// Maximum total decompressed size of a whole archive (sum over all
+    /// extracted entries), in bytes. `None` uses the stdlib default. This is the
+    /// cap a real multi-GB government bundle is most likely to hit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_archive_total_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

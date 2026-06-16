@@ -21,12 +21,17 @@ pub struct CorrespondenceOptions {
     /// left unsettled so expansion can recover copy/move-out provenance under
     /// the renamed collection. Set false for the fast short-circuit posture.
     pub expand_renamed_unchanged_collections: bool,
+    /// Decompression-bomb size caps for the archive/gzip expand rules. Defaults
+    /// to [`expand::ExpandCaps::default`]; per-dataset config overrides
+    /// individual caps (see [`engine_config_for_dataset_config`]).
+    pub expand_caps: expand::ExpandCaps,
 }
 
 impl Default for CorrespondenceOptions {
     fn default() -> Self {
         Self {
             expand_renamed_unchanged_collections: true,
+            expand_caps: expand::ExpandCaps::default(),
         }
     }
 }
@@ -38,11 +43,18 @@ pub fn default_engine_config() -> CorrespondenceEngineConfig {
 pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> CorrespondenceEngineConfig {
     let mut options = CorrespondenceOptions::default();
     if let Ok(semantics) = serde_json::from_value::<DatasetSemanticsV1>(dataset.clone()) {
-        if let Some(value) = semantics
-            .correspondence
-            .expand_renamed_unchanged_collections
-        {
+        let correspondence = &semantics.correspondence;
+        if let Some(value) = correspondence.expand_renamed_unchanged_collections {
             options.expand_renamed_unchanged_collections = value;
+        }
+        if let Some(bytes) = correspondence.max_gzip_bytes {
+            options.expand_caps.gzip_max_bytes = bytes;
+        }
+        if let Some(bytes) = correspondence.max_archive_entry_bytes {
+            options.expand_caps.archive_max_entry_bytes = bytes;
+        }
+        if let Some(bytes) = correspondence.max_archive_total_bytes {
+            options.expand_caps.archive_max_total_bytes = bytes;
         }
     }
     engine_config_with_options(options)
@@ -64,9 +76,15 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             CoreRule::Pair(Arc::new(pair::TabularPair::default())),
             CoreRule::Pair(Arc::new(pair::FuzzyPair::default())),
             CoreRule::Pair(Arc::new(pair::ContainerFromChildEvidence::default())),
-            CoreRule::Expand(Arc::new(expand::ZipExpand)),
-            CoreRule::Expand(Arc::new(expand::TarExpand)),
-            CoreRule::Expand(Arc::new(expand::GzipExpand)),
+            CoreRule::Expand(Arc::new(expand::ZipExpand {
+                caps: options.expand_caps,
+            })),
+            CoreRule::Expand(Arc::new(expand::TarExpand {
+                caps: options.expand_caps,
+            })),
+            CoreRule::Expand(Arc::new(expand::GzipExpand {
+                caps: options.expand_caps,
+            })),
             CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
             CoreRule::Parse(Arc::new(parse::JsonRecordsParse)),
             CoreRule::Parse(Arc::new(parse::JsonMediaRecordsParse)),
