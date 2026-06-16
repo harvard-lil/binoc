@@ -181,7 +181,7 @@ One bounded example inside a detail block.
 |---|---|---|---|
 | `code` | string | yes |  |
 | `location` | string \| null | no |  |
-| `message` | string | yes |  |
+| `message` | [`Summary`](#summary) | yes |  |
 | `severity` | [`DiagnosticSeverity`](#diagnosticseverity) | yes |  |
 
 ### `DiagnosticSeverity`
@@ -219,6 +219,7 @@ Product-facing projection metadata supplied by rules, not inferred by core.
 |---|---|---|---|
 | `action` | string \| null | no |  |
 | `item_type` | string \| null | no |  |
+| `retract_tags` | array of string | no | Tags this hint *removes* from the accumulated projection. Tag overlay is union-only, so an annotator that supersedes an earlier framing (e.g. a CFM-71 container reshape replacing a pair-time `binoc.move`) needs a way to drop the now-stale tag — otherwise the IR carries contradictory tags (inert in rendering, but incoherent in JSON). A retraction is honored whenever tags are merged: the named tags are removed from the result and can never be re-introduced by the *same* hint. |
 | `summary` | [`Summary`](#summary) \| null | no |  |
 | `tags` | array of string | no |  |
 

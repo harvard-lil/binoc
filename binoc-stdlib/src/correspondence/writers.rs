@@ -16,6 +16,8 @@ const MAX_CAPTURED_VALUES: usize = 16;
 const MAX_VALUE_PREVIEW_BYTES: usize = 120;
 const MAX_TEXT_LINE_EXAMPLES: usize = 8;
 const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
+const AUTO_KEY_MIN_JACCARD: f64 = 0.80;
+const AUTO_KEY_MAX_ROWS: usize = 10_000;
 const MAX_JSON_CHANGE_EXAMPLES: usize = 16;
 const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
 
@@ -153,6 +155,35 @@ impl EditListWriter for TabularWriter {
             push_key_quality_diagnostics(&mut diagnostics, quality, ctx.row_identity_policies);
             if let Some(edit) = key_quality_edit(quality, ctx.row_identity_policies) {
                 edits.push(edit);
+            }
+        } else if ctx.row_keys.is_empty() {
+            if let Some(auto_key) = infer_auto_key(&left, &right) {
+                diagnostics.push(Diagnostic::suggestion(
+                    "binoc.tabular_auto_key",
+                    format!(
+                        "inferred row identity column '{}' from unique values with {:.0}% overlap",
+                        auto_key.column,
+                        auto_key.jaccard * 100.0
+                    ),
+                ));
+                edits.push(
+                    Edit::new(
+                        "tabular.auto_detected_key",
+                        json!({
+                            "columns": [auto_key.column.clone()],
+                            "overlap": auto_key.jaccard,
+                            "left_rows": left.rows.len(),
+                            "right_rows": right.rows.len(),
+                        }),
+                    )
+                    .with_item_type("tabular")
+                    .with_tag("binoc.row-identity-inferred")
+                    .hidden(),
+                );
+                let keys = vec![auto_key.column];
+                write_keyed_row_edits(&mut edits, &keys, &left, &right);
+                edits.extend(metadata_edits);
+                return Ok(Some(WriteOutput { edits, diagnostics }));
             }
         }
 
@@ -368,6 +399,94 @@ fn table_has_complete_unique_keys(table: &TabularData, keys: &[String]) -> bool 
         }
     }
     true
+}
+
+#[derive(Debug, Clone)]
+struct AutoKeyCandidate {
+    column: String,
+    jaccard: f64,
+    total_value_bytes: usize,
+}
+
+fn infer_auto_key(left: &TabularData, right: &TabularData) -> Option<AutoKeyCandidate> {
+    if left.rows.len() > AUTO_KEY_MAX_ROWS || right.rows.len() > AUTO_KEY_MAX_ROWS {
+        return None;
+    }
+    left.headers
+        .iter()
+        .filter(|header| right.column_index(header).is_some())
+        .filter_map(|header| auto_key_candidate(header, left, right))
+        .filter(|candidate| candidate.jaccard >= AUTO_KEY_MIN_JACCARD)
+        .min_by(|a, b| {
+            b.jaccard
+                .total_cmp(&a.jaccard)
+                .then_with(|| a.total_value_bytes.cmp(&b.total_value_bytes))
+                .then_with(|| a.column.cmp(&b.column))
+        })
+}
+
+fn auto_key_candidate(
+    column: &str,
+    left: &TabularData,
+    right: &TabularData,
+) -> Option<AutoKeyCandidate> {
+    let keys = [column.to_string()];
+    if !keyed_rows_complete(&keys, left, right) {
+        return None;
+    }
+    if !auto_key_would_change_alignment(&keys, left, right) {
+        return None;
+    }
+    let left_values = column_signatures(left, column)?;
+    let right_values = column_signatures(right, column)?;
+    let intersection = left_values.intersection(&right_values).count();
+    let union = left_values.union(&right_values).count();
+    if union == 0 {
+        return None;
+    }
+    Some(AutoKeyCandidate {
+        column: column.to_string(),
+        jaccard: intersection as f64 / union as f64,
+        total_value_bytes: total_column_value_bytes(left, column)?
+            + total_column_value_bytes(right, column)?,
+    })
+}
+
+fn auto_key_would_change_alignment(
+    keys: &[String],
+    left: &TabularData,
+    right: &TabularData,
+) -> bool {
+    let left_rows = unique_rows_by_key(left, keys);
+    let right_rows = unique_rows_by_key(right, keys);
+    left_rows.iter().any(|(signature, (_, left_index, _))| {
+        right_rows
+            .get(signature)
+            .is_some_and(|(_, right_index, _)| left_index != right_index)
+    })
+}
+
+fn column_signatures(table: &TabularData, column: &str) -> Option<BTreeSet<String>> {
+    let index = table.column_index(column)?;
+    Some(
+        table
+            .rows
+            .iter()
+            .filter_map(|row| row.get(index))
+            .map(|value| value.as_text().into_owned())
+            .collect(),
+    )
+}
+
+fn total_column_value_bytes(table: &TabularData, column: &str) -> Option<usize> {
+    let index = table.column_index(column)?;
+    Some(
+        table
+            .rows
+            .iter()
+            .map(|row| row.get(index).unwrap_or(&Value::Null).as_text().len())
+            .sum(),
+    )
 }
 
 /// A row's identity key: a `signature` of the cells' flat text for

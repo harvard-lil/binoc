@@ -223,7 +223,7 @@
           ]
         },
         "message": {
-          "type": "string"
+          "$ref": "#/$defs/Summary"
         },
         "severity": {
           "$ref": "#/$defs/DiagnosticSeverity"
@@ -478,6 +478,13 @@
             "string",
             "null"
           ]
+        },
+        "retract_tags": {
+          "description": "Tags this hint *removes* from the accumulated projection. Tag overlay is\nunion-only, so an annotator that supersedes an earlier framing (e.g. a\nCFM-71 container reshape replacing a pair-time `binoc.move`) needs a way to\ndrop the now-stale tag — otherwise the IR carries contradictory tags\n(inert in rendering, but incoherent in JSON). A retraction is honored\nwhenever tags are merged: the named tags are removed from the result and\ncan never be re-introduced by the *same* hint.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "summary": {
           "anyOf": [

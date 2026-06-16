@@ -25,10 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "uint": 1
-          },
-          {
-            "text": " edit"
+            "text": "2 rows added"
           }
         ],
         "tags": [

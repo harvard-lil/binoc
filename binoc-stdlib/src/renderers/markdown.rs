@@ -306,20 +306,31 @@ fn format_node(
         &node.path
     };
 
-    out.push_str(&format!("- **{path}**: "));
-
-    out.push_str(&render_summary(&node_summary(node)));
-    out.push('\n');
-
-    // For a move with content detail, emit the detail as a second
-    // top-level bullet under the same path. The two-bullet layout keeps
-    // the rename and the content change visually grouped (they share a
-    // path and stay in the same significance section) without needing
-    // inline punctuation or capitalization fixups.
-    if should_group_move_children(node) {
-        if let Some(detail) = move_trailer(node) {
-            out.push_str(&format!("- **{path}**: {}\n", render_summary(&detail)));
+    // A moved or copied node always names its origin, even when the pairing
+    // also carried a content change. When both are present they read as an
+    // indented pair under one path — origin first, then the change — matching
+    // the sub-bullet style used for edit detail. A move with no separate
+    // content (a pure rename, a copy, a merge whose summary already states the
+    // origin) stays a single inline line.
+    if is_move_node(node) {
+        match move_content(node) {
+            Some(content) => {
+                out.push_str(&format!("- **{path}**:\n"));
+                out.push_str(&format!("  - {}\n", render_summary(&move_origin(node))));
+                out.push_str(&format!("  - {}\n", render_summary(&content)));
+            }
+            None => {
+                out.push_str(&format!(
+                    "- **{path}**: {}\n",
+                    render_summary(&move_origin(node))
+                ));
+            }
         }
+    } else {
+        out.push_str(&format!(
+            "- **{path}**: {}\n",
+            render_summary(&node_summary(node))
+        ));
     }
 
     render_sources(out, node, config);
@@ -358,19 +369,68 @@ fn source_side_label(side: Side) -> &'static str {
     }
 }
 
-fn should_group_move_children(node: &DiffNode) -> bool {
-    node.action == "move"
-        && !node.tags.contains("binoc.folder-move")
-        && move_trailer(node).is_some()
+/// Whether a node represents a move or a copy (and so names its origin).
+fn is_move_node(node: &DiffNode) -> bool {
+    matches!(node.action.as_str(), "move" | "copy")
 }
 
-/// Build the trailing description for a move bullet, if any.
+/// The origin line for a moved or copied node: "Moved from X" / "Copied from X".
+///
+/// When the projection tagged the node `binoc.move.modified`, its `summary`
+/// holds the *content* change (see [`move_content`]) and the origin must be
+/// derived from the node's sources. Otherwise the producer's own summary is
+/// already an origin statement — a bare rename, a copy, or a multi-source
+/// "Merged from A, B" that names every source — and we use it verbatim, falling
+/// back to the synthesized phrasing only when no summary was supplied.
+fn move_origin(node: &DiffNode) -> Summary {
+    if node.tags.contains("binoc.move.modified") {
+        return synthesized_move_origin(node);
+    }
+    node_summary(node)
+}
+
+/// The synthesized "Moved from X" / "Copied from X" origin, reusing the same
+/// wording as [`fallback_summary`]'s move/copy arms.
+fn synthesized_move_origin(node: &DiffNode) -> Summary {
+    let item_type = if node.item_type.is_empty() {
+        "item"
+    } else {
+        &node.item_type
+    };
+    let (verb_phrase, fallback) = if node.action == "copy" {
+        ("Copied from ", "copied")
+    } else {
+        ("Moved from ", "moved")
+    };
+    match node.primary_from_source() {
+        Some(src) => Summary::new()
+            .text(verb_phrase)
+            .path(src.path.clone(), src.side),
+        None => format!("{} {fallback}", capitalize(item_type)).into(),
+    }
+}
+
+/// Whether a move/copy node carries a content change folded inline beneath the
+/// origin line (so its content children, if any, are not reported separately).
+/// Pure moves, copies, merges, and folder moves report normally.
+fn should_group_move_children(node: &DiffNode) -> bool {
+    is_move_node(node) && move_content(node).is_some()
+}
+
+/// The content change carried by a moved/copied node, shown beneath its origin
+/// line, or `None` for a pure move/copy. Folder moves describe their content
+/// through separately-rendered child nodes, so they contribute none here.
 ///
 /// Priority (first match wins):
 /// 1. `annotations.tabular_summary` — rich, from tabular writers.
 /// 2. `annotations.content_summary` — generic content detail.
-/// 3. A join of non-identical child summaries.
-fn move_trailer(node: &DiffNode) -> Option<Summary> {
+/// 3. The node's own `summary`, when it was tagged `binoc.move.modified` (its
+///    summary is the content change, not the origin).
+/// 4. A join of non-identical child summaries.
+fn move_content(node: &DiffNode) -> Option<Summary> {
+    if node.tags.contains("binoc.folder-move") {
+        return None;
+    }
     // The annotation trailers are carried as plain strings and render
     // verbatim as a single text segment.
     if let Some(s) = annotation_str(node, "tabular_summary") {
@@ -378,6 +438,11 @@ fn move_trailer(node: &DiffNode) -> Option<Summary> {
     }
     if let Some(s) = annotation_str(node, "content_summary") {
         return Some(s.into());
+    }
+    if node.tags.contains("binoc.move.modified") {
+        if let Some(summary) = &node.summary {
+            return Some(summary.clone());
+        }
     }
     if !node.children.is_empty() {
         let mut trailer = Summary::new();
@@ -697,6 +762,177 @@ fn render_known_edit_details(
     // Metadata reads AFTER the primary table/content edits above, so a changelog
     // says "what the table did" then "what its metadata did" (CFM-82).
     render_metadata_details(out, edits, config, detail_budget);
+    render_generic_edit_details(out, node, edits, config, detail_budget);
+}
+
+fn render_generic_edit_details(
+    out: &mut String,
+    node: &DiffNode,
+    edits: &[serde_json::Value],
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) {
+    let generic: Vec<&serde_json::Value> = edits
+        .iter()
+        .filter(|edit| {
+            edit.get("verb")
+                .and_then(|value| value.as_str())
+                .is_none_or(|verb| !specialized_detail_verb(verb))
+                && !summary_covered_generic_verb(node, edit)
+        })
+        .collect();
+    if generic.is_empty() {
+        return;
+    }
+    let total = generic.len();
+    let shown = example_count(generic.len(), config);
+    for edit in generic.into_iter().take(shown) {
+        if !render_generic_edit_detail(out, edit, config, detail_budget) {
+            return;
+        }
+    }
+    if shown < total {
+        let _ = detail_budget.push_line(
+            out,
+            format!(
+                "  - Additional edits omitted{}\n",
+                showing_suffix(shown, total)
+            ),
+        );
+    }
+}
+
+fn render_generic_edit_detail(
+    out: &mut String,
+    edit: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let verb = edit
+        .get("verb")
+        .and_then(|value| value.as_str())
+        .unwrap_or("edit");
+    let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+    if verb == "tabular.append_rows" {
+        return render_append_rows_detail(out, params, config, detail_budget);
+    }
+
+    let title = humanize_edit_verb(verb);
+    let detail = format_generic_edit_params(params, config);
+    let line = if detail.is_empty() {
+        title
+    } else {
+        format!("{title}: {detail}")
+    };
+    detail_budget.push_line(out, format!("  - {line}\n"))
+}
+
+fn render_append_rows_detail(
+    out: &mut String,
+    params: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let rows = params
+        .get("rows")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if rows.is_empty() {
+        return detail_budget.push_line(out, "  - Rows added\n".to_string());
+    }
+    let shown = example_count(rows.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!("  - Rows added{}\n", showing_suffix(shown, rows.len())),
+    ) {
+        return false;
+    }
+    let start = params.get("start").and_then(|value| value.as_u64());
+    for (offset, row) in rows.into_iter().take(shown).enumerate() {
+        let locator = start
+            .map(|start| format!("row {}", start + offset as u64 + 1))
+            .unwrap_or_else(|| "row".into());
+        let values = captured_row_values_text(&row, config);
+        if !detail_budget.push_line(out, format!("    - {locator}: {values}\n")) {
+            return false;
+        }
+    }
+    true
+}
+
+fn specialized_detail_verb(verb: &str) -> bool {
+    matches!(
+        verb,
+        "tabular.edit_cell"
+            | "tabular.add_row"
+            | "tabular.remove_row"
+            | "text.replace_lines"
+            | "binary.contents-differ"
+            | "metadata.value_change"
+    )
+}
+
+fn summary_covered_generic_verb(node: &DiffNode, edit: &serde_json::Value) -> bool {
+    let Some(verb) = edit.get("verb").and_then(|value| value.as_str()) else {
+        return false;
+    };
+    matches!(verb, "tabular.rename_column") && node.tags.contains("binoc.column-rename")
+}
+
+fn humanize_edit_verb(verb: &str) -> String {
+    let tail = verb.rsplit_once('.').map(|(_, tail)| tail).unwrap_or(verb);
+    tail.replace(['_', '-'], " ")
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn captured_row_values_text(row: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    row.get("values")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .take(config.max_examples_per_block.max(1))
+                .map(|value| format_scalar_value(value, config))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .filter(|values| !values.is_empty())
+        .unwrap_or_else(|| "values omitted".into())
+}
+
+fn format_generic_edit_params(
+    params: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+) -> String {
+    match params {
+        serde_json::Value::Object(map) => map
+            .iter()
+            .take(config.max_examples_per_block.max(1))
+            .map(|(key, value)| format!("{key}: {}", compact_json_value(value, config)))
+            .collect::<Vec<_>>()
+            .join("; "),
+        serde_json::Value::Null => String::new(),
+        other => compact_json_value(other, config),
+    }
+}
+
+fn compact_json_value(value: &serde_json::Value, config: &MarkdownRendererConfig) -> String {
+    let rendered = match value {
+        serde_json::Value::String(text) => format!("'{text}'"),
+        other => serde_json::to_string(other).unwrap_or_else(|_| "null".into()),
+    };
+    let (rendered, truncated) = truncate_text(&rendered, config.max_value_chars);
+    format!("{rendered}{}", if truncated { "..." } else { "" })
 }
 
 /// Render `metadata.value_change` edits (column/table/file metadata) as human
@@ -1367,6 +1603,79 @@ mod tests {
     }
 
     #[test]
+    fn to_markdown_renders_unknown_visible_edit_details() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv").with_summary("1 edit");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.append_rows",
+                    "params": {
+                        "start": 2,
+                        "rows": [
+                            { "values": ["south", "2025", "9"] },
+                            { "values": ["east", "2025", "21"] }
+                        ]
+                    }
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("  - Rows added\n"), "got:\n{md}");
+        assert!(
+            md.contains("    - row 3: 'south', '2025', '9'")
+                && md.contains("    - row 4: 'east', '2025', '21'"),
+            "got:\n{md}"
+        );
+    }
+
+    #[test]
+    fn to_markdown_does_not_duplicate_summary_covered_column_rename() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv")
+            .with_summary("Column renamed: 'count' -> 'total'")
+            .with_tag("binoc.column-rename");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.rename_column",
+                    "params": { "from": "count", "to": "total" }
+                },
+                {
+                    "verb": "tabular.append_rows",
+                    "params": {
+                        "start": 3,
+                        "rows": [
+                            { "values": ["south", "2025", "9"] },
+                            { "values": ["east", "2025", "21"] }
+                        ]
+                    }
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("Column renamed: 'count' -> 'total'"),
+            "got:\n{md}"
+        );
+        assert!(!md.contains("Rename Column"), "got:\n{md}");
+        assert!(!md.contains("Other edits"), "got:\n{md}");
+        assert!(md.contains("  - Rows added\n"), "got:\n{md}");
+    }
+
+    #[test]
     fn to_markdown_respects_explicit_group_sections() {
         let changeset = Changeset::new(
             "v1",
@@ -1529,19 +1838,18 @@ mod tests {
 
     #[test]
     fn move_with_children_renders_as_paired_bullets() {
-        // A `move` node carrying its own content-change children should
-        // be reported as two stacked top-level bullets under the same
-        // path (move headline + content detail), classified together by
-        // the highest-significance descendant tag. Children must NOT
-        // also appear as separate enumerated entries elsewhere.
+        // A container `move` whose content change lives in a child (e.g. a
+        // renamed archive holding one modified member) reports as one unit: an
+        // origin line plus the joined child detail, indented under one path and
+        // classified together by the highest-significance descendant tag.
+        // Children must NOT also appear as separate enumerated entries.
         let child = DiffNode::new("modify", "column", "email")
             .with_summary("Column added: 'email'")
             .with_tag("binoc.column-addition");
         let move_node = DiffNode::new("move", "tabular", "data_v2.csv")
             .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_summary("Moved from data.csv (modified)")
+            .with_summary("Moved from data.csv")
             .with_tag("binoc.move")
-            .with_tag("binoc.move.modified")
             .with_children(vec![child]);
         let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
 
@@ -1560,8 +1868,9 @@ mod tests {
             md.contains("## Substantive changes"),
             "should land in substantive section (promoted from child tag)"
         );
-        assert!(md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"));
-        assert!(md.contains("- **data_v2.csv**: Column added: 'email'\n"));
+        assert!(md.contains("- **data_v2.csv**:\n"), "got:\n{md}");
+        assert!(md.contains("  - Moved from data.csv\n"), "got:\n{md}");
+        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
         // The child detail should appear exactly once, never as its own
         // separately-categorized entry.
         assert_eq!(md.matches("Column added: 'email'").count(), 1);
@@ -1569,11 +1878,11 @@ mod tests {
 
     #[test]
     fn move_with_tabular_summary_annotation_renders_as_paired_bullets() {
-        // A CSV rename+modify produces a move node with no children but
-        // `annotations.tabular_summary` set by TabularAnalyzer.
+        // A CSV rename+modify produces a `binoc.move.modified` node whose
+        // origin is synthesized from its source and whose content comes from
+        // `annotations.tabular_summary` (set by TabularAnalyzer).
         let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
             .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_summary("Moved from data.csv (modified)")
             .with_tag("binoc.move")
             .with_tag("binoc.move.modified")
             .with_tag("binoc.column-addition")
@@ -1598,23 +1907,22 @@ mod tests {
 
         assert!(md.contains("## Substantive changes"));
         assert!(
-            md.contains("- **data_v2.csv**: Moved from data.csv (modified)\n"),
-            "move headline bullet missing; got:\n{md}"
+            md.contains("  - Moved from data.csv\n"),
+            "origin line missing; got:\n{md}"
         );
         assert!(
-            md.contains("- **data_v2.csv**: Column added: 'email'\n"),
-            "tabular_summary must render as its own bullet under the same path; got:\n{md}"
+            md.contains("  - Column added: 'email'\n"),
+            "tabular_summary must render beneath the origin under the same path; got:\n{md}"
         );
     }
 
     #[test]
     fn move_with_content_summary_annotation_renders_as_paired_bullets() {
-        // A text rename+modify produces a move node with no children,
-        // no tabular_summary, but `annotations.content_summary` from
+        // A text rename+modify produces a `binoc.move.modified` node with no
+        // children, no tabular_summary, but `annotations.content_summary` from
         // the controller's re-dispatch merge.
         let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
             .with_source(Source::new("notes.txt", Side::From).with_action("move"))
-            .with_summary("Moved from notes.txt (modified)")
             .with_tag("binoc.move")
             .with_tag("binoc.move.modified")
             .with_tag("binoc.content-changed")
@@ -1632,12 +1940,12 @@ mod tests {
         );
 
         assert!(
-            md.contains("- **meeting-notes-v2.txt**: Moved from notes.txt (modified)\n"),
-            "move headline bullet missing; got:\n{md}"
+            md.contains("  - Moved from notes.txt\n"),
+            "origin line missing; got:\n{md}"
         );
         assert!(
-            md.contains("- **meeting-notes-v2.txt**: 2 lines added\n"),
-            "content_summary must render as its own bullet under the same path; got:\n{md}"
+            md.contains("  - 2 lines added\n"),
+            "content_summary must render beneath the origin under the same path; got:\n{md}"
         );
     }
 
@@ -1645,7 +1953,7 @@ mod tests {
     fn move_trailer_prefers_tabular_over_content_summary() {
         let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
             .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_summary("Moved from data.csv (modified)")
+            .with_summary("Moved from data.csv")
             .with_tag("binoc.move");
         move_node.annotate_from(
             "binoc",
@@ -1664,7 +1972,7 @@ mod tests {
             &MarkdownRendererConfig::default(),
         );
 
-        assert!(md.contains("- **data_v2.csv**: Column added: 'email'\n"));
+        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
         assert!(
             !md.contains("CSV modified"),
             "content_summary should be shadowed by tabular_summary"

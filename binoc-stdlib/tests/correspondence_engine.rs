@@ -839,6 +839,73 @@ fn keyed_row_exclusion_degrades_with_diagnostic() {
 }
 
 #[test]
+fn tabular_writer_infers_single_column_row_key_for_high_overlap_unique_values() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.csv"),
+        "id,name,value\n1,alpha,a\n2,beta,b\n3,gamma,c\n4,delta,d\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.csv"),
+        "id,name,value\n4,delta,d\n3,gamma,c\n2,beta,B\n1,alpha,a\n",
+    )
+    .unwrap();
+
+    let changeset = diff_with_config(&left, &right, default_engine_config());
+    assert!(changeset
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "binoc.tabular_auto_key"));
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.csv").expect("data.csv");
+    assert_eq!(node.action, "modify");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1, "{edits:?}");
+    assert_eq!(edits[0]["verb"], "tabular.edit_cell");
+    assert_eq!(edits[0]["params"]["key"]["id"], "2");
+    assert_eq!(edits[0]["params"]["column"], "value");
+}
+
+#[test]
+fn csv_banner_line_does_not_truncate_later_rows_to_one_column() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("gistemp.csv"),
+        "Land-Ocean: Global Means\nYear,Jan,Feb\n1880,-.18,-.24\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("gistemp.csv"),
+        "Land-Ocean: Global Means\nYear,Jan,Feb\n1880,-.17,-.24\n",
+    )
+    .unwrap();
+
+    let changeset = diff_with_config(&left, &right, default_engine_config());
+    let root = changeset.root.expect("root");
+    let node = find(&root, "gistemp.csv").expect("gistemp.csv");
+    assert_eq!(node.action, "modify");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert!(
+        edits.iter().any(|edit| {
+            edit["verb"] == "tabular.edit_cell"
+                && edit["params"]["column"] == "column_2"
+                && edit["params"]["from"] == "-.18"
+                && edit["params"]["to"] == "-.17"
+        }),
+        "{edits:?}"
+    );
+}
+
+#[test]
 fn keyed_row_degradation_tags_only_observed_failures() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");

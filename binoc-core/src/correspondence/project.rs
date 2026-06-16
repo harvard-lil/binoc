@@ -126,29 +126,6 @@ pub fn project(
 
         let left_path = &store.item(left_id).logical_path;
         let right_path = &store.item(right_id).logical_path;
-        let edits = edit_lists.get(&index).cloned().unwrap_or_default();
-        let visible_edits: Vec<Edit> = edits
-            .iter()
-            .filter(|edit| edit.projection.visible)
-            .cloned()
-            .collect();
-        // Grab each endpoint's own `item_type` BEFORE merging the two
-        // projections together — the merge collapses them into one, which would
-        // hide the fact that the representation changed across the link. These
-        // raw strings flow to the annotator so stdlib/plugin rules can decide
-        // whether a container reshaped (e.g. "directory" -> "SQLite database");
-        // core never interprets them.
-        let source_item_type = store.projection(left_id).item_type.clone();
-        let mut projection = store.projection(right_id).clone();
-        projection.merge_from(store.projection(left_id));
-        overlay_projection(&mut projection, &link.projection);
-        for edit in &edits {
-            overlay_projection(&mut projection, &edit.projection.hint);
-        }
-        let carried = carried_path_change(store, link.left, link.right);
-        let copied = projection.action.as_deref() == Some("copy");
-        let moved = left_path != right_path && !carried && !copied;
-        let changed = !edits.is_empty();
         let line_is_container = !store
             .tree(TreeSide::Right)
             .node(link.right)
@@ -159,6 +136,47 @@ pub fn project(
                 .node(link.left)
                 .children
                 .is_empty();
+        let edits = edit_lists.get(&index).cloned().unwrap_or_default();
+        let mut projected_edits = edits.clone();
+        // Grab each endpoint's own `item_type` BEFORE merging the two
+        // projections together — the merge collapses them into one, which would
+        // hide the fact that the representation changed across the link. These
+        // raw strings flow to the annotator so stdlib/plugin rules can decide
+        // whether a container reshaped (e.g. "directory" -> "SQLite database");
+        // core never interprets them.
+        let source_item_type = store.projection(left_id).item_type.clone();
+        let mut projection = store.projection(right_id).clone();
+        projection.merge_from(store.projection(left_id));
+        overlay_projection(&mut projection, &link.projection);
+        for edit in &projected_edits {
+            overlay_projection(&mut projection, &edit.projection.hint);
+        }
+        let carried = carried_path_change(store, link.left, link.right);
+        let copied = projection.action.as_deref() == Some("copy");
+        let moved = left_path != right_path && !carried && !copied;
+        if !line_is_container
+            && !copied
+            && !moved
+            && projection.action.is_none()
+            && projected_edits.iter().all(|edit| !edit.projection.visible)
+            && content_hashes_differ(store.item(left_id), store.item(right_id))
+        {
+            let edit = Edit::new(
+                "content.differs",
+                json!({
+                    "reason": "linked endpoints have different content hashes, but no visible edit explained the difference"
+                }),
+            )
+            .with_item_type("item");
+            overlay_projection(&mut projection, &edit.projection.hint);
+            projected_edits.push(edit);
+        }
+        let visible_edits: Vec<Edit> = projected_edits
+            .iter()
+            .filter(|edit| edit.projection.visible)
+            .cloned()
+            .collect();
+        let changed = !projected_edits.is_empty();
         let derived_action = match (copied, moved, changed) {
             (true, _, _) => "copy",
             (false, true, _) => "move",
@@ -215,7 +233,10 @@ pub fn project(
                 .with_evidence(link.evidence.clone())
                 .with_action(action)],
             evidence: Some(link.evidence.clone()),
-            verbs: edits.iter().map(|edit| edit.verb.clone()).collect(),
+            verbs: projected_edits
+                .iter()
+                .map(|edit| edit.verb.clone())
+                .collect(),
             edits: visible_edits,
             container: line_is_container,
             depth: store.tree(TreeSide::Right).ancestors(link.right).len(),
@@ -319,6 +340,16 @@ pub fn project(
     Projection {
         lines,
         container_item_types,
+    }
+}
+
+fn content_hashes_differ(left: &binoc_sdk::ItemRef, right: &binoc_sdk::ItemRef) -> bool {
+    if left.is_dir || right.is_dir {
+        return false;
+    }
+    match (&left.content_hash, &right.content_hash) {
+        (Some(left), Some(right)) => left != right,
+        _ => false,
     }
 }
 
@@ -580,6 +611,13 @@ mod tests {
         }
     }
 
+    fn hashed_item(path: &str, hash: &str) -> ItemRef {
+        ItemRef {
+            content_hash: Some(hash.into()),
+            ..item(path)
+        }
+    }
+
     #[test]
     fn projection_uses_rule_supplied_metadata_for_visible_output() {
         let mut store = Store::new(
@@ -633,6 +671,54 @@ mod tests {
         assert_eq!(node.item_type, "custom-item");
         assert!(node.tags.contains("test.tag"));
         assert_eq!(node.details["edits"][0]["verb"], json!("test.edit"));
+    }
+
+    #[test]
+    fn projection_surfaces_unexplained_content_difference() {
+        let mut store = Store::new(
+            ItemRef {
+                is_dir: true,
+                projection_hint: ProjectionHint::default().item_type("tree"),
+                ..item("")
+            },
+            ItemRef {
+                is_dir: true,
+                projection_hint: ProjectionHint::default().item_type("tree"),
+                ..item("")
+            },
+            ProjectionHint::default().item_type("tree"),
+        );
+        let left = store.left.add_child(
+            0,
+            hashed_item("data.csv", "left-hash"),
+            ProjectionHint::default().item_type("tabular"),
+        );
+        let right = store.right.add_child(
+            0,
+            hashed_item("data.csv", "right-hash"),
+            ProjectionHint::default().item_type("tabular"),
+        );
+        store.links.apply(
+            LinkProposal {
+                left,
+                right,
+                evidence: "test.evidence".into(),
+                settled: false,
+                projection: ProjectionHint::default(),
+            },
+            "test-rule",
+            1,
+        );
+
+        let changeset = project(&store, &BTreeMap::new(), &[]).to_changeset("left", "right");
+        let root = changeset.root.expect("root");
+        let node = root
+            .children
+            .iter()
+            .find(|node| node.path == "data.csv")
+            .unwrap();
+        assert_eq!(node.action, "modify");
+        assert_eq!(node.details["edits"][0]["verb"], json!("content.differs"));
     }
 
     #[test]

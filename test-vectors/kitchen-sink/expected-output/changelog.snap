@@ -27,4 +27,5 @@ expression: "&md"
     - '\nFAKEICONv1'
 - **license-copy.txt**: Copied from license.txt
 - **metrics.csv**: Columns reordered
+  - Reorder Columns: order: ["category","year","value"]
 - **summary.txt**: Moved from report.txt
