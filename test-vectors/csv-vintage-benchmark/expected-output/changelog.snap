@@ -1,0 +1,24 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+## Schema & vocabulary changes
+
+- **facilities.csv**: Column added: 'region'; 1 cell changed
+  - Changed cells
+    - row 2, column 'status': 'active' -> 'decommissioned'
+  - Set Headers: from: ["facility_id","name","status"]; to: ["facility_id","name","status","region"]
+  - Add Column: name: 'region'; values: {"total_values":4,"truncated":false,"values":["north","east","west","south"]}
+
+## Bulk data updates
+
+- **inspections.csv**: 2 rows added; 3 cells changed
+  - Changed cells
+    - row 1, column 'score': '82' -> '85'
+    - row 3, column 'score': '90' -> '91'
+    - row 4, column 'score': '68' -> '70'
+  - Rows added
+    - row 5: 'I104', 'F001', '88'
+    - row 6: 'I105', 'F002', '73'

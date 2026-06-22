@@ -1,0 +1,65 @@
+[vector]
+name = "csv-vintage-benchmark"
+description = "Two vintages of a published dataset: a vintage reader cares about schema and vocabulary, not the bulk cell/row churn. Benchmark for how well binoc can serve the vintage (different-edition) audience, distinct from the same-data-with-edits audience."
+tags = ["csv", "vintage", "metadata", "benchmark"]
+
+[docs]
+summary = "A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore."
+setup = """
+The dataset is a yearly facilities register published as a small directory of
+CSVs. Between the two editions:
+
+  * `facilities.csv` gains a `region` column (schema change) and one row's
+    `status` moves to a brand-new category value, `decommissioned`
+    (a *vocabulary* shift — the set of distinct values in a categorical column
+    grew).
+  * `inspections.csv` changes only in its data: several scores are edited and
+    two rows are appended. This is exactly the churn a vintage reader does not
+    want to read.
+
+The markdown config models the vintage stance as significance: schema/structural
+tags are the high-priority group, bulk cell/row tags the low-priority group.
+Because `classify_tags` promotes a node to the highest-priority group among its
+tags, `facilities.csv` (which carries both schema and cell tags) floats up to
+"Schema & vocabulary changes" while the pure-data `inspections.csv` sinks to
+"Bulk data updates". That file-granularity separation is the best vintage view
+binoc offers today.
+
+WHAT THIS BENCHMARK IS FOR — the gap between today's output (see
+`expected-output/changelog.snap`) and the target (see `VINTAGE-IDEAL.md`):
+
+  1. Within-node significance. `facilities.csv`'s `region` addition and its
+     `status` cell edit live on one node, so they cannot be separated: the
+     vintage reader still sees the cell bullet. There is no config-driven
+     edit-level drop/keep (only `EditProjection.visible`, set by writers).
+  2. Vocabulary as a first-class change. The `active -> decommissioned` shift is
+     reported as an ordinary `binoc.cell-change`, not as "the `status` vocabulary
+     gained a value". Columns are not first-class nodes and distinct-value-set
+     diffing does not exist.
+  3. Summary statistics. `inspections.csv` is rendered as full cell/row detail,
+     not as a one-line vintage statistic ("142 -> 144 rows, 3 cells changed").
+     The Summary/GlobalClaim seams exist to carry such a fact; no rule emits one.
+
+This vector is a kept benchmark, not a feature. It is expected to PASS against
+current output; as the vintage story improves, update the snapshot and watch it
+converge on VINTAGE-IDEAL.md. See docs/adr for the design rationale.
+"""
+
+# The vintage stance expressed as renderer significance (AGENTS rule 3): schema
+# and vocabulary changes outrank bulk data churn. Config order is priority, so a
+# node touching the schema is promoted above pure-data nodes.
+[config.output.markdown]
+groups = [
+    { heading = "Schema & vocabulary changes", tags = ["binoc.schema-change", "binoc.column-addition", "binoc.column-removal", "binoc.column-rename", "binoc.metadata.value-label-set"] },
+    { heading = "Bulk data updates", tags = ["binoc.cell-change", "binoc.row-addition", "binoc.row-removal"] },
+]
+
+[expected]
+root_action = "modify"
+has_tags = [
+    "binoc.column-addition",
+    "binoc.schema-change",
+    "binoc.cell-change",
+    "binoc.row-addition",
+]
+significance = "Schema & vocabulary changes"
