@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use binoc_sdk::{
@@ -44,11 +44,142 @@ impl Default for ExpandCaps {
 const GZIP_CAP_KNOB: &str = "correspondence.max_gzip_bytes";
 const ENTRY_CAP_KNOB: &str = "correspondence.max_archive_entry_bytes";
 const TOTAL_CAP_KNOB: &str = "correspondence.max_archive_total_bytes";
+const STREAM_COPY_BUFFER_BYTES: usize = 64 * 1024;
 
 fn cap_overflow_message(what: &str, cap: u64, knob: &str) -> String {
     format!(
         "{what} exceeds the {cap}-byte decompression cap; raise `{knob}` in the dataset config to expand it"
     )
+}
+
+#[derive(Debug)]
+enum StreamCopyError {
+    SourceIo(std::io::Error),
+    OutputIo(std::io::Error),
+    Cap(String),
+}
+
+impl StreamCopyError {
+    fn into_format_error(self, format: fn(String) -> BinocError) -> BinocError {
+        match self {
+            Self::SourceIo(err) => format(BinocError::Io(err).to_string()),
+            Self::OutputIo(err) => BinocError::Io(err),
+            Self::Cap(message) => format(message),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StreamCap<'a> {
+    cap: u64,
+    message: &'a str,
+}
+
+struct StreamTotalCap<'a> {
+    current: &'a mut u64,
+    cap: u64,
+    message: &'a str,
+}
+
+#[derive(Debug)]
+struct StreamCopyStats {
+    bytes_written: u64,
+    hash: Option<String>,
+}
+
+fn stream_copy_with_caps<R: Read>(
+    reader: &mut R,
+    dest: &Path,
+    entry_cap: StreamCap<'_>,
+    mut total_cap: Option<StreamTotalCap<'_>>,
+    hash_output: bool,
+) -> Result<StreamCopyStats, StreamCopyError> {
+    let result = (|| {
+        let mut out = std::fs::File::create(dest).map_err(StreamCopyError::OutputIo)?;
+        let mut buffer = [0u8; STREAM_COPY_BUFFER_BYTES];
+        let mut entry_total = 0u64;
+        let mut hasher = hash_output.then(blake3::Hasher::new);
+
+        loop {
+            let entry_remaining = entry_cap.cap.saturating_sub(entry_total);
+            if entry_remaining == 0 {
+                if read_over_cap_probe(reader)? {
+                    return Err(StreamCopyError::Cap(entry_cap.message.to_string()));
+                }
+                break;
+            }
+
+            let total_remaining = total_cap
+                .as_ref()
+                .map(|total| total.cap.saturating_sub(*total.current))
+                .unwrap_or(u64::MAX);
+            if total_remaining == 0 {
+                if read_over_cap_probe(reader)? {
+                    let message = total_cap
+                        .as_ref()
+                        .expect("total cap must be present")
+                        .message
+                        .to_string();
+                    return Err(StreamCopyError::Cap(message));
+                }
+                break;
+            }
+
+            let read_limit = STREAM_COPY_BUFFER_BYTES.min(
+                entry_remaining
+                    .min(total_remaining)
+                    .try_into()
+                    .unwrap_or(usize::MAX),
+            );
+            let bytes_read = reader
+                .read(&mut buffer[..read_limit])
+                .map_err(StreamCopyError::SourceIo)?;
+            if bytes_read == 0 {
+                break;
+            }
+            let bytes_read_u64 = bytes_read as u64;
+            let new_entry_total = entry_total
+                .checked_add(bytes_read_u64)
+                .ok_or_else(|| StreamCopyError::Cap(entry_cap.message.to_string()))?;
+            let new_total = total_cap
+                .as_ref()
+                .map(|total| {
+                    (*total.current)
+                        .checked_add(bytes_read_u64)
+                        .ok_or_else(|| StreamCopyError::Cap(total.message.to_string()))
+                })
+                .transpose()?;
+
+            out.write_all(&buffer[..bytes_read])
+                .map_err(StreamCopyError::OutputIo)?;
+            if let Some(hasher) = hasher.as_mut() {
+                hasher.update(&buffer[..bytes_read]);
+            }
+            entry_total = new_entry_total;
+            if let (Some(total), Some(new_total)) = (total_cap.as_mut(), new_total) {
+                *total.current = new_total;
+            }
+        }
+
+        out.flush().map_err(StreamCopyError::OutputIo)?;
+        Ok(StreamCopyStats {
+            bytes_written: entry_total,
+            hash: hasher.map(|hasher| hasher.finalize().to_hex().to_string()),
+        })
+    })();
+
+    if result.is_err() {
+        let _ = std::fs::remove_file(dest);
+    }
+    result
+}
+
+fn read_over_cap_probe<R: Read>(reader: &mut R) -> Result<bool, StreamCopyError> {
+    let mut byte = [0u8; 1];
+    reader
+        .read(&mut byte)
+        .map(|bytes_read| bytes_read > 0)
+        .map_err(StreamCopyError::SourceIo)
 }
 
 /// Which separator the immediate children of an expansion hang off.
@@ -208,23 +339,29 @@ fn extract_zip(zip_path: &Path, dest: &Path, caps: ExpandCaps) -> BinocResult<Ve
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(BinocError::Io)?;
         }
-        let buffer = read_capped(
+        stream_copy_with_caps(
             &mut entry,
-            caps.archive_max_entry_bytes,
-            &cap_overflow_message("zip entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
+            &out_path,
+            StreamCap {
+                cap: caps.archive_max_entry_bytes,
+                message: &cap_overflow_message(
+                    "zip entry",
+                    caps.archive_max_entry_bytes,
+                    ENTRY_CAP_KNOB,
+                ),
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: caps.archive_max_total_bytes,
+                message: &cap_overflow_message(
+                    "zip total output",
+                    caps.archive_max_total_bytes,
+                    TOTAL_CAP_KNOB,
+                ),
+            }),
+            false,
         )
-        .map_err(|err| BinocError::Zip(err.to_string()))?;
-        total = total
-            .checked_add(buffer.len() as u64)
-            .ok_or_else(|| BinocError::Zip("zip output size overflow".into()))?;
-        if total > caps.archive_max_total_bytes {
-            return Err(BinocError::Zip(cap_overflow_message(
-                "zip total output",
-                caps.archive_max_total_bytes,
-                TOTAL_CAP_KNOB,
-            )));
-        }
-        std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
+        .map_err(|err| err.into_format_error(BinocError::Zip))?;
     }
     Ok(diagnostics)
 }
@@ -292,36 +429,32 @@ impl ExpandRule for GzipExpand {
         if inner_name.ends_with(".tar") {
             return TarExpand { caps: self.caps }.expand(item, data);
         }
-        let bytes = data.read_bytes(item)?;
-        let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
-        let output = read_capped(
-            &mut decoder,
-            self.caps.gzip_max_bytes,
-            &cap_overflow_message("gzip output", self.caps.gzip_max_bytes, GZIP_CAP_KNOB),
-        )
-        .map_err(|err| BinocError::Gzip(err.to_string()))?;
         let workspace = data.workspace()?;
         let physical = workspace.join(inner_name);
-        std::fs::write(&physical, &output).map_err(BinocError::Io)?;
+        let mut reader = data.open_read(item)?;
+        let mut decoder = flate2::read::GzDecoder::new(&mut reader);
+        let stats = stream_copy_with_caps(
+            &mut decoder,
+            &physical,
+            StreamCap {
+                cap: self.caps.gzip_max_bytes,
+                message: &cap_overflow_message(
+                    "gzip output",
+                    self.caps.gzip_max_bytes,
+                    GZIP_CAP_KNOB,
+                ),
+            },
+            None,
+            true,
+        )
+        .map_err(|err| err.into_format_error(BinocError::Gzip))?;
         let logical = decompose_child(&item.logical_path, inner_name);
         let mut child = data.register_local(&physical, &logical)?;
-        child.content_hash = Some(blake3::hash(&output).to_hex().to_string());
-        child.size = Some(output.len() as u64);
+        child.content_hash = stats.hash;
+        child.size = Some(stats.bytes_written);
         child.projection_hint = projection_for(&logical, child.is_dir);
         Ok(vec![child].into())
     }
-}
-
-fn read_capped<R: Read>(reader: &mut R, cap: u64, message: &str) -> BinocResult<Vec<u8>> {
-    let mut out = Vec::new();
-    reader
-        .take(cap + 1)
-        .read_to_end(&mut out)
-        .map_err(BinocError::Io)?;
-    if out.len() as u64 > cap {
-        return Err(BinocError::Other(message.into()));
-    }
-    Ok(out)
 }
 
 fn safe_archive_path(path: &Path) -> Option<PathBuf> {
@@ -369,23 +502,125 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, caps: ExpandCaps) -> BinocResult
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(BinocError::Io)?;
         }
-        let buffer = read_capped(
+        stream_copy_with_caps(
             &mut entry,
-            caps.archive_max_entry_bytes,
-            &cap_overflow_message("tar entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
+            &out_path,
+            StreamCap {
+                cap: caps.archive_max_entry_bytes,
+                message: &cap_overflow_message(
+                    "tar entry",
+                    caps.archive_max_entry_bytes,
+                    ENTRY_CAP_KNOB,
+                ),
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: caps.archive_max_total_bytes,
+                message: &cap_overflow_message(
+                    "tar total output",
+                    caps.archive_max_total_bytes,
+                    TOTAL_CAP_KNOB,
+                ),
+            }),
+            false,
         )
-        .map_err(|err| BinocError::Tar(err.to_string()))?;
-        total = total
-            .checked_add(buffer.len() as u64)
-            .ok_or_else(|| BinocError::Tar("tar output size overflow".into()))?;
-        if total > caps.archive_max_total_bytes {
-            return Err(BinocError::Tar(cap_overflow_message(
-                "tar total output",
-                caps.archive_max_total_bytes,
-                TOTAL_CAP_KNOB,
-            )));
-        }
-        std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
+        .map_err(|err| err.into_format_error(BinocError::Tar))?;
     }
     Ok(diagnostics)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    #[test]
+    fn stream_copy_writes_in_cap_output_and_hashes_incrementally() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let payload = b"stream me";
+        let mut reader = Cursor::new(payload);
+        let mut total = 7u64;
+
+        let stats = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 1024,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 1024,
+                message: "total cap",
+            }),
+            true,
+        )
+        .expect("copy succeeds");
+
+        assert_eq!(std::fs::read(&out_path).expect("output"), payload);
+        assert_eq!(stats.bytes_written, payload.len() as u64);
+        assert_eq!(total, 7 + payload.len() as u64);
+        assert_eq!(
+            stats.hash.as_deref(),
+            Some(blake3::hash(payload).to_hex().as_str())
+        );
+    }
+
+    #[test]
+    fn stream_copy_removes_partial_file_on_entry_cap() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let mut reader = Cursor::new(b"abcdef");
+        let mut total = 0u64;
+
+        let err = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 3,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 1024,
+                message: "total cap",
+            }),
+            false,
+        )
+        .expect_err("entry cap should fail");
+
+        assert!(matches!(err, StreamCopyError::Cap(message) if message == "entry cap"));
+        assert!(!out_path.exists(), "partial output should be removed");
+        assert_eq!(total, 3);
+    }
+
+    #[test]
+    fn stream_copy_removes_partial_file_on_total_cap() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let mut reader = Cursor::new(b"abcdef");
+        let mut total = 2u64;
+
+        let err = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 1024,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 5,
+                message: "total cap",
+            }),
+            false,
+        )
+        .expect_err("total cap should fail");
+
+        assert!(matches!(err, StreamCopyError::Cap(message) if message == "total cap"));
+        assert!(!out_path.exists(), "partial output should be removed");
+        assert_eq!(total, 5);
+    }
 }
