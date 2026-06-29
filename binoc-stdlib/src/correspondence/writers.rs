@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use binoc_sdk::{
@@ -11,6 +12,7 @@ use serde_json::json;
 use similar::{ChangeTag, TextDiff};
 
 use super::parse::JsonSourceFacts;
+use super::tabular::load_tabular;
 
 const MAX_CAPTURED_VALUES: usize = 16;
 const MAX_VALUE_PREVIEW_BYTES: usize = 120;
@@ -145,16 +147,18 @@ impl EditListWriter for TabularWriter {
         // diff. See the tiered-artifact-metadata + per-artifact-writer ADRs.
         let metadata_edits = tabular_metadata_edits(&left, &right);
 
-        if !ctx.row_keys.is_empty() && keys_present(ctx.row_keys, &left, &right) {
-            if keyed_rows_complete(ctx.row_keys, &left, &right) {
-                write_keyed_row_edits(&mut edits, ctx.row_keys, &left, &right);
-                edits.extend(metadata_edits);
-                return Ok(Some(WriteOutput { edits, diagnostics }));
-            }
-            let quality = key_quality(ctx.row_keys, &left, &right);
-            push_key_quality_diagnostics(&mut diagnostics, quality, ctx.row_identity_policies);
-            if let Some(edit) = key_quality_edit(quality, ctx.row_identity_policies) {
-                edits.push(edit);
+        if !ctx.row_keys.is_empty() {
+            if let Some((left_keyed, right_keyed)) = keyed_tables(ctx.row_keys, &left, &right) {
+                if keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
+                    write_keyed_row_edits(&mut edits, ctx.row_keys, &left_keyed, &right_keyed);
+                    edits.extend(metadata_edits);
+                    return Ok(Some(WriteOutput { edits, diagnostics }));
+                }
+                let quality = key_quality(&left_keyed.index, &right_keyed.index);
+                push_key_quality_diagnostics(&mut diagnostics, quality, ctx.row_identity_policies);
+                if let Some(edit) = key_quality_edit(quality, ctx.row_identity_policies) {
+                    edits.push(edit);
+                }
             }
         } else if ctx.row_keys.is_empty() {
             if let Some(auto_key) = infer_auto_key(&left, &right) {
@@ -181,17 +185,15 @@ impl EditListWriter for TabularWriter {
                     .hidden(),
                 );
                 let keys = vec![auto_key.column];
-                write_keyed_row_edits(&mut edits, &keys, &left, &right);
+                if let Some((left_keyed, right_keyed)) = keyed_tables(&keys, &left, &right) {
+                    write_keyed_row_edits(&mut edits, &keys, &left_keyed, &right_keyed);
+                }
                 edits.extend(metadata_edits);
                 return Ok(Some(WriteOutput { edits, diagnostics }));
             }
         }
 
-        let common: Vec<&String> = left
-            .headers
-            .iter()
-            .filter(|header| right.headers.contains(header))
-            .collect();
+        let common = common_columns(&left, &right);
         if left.rows.len() != right.rows.len()
             && left.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
             && right.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
@@ -202,14 +204,16 @@ impl EditListWriter for TabularWriter {
         let min_rows = left.rows.len().min(right.rows.len());
         for index in 0..min_rows {
             for column in &common {
-                let left_index = left.column_index(column).expect("common column");
-                let right_index = right.column_index(column).expect("common column");
-                let left_value = left.rows[index].get(left_index).unwrap_or(&Value::Null);
-                let right_value = right.rows[index].get(right_index).unwrap_or(&Value::Null);
+                let left_value = left.rows[index]
+                    .get(column.left_index)
+                    .unwrap_or(&Value::Null);
+                let right_value = right.rows[index]
+                    .get(column.right_index)
+                    .unwrap_or(&Value::Null);
                 if left_value != right_value {
                     edits.push(cell_edit(json!({
                         "row": index,
-                        "column": column,
+                        "column": column.name,
                         "from": value_preview(left_value),
                         "to": value_preview(right_value)
                     })));
@@ -240,8 +244,8 @@ impl EditListWriter for TabularWriter {
         data: &dyn DataAccess,
     ) -> BinocResult<Option<ExtractResult>> {
         let pair = TabularDataPair {
-            left: load_tabular(ctx, ctx.link.left, data)?,
-            right: load_tabular(ctx, ctx.link.right, data)?,
+            left: load_tabular(ctx, ctx.link.left, data)?.map(|table| (*table).clone()),
+            right: load_tabular(ctx, ctx.link.right, data)?.map(|table| (*table).clone()),
         };
         if pair.left.is_none() && pair.right.is_none() {
             return Ok(None);
@@ -276,26 +280,8 @@ fn column_order_extract(pair: &TabularDataPair) -> ExtractResult {
     ExtractResult::Text(out)
 }
 
-fn load_tabular(
-    ctx: &LinkCtx<'_>,
-    id: NodeId,
-    data: &dyn DataAccess,
-) -> BinocResult<Option<TabularData>> {
-    let Some(bytes) = ctx.view.artifact_bytes(id, &tabular_v1(), data)? else {
-        return Ok(None);
-    };
-    serde_json::from_slice(&bytes)
-        .map(Some)
-        .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))
-}
-
-fn keys_present(keys: &[String], left: &TabularData, right: &TabularData) -> bool {
-    keys.iter()
-        .all(|key| left.column_index(key).is_some() && right.column_index(key).is_some())
-}
-
-fn keyed_rows_complete(keys: &[String], left: &TabularData, right: &TabularData) -> bool {
-    table_has_complete_unique_keys(left, keys) && table_has_complete_unique_keys(right, keys)
+fn keyed_rows_complete(left: &KeyedIndex<'_>, right: &KeyedIndex<'_>) -> bool {
+    left.complete() && right.complete()
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -304,27 +290,11 @@ struct KeyQuality {
     has_duplicate: bool,
 }
 
-fn key_quality(keys: &[String], left: &TabularData, right: &TabularData) -> KeyQuality {
-    let left = table_key_quality(left, keys);
-    let right = table_key_quality(right, keys);
+fn key_quality(left: &KeyedIndex<'_>, right: &KeyedIndex<'_>) -> KeyQuality {
     KeyQuality {
-        has_null: left.has_null || right.has_null,
-        has_duplicate: left.has_duplicate || right.has_duplicate,
+        has_null: left.quality.has_null || right.quality.has_null,
+        has_duplicate: left.quality.has_duplicate || right.quality.has_duplicate,
     }
-}
-
-fn table_key_quality(table: &TabularData, keys: &[String]) -> KeyQuality {
-    let mut quality = KeyQuality::default();
-    let mut counts = BTreeMap::new();
-    for row in &table.rows {
-        let Some(key) = row_key(table, keys, row) else {
-            quality.has_null = true;
-            continue;
-        };
-        *counts.entry(key.signature).or_insert(0usize) += 1;
-    }
-    quality.has_duplicate = counts.values().any(|count| *count > 1);
-    quality
 }
 
 fn push_key_quality_diagnostics(
@@ -388,19 +358,6 @@ fn key_quality_edit(quality: KeyQuality, policies: binoc_sdk::RowIdentityPolicie
     Some(edit)
 }
 
-fn table_has_complete_unique_keys(table: &TabularData, keys: &[String]) -> bool {
-    let mut seen = BTreeSet::new();
-    for row in &table.rows {
-        let Some(key) = row_key(table, keys, row) else {
-            return false;
-        };
-        if !seen.insert(key.signature) {
-            return false;
-        }
-    }
-    true
-}
-
 #[derive(Debug, Clone)]
 struct AutoKeyCandidate {
     column: String,
@@ -412,9 +369,10 @@ fn infer_auto_key(left: &TabularData, right: &TabularData) -> Option<AutoKeyCand
     if left.rows.len() > AUTO_KEY_MAX_ROWS || right.rows.len() > AUTO_KEY_MAX_ROWS {
         return None;
     }
+    let right_headers = header_indices(right);
     left.headers
         .iter()
-        .filter(|header| right.column_index(header).is_some())
+        .filter(|header| right_headers.contains_key(header.as_str()))
         .filter_map(|header| auto_key_candidate(header, left, right))
         .filter(|candidate| candidate.jaccard >= AUTO_KEY_MIN_JACCARD)
         .min_by(|a, b| {
@@ -431,14 +389,15 @@ fn auto_key_candidate(
     right: &TabularData,
 ) -> Option<AutoKeyCandidate> {
     let keys = [column.to_string()];
-    if !keyed_rows_complete(&keys, left, right) {
+    let (left_keyed, right_keyed) = keyed_tables(&keys, left, right)?;
+    if !keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
         return None;
     }
-    if !auto_key_would_change_alignment(&keys, left, right) {
+    if !auto_key_would_change_alignment(&left_keyed.index, &right_keyed.index) {
         return None;
     }
-    let left_values = column_signatures(left, column)?;
-    let right_values = column_signatures(right, column)?;
+    let left_values = column_signatures(left, left_keyed.columns.indices[0]);
+    let right_values = column_signatures(right, right_keyed.columns.indices[0]);
     let intersection = left_values.intersection(&right_values).count();
     let union = left_values.union(&right_values).count();
     if union == 0 {
@@ -447,142 +406,254 @@ fn auto_key_candidate(
     Some(AutoKeyCandidate {
         column: column.to_string(),
         jaccard: intersection as f64 / union as f64,
-        total_value_bytes: total_column_value_bytes(left, column)?
-            + total_column_value_bytes(right, column)?,
+        total_value_bytes: total_column_value_bytes(left, left_keyed.columns.indices[0])
+            + total_column_value_bytes(right, right_keyed.columns.indices[0]),
     })
 }
 
-fn auto_key_would_change_alignment(
-    keys: &[String],
-    left: &TabularData,
-    right: &TabularData,
-) -> bool {
-    let left_rows = unique_rows_by_key(left, keys);
-    let right_rows = unique_rows_by_key(right, keys);
-    left_rows.iter().any(|(signature, (_, left_index, _))| {
-        right_rows
+fn auto_key_would_change_alignment(left: &KeyedIndex<'_>, right: &KeyedIndex<'_>) -> bool {
+    left.rows.iter().any(|(signature, left_row)| {
+        right
+            .rows
             .get(signature)
-            .is_some_and(|(_, right_index, _)| left_index != right_index)
+            .is_some_and(|right_row| left_row.index != right_row.index)
     })
 }
 
-fn column_signatures(table: &TabularData, column: &str) -> Option<BTreeSet<String>> {
-    let index = table.column_index(column)?;
-    Some(
-        table
-            .rows
-            .iter()
-            .filter_map(|row| row.get(index))
-            .map(|value| value.as_text().into_owned())
-            .collect(),
-    )
+fn column_signatures(table: &TabularData, index: usize) -> BTreeSet<Cow<'_, str>> {
+    table
+        .rows
+        .iter()
+        .filter_map(|row| row.get(index))
+        .map(Value::as_text)
+        .collect()
 }
 
-fn total_column_value_bytes(table: &TabularData, column: &str) -> Option<usize> {
-    let index = table.column_index(column)?;
-    Some(
-        table
-            .rows
-            .iter()
-            .map(|row| row.get(index).unwrap_or(&Value::Null).as_text().len())
-            .sum(),
-    )
+fn total_column_value_bytes(table: &TabularData, index: usize) -> usize {
+    table
+        .rows
+        .iter()
+        .map(|row| row.get(index).unwrap_or(&Value::Null).as_text().len())
+        .sum()
 }
 
-/// A row's identity key: a `signature` of the cells' flat text for
-/// grouping/ordering (so ordering matches the legacy all-string behavior) plus
-/// the typed cell `values` for rendering.
 #[derive(Debug, Clone)]
-struct RowKey {
-    signature: Vec<String>,
-    values: Vec<Value>,
+struct KeyColumns {
+    indices: Vec<usize>,
 }
 
-fn row_key(table: &TabularData, keys: &[String], row: &[Value]) -> Option<RowKey> {
-    let mut values = Vec::with_capacity(keys.len());
-    let mut signature = Vec::with_capacity(keys.len());
-    for key in keys {
-        let value = row.get(table.column_index(key)?).unwrap_or(&Value::Null);
+fn resolve_key_columns(table: &TabularData, keys: &[String]) -> Option<KeyColumns> {
+    keys.iter()
+        .map(|key| table.column_index(key))
+        .collect::<Option<Vec<_>>>()
+        .map(|indices| KeyColumns { indices })
+}
+
+fn keyed_tables<'a>(
+    keys: &[String],
+    left: &'a TabularData,
+    right: &'a TabularData,
+) -> Option<(KeyedTable<'a>, KeyedTable<'a>)> {
+    let left_columns = resolve_key_columns(left, keys)?;
+    let right_columns = resolve_key_columns(right, keys)?;
+    let left_index = KeyedIndex::build(left, &left_columns);
+    let right_index = KeyedIndex::build(right, &right_columns);
+    Some((
+        KeyedTable {
+            table: left,
+            columns: left_columns,
+            index: left_index,
+        },
+        KeyedTable {
+            table: right,
+            columns: right_columns,
+            index: right_index,
+        },
+    ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RowSignature<'a>(Box<[Cow<'a, str>]>);
+
+fn row_signature_for_key<'a>(
+    row: &'a [Value],
+    key_columns: &KeyColumns,
+) -> Option<RowSignature<'a>> {
+    let mut signature = Vec::with_capacity(key_columns.indices.len());
+    for &index in &key_columns.indices {
+        let value = row.get(index).unwrap_or(&Value::Null);
         if value.is_blank() {
             return None;
         }
-        signature.push(value.as_text().into_owned());
-        values.push(value.clone());
+        signature.push(value.as_text());
     }
-    Some(RowKey { signature, values })
+    Some(RowSignature(signature.into_boxed_slice()))
 }
 
-fn unique_rows_by_key<'a>(
+#[derive(Debug, Clone, Copy)]
+struct KeyedRow<'a> {
+    index: usize,
+    row: &'a Vec<Value>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RowBucket<'a> {
+    Unique(KeyedRow<'a>),
+    Duplicate,
+}
+
+#[derive(Debug)]
+struct KeyedIndex<'a> {
+    rows: BTreeMap<RowSignature<'a>, KeyedRow<'a>>,
+    quality: KeyQuality,
+}
+
+impl<'a> KeyedIndex<'a> {
+    fn build(table: &'a TabularData, key_columns: &KeyColumns) -> Self {
+        let mut quality = KeyQuality::default();
+        let mut buckets = BTreeMap::new();
+
+        for (index, row) in table.rows.iter().enumerate() {
+            let Some(signature) = row_signature_for_key(row, key_columns) else {
+                quality.has_null = true;
+                continue;
+            };
+            match buckets.entry(signature) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(RowBucket::Unique(KeyedRow { index, row }));
+                }
+                std::collections::btree_map::Entry::Occupied(mut entry) => {
+                    quality.has_duplicate = true;
+                    entry.insert(RowBucket::Duplicate);
+                }
+            }
+        }
+
+        let rows = buckets
+            .into_iter()
+            .filter_map(|(signature, bucket)| match bucket {
+                RowBucket::Unique(row) => Some((signature, row)),
+                RowBucket::Duplicate => None,
+            })
+            .collect();
+
+        Self { rows, quality }
+    }
+
+    fn complete(&self) -> bool {
+        !self.quality.has_null && !self.quality.has_duplicate
+    }
+}
+
+#[derive(Debug)]
+struct KeyedTable<'a> {
     table: &'a TabularData,
-    keys: &[String],
-) -> BTreeMap<Vec<String>, (RowKey, usize, &'a Vec<Value>)> {
-    let mut counts = BTreeMap::new();
-    let mut rows = BTreeMap::new();
-    for (index, row) in table.rows.iter().enumerate() {
-        let Some(key) = row_key(table, keys, row) else {
-            continue;
-        };
-        *counts.entry(key.signature.clone()).or_insert(0usize) += 1;
-        rows.entry(key.signature.clone())
-            .or_insert((key, index, row));
-    }
-    rows.retain(|sig, _| counts.get(sig).copied().unwrap_or(0) == 1);
-    rows
+    columns: KeyColumns,
+    index: KeyedIndex<'a>,
 }
 
-fn key_json(keys: &[String], values: &[Value]) -> serde_json::Value {
+fn key_json(keys: &[String], key_columns: &KeyColumns, row: &[Value]) -> serde_json::Value {
     let mut object = serde_json::Map::new();
-    for (key, value) in keys.iter().zip(values) {
-        object.insert(key.clone(), value.to_json());
+    for (key, index) in keys.iter().zip(&key_columns.indices) {
+        object.insert(
+            key.clone(),
+            row.get(*index).unwrap_or(&Value::Null).to_json(),
+        );
     }
     serde_json::Value::Object(object)
+}
+
+#[derive(Debug, Clone)]
+struct CommonColumn<'a> {
+    name: &'a String,
+    left_index: usize,
+    right_index: usize,
+}
+
+fn header_indices(table: &TabularData) -> BTreeMap<&str, usize> {
+    table
+        .headers
+        .iter()
+        .enumerate()
+        .map(|(index, header)| (header.as_str(), index))
+        .collect()
+}
+
+fn common_columns<'a>(left: &'a TabularData, right: &TabularData) -> Vec<CommonColumn<'a>> {
+    common_columns_by(left, right, |_| true)
+}
+
+fn common_non_key_columns<'a>(
+    left: &'a TabularData,
+    right: &TabularData,
+    keys: &[String],
+) -> Vec<CommonColumn<'a>> {
+    let key_names: BTreeSet<&str> = keys.iter().map(String::as_str).collect();
+    common_columns_by(left, right, |header| !key_names.contains(header))
+}
+
+fn common_columns_by<'a>(
+    left: &'a TabularData,
+    right: &TabularData,
+    include: impl Fn(&str) -> bool,
+) -> Vec<CommonColumn<'a>> {
+    let right_headers = header_indices(right);
+    let mut columns = Vec::new();
+    for (left_index, header) in left.headers.iter().enumerate() {
+        if !include(header) {
+            continue;
+        }
+        if let Some(&right_index) = right_headers.get(header.as_str()) {
+            columns.push(CommonColumn {
+                name: header,
+                left_index,
+                right_index,
+            });
+        }
+    }
+    columns
 }
 
 fn write_keyed_row_edits(
     edits: &mut Vec<Edit>,
     keys: &[String],
-    left: &TabularData,
-    right: &TabularData,
+    left: &KeyedTable<'_>,
+    right: &KeyedTable<'_>,
 ) {
-    let left_rows = unique_rows_by_key(left, keys);
-    let right_rows = unique_rows_by_key(right, keys);
-    let left_keys: BTreeSet<Vec<String>> = left_rows.keys().cloned().collect();
-    let right_keys: BTreeSet<Vec<String>> = right_rows.keys().cloned().collect();
+    let left_keys: BTreeSet<&RowSignature<'_>> = left.index.rows.keys().collect();
+    let right_keys: BTreeSet<&RowSignature<'_>> = right.index.rows.keys().collect();
 
     for sig in left_keys.difference(&right_keys) {
-        let (key, index, row) = left_rows.get(sig).expect("known left key");
+        let keyed_row = left.index.rows.get(*sig).expect("known left key");
         edits.push(row_remove_edit(json!({
-            "index": index,
-            "key": key_json(keys, &key.values),
-            "values": capture_row(row)
+            "index": keyed_row.index,
+            "key": key_json(keys, &left.columns, keyed_row.row),
+            "values": capture_row(keyed_row.row)
         })));
     }
     for sig in right_keys.difference(&left_keys) {
-        let (key, index, row) = right_rows.get(sig).expect("known right key");
+        let keyed_row = right.index.rows.get(*sig).expect("known right key");
         edits.push(row_add_edit(json!({
-            "index": index,
-            "key": key_json(keys, &key.values),
-            "values": capture_row(row)
+            "index": keyed_row.index,
+            "key": key_json(keys, &right.columns, keyed_row.row),
+            "values": capture_row(keyed_row.row)
         })));
     }
 
-    let common: Vec<&String> = left
-        .headers
-        .iter()
-        .filter(|header| right.headers.contains(header) && !keys.contains(header))
-        .collect();
+    let common = common_non_key_columns(left.table, right.table, keys);
     for sig in left_keys.intersection(&right_keys) {
-        let (key, _, left_row) = left_rows.get(sig).expect("known left key");
-        let (_, _, right_row) = right_rows.get(sig).expect("known right key");
+        let left_row = left.index.rows.get(*sig).expect("known left key");
+        let right_row = right.index.rows.get(*sig).expect("known right key");
         for column in &common {
-            let left_index = left.column_index(column).expect("common column");
-            let right_index = right.column_index(column).expect("common column");
-            let left_value = left_row.get(left_index).unwrap_or(&Value::Null);
-            let right_value = right_row.get(right_index).unwrap_or(&Value::Null);
+            let left_value = left_row.row.get(column.left_index).unwrap_or(&Value::Null);
+            let right_value = right_row
+                .row
+                .get(column.right_index)
+                .unwrap_or(&Value::Null);
             if left_value != right_value {
                 edits.push(cell_edit(json!({
-                    "key": key_json(keys, &key.values),
-                    "column": column,
+                    "key": key_json(keys, &left.columns, left_row.row),
+                    "column": column.name,
                     "from": value_preview(left_value),
                     "to": value_preview(right_value)
                 })));
@@ -604,16 +675,20 @@ fn capture_row(row: &[Value]) -> serde_json::Value {
     })
 }
 
-fn row_alignment_basis(left: &TabularData, right: &TabularData, common: &[&String]) -> Edit {
+fn row_alignment_basis(
+    left: &TabularData,
+    right: &TabularData,
+    common: &[CommonColumn<'_>],
+) -> Edit {
     let left_rows: Vec<String> = left
         .rows
         .iter()
-        .map(|row| row_signature(left, row, common))
+        .map(|row| row_signature(row, common.iter().map(|column| column.left_index)))
         .collect();
     let right_rows: Vec<String> = right
         .rows
         .iter()
-        .map(|row| row_signature(right, row, common))
+        .map(|row| row_signature(row, common.iter().map(|column| column.right_index)))
         .collect();
     let captured_right: Vec<serde_json::Value> =
         right.rows.iter().map(|row| capture_row(row)).collect();
@@ -621,7 +696,7 @@ fn row_alignment_basis(left: &TabularData, right: &TabularData, common: &[&Strin
     Edit::new(
         "tabular.row_alignment_basis",
         json!({
-            "columns": common.iter().map(|column| column.as_str()).collect::<Vec<_>>(),
+            "columns": common.iter().map(|column| column.name.as_str()).collect::<Vec<_>>(),
             "left": left_rows,
             "right": right_rows,
             "right_rows": captured_right,
@@ -630,10 +705,9 @@ fn row_alignment_basis(left: &TabularData, right: &TabularData, common: &[&Strin
     .hidden()
 }
 
-fn row_signature(table: &TabularData, row: &[Value], common: &[&String]) -> String {
+fn row_signature(row: &[Value], indices: impl IntoIterator<Item = usize>) -> String {
     let mut hasher = blake3::Hasher::new();
-    for column in common {
-        let index = table.column_index(column).expect("common column");
+    for index in indices {
         row.get(index)
             .unwrap_or(&Value::Null)
             .hash_into(&mut hasher);

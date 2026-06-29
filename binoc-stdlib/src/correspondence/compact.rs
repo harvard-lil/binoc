@@ -1,8 +1,9 @@
 use binoc_sdk::{
-    tabular_v1, BinocError, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, NodeId,
-    TabularData, Value,
+    tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, TabularData, Value,
 };
 use serde_json::json;
+
+use super::tabular::load_tabular;
 
 const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
 const COLUMN_RENAME_MIN_MATCHES: usize = 2;
@@ -126,19 +127,6 @@ fn rewrite_column_renames(
     }
 
     Some(out)
-}
-
-fn load_tabular(
-    ctx: &LinkCtx<'_>,
-    id: NodeId,
-    data: &dyn DataAccess,
-) -> BinocResult<Option<TabularData>> {
-    let Some(bytes) = ctx.view.artifact_bytes(id, &tabular_v1(), data)? else {
-        return Ok(None);
-    };
-    serde_json::from_slice(&bytes)
-        .map(Some)
-        .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))
 }
 
 #[derive(Debug, Clone)]
