@@ -6,6 +6,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
+| 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deferred) |
 | 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers in CFM-80; rendering + significance in CFM-82) |
 | 2026-06-15 | [The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First](2026-06-15-engine_overhaul_retrospective.md) | Retrospective |
 | 2026-06-15 | [Partition Identities: a JIT, Format-Owned Capability for N↔M Correspondence (CFM-72)](2026-06-15-partition_identities_jit_format_capability.md) | Implemented |

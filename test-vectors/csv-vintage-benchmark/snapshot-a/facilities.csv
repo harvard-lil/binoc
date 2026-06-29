@@ -1,0 +1,5 @@
+facility_id,name,status
+F001,North Plant,active
+F002,East Depot,active
+F003,West Yard,inactive
+F004,South Hub,active

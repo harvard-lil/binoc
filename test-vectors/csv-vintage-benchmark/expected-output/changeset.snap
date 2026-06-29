@@ -1,0 +1,163 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "facilities.csv",
+        "sources": [
+          {
+            "path": "facilities.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Column added: 'region'; 1 cell changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.column-addition",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "facility_id",
+                  "name",
+                  "status"
+                ],
+                "to": [
+                  "facility_id",
+                  "name",
+                  "status",
+                  "region"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "region",
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "north",
+                    "east",
+                    "west",
+                    "south"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            },
+            {
+              "params": {
+                "column": "status",
+                "from": "active",
+                "row": 1,
+                "to": "decommissioned"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      },
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "inspections.csv",
+        "sources": [
+          {
+            "path": "inspections.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "2 rows added; 3 cells changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.row-addition"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "score",
+                "from": "82",
+                "row": 0,
+                "to": "85"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "90",
+                "row": 2,
+                "to": "91"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "column": "score",
+                "from": "68",
+                "row": 3,
+                "to": "70"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "rows": [
+                  {
+                    "total_values": 3,
+                    "truncated": false,
+                    "values": [
+                      "I104",
+                      "F001",
+                      "88"
+                    ]
+                  },
+                  {
+                    "total_values": 3,
+                    "truncated": false,
+                    "values": [
+                      "I105",
+                      "F002",
+                      "73"
+                    ]
+                  }
+                ],
+                "start": 4
+              },
+              "verb": "tabular.append_rows"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
