@@ -7,6 +7,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | Date | Title | Status |
 |---|---|---|
 | 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented |
+| 2026-06-29 | [SDK Annotation Package Identity Stays Explicit](2026-06-29-sdk_annotation_package_id.md) | Accepted |
 | 2026-06-29 | [Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug](2026-06-29-renderer_ecosystem_ignorance.md) | Accepted |
 | 2026-06-29 | [Memory and Wall-Clock Contract for Large Dataset Diffs](2026-06-29-memory_and_wall_clock_contract_for_large_dataset_diffs.md) | Proposed |
 | 2026-06-29 | [Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop](2026-06-29-inference_disclosure_and_high_churn_guardrail.md) | Accepted |
