@@ -1566,10 +1566,19 @@ mod tests {
     }
 
     fn basis(left: &[&str], right: &[&str], right_rows: Vec<serde_json::Value>) -> Edit {
+        basis_with_columns(&["name", "age"], left, right, right_rows)
+    }
+
+    fn basis_with_columns(
+        columns: &[&str],
+        left: &[&str],
+        right: &[&str],
+        right_rows: Vec<serde_json::Value>,
+    ) -> Edit {
         Edit::new(
             "tabular.row_alignment_basis",
             json!({
-                "columns": ["name", "age"],
+                "columns": columns,
                 "left": left,
                 "right": right,
                 "right_rows": right_rows,
@@ -1751,6 +1760,55 @@ mod tests {
             rewritten[2].params["values"],
             json!({"values": ["Bob", "25"], "total_values": 2, "truncated": false})
         );
+    }
+
+    #[test]
+    fn row_alignment_precedes_reduced_precision_for_inserted_sentinels() {
+        let edits = vec![
+            basis_with_columns(
+                &["name", "count"],
+                &["alpha", "delta", "epsilon"],
+                &["alpha", "beta", "gamma", "delta", "epsilon"],
+                vec![
+                    json!({"values": ["Alpha", "10"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Beta", "*"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Gamma", "(D)"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Delta", "40"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Epsilon", "50"], "total_values": 2, "truncated": false}),
+                ],
+            ),
+            cell(1, "name", json!("Delta"), json!("Beta")),
+            cell(1, "count", json!("40"), json!("*")),
+            cell(2, "name", json!("Epsilon"), json!("Gamma")),
+            cell(2, "count", json!("50"), json!("(D)")),
+            Edit::new(
+                "tabular.add_row",
+                json!({
+                    "index": 3,
+                    "values": {"values": ["Delta", "40"], "total_values": 2, "truncated": false}
+                }),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-addition"),
+            Edit::new(
+                "tabular.add_row",
+                json!({
+                    "index": 4,
+                    "values": {"values": ["Epsilon", "50"], "total_values": 2, "truncated": false}
+                }),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-addition"),
+        ];
+
+        let prematurely_reduced = rewrite_reduced_precision(&edits).expect("old-order rewrite");
+        assert!(prematurely_reduced
+            .iter()
+            .any(|edit| edit.verb == "tabular.values_suppressed"));
+
+        let aligned = rewrite_row_alignment(&edits).expect("alignment rewrite");
+        assert!(!aligned.iter().any(|edit| edit.verb == "tabular.edit_cell"));
+        assert!(rewrite_reduced_precision(&aligned).is_none());
     }
 
     #[test]

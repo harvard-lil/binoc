@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 2 rows added
+  - Rows added
+    - row 2: 'Beta', '*'
+    - row 3: 'Gamma', '(D)'
