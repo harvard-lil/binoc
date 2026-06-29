@@ -762,9 +762,59 @@ fn row_remove_edit(params: serde_json::Value) -> Edit {
 }
 
 fn cell_edit(params: serde_json::Value) -> Edit {
-    Edit::new("tabular.edit_cell", params)
+    let suppressed = cell_edit_is_value_suppressed(&params);
+    let mut edit = Edit::new("tabular.edit_cell", params)
         .with_item_type("tabular")
-        .with_tag("binoc.cell-change")
+        .with_tag("binoc.cell-change");
+    if suppressed {
+        edit = edit.with_tag("binoc.value-suppressed");
+    }
+    edit
+}
+
+fn cell_edit_is_value_suppressed(params: &serde_json::Value) -> bool {
+    let Some(from) = params.get("from") else {
+        return false;
+    };
+    let Some(to) = params.get("to") else {
+        return false;
+    };
+    value_is_present(from) && value_is_suppression_sentinel(from, to)
+}
+
+fn value_is_present(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::String(text) => !text.trim().is_empty(),
+        _ => true,
+    }
+}
+
+fn value_is_suppression_sentinel(from: &serde_json::Value, to: &serde_json::Value) -> bool {
+    match to {
+        serde_json::Value::Null => value_looks_numeric(from),
+        serde_json::Value::String(text) => match text.trim() {
+            "*" | "(D)" | "(S)" => true,
+            "" => value_looks_numeric(from),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn value_looks_numeric(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Number(_) => true,
+        serde_json::Value::String(text) => {
+            let text = text.trim();
+            !text.is_empty()
+                && text
+                    .replace(',', "")
+                    .parse::<f64>()
+                    .is_ok_and(f64::is_finite)
+        }
+        _ => false,
+    }
 }
 
 // ── Metadata rendering (CFM-82) ─────────────────────────────────────────────

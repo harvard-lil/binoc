@@ -1,0 +1,70 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Rounded "
+          },
+          {
+            "uint": 3
+          },
+          {
+            "text": " cells in 'population' to nearest 1000"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.value-rounded"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "basis": {
+                  "kind": "modulus",
+                  "value": "1000"
+                },
+                "cells": 3,
+                "column": "population"
+              },
+              "summary": [
+                {
+                  "text": "Rounded "
+                },
+                {
+                  "uint": 3
+                },
+                {
+                  "text": " cells in 'population' to nearest 1000"
+                }
+              ],
+              "verb": "tabular.values_rounded"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

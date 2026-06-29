@@ -112,6 +112,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             Arc::new(compact::ColumnReorder),
             Arc::new(compact::ColumnRename),
             Arc::new(compact::TypeOnlyColumnChange),
+            Arc::new(compact::ReducedPrecision),
             Arc::new(compact::RowAlignment),
             Arc::new(compact::RowAdditionConsolidation),
         ],

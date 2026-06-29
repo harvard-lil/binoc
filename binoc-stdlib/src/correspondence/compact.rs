@@ -16,6 +16,8 @@ pub struct ColumnRename;
 
 pub struct TypeOnlyColumnChange;
 
+pub struct ReducedPrecision;
+
 impl CompactionRule for ColumnReorder {
     fn name(&self) -> &str {
         "binoc.compact.column_reorder"
@@ -114,6 +116,25 @@ impl CompactionRule for TypeOnlyColumnChange {
     }
 }
 
+impl CompactionRule for ReducedPrecision {
+    fn name(&self) -> &str {
+        "binoc.compact.reduced_precision"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        _ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        Ok(rewrite_reduced_precision(edits))
+    }
+}
+
 fn rewrite_type_only_column_changes(edits: &[Edit]) -> Option<Vec<Edit>> {
     let type_only = type_only_column_groups(edits);
     if type_only.is_empty() {
@@ -207,7 +228,7 @@ fn edit_cell_is_type_only(edit: &Edit) -> bool {
     let Some(to) = edit.params.get("to") else {
         return false;
     };
-    from != to && canonical_cell_equal(from, to)
+    from != to && cell_type_name(from) != cell_type_name(to) && canonical_cell_equal(from, to)
 }
 
 fn type_only_column_edit(column: &str, group: &TypeOnlyColumnGroup) -> Edit {
@@ -250,11 +271,9 @@ fn cell_type_name(value: &serde_json::Value) -> &'static str {
 ///
 /// Policy:
 /// - Values with the same JSON type use ordinary JSON equality.
-/// - JSON numbers and strings compare equal only when the string is non-empty
-///   and is byte-for-byte identical to serde_json's canonical number spelling.
-///   This makes `2024` equal to `"2024"` and `1.0` equal to `"1.0"`, while
-///   `"007"` is not equal to `7`, `"1"` is not equal to `1.0`, and whitespace
-///   is significant.
+/// - Numeric JSON values and numeric strings compare equal by conservative
+///   decimal value. This makes `1.0` equal to `"1"` while `"007"` is not equal
+///   to `7`, and whitespace remains significant.
 /// - Booleans do not equal strings (`true` != `"true"`).
 /// - Null does not equal an empty string.
 /// - Dates and timestamps have no special parsing; date-like strings are only
@@ -266,6 +285,9 @@ fn canonical_cell_equal(left: &serde_json::Value, right: &serde_json::Value) -> 
     if left == right {
         return true;
     }
+    if let (Some(left), Some(right)) = (NumericCell::parse(left), NumericCell::parse(right)) {
+        return left.value == right.value;
+    }
     match (left, right) {
         (serde_json::Value::Number(number), serde_json::Value::String(string))
         | (serde_json::Value::String(string), serde_json::Value::Number(number)) => {
@@ -274,6 +296,463 @@ fn canonical_cell_equal(left: &serde_json::Value, right: &serde_json::Value) -> 
         _ => false,
     }
 }
+
+fn rewrite_reduced_precision(edits: &[Edit]) -> Option<Vec<Edit>> {
+    let semantic_edits: Vec<Edit> = edits
+        .iter()
+        .filter(|edit| !edit_cell_is_numeric_noop(edit))
+        .cloned()
+        .collect();
+    let removed_numeric_noops = semantic_edits.len() != edits.len();
+    if semantic_edits.is_empty() && removed_numeric_noops {
+        return Some(vec![numeric_noop_edit()]);
+    }
+
+    let suppressed = suppressed_value_groups(&semantic_edits);
+    let rounded = rounded_value_groups(&semantic_edits);
+    if suppressed.is_empty() && rounded.is_empty() {
+        return removed_numeric_noops.then_some(semantic_edits);
+    }
+
+    let mut out = Vec::new();
+    let mut rewrote = false;
+    for (index, edit) in semantic_edits.iter().enumerate() {
+        if let Some(group) = suppressed.get(&index) {
+            out.push(suppressed_values_edit(group));
+            rewrote = true;
+            continue;
+        }
+        if suppressed
+            .values()
+            .any(|group| group.indices.contains(&index))
+        {
+            rewrote = true;
+            continue;
+        }
+        if let Some(group) = rounded.get(&index) {
+            out.push(rounded_values_edit(group));
+            rewrote = true;
+            continue;
+        }
+        if rounded.values().any(|group| group.indices.contains(&index)) {
+            rewrote = true;
+            continue;
+        }
+        out.push(edit.clone());
+    }
+
+    (rewrote || removed_numeric_noops).then_some(out)
+}
+
+#[derive(Debug, Clone)]
+struct CellGroup {
+    first_index: usize,
+    indices: Vec<usize>,
+    column: String,
+    count: usize,
+    basis: Option<RoundingBasis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum RoundingBasis {
+    Modulus(NumericValue),
+}
+
+fn suppressed_value_groups(edits: &[Edit]) -> BTreeMap<usize, CellGroup> {
+    let mut by_column: BTreeMap<String, CellGroup> = BTreeMap::new();
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        if !edit_cell_is_value_suppressed(edit) {
+            continue;
+        }
+        by_column
+            .entry(column.clone())
+            .and_modify(|group| {
+                group.indices.push(index);
+                group.count += 1;
+            })
+            .or_insert(CellGroup {
+                first_index: index,
+                indices: vec![index],
+                column,
+                count: 1,
+                basis: None,
+            });
+    }
+    by_column
+        .into_values()
+        .filter(|group| group.count >= 2)
+        .map(|group| (group.first_index, group))
+        .collect()
+}
+
+fn rounded_value_groups(edits: &[Edit]) -> BTreeMap<usize, CellGroup> {
+    let mut by_column_and_basis: BTreeMap<(String, RoundingBasis), CellGroup> = BTreeMap::new();
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        let Some(basis) = edit_cell_rounding_basis(edit) else {
+            continue;
+        };
+        by_column_and_basis
+            .entry((column.clone(), basis.clone()))
+            .and_modify(|group| {
+                group.indices.push(index);
+                group.count += 1;
+            })
+            .or_insert(CellGroup {
+                first_index: index,
+                indices: vec![index],
+                column,
+                count: 1,
+                basis: Some(basis),
+            });
+    }
+    by_column_and_basis
+        .into_values()
+        .filter(|group| group.count >= 2)
+        .map(|group| (group.first_index, group))
+        .collect()
+}
+
+fn edit_cell_is_numeric_noop(edit: &Edit) -> bool {
+    if edit.verb != "tabular.edit_cell" {
+        return false;
+    }
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    from != to
+        && cell_type_name(from) == cell_type_name(to)
+        && NumericCell::parse(from)
+            .zip(NumericCell::parse(to))
+            .is_some_and(|(from, to)| from.value == to.value)
+}
+
+fn edit_cell_is_value_suppressed(edit: &Edit) -> bool {
+    if edit.verb != "tabular.edit_cell" {
+        return false;
+    }
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    value_is_present(from) && value_is_suppression_sentinel(from, to)
+}
+
+fn edit_cell_rounding_basis(edit: &Edit) -> Option<RoundingBasis> {
+    if edit.verb != "tabular.edit_cell" {
+        return None;
+    }
+    let from = NumericCell::parse(edit.params.get("from")?)?;
+    let to = NumericCell::parse(edit.params.get("to")?)?;
+    if from.value == to.value {
+        return None;
+    }
+    let modulus = to.rounding_modulus()?;
+    (from.value.round_to_nearest(&modulus)? == to.value).then_some(RoundingBasis::Modulus(modulus))
+}
+
+fn numeric_noop_edit() -> Edit {
+    let mut edit = Edit::new(
+        "tabular.numeric_canonical_equal",
+        json!({
+            "reason": "numeric cells differ only in representation",
+        }),
+    )
+    .with_item_type("tabular")
+    .hidden()
+    .with_summary("Numeric cells differ only in representation");
+    edit.projection.hint.action = Some("identical".into());
+    edit
+}
+
+fn suppressed_values_edit(group: &CellGroup) -> Edit {
+    Edit::new(
+        "tabular.values_suppressed",
+        json!({
+            "column": group.column,
+            "cells": group.count,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.value-suppressed")
+    .with_tag("binoc.cell-change")
+    .with_summary(
+        Summary::new()
+            .text("Suppressed ")
+            .count(group.count as u64, "cell")
+            .text(" in '")
+            .text(group.column.clone())
+            .text("'"),
+    )
+}
+
+fn rounded_values_edit(group: &CellGroup) -> Edit {
+    let basis = match group.basis.as_ref().expect("rounding group has basis") {
+        RoundingBasis::Modulus(modulus) => {
+            json!({
+                "kind": "modulus",
+                "value": modulus.to_display_string(),
+            })
+        }
+    };
+    Edit::new(
+        "tabular.values_rounded",
+        json!({
+            "column": group.column,
+            "cells": group.count,
+            "basis": basis,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.value-rounded")
+    .with_tag("binoc.cell-change")
+    .with_summary(
+        Summary::new()
+            .text("Rounded ")
+            .count(group.count as u64, "cell")
+            .text(" in '")
+            .text(group.column.clone())
+            .text("' to nearest ")
+            .text(
+                match group.basis.as_ref().expect("rounding group has basis") {
+                    RoundingBasis::Modulus(modulus) => modulus.to_display_string(),
+                },
+            ),
+    )
+}
+
+fn value_is_present(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::String(text) => !text.trim().is_empty(),
+        _ => true,
+    }
+}
+
+fn value_is_suppression_sentinel(from: &serde_json::Value, to: &serde_json::Value) -> bool {
+    match to {
+        serde_json::Value::Null => NumericCell::parse(from).is_some(),
+        serde_json::Value::String(text) => match text.trim() {
+            "*" | "(D)" | "(S)" => true,
+            "" => NumericCell::parse(from).is_some(),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NumericCell {
+    value: NumericValue,
+    declared_scale: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NumericValue {
+    coeff: i128,
+    scale: u32,
+}
+
+impl NumericCell {
+    fn parse(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::Number(number) => parse_numeric_text(&number.to_string()),
+            serde_json::Value::String(text) => parse_numeric_text(text),
+            _ => None,
+        }
+    }
+
+    fn rounding_modulus(&self) -> Option<NumericValue> {
+        if self.value.coeff == 0 {
+            return None;
+        }
+        if self.declared_scale > 0 {
+            return Some(NumericValue {
+                coeff: 1,
+                scale: self.declared_scale,
+            });
+        }
+        let trailing_zeroes = decimal_trailing_zeroes(self.value.coeff.unsigned_abs());
+        (trailing_zeroes > 0)
+            .then(|| {
+                Some(NumericValue {
+                    coeff: pow10(trailing_zeroes)?,
+                    scale: 0,
+                })
+            })
+            .flatten()
+    }
+}
+
+impl NumericValue {
+    fn normalized(mut coeff: i128, mut scale: u32) -> Self {
+        while scale > 0 && coeff % 10 == 0 {
+            coeff /= 10;
+            scale -= 1;
+        }
+        Self { coeff, scale }
+    }
+
+    fn round_to_nearest(&self, modulus: &NumericValue) -> Option<NumericValue> {
+        if modulus.coeff <= 0 {
+            return None;
+        }
+        let scale = self.scale.max(modulus.scale);
+        let value = self.coeff.checked_mul(pow10(scale - self.scale)?)?;
+        let modulus = modulus.coeff.checked_mul(pow10(scale - modulus.scale)?)?;
+        let quotient = div_round_nearest(value, modulus)?;
+        Some(NumericValue::normalized(
+            quotient.checked_mul(modulus)?,
+            scale,
+        ))
+    }
+
+    fn to_display_string(&self) -> String {
+        if self.scale == 0 {
+            return self.coeff.to_string();
+        }
+        let sign = if self.coeff < 0 { "-" } else { "" };
+        let digits = self.coeff.unsigned_abs().to_string();
+        let scale = self.scale as usize;
+        if digits.len() <= scale {
+            format!("{sign}0.{}{}", "0".repeat(scale - digits.len()), digits)
+        } else {
+            let split = digits.len() - scale;
+            format!("{sign}{}.{}", &digits[..split], &digits[split..])
+        }
+    }
+}
+
+fn parse_numeric_text(text: &str) -> Option<NumericCell> {
+    if text.is_empty() || text.trim() != text {
+        return None;
+    }
+    let (negative, rest) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let (mantissa, exponent) = split_exponent(rest)?;
+    let (integer, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    if integer.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    let integer = strip_grouping_commas(integer)?;
+    if integer.len() > 1 && integer.starts_with('0') {
+        return None;
+    }
+    if !integer.bytes().all(|ch| ch.is_ascii_digit())
+        || !fraction.bytes().all(|ch| ch.is_ascii_digit())
+    {
+        return None;
+    }
+    let digits = format!("{integer}{fraction}");
+    if digits.is_empty() || digits.len() > 36 || !digits.bytes().any(|ch| ch != b'0') {
+        return if digits.bytes().all(|ch| ch == b'0') {
+            Some(NumericCell {
+                value: NumericValue { coeff: 0, scale: 0 },
+                declared_scale: fraction.len() as u32,
+            })
+        } else {
+            None
+        };
+    }
+    let mut coeff = digits.parse::<i128>().ok()?;
+    if negative {
+        coeff = -coeff;
+    }
+    let declared_scale = fraction.len() as u32;
+    let scale = declared_scale as i32 - exponent;
+    if scale < 0 {
+        coeff = coeff.checked_mul(pow10((-scale) as u32)?)?;
+        Some(NumericCell {
+            value: NumericValue::normalized(coeff, 0),
+            declared_scale: 0,
+        })
+    } else {
+        Some(NumericCell {
+            value: NumericValue::normalized(coeff, scale as u32),
+            declared_scale: scale as u32,
+        })
+    }
+}
+
+fn split_exponent(text: &str) -> Option<(&str, i32)> {
+    if let Some(index) = text.find(['e', 'E']) {
+        let exponent = text[index + 1..].parse::<i32>().ok()?;
+        Some((&text[..index], exponent))
+    } else {
+        Some((text, 0))
+    }
+}
+
+fn strip_grouping_commas(integer: &str) -> Option<String> {
+    if !integer.contains(',') {
+        return Some(integer.to_string());
+    }
+    let mut groups = integer.split(',');
+    let first = groups.next()?;
+    if first.is_empty() || first.len() > 3 || !first.bytes().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let mut out = first.to_string();
+    for group in groups {
+        if group.len() != 3 || !group.bytes().all(|ch| ch.is_ascii_digit()) {
+            return None;
+        }
+        out.push_str(group);
+    }
+    Some(out)
+}
+
+fn decimal_trailing_zeroes(mut value: u128) -> u32 {
+    let mut count = 0;
+    while value > 0 && value.is_multiple_of(10) {
+        value /= 10;
+        count += 1;
+    }
+    count
+}
+
+fn pow10(exp: u32) -> Option<i128> {
+    let mut value = 1i128;
+    for _ in 0..exp {
+        value = value.checked_mul(10)?;
+    }
+    Some(value)
+}
+
+fn div_round_nearest(value: i128, modulus: i128) -> Option<i128> {
+    if modulus <= 0 {
+        return None;
+    }
+    let sign = if value < 0 { -1 } else { 1 };
+    let absolute = value.checked_abs()?;
+    let quotient = absolute / modulus;
+    let remainder = absolute % modulus;
+    let rounded = if remainder.checked_mul(2)? >= modulus {
+        quotient.checked_add(1)?
+    } else {
+        quotient
+    };
+    rounded.checked_mul(sign)
+}
+
+// Category-collapse and row-aggregation stay out of this pass pending the #120
+// value-domain / aggregation design discussion.
 
 fn rewrite_column_renames(
     edits: &[Edit],
@@ -921,8 +1400,8 @@ mod tests {
         assert!(canonical_cell_equal(&json!(2024), &json!("2024")));
         assert!(canonical_cell_equal(&json!("2024"), &json!(2024)));
         assert!(canonical_cell_equal(&json!(1.0), &json!("1.0")));
+        assert!(canonical_cell_equal(&json!("1.0"), &json!("1")));
         assert!(!canonical_cell_equal(&json!(7), &json!("007")));
-        assert!(!canonical_cell_equal(&json!(1.0), &json!("1")));
         assert!(!canonical_cell_equal(&json!(true), &json!("true")));
         assert!(!canonical_cell_equal(&json!(null), &json!("")));
         assert!(!canonical_cell_equal(
@@ -988,6 +1467,102 @@ mod tests {
         assert_eq!(rewritten.len(), 1);
         assert_eq!(rewritten[0].verb, "tabular.column_type_changed");
         assert_eq!(rewritten[0].params["cells"], json!(2));
+    }
+
+    #[test]
+    fn reduced_precision_removes_numeric_representation_noops() {
+        let edits = vec![
+            cell(0, "rate", json!("1.0"), json!("1")),
+            cell(1, "rate", json!("2.50"), json!("2.5")),
+        ];
+
+        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.numeric_canonical_equal");
+        assert!(!rewritten[0].projection.visible);
+        assert_eq!(
+            rewritten[0].projection.hint.action.as_deref(),
+            Some("identical")
+        );
+    }
+
+    #[test]
+    fn reduced_precision_collapses_suppressed_cells_by_column() {
+        let edits = vec![
+            cell(0, "count", json!("123"), json!("*")),
+            cell(1, "count", json!("456"), json!("(D)")),
+            cell(2, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "count",
+                "cells": 2,
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Suppressed 2 cells in 'count'"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+    }
+
+    #[test]
+    fn reduced_precision_collapses_numeric_rounding_by_column_and_modulus() {
+        let edits = vec![
+            cell(0, "population", json!("12,345"), json!("12,000")),
+            cell(1, "population", json!("67,890"), json!("68,000")),
+            cell(2, "name", json!("Alpha"), json!("Alfa")),
+        ];
+
+        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.values_rounded");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "population",
+                "cells": 2,
+                "basis": {
+                    "kind": "modulus",
+                    "value": "1000",
+                },
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-rounded".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Rounded 2 cells in 'population' to nearest 1000"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
     }
 
     fn basis(left: &[&str], right: &[&str], right_rows: Vec<serde_json::Value>) -> Edit {
