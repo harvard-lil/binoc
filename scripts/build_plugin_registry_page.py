@@ -42,7 +42,8 @@ def _as_str_list(val: Any, path: str) -> list[str]:
 def _md_table(rows: list[tuple[str, str]]) -> str:
     lines = ["| Field | Value |", "|---|---|"]
     for k, v in rows:
-        lines.append(f"| {k} | {v.replace('|', '\\|').replace(chr(10), '<br>')} |")
+        v_esc = v.replace("|", "\\|").replace("\n", "<br>")
+        lines.append(f"| {k} | {v_esc} |")
     return "\n".join(lines)
 
 

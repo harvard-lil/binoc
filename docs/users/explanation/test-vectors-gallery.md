@@ -82,8 +82,8 @@ just materialize
 | [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt | Default pipeline |
 | [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: Document values changed | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
-| [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | # Changelog: snapshot-a → snapshot-b | Default pipeline |
-| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | # Changelog: snapshot-a → snapshot-b | Default pipeline |
+| [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/referen… | Default pipeline |
+| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/referen… | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: Document values changed | Default pipeline |
 | [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: Moved from outer.zip/>records-old.zip | Custom config |
@@ -111,8 +111,6 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
-
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
@@ -1724,6 +1722,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 ```
 
 ## trivial-identical-csv
@@ -1743,6 +1743,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 ```
 
 ## tsv-cell-changes
