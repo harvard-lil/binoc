@@ -260,6 +260,9 @@ def main() -> int:
         "detected media types to the tables under each plugin. Once you find one, "
         "install the package and configure any dataset semantics it documents.",
         "",
+        "For built-in and in-tree plugins that may also appear in changelog output, "
+        "see the [plugin registry](plugin-registry.md).",
+        "",
         "!!! tip \"Publishing or listing a plugin\"",
         "",
         "    If you maintain a plugin and want it listed here, see "
