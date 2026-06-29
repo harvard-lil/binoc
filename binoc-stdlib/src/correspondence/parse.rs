@@ -912,23 +912,13 @@ impl ResolvedCsvDialect {
 }
 
 fn resolve_csv_dialect(item: &ItemRef, bytes: &[u8]) -> BinocResult<ResolvedCsvDialect> {
-    let declared = item
-        .tabular_parse
-        .as_ref()
-        .is_some_and(|parse| parse.delimiter.is_some() || parse.dialect.is_some());
-    let implied = extension_implies_csv_dialect(item);
-    let fallback = if implied {
-        implied_csv_dialect(item, bytes)
-    } else {
-        sniff_csv_dialect(bytes, default_delimiter_for(item))
-    };
+    let mut resolved = sniff_csv_dialect(bytes, default_delimiter_for(item));
     let Some(parse) = item.tabular_parse.as_ref() else {
-        let mut sniffed = fallback;
-        sniffed.inferred = !implied;
-        return Ok(sniffed);
+        resolved.inferred = true;
+        return Ok(resolved);
     };
-    let mut resolved = fallback;
-    resolved.inferred = !implied && !declared;
+    let declared = parse.delimiter.is_some() || parse.dialect.is_some();
+    resolved.inferred = !declared;
     if let Some(delimiter) = parse.delimiter.as_deref() {
         resolved.delimiter = single_byte(delimiter, "delimiter")?;
     }
@@ -936,23 +926,6 @@ fn resolve_csv_dialect(item: &ItemRef, bytes: &[u8]) -> BinocResult<ResolvedCsvD
         apply_declared_dialect(&mut resolved, dialect)?;
     }
     Ok(resolved)
-}
-
-fn extension_implies_csv_dialect(item: &ItemRef) -> bool {
-    matches!(item.extension().as_deref(), Some(".csv") | Some(".tsv"))
-        || item.media_type.as_deref() == Some("text/tab-separated-values")
-}
-
-fn implied_csv_dialect(item: &ItemRef, bytes: &[u8]) -> ResolvedCsvDialect {
-    ResolvedCsvDialect {
-        delimiter: default_delimiter_for(item),
-        quote: Some(b'"'),
-        escape: None,
-        double_quote: true,
-        bom: bytes.starts_with(&[0xEF, 0xBB, 0xBF]),
-        newline: sniff_newline(bytes),
-        inferred: false,
-    }
 }
 
 fn apply_declared_dialect(
@@ -1033,8 +1006,11 @@ fn sniff_delimiter(sample: &[u8]) -> Option<u8> {
         if widths.len() < 2 {
             continue;
         }
-        let consistency = widths.windows(2).filter(|pair| pair[0] == pair[1]).count();
         let width = widths.iter().copied().max().unwrap_or(1);
+        if width < 2 {
+            continue;
+        }
+        let consistency = widths.windows(2).filter(|pair| pair[0] == pair[1]).count();
         let score = (consistency, widths.len(), width);
         if best
             .as_ref()

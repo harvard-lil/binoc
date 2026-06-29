@@ -1,6 +1,5 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
@@ -8,6 +7,7 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: 14 cells changed
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells (showing 3 of 14)
     - changed cells by column: id 4, name 5, score 5
     - row 1, column 'id': 'a' -> 'b'

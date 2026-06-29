@@ -29,6 +29,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
+          "binoc.dialect-inferred",
           "binoc.row-removal"
         ],
         "details": {
@@ -62,7 +63,14 @@ expression: "&stable_changeset"
               "verb": "tabular.remove_row"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
+        ]
       }
     ]
   }

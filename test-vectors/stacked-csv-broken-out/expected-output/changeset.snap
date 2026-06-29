@@ -35,8 +35,16 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
+          "binoc.dialect-inferred",
           "binoc.move",
           "binoc.serialization-change"
+        ],
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
         ]
       },
       {
@@ -67,7 +75,15 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.container-reshape",
+          "binoc.dialect-inferred",
           "binoc.serialization-change"
+        ],
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
         ]
       },
       {

@@ -1,6 +1,5 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
@@ -10,6 +9,7 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 ## Schema & vocabulary changes
 
 - **facilities.csv**: Column added: 'region'; 1 cell changed
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 2, column 'status': 'active' -> 'decommissioned'
   - Set Headers: from: ["facility_id","name","status"]; to: ["facility_id","name","status","region"]
@@ -18,6 +18,7 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 ## Bulk data updates
 
 - **inspections.csv**: 2 rows added; 3 cells changed
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 1, column 'score': '82' -> '85'
     - row 3, column 'score': '90' -> '91'

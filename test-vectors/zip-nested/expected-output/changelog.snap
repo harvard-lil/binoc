@@ -7,5 +7,6 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **outer.zip/>inner.zip/>data.csv**: 1 row added
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows added
     - row 2: 'Bob', '25'
