@@ -1,15 +1,16 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::any::{Any, TypeId};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ArtifactFormat, BinocResult, DataAccess, Diagnostic, ExtractResult, GlobalClaim,
+    ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult, GlobalClaim,
     IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment, Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TreeSide {
@@ -27,11 +28,95 @@ impl TreeSide {
 }
 
 /// Stable identity of one side-tree node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NodeId {
     pub side: TreeSide,
     pub index: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ArtifactDecodeCacheKey {
+    id: NodeId,
+    format: ArtifactFormat,
+    type_id: TypeId,
+}
+
+#[derive(Clone)]
+enum CachedDecode {
+    Missing,
+    Present(Arc<dyn Any + Send + Sync>),
+}
+
+/// Per-run, type-erased cache for decoded artifacts used by in-process rules.
+///
+/// The engine only carries this cache through dispatch; individual plugins own
+/// the artifact format and decoded type they store in it.
+#[derive(Default)]
+pub struct ArtifactDecodeCache {
+    entries: Mutex<HashMap<ArtifactDecodeCacheKey, CachedDecode>>,
+}
+
+impl ArtifactDecodeCache {
+    pub fn get_or_try_insert_with<T>(
+        &self,
+        id: NodeId,
+        format: &ArtifactFormat,
+        load: impl FnOnce() -> BinocResult<Option<T>>,
+    ) -> BinocResult<Option<Arc<T>>>
+    where
+        T: Any + Send + Sync,
+    {
+        let key = ArtifactDecodeCacheKey {
+            id,
+            format: format.clone(),
+            type_id: TypeId::of::<T>(),
+        };
+        if let Some(cached) = self.lookup::<T>(&key)? {
+            return Ok(cached);
+        }
+
+        let loaded = match load()? {
+            Some(value) => CachedDecode::Present(Arc::new(value)),
+            None => CachedDecode::Missing,
+        };
+
+        let cached = {
+            let mut entries = self.entries.lock().map_err(cache_poisoned)?;
+            entries.entry(key).or_insert(loaded).clone()
+        };
+        decode_cached::<T>(cached)
+    }
+
+    fn lookup<T>(&self, key: &ArtifactDecodeCacheKey) -> BinocResult<Option<Option<Arc<T>>>>
+    where
+        T: Any + Send + Sync,
+    {
+        let cached = self
+            .entries
+            .lock()
+            .map_err(cache_poisoned)?
+            .get(key)
+            .cloned();
+        cached.map(decode_cached::<T>).transpose()
+    }
+}
+
+fn decode_cached<T>(cached: CachedDecode) -> BinocResult<Option<Arc<T>>>
+where
+    T: Any + Send + Sync,
+{
+    match cached {
+        CachedDecode::Missing => Ok(None),
+        CachedDecode::Present(value) => value
+            .downcast::<T>()
+            .map(Some)
+            .map_err(|_| BinocError::Other("artifact decode cache type mismatch".into())),
+    }
+}
+
+fn cache_poisoned<T>(_err: std::sync::PoisonError<T>) -> BinocError {
+    BinocError::Other("artifact decode cache lock poisoned".into())
 }
 
 /// Product-facing projection metadata supplied by rules, not inferred by core.
@@ -746,6 +831,7 @@ pub struct LinkCtx<'a> {
     pub link: LinkRef,
     pub row_keys: &'a [String],
     pub row_identity_policies: RowIdentityPolicies,
+    pub artifact_cache: &'a ArtifactDecodeCache,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

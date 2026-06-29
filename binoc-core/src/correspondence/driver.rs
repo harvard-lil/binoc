@@ -4,10 +4,11 @@ use std::time::Duration;
 use std::time::Instant;
 
 use binoc_sdk::{
-    ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig,
-    DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule, ExtractResult, GlobalClaim,
-    IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef, NodeId, ParseGroup, ParseOutput,
-    ParseRule, ProjectionAnnotator, ShapeFilter, Side, Summary, TreeSide, WriterDescriptor,
+    ArtifactDecodeCache, ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule,
+    CorrespondenceEngineConfig, DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule,
+    ExtractResult, GlobalClaim, IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef,
+    NodeId, ParseGroup, ParseOutput, ParseRule, ProjectionAnnotator, ShapeFilter, Side, Summary,
+    TreeSide, WriterDescriptor,
 };
 use rayon::prelude::*;
 
@@ -205,11 +206,13 @@ impl CorrespondenceRunResult {
         })?;
         let link = self.store.links.link(link_index);
         let view = CoreEngineView::new(&self.store, false);
+        let artifact_cache = ArtifactDecodeCache::default();
         let ctx = link_ctx(
             &view,
             view.link_ref(link_index),
             &self.store.right.node(link.right).item.logical_path,
             config,
+            &artifact_cache,
         );
         let edits = self
             .edit_lists
@@ -873,16 +876,26 @@ fn run_inner(
         }
     }
 
+    let artifact_cache = ArtifactDecodeCache::default();
     let mut edit_lists = build_edit_lists(
         config,
         &store,
         &mut diagnostics,
         &mut stats,
         data,
+        &artifact_cache,
         trace.as_deref_mut(),
     )?;
 
-    compact_edit_lists(config, &store, &mut edit_lists, &mut stats, data, trace)?;
+    compact_edit_lists(
+        config,
+        &store,
+        &mut edit_lists,
+        &mut stats,
+        data,
+        &artifact_cache,
+        trace,
+    )?;
 
     Ok(CorrespondenceRunResult {
         store,
@@ -902,6 +915,7 @@ fn link_ctx<'a>(
     link: LinkRef,
     right_path: &str,
     config: &'a CorrespondenceEngineConfig,
+    artifact_cache: &'a ArtifactDecodeCache,
 ) -> LinkCtx<'a> {
     LinkCtx {
         view,
@@ -916,6 +930,7 @@ fn link_ctx<'a>(
             .get(right_path)
             .copied()
             .unwrap_or_default(),
+        artifact_cache,
     }
 }
 
@@ -925,6 +940,7 @@ fn build_edit_lists(
     diagnostics: &mut Vec<Diagnostic>,
     stats: &mut RunStats,
     data: &dyn DataAccess,
+    artifact_cache: &ArtifactDecodeCache,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<BTreeMap<usize, Vec<Edit>>> {
     let mut edit_lists = BTreeMap::new();
@@ -970,6 +986,7 @@ fn build_edit_lists(
             link_ref,
             &store.right.node(link.right).item.logical_path,
             config,
+            artifact_cache,
         );
 
         // Dispatch composes, then selects (CFM-81). The link's edit list is
@@ -1077,6 +1094,7 @@ fn compact_edit_lists(
     edit_lists: &mut BTreeMap<usize, Vec<Edit>>,
     stats: &mut RunStats,
     data: &dyn DataAccess,
+    artifact_cache: &ArtifactDecodeCache,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<()> {
     let view = CoreEngineView::new(store, false);
@@ -1091,6 +1109,7 @@ fn compact_edit_lists(
                 view.link_ref(*link_index),
                 &store.right.node(link.right).item.logical_path,
                 config,
+                artifact_cache,
             );
             // Format-scoped compaction (CFM-81): a rule that declares a
             // `format()` sees and rewrites only the provenance-scoped segment
