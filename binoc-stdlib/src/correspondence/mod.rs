@@ -965,6 +965,10 @@ fn glob_can_match_tabular_artifact(pattern: &str) -> bool {
     .any(|extension| pattern.ends_with(extension))
 }
 
+fn is_tabular_path(path: &str) -> bool {
+    glob_can_match_tabular_artifact(path)
+}
+
 fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Vec<String>> {
     let physical = data.local_path(item)?;
     let mut paths = Vec::new();
