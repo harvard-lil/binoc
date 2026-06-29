@@ -5,15 +5,14 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.sqlite**: Reshaped from data (directory → SQLite database)
-- **data.sqlite/>customers**: Moved from data/customers.csv
-  - Changed cells
-    - row 1, column 'id': '1' -> 1
-    - row 2, column 'id': '2' -> 2
+- **data.sqlite/>customers**:
+  - Moved from data/customers.csv
+  - Column type changed: 'id' string -> number
   - Rows added
     - row 3: 3, 'Carol', 'NY'
-- **data.sqlite/>orders**: Moved from data/orders.csv
-  - Changed cells (showing 3 of 6)
-    - changed cells by column: id 2, customer_id 2, total 2
-    - row 1, column 'id': '100' -> 100
-    - row 1, column 'customer_id': '1' -> 1
+- **data.sqlite/>orders**:
+  - Moved from data/orders.csv
+  - Column type changed: 'id' string -> number; Column type changed: 'customer_id' string -> number
+  - Changed cells
     - row 1, column 'total': '42' -> 42
+    - row 2, column 'total': '17' -> 99
