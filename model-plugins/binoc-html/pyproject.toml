@@ -9,7 +9,7 @@ dependencies = ["binoc>=0.1"]
 binoc-html = "binoc_html:register"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=9.1.1"]
 
 [build-system]
 requires = ["hatchling"]
