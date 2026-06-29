@@ -655,11 +655,15 @@ fn positional_column_name(position: usize) -> String {
 }
 
 fn parse_config_for_entry(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
-    entry.shape.as_ref().map(|shape| {
-        let mut parse = TabularParseConfig::default();
+    if entry.shape.is_none() && entry.records_path.is_none() {
+        return None;
+    }
+    let mut parse = TabularParseConfig::default();
+    if let Some(shape) = &entry.shape {
         shape.apply_to_parse_config(&mut parse);
-        parse
-    })
+    }
+    parse.records_path = entry.records_path.clone();
+    Some(parse)
 }
 fn first_path_entry<'a>(entries: &'a [PathConfigEntry], path: &str) -> Option<&'a PathConfigEntry> {
     entries
@@ -687,6 +691,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
         if entry.content_type.is_none()
             && entry.rule.is_none()
             && entry.shape.is_none()
+            && entry.records_path.is_none()
             && entry.row_identity.is_none()
         {
             diagnostics.push(
@@ -728,6 +733,28 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 )
                 .with_location(location.clone()),
             );
+        }
+        if let Some(records_path) = &entry.records_path {
+            if records_path.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.records_path_empty",
+                        Summary::new().text("records_path must be a non-empty JSON path"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
+            if !entry_declares_tabular(entry) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.facet_kind_mismatch",
+                        Summary::new()
+                            .text("records_path is only meaningful for JSON paths that can parse ")
+                            .text("as tabular data; use a JSON match, content_type, or rule"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
         }
         if entry.shape.is_some() && !entry_declares_tabular(entry) {
             diagnostics.push(

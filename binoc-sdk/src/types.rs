@@ -441,6 +441,8 @@ pub struct PathConfigEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<TabularShapeConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub records_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_identity: Option<RowIdentity>,
     #[serde(skip)]
     pub unknown_fields: Vec<String>,
@@ -461,6 +463,8 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             rule: Option<String>,
             #[serde(default)]
             shape: Option<TabularShapeConfig>,
+            #[serde(default)]
+            records_path: Option<String>,
             #[serde(default)]
             row_identity: Option<RowIdentity>,
             #[serde(default)]
@@ -494,6 +498,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             content_type: raw.content_type,
             rule: raw.rule,
             shape: raw.shape,
+            records_path: raw.records_path,
             row_identity,
             unknown_fields: raw.extra.into_keys().collect(),
         })
@@ -701,6 +706,10 @@ pub struct TabularParseConfig {
     pub header_line: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skip_lines: Option<usize>,
+    /// JSON record collection path for document formats that need to expose a
+    /// nested array as the tabular record stream.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub records_path: Option<String>,
 }
 
 impl Default for TabularParseConfig {
@@ -710,6 +719,7 @@ impl Default for TabularParseConfig {
             delimiter: None,
             header_line: None,
             skip_lines: None,
+            records_path: None,
         }
     }
 }

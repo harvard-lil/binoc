@@ -6,6 +6,6 @@ expression: "&md"
 
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
-- **GLB.Ts+dSST.csv**: 1 row modified by key
+- **enterprise.stix.json**: 1 row modified by key
   - Changed cells
-    - key Year '2024', column 'Feb': '118' -> '119'
+    - key id 'attack-pattern--1', column 'name': 'Old Name' -> 'New Name'
