@@ -262,6 +262,29 @@ pub fn run_with_execution(
     run_inner(config, left_root, right_root, data, execution, None)
 }
 
+fn configure_item_for_dispatch(
+    config: &CorrespondenceEngineConfig,
+    item: &mut ItemRef,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> BinocResult<()> {
+    if let Some(resolver) = &config.dispatch_resolver {
+        diagnostics.extend(resolver.configure_item(item)?);
+    }
+    Ok(())
+}
+
+fn rule_allowed_for_item(
+    config: &CorrespondenceEngineConfig,
+    item: &ItemRef,
+    rule_name: &str,
+) -> bool {
+    config
+        .dispatch_resolver
+        .as_ref()
+        .and_then(|resolver| resolver.forced_rule_for(item))
+        .is_none_or(|forced| forced == rule_name)
+}
+
 /// Run the engine in serial mode while capturing a full [`RunTrace`] for
 /// replay/visualization. Serial execution keeps step ordering deterministic,
 /// which matters for a step-by-step replay; the intended target is smaller
@@ -287,15 +310,17 @@ pub fn run_traced(
 
 fn run_inner(
     config: &CorrespondenceEngineConfig,
-    left_root: ItemRef,
-    right_root: ItemRef,
+    mut left_root: ItemRef,
+    mut right_root: ItemRef,
     data: &dyn DataAccess,
     execution: ExecutionMode,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<CorrespondenceRunResult> {
-    let mut store = Store::new(left_root, right_root, config.root_projection.clone());
     let mut stats = RunStats::default();
     let mut diagnostics = Vec::new();
+    configure_item_for_dispatch(config, &mut left_root, &mut diagnostics)?;
+    configure_item_for_dispatch(config, &mut right_root, &mut diagnostics)?;
+    let mut store = Store::new(left_root, right_root, config.root_projection.clone());
 
     let pair_count = config
         .rules
@@ -413,7 +438,9 @@ fn run_inner(
                                 continue;
                             }
                             let item = &store.tree(side).node(index).item;
-                            if !descriptor.input.matches(item) {
+                            if !rule_allowed_for_item(config, item, &descriptor.name)
+                                || !descriptor.input.matches(item)
+                            {
                                 continue;
                             }
                             RunStats::bump(&mut stats.invocations, &descriptor.name);
@@ -460,7 +487,8 @@ fn run_inner(
                             output.diagnostics,
                         );
                         let mut child_indices = Vec::new();
-                        for child in output.children {
+                        for mut child in output.children {
+                            configure_item_for_dispatch(config, &mut child, &mut diagnostics)?;
                             let projection = child.projection_hint.clone();
                             let child_index = store.tree_mut(result.side).add_child(
                                 result.index,
@@ -514,7 +542,17 @@ fn run_inner(
                             }
                             let id = NodeId { side, index };
                             let item = &store.tree(side).node(index).item;
-                            if !descriptor.input.matches(item) {
+                            let forced_rule = config
+                                .dispatch_resolver
+                                .as_ref()
+                                .and_then(|resolver| resolver.forced_rule_for(item));
+                            if forced_rule
+                                .as_deref()
+                                .is_some_and(|rule| rule != descriptor.name)
+                            {
+                                continue;
+                            }
+                            if forced_rule.is_none() && !descriptor.input.matches(item) {
                                 continue;
                             }
                             // Link-gated unless some pair rule consumes this
@@ -641,7 +679,8 @@ fn run_inner(
                             store.add_artifact(result.id, artifact);
                         }
                         let mut child_indices = Vec::new();
-                        for child in output.children {
+                        for mut child in output.children {
+                            configure_item_for_dispatch(config, &mut child.item, &mut diagnostics)?;
                             let projection = child.item.projection_hint.clone();
                             let child_index = store.tree_mut(result.id.side).add_child(
                                 result.id.index,
@@ -1712,6 +1751,7 @@ mod tests {
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");
@@ -1977,6 +2017,7 @@ mod tests {
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");
@@ -2067,6 +2108,7 @@ mod tests {
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
         let result = run(&with_claim, left.clone(), right.clone(), &data).expect("run");
         let writers = result.stats.writer_used.values().next().expect("writers");
@@ -2087,6 +2129,7 @@ mod tests {
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
         let result = run(&only_fallback, left, right, &data).expect("run");
         let writers = result.stats.writer_used.values().next().expect("writers");
@@ -2116,6 +2159,7 @@ mod tests {
             row_identity_policies: BTreeMap::new(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");

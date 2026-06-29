@@ -8,6 +8,7 @@ use binoc_sdk::{
 use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 
 pub struct CsvParse;
+pub struct CsvMediaParse;
 pub struct JsonParse;
 pub struct JsonMediaParse;
 /// Routes JSON / JSONL whose top level is a consistently-shaped record
@@ -88,6 +89,25 @@ impl ParseRule for CsvParse {
             artifacts: Vec::new(),
             projection: ProjectionHint::default().item_type("stacked tables"),
         })
+    }
+}
+
+impl ParseRule for CsvMediaParse {
+    fn descriptor(&self) -> ParseDescriptor {
+        ParseDescriptor {
+            name: "binoc.parse.csv_media".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                media_types: vec!["text/csv".into(), "text/tab-separated-values".into()],
+                ..NodeMatch::default()
+            },
+            output: tabular_v1(),
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        CsvParse.parse(item, data)
     }
 }
 
@@ -692,6 +712,9 @@ fn json_child_path(parent: &str, key: &str) -> String {
 }
 
 fn delimiter_for(item: &ItemRef) -> u8 {
+    if item.media_type.as_deref() == Some("text/tab-separated-values") {
+        return b'\t';
+    }
     match item.extension().as_deref() {
         Some(".tsv") => b'\t',
         _ => b',',

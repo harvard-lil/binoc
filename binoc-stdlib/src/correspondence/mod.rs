@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use binoc_sdk::{
     BinocResult, CoreRule, CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig,
-    DataAccess, DatasetSemanticsV1, Diagnostic, Edit, FileSelector, ItemRef,
-    ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
+    DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit, FileSelector, ItemRef,
+    PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
     RowIdentityPolicies, Summary,
 };
 use regex::Regex;
@@ -91,6 +91,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             CoreRule::Parse(Arc::new(parse::JsonParse)),
             CoreRule::Parse(Arc::new(parse::JsonMediaParse)),
             CoreRule::Parse(Arc::new(parse::CsvParse)),
+            CoreRule::Parse(Arc::new(parse::CsvMediaParse)),
             CoreRule::Parse(Arc::new(parse::YamlParse)),
             CoreRule::Parse(Arc::new(parse::YamlMediaParse)),
             CoreRule::Parse(Arc::new(parse::TomlParse)),
@@ -119,6 +120,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
         row_identity_policies: BTreeMap::new(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: Some(Arc::new(StdlibDatasetConfigurator)),
+        dispatch_resolver: None,
     }
 }
 
@@ -150,6 +152,12 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
 
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
+        let diagnostics = validate_path_entries(&semantics);
+        if !semantics.paths.is_empty() {
+            config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
+                entries: semantics.paths.clone(),
+            }));
+        }
         let row_identity = row_identity_for_paths(&semantics, &left_paths, &right_paths);
         config.row_keys = row_identity
             .iter()
@@ -176,7 +184,37 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 })),
             );
         }
+        Ok(diagnostics)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct StdlibPathDispatchResolver {
+    entries: Vec<PathConfigEntry>,
+}
+
+impl DispatchResolver for StdlibPathDispatchResolver {
+    fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>> {
+        let Some(entry) = first_path_entry(&self.entries, &item.logical_path) else {
+            return Ok(Vec::new());
+        };
+        if let Some(content_type) = &entry.content_type {
+            item.media_type = Some(content_type.clone());
+            if !item.is_dir {
+                item.projection_hint = projection_for_content_type(content_type);
+            }
+        } else if matches!(
+            entry.rule.as_deref(),
+            Some("binoc.parse.csv" | "binoc.parse.csv_media")
+        ) && !item.is_dir
+        {
+            item.projection_hint = ProjectionHint::default().item_type("tabular");
+        }
         Ok(Vec::new())
+    }
+
+    fn forced_rule_for(&self, item: &ItemRef) -> Option<String> {
+        first_path_entry(&self.entries, &item.logical_path).and_then(|entry| entry.rule.clone())
     }
 }
 
@@ -482,15 +520,37 @@ fn row_identity_for_paths(
     let mut paths = left_paths
         .iter()
         .chain(right_paths)
-        .filter(|path| is_tabular_path(path))
         .cloned()
         .collect::<Vec<_>>();
     paths.sort();
     paths.dedup();
 
-    let defaults = &semantics.tables.defaults.row_identity;
+    let defaults = dataset_default_row_identity(semantics);
     let mut row_identity = BTreeMap::new();
     for path in paths {
+        if !semantics.paths.is_empty() {
+            let entry = first_path_entry(&semantics.paths, &path);
+            let has_path_row_identity = entry
+                .and_then(|entry| entry.row_identity.as_ref())
+                .is_some();
+            let has_default_row_identity = !defaults.columns.is_empty();
+            if (has_default_row_identity || has_path_row_identity)
+                && path_resolves_to_tabular(&path, entry)
+            {
+                let identity = merge_row_identity(
+                    defaults,
+                    entry.and_then(|entry| entry.row_identity.as_ref()),
+                );
+                if !identity.columns.is_empty() {
+                    row_identity.insert(path, identity);
+                }
+            }
+            continue;
+        }
+
+        if !is_tabular_path(&path) {
+            continue;
+        }
         let mut identity = defaults.clone();
         for entry in &semantics.tables.entries {
             if table_entry_matches_path(entry, &path) {
@@ -507,6 +567,133 @@ fn row_identity_for_paths(
         }
     }
     row_identity
+}
+
+fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
+    if !semantics.defaults.row_identity.columns.is_empty() {
+        &semantics.defaults.row_identity
+    } else {
+        &semantics.tables.defaults.row_identity
+    }
+}
+
+fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentity>) -> RowIdentity {
+    let Some(entry) = entry else {
+        return defaults.clone();
+    };
+    let mut identity = entry.clone();
+    if identity.columns.is_empty() {
+        identity.columns = defaults.columns.clone();
+    }
+    identity
+}
+
+fn path_resolves_to_tabular(path: &str, entry: Option<&PathConfigEntry>) -> bool {
+    is_tabular_path(path)
+        || entry.is_some_and(|entry| {
+            entry
+                .content_type
+                .as_deref()
+                .is_some_and(content_type_is_tabular)
+                || entry.rule.as_deref() == Some("binoc.parse.csv")
+                || entry.rule.as_deref() == Some("binoc.parse.csv_media")
+        })
+}
+
+fn first_path_entry<'a>(entries: &'a [PathConfigEntry], path: &str) -> Option<&'a PathConfigEntry> {
+    entries
+        .iter()
+        .find(|entry| glob_matches_path(&entry.match_, path))
+}
+
+fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    for entry in &semantics.paths {
+        let location = if entry.match_.is_empty() {
+            "dataset.paths[]".to_string()
+        } else {
+            format!("dataset.paths[match={}]", entry.match_)
+        };
+        if entry.match_.is_empty() {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.path_match_empty",
+                    Summary::new().text("A dataset.paths entry is missing a non-empty match glob"),
+                )
+                .with_location(location.clone()),
+            );
+        }
+        if entry.content_type.is_none() && entry.rule.is_none() && entry.row_identity.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.path_entry_empty",
+                    Summary::new().text("A dataset.paths entry must set at least one facet"),
+                )
+                .with_location(location.clone()),
+            );
+        }
+        if entry.content_type.is_some() && entry.rule.is_some() {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.dispatch_ambiguous",
+                    Summary::new()
+                        .text("A dataset.paths entry cannot set both content_type and rule"),
+                )
+                .with_location(location.clone()),
+            );
+        }
+        for field in &entry.unknown_fields {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.unknown_facet",
+                    Summary::new()
+                        .text("Unknown dataset.paths facet: ")
+                        .text(field.clone()),
+                )
+                .with_location(location.clone()),
+            );
+        }
+        if entry.row_identity.is_some() && !entry_declares_tabular(entry) {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.facet_kind_mismatch",
+                    Summary::new()
+                        .text("row_identity is only meaningful for tabular paths; add ")
+                        .text("content_type: text/csv or rule: binoc.parse.csv for this match"),
+                )
+                .with_location(location),
+            );
+        }
+    }
+    diagnostics
+}
+
+fn entry_declares_tabular(entry: &PathConfigEntry) -> bool {
+    glob_can_match_tabular_extension(&entry.match_)
+        || entry
+            .content_type
+            .as_deref()
+            .is_some_and(content_type_is_tabular)
+        || entry.rule.as_deref() == Some("binoc.parse.csv")
+        || entry.rule.as_deref() == Some("binoc.parse.csv_media")
+}
+
+fn content_type_is_tabular(content_type: &str) -> bool {
+    matches!(content_type, "text/csv" | "text/tab-separated-values")
+}
+
+fn projection_for_content_type(content_type: &str) -> ProjectionHint {
+    match content_type {
+        "text/csv" | "text/tab-separated-values" => ProjectionHint::default().item_type("tabular"),
+        content_type if content_type.starts_with("text/") => {
+            ProjectionHint::default().item_type("text")
+        }
+        _ => ProjectionHint::default(),
+    }
+}
+
+fn glob_can_match_tabular_extension(pattern: &str) -> bool {
+    pattern.ends_with(".csv") || pattern.ends_with(".tsv")
 }
 
 fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Vec<String>> {
@@ -571,6 +758,41 @@ fn selector_captures(selector: &FileSelector, path: &str) -> Option<BTreeMap<Str
         return None;
     }
     Some(captures_by_name)
+}
+
+fn glob_matches_path(pattern: &str, path: &str) -> bool {
+    if pattern.is_empty() {
+        return false;
+    }
+    let mut regex = String::from("^");
+    let mut chars = pattern.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '*' if chars.peek() == Some(&'*') => {
+                chars.next();
+                if chars.peek() == Some(&'/') {
+                    chars.next();
+                    regex.push_str("(?:.*/)?");
+                } else {
+                    regex.push_str(".*");
+                }
+            }
+            '/' => {
+                regex.push('/');
+            }
+            '*' => regex.push_str("[^/]*"),
+            '?' => regex.push_str("[^/]"),
+            '.' | '+' | '(' | ')' | '|' | '^' | '$' | '{' | '}' | '[' | ']' | '\\' => {
+                regex.push('\\');
+                regex.push(ch);
+            }
+            other => regex.push(other),
+        }
+    }
+    regex.push('$');
+    Regex::new(&regex)
+        .map(|regex| regex.is_match(path))
+        .unwrap_or(false)
 }
 
 fn is_tabular_path(path: &str) -> bool {
