@@ -16,5 +16,5 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 
 ## Warnings
 
-- configured row keys had null values; fell back to positional row comparison (`binoc.write.tabular`) [binoc.keyed_row_identity_degraded]
-  - use `binoc extract CHANGESET "binoc.write.tabular" content`
+- configured row keys had null values; fell back to positional row comparison (`data.csv`) [binoc.keyed_row_identity_degraded]
+  - use `binoc extract CHANGESET "data.csv" content`

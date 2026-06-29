@@ -111,6 +111,7 @@ impl EditListWriter for TabularWriter {
             return Ok(None);
         };
 
+        let location = &ctx.view.item(ctx.link.right).logical_path;
         let mut edits = Vec::new();
         let mut diagnostics = Vec::new();
         if left.headers != right.headers {
