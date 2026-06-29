@@ -77,7 +77,7 @@ impl ParseRule for CsvParse {
         let projection = if dialect.inferred {
             ProjectionHint::default()
                 .tag("binoc.dialect-inferred")
-                .annotation(
+                .annotate(
                     "binoc",
                     "dialect_provenance",
                     serde_json::json!(dialect_provenance_summary(&dialect)),
