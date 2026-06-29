@@ -2204,6 +2204,7 @@ mod tests {
             size: None,
             media_type: None,
             projection_hint: ProjectionHint::default().item_type("leaf"),
+            tabular_parse: None,
             handle: path.into(),
         }
     }

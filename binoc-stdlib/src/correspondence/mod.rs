@@ -12,7 +12,7 @@ use binoc_sdk::{
     BinocResult, CoreRule, CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig,
     DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit, FileSelector, ItemRef,
     PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPolicies, Summary,
+    RowIdentityPolicies, Summary, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -210,6 +210,12 @@ impl DispatchResolver for StdlibPathDispatchResolver {
         ) && !item.is_dir
         {
             item.projection_hint = ProjectionHint::default().item_type("tabular");
+        }
+        if let Some(parse) = parse_config_for_entry(entry) {
+            item.tabular_parse = Some(parse);
+            if !item.is_dir {
+                item.projection_hint = ProjectionHint::default().item_type("tabular");
+            }
         }
         Ok(Vec::new())
     }
@@ -542,8 +548,8 @@ fn row_identity_for_paths(
             let entry = first_path_entry(&semantics.paths, &path);
             let has_path_row_identity = entry
                 .and_then(|entry| entry.row_identity.as_ref())
-                .is_some();
-            let has_default_row_identity = !defaults.columns.is_empty();
+                .is_some_and(row_identity_configured);
+            let has_default_row_identity = row_identity_configured(defaults);
             if (has_default_row_identity || has_path_row_identity)
                 && path_resolves_to_tabular(&path, entry)
             {
@@ -551,7 +557,7 @@ fn row_identity_for_paths(
                     defaults,
                     entry.and_then(|entry| entry.row_identity.as_ref()),
                 );
-                if !identity.columns.is_empty() {
+                if row_identity_configured(&identity) {
                     row_identity.insert(path, identity);
                 }
             }
@@ -565,14 +571,16 @@ fn row_identity_for_paths(
         for entry in &semantics.tables.entries {
             if table_entry_matches_path(entry, &path) {
                 let mut entry_identity = entry.row_identity.clone();
-                if entry_identity.columns.is_empty() {
-                    entry_identity.columns = identity.columns;
+                if !row_identity_configured(&entry_identity) {
+                    entry_identity.columns = identity.columns.clone();
+                    entry_identity.by_position = identity.by_position.clone();
                 }
                 identity = entry_identity;
                 break;
             }
         }
-        if !identity.columns.is_empty() {
+        identity = canonicalize_row_identity(identity);
+        if row_identity_configured(&identity) {
             row_identity.insert(path, identity);
         }
     }
@@ -580,7 +588,7 @@ fn row_identity_for_paths(
 }
 
 fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
-    if !semantics.defaults.row_identity.columns.is_empty() {
+    if row_identity_configured(&semantics.defaults.row_identity) {
         &semantics.defaults.row_identity
     } else {
         &semantics.tables.defaults.row_identity
@@ -589,13 +597,44 @@ fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity 
 
 fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentity>) -> RowIdentity {
     let Some(entry) = entry else {
-        return defaults.clone();
+        return canonicalize_row_identity(defaults.clone());
     };
     let mut identity = entry.clone();
-    if identity.columns.is_empty() {
+    if !row_identity_configured(&identity) {
         identity.columns = defaults.columns.clone();
+        identity.by_position = defaults.by_position.clone();
     }
+    canonicalize_row_identity(identity)
+}
+
+fn canonicalize_row_identity(mut identity: RowIdentity) -> RowIdentity {
+    if identity.columns.is_empty() {
+        identity.columns = identity
+            .by_position
+            .iter()
+            .copied()
+            .filter(|position| *position > 0)
+            .map(positional_column_name)
+            .collect();
+    }
+    identity.by_position.clear();
     identity
+}
+
+fn row_identity_configured(identity: &RowIdentity) -> bool {
+    !identity.columns.is_empty() || !identity.by_position.is_empty()
+}
+
+fn positional_column_name(position: usize) -> String {
+    format!("column_{position}")
+}
+
+fn parse_config_for_entry(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
+    entry.shape.as_ref().map(|shape| {
+        let mut parse = TabularParseConfig::default();
+        shape.apply_to_parse_config(&mut parse);
+        parse
+    })
 }
 
 fn path_resolves_to_tabular(path: &str, entry: Option<&PathConfigEntry>) -> bool {
@@ -633,7 +672,11 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 .with_location(location.clone()),
             );
         }
-        if entry.content_type.is_none() && entry.rule.is_none() && entry.row_identity.is_none() {
+        if entry.content_type.is_none()
+            && entry.rule.is_none()
+            && entry.shape.is_none()
+            && entry.row_identity.is_none()
+        {
             diagnostics.push(
                 Diagnostic::error(
                     "binoc.dataset_config.path_entry_empty",
@@ -671,8 +714,39 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                         .text("row_identity is only meaningful for tabular paths; add ")
                         .text("content_type: text/csv or rule: binoc.parse.csv for this match"),
                 )
-                .with_location(location),
+                .with_location(location.clone()),
             );
+        }
+        if entry.shape.is_some() && !entry_declares_tabular(entry) {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.facet_kind_mismatch",
+                    Summary::new()
+                        .text("shape is only meaningful for tabular paths; add ")
+                        .text("content_type: text/csv or rule: binoc.parse.csv for this match"),
+                )
+                .with_location(location.clone()),
+            );
+        }
+        if let Some(shape) = &entry.shape {
+            if shape.header_line.is_some() && shape.skip_lines.is_some() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.shape_header_position_ambiguous",
+                        Summary::new().text("shape cannot set both header_line and skip_lines"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
+            if shape.header_line == Some(0) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.shape_header_line_invalid",
+                        Summary::new().text("shape.header_line is 1-based and must be at least 1"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
         }
     }
     diagnostics
