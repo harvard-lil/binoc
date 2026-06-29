@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use binoc_sdk::{
     decompose_child, structured_document_v1, tabular_v1, BinocError, BinocResult, DataAccess,
     ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact, ParsedChild,
-    ProjectionHint, StructuredDocument, TabularData,
+    ProjectionHint, StructuredDocument, TabularData, TabularParseConfig,
 };
 use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 
@@ -62,7 +62,8 @@ impl ParseRule for CsvParse {
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
         let records = parse_csv_records(&bytes, delimiter_for(item))?;
-        let tabular = table_from_csv_records(records.clone());
+        let tabular =
+            table_from_csv_records_with_config(records.clone(), item.tabular_parse.as_ref());
         let sections = detect_stacked_sections_from_rows(&records);
 
         // Fewer than two qualifying regions: a plain CSV is a single table,
@@ -748,14 +749,49 @@ fn parse_csv_records(bytes: &[u8], delimiter: u8) -> BinocResult<Vec<Vec<String>
     Ok(records)
 }
 
+#[cfg(test)]
 fn table_from_csv_records(records: Vec<Vec<String>>) -> TabularData {
+    table_from_csv_records_with_config(records, None)
+}
+
+fn table_from_csv_records_with_config(
+    records: Vec<Vec<String>>,
+    config: Option<&TabularParseConfig>,
+) -> TabularData {
     let Some(first) = records.first() else {
         return TabularData::from_string_rows(Vec::new(), Vec::new());
     };
-    let width = records.iter().map(Vec::len).max().unwrap_or(first.len());
-    let headers = complete_csv_headers(first, width);
-    let rows = records.into_iter().skip(1).collect();
-    TabularData::from_string_rows(headers, rows)
+    let has_header = config.is_none_or(|config| config.header);
+    let skip_lines = config.and_then(|config| config.skip_lines).unwrap_or(0);
+    let header_index = config
+        .and_then(|config| config.header_line)
+        .map(|line| line.saturating_sub(1))
+        .unwrap_or(skip_lines);
+
+    if has_header {
+        let header = records.get(header_index).unwrap_or(first);
+        let width = records
+            .iter()
+            .skip(header_index)
+            .map(Vec::len)
+            .max()
+            .unwrap_or(header.len());
+        let headers = complete_csv_headers(header, width);
+        let rows = records.into_iter().skip(header_index + 1).collect();
+        TabularData::from_string_rows(headers, rows)
+    } else {
+        let width = records
+            .iter()
+            .skip(skip_lines)
+            .map(Vec::len)
+            .max()
+            .unwrap_or(first.len());
+        let headers = complete_csv_headers(&[], width);
+        let rows = records.into_iter().skip(skip_lines).collect();
+        let mut table = TabularData::from_string_rows(headers, rows);
+        table.has_header = false;
+        table
+    }
 }
 
 fn complete_csv_headers(first: &[String], width: usize) -> Vec<String> {
@@ -858,6 +894,7 @@ fn children_from_sections(parent_path: &str, sections: &[StackedSection]) -> Vec
                 size: Some(bytes.len() as u64),
                 media_type: Some("application/vnd.binoc.tabular+json".into()),
                 projection_hint: ProjectionHint::default().item_type("tabular"),
+                tabular_parse: None,
                 handle: logical_path,
             },
             artifacts: vec![ParsedArtifact {

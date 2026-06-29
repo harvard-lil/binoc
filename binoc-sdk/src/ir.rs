@@ -990,6 +990,7 @@ mod tests {
                 size: None,
                 media_type: None,
                 projection_hint: Default::default(),
+                tabular_parse: None,
                 handle: "/tmp/a/data.csv".into(),
             },
             ItemRef {
@@ -999,6 +1000,7 @@ mod tests {
                 size: None,
                 media_type: None,
                 projection_hint: Default::default(),
+                tabular_parse: None,
                 handle: "/tmp/b/data.csv".into(),
             },
         );

@@ -84,6 +84,16 @@ without a schema change. It is also the same mechanism as #107's content sniff:
 sniffing *infers* a content type (disclosed, per the inference ADR), config
 *declares* one (silent).
 
+For #104's position-keying case, `row_identity.by_position` is configuration
+sugar that resolves to the same canonical column-name form the tabular writer
+already consumes. Positions are 1-based: `by_position: [1]` resolves to
+`columns: ["column_1"]`. On a headerless table declared with
+`shape: { has_header: false }`, the parser synthesizes the same positional
+headers (`column_1`, `column_2`, ...), so `by_position: [1]` and
+`columns: ["column_1"]` are the same key expressed two ways. Downstream
+row-key maps stay name-keyed; position syntax does not add a second identity
+mode to the IR or writer contract.
+
 Note the *keying facets* sit beside this override, and none of them is a fourth
 projection kind: `row_identity` keys a flat table, `records_path` + `row_identity`
 keys a table nested in a document, and `node_identity` keys nodes in a
@@ -143,9 +153,6 @@ proves awkward, splitting `paths` into `tables`/`trees` while sharing the select
 
 ## Open sub-decisions (flagged for review, not yet decided here)
 
-- **Position-keying representation** (`row_identity.by_position: [1]`) and how it
-  composes with synthesized positional column names from `shape.has_header:false`
-  (#104 calls for both).
 - Whether the `node_identity` facet (#106's keyed-tree, the heaviest issue) lands
   in this round or is reserved — the schema slot is defined now so the model is
   forward-compatible either way, since it is just another keying facet alongside

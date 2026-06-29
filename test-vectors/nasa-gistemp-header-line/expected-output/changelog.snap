@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **GLB.Ts+dSST.csv**: 1 row modified by key
+  - Changed cells
+    - key Year '2024', column 'Feb': '118' -> '119'

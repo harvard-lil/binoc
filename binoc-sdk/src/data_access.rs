@@ -120,6 +120,7 @@ fn item_ref_from_physical(physical: &Path, logical: &str) -> ItemRef {
         size: None,
         media_type: None,
         projection_hint: Default::default(),
+        tabular_parse: None,
         handle: physical.to_string_lossy().to_string(),
     }
 }

@@ -439,6 +439,8 @@ pub struct PathConfigEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<TabularShapeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_identity: Option<RowIdentity>,
     #[serde(skip)]
     pub unknown_fields: Vec<String>,
@@ -457,6 +459,8 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             content_type: Option<String>,
             #[serde(default)]
             rule: Option<String>,
+            #[serde(default)]
+            shape: Option<TabularShapeConfig>,
             #[serde(default)]
             row_identity: Option<RowIdentity>,
             #[serde(default)]
@@ -489,6 +493,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             match_: raw.match_,
             content_type: raw.content_type,
             rule: raw.rule,
+            shape: raw.shape,
             row_identity,
             unknown_fields: raw.extra.into_keys().collect(),
         })
@@ -686,11 +691,16 @@ pub struct TableSelector {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TabularParseConfig {
     #[serde(default = "default_header")]
     pub header: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delimiter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_line: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_lines: Option<usize>,
 }
 
 impl Default for TabularParseConfig {
@@ -698,6 +708,8 @@ impl Default for TabularParseConfig {
         Self {
             header: true,
             delimiter: None,
+            header_line: None,
+            skip_lines: None,
         }
     }
 }
@@ -707,9 +719,36 @@ fn default_header() -> bool {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct TabularShapeConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_header: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_line: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_lines: Option<usize>,
+}
+
+impl TabularShapeConfig {
+    pub fn apply_to_parse_config(&self, parse: &mut TabularParseConfig) {
+        if let Some(has_header) = self.has_header {
+            parse.header = has_header;
+        }
+        if let Some(header_line) = self.header_line {
+            parse.header_line = Some(header_line);
+        }
+        if let Some(skip_lines) = self.skip_lines {
+            parse.skip_lines = Some(skip_lines);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RowIdentity {
     #[serde(default)]
     pub columns: Vec<String>,
+    #[serde(default)]
+    pub by_position: Vec<usize>,
     #[serde(default)]
     pub cardinality: Cardinality,
     #[serde(default)]
@@ -923,6 +962,11 @@ pub struct ItemRef {
     /// file names, media types, or plugin-specific tags.
     #[serde(default, skip_serializing_if = "crate::projection_hint_is_default")]
     pub projection_hint: crate::ProjectionHint,
+    /// Optional tabular parser options resolved by a dispatch configurator.
+    /// Core carries this through without interpreting it; tabular parse rules
+    /// decide whether it applies to their format.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tabular_parse: Option<TabularParseConfig>,
     /// Opaque identifier used by DataAccess implementations to locate data.
     /// Plugin authors should not create or interpret this value directly.
     #[serde(default)]
@@ -1045,6 +1089,7 @@ mod tests {
             size: None,
             media_type: None,
             projection_hint: Default::default(),
+            tabular_parse: None,
             handle: String::new(),
         }
     }
