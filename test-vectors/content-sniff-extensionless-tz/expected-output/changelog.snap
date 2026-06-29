@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **asia**: 1 line added
   - Content type inference: treated asia as text (content sniff, no extension)
   - Line changes
