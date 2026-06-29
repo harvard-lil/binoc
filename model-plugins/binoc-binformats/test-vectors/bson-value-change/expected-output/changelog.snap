@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.bson**: Document values changed
-  - Value Change: changes: [{"from":"2","kind":"replace","path":"$.settings.retries","to":"4"}]; examples_truncated: false

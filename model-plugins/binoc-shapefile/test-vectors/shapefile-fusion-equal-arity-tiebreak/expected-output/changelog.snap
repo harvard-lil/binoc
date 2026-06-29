@@ -8,9 +8,7 @@ expression: "&md"
   - Changed cells
     - row 2, column 'navigable': false -> true
 - **rivers.shp/>geometry**: Document values changed
-  - Value Change: changes: [{"from":"11.0","kind":"replace","path":"$.bbox.max_x","to":"12.0"},{"from":"11.0","kind":"replace","path":"$.bbox.max_y","to":"12.0"},{"from":"2","kind":"repla...; examples_truncated: false
 - **roads.shp/>attributes**: 1 row added
   - Rows added
     - row 3: 'Pine Rd', 1.0
 - **roads.shp/>geometry**: Document values changed
-  - Value Change: changes: [{"from":"1.0","kind":"replace","path":"$.bbox.max_x","to":"2.0"},{"from":"1.0","kind":"replace","path":"$.bbox.max_y","to":"2.0"},{"from":"2","kind":"replace",...; examples_truncated: false

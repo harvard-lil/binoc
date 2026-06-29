@@ -374,40 +374,10 @@ fn is_move_node(node: &DiffNode) -> bool {
     matches!(node.action.as_str(), "move" | "copy")
 }
 
-/// The origin line for a moved or copied node: "Moved from X" / "Copied from X".
-///
-/// When the projection tagged the node `binoc.move.modified`, its `summary`
-/// holds the *content* change (see [`move_content`]) and the origin must be
-/// derived from the node's sources. Otherwise the producer's own summary is
-/// already an origin statement — a bare rename, a copy, or a multi-source
-/// "Merged from A, B" that names every source — and we use it verbatim, falling
-/// back to the synthesized phrasing only when no summary was supplied.
+/// The origin line for a moved or copied node: a producer-supplied origin
+/// statement, falling back to "Moved from X" / "Copied from X".
 fn move_origin(node: &DiffNode) -> Summary {
-    if node.tags.contains("binoc.move.modified") {
-        return synthesized_move_origin(node);
-    }
     node_summary(node)
-}
-
-/// The synthesized "Moved from X" / "Copied from X" origin, reusing the same
-/// wording as [`fallback_summary`]'s move/copy arms.
-fn synthesized_move_origin(node: &DiffNode) -> Summary {
-    let item_type = if node.item_type.is_empty() {
-        "item"
-    } else {
-        &node.item_type
-    };
-    let (verb_phrase, fallback) = if node.action == "copy" {
-        ("Copied from ", "copied")
-    } else {
-        ("Moved from ", "moved")
-    };
-    match node.primary_from_source() {
-        Some(src) => Summary::new()
-            .text(verb_phrase)
-            .path(src.path.clone(), src.side),
-        None => format!("{} {fallback}", capitalize(item_type)).into(),
-    }
 }
 
 /// Whether a move/copy node carries a content change folded inline beneath the
@@ -419,18 +389,9 @@ fn should_group_move_children(node: &DiffNode) -> bool {
 
 /// The content change carried by a moved/copied node, shown beneath its origin
 /// line, or `None` for a pure move/copy. Folder moves describe their content
-/// through separately-rendered child nodes, so they contribute none here.
-///
-/// Priority (first match wins):
-/// 1. `annotations.tabular_summary` — rich, from tabular writers.
-/// 2. `annotations.content_summary` — generic content detail.
-/// 3. The node's own `summary`, when it was tagged `binoc.move.modified` (its
-///    summary is the content change, not the origin).
-/// 4. A join of non-identical child summaries.
+/// through separately-rendered child nodes, so they contribute none here unless
+/// a producer emitted an explicit content summary.
 fn move_content(node: &DiffNode) -> Option<Summary> {
-    if node.tags.contains("binoc.folder-move") {
-        return None;
-    }
     // The annotation trailers are carried as plain strings and render
     // verbatim as a single text segment.
     if let Some(s) = annotation_str(node, "tabular_summary") {
@@ -439,26 +400,14 @@ fn move_content(node: &DiffNode) -> Option<Summary> {
     if let Some(s) = annotation_str(node, "content_summary") {
         return Some(s.into());
     }
-    if node.tags.contains("binoc.move.modified") {
-        if let Some(summary) = &node.summary {
-            return Some(summary.clone());
+    edit_summaries(node).next().map(|first| {
+        let mut trailer = first;
+        for summary in edit_summaries(node).skip(1) {
+            trailer = trailer.text("; ");
+            trailer.extend(summary);
         }
-    }
-    if !node.children.is_empty() {
-        let mut trailer = Summary::new();
-        let mut any = false;
-        for child in node.children.iter().filter(|c| c.action != "identical") {
-            if any {
-                trailer = trailer.text("; ");
-            }
-            trailer.extend(node_summary(child));
-            any = true;
-        }
-        if any {
-            return Some(trailer);
-        }
-    }
-    None
+        trailer
+    })
 }
 
 fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
@@ -466,6 +415,20 @@ fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
         .and_then(Annotation::as_str)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+fn edit_summaries(node: &DiffNode) -> impl Iterator<Item = Summary> + '_ {
+    node.details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(edit_summary)
+}
+
+fn edit_summary(edit: &serde_json::Value) -> Option<Summary> {
+    edit.get("summary")
+        .and_then(|summary| serde_json::from_value(summary.clone()).ok())
 }
 
 fn render_annotations(
@@ -762,12 +725,11 @@ fn render_known_edit_details(
     // Metadata reads AFTER the primary table/content edits above, so a changelog
     // says "what the table did" then "what its metadata did" (CFM-82).
     render_metadata_details(out, edits, config, detail_budget);
-    render_generic_edit_details(out, node, edits, config, detail_budget);
+    render_generic_edit_details(out, edits, config, detail_budget);
 }
 
 fn render_generic_edit_details(
     out: &mut String,
-    node: &DiffNode,
     edits: &[serde_json::Value],
     config: &MarkdownRendererConfig,
     detail_budget: &mut DetailBudget,
@@ -778,7 +740,7 @@ fn render_generic_edit_details(
             edit.get("verb")
                 .and_then(|value| value.as_str())
                 .is_none_or(|verb| !specialized_detail_verb(verb))
-                && !summary_covered_generic_verb(node, edit)
+                && edit_summary(edit).is_none()
         })
         .collect();
     if generic.is_empty() {
@@ -871,21 +833,6 @@ fn specialized_detail_verb(verb: &str) -> bool {
             | "binary.contents-differ"
             | "metadata.value_change"
     )
-}
-
-/// True when the node summary already states this edit, so a generic detail
-/// bullet would only repeat it (and, for structural edits, dump raw params).
-/// Each arm pairs the edit verb with the tag that proves the summary covers it.
-fn summary_covered_generic_verb(node: &DiffNode, edit: &serde_json::Value) -> bool {
-    let Some(verb) = edit.get("verb").and_then(|value| value.as_str()) else {
-        return false;
-    };
-    match verb {
-        "tabular.rename_column" => node.tags.contains("binoc.column-rename"),
-        "tabular.reorder_columns" => node.tags.contains("binoc.column-reorder"),
-        "document.serialization_change" => node.tags.contains("binoc.serialization-change"),
-        _ => false,
-    }
 }
 
 fn humanize_edit_verb(verb: &str) -> String {
@@ -1748,7 +1695,10 @@ mod tests {
             serde_json::json!([
                 {
                     "verb": "tabular.rename_column",
-                    "params": { "from": "count", "to": "total" }
+                    "params": { "from": "count", "to": "total" },
+                    "summary": [
+                        { "text": "Column renamed: 'count' -> 'total'" }
+                    ]
                 },
                 {
                     "verb": "tabular.append_rows",
@@ -1940,12 +1890,11 @@ mod tests {
     }
 
     #[test]
-    fn move_with_children_renders_as_paired_bullets() {
-        // A container `move` whose content change lives in a child (e.g. a
-        // renamed archive holding one modified member) reports as one unit: an
-        // origin line plus the joined child detail, indented under one path and
-        // classified together by the highest-significance descendant tag.
-        // Children must NOT also appear as separate enumerated entries.
+    fn move_with_children_renders_children_separately_without_content_summary() {
+        // A moved container whose content change lives only in a child is not
+        // implicitly summarized by the renderer. The child remains reportable
+        // on its own unless the producing rule emits an explicit content
+        // summary on the moved node.
         let child = DiffNode::new("modify", "column", "email")
             .with_summary("Column added: 'email'")
             .with_tag("binoc.column-addition");
@@ -1969,13 +1918,17 @@ mod tests {
 
         assert!(
             md.contains("## Substantive changes"),
-            "should land in substantive section (promoted from child tag)"
+            "child should land in substantive section"
         );
-        assert!(md.contains("- **data_v2.csv**:\n"), "got:\n{md}");
-        assert!(md.contains("  - Moved from data.csv\n"), "got:\n{md}");
-        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
-        // The child detail should appear exactly once, never as its own
-        // separately-categorized entry.
+        assert!(
+            md.contains("- **email**: Column added: 'email'\n"),
+            "got:\n{md}"
+        );
+        assert!(md.contains("## Other Changes"), "got:\n{md}");
+        assert!(
+            md.contains("- **data_v2.csv**: Moved from data.csv\n"),
+            "got:\n{md}"
+        );
         assert_eq!(md.matches("Column added: 'email'").count(), 1);
     }
 

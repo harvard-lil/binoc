@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.shp**: Document values changed
-  - Value Change: changes: [{"from":"5.0","kind":"replace","path":"$.bbox.max_x","to":"9.0"},{"from":"5.0","kind":"replace","path":"$.bbox.max_y","to":"9.0"}]; examples_truncated: false

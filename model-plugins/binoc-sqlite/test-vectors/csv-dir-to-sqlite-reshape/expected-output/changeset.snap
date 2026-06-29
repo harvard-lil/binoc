@@ -56,7 +56,13 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "1 row added; 2 cells changed"
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data/customers.csv",
+                  "snapshot": "from"
+                }
               }
             ],
             "tags": [
@@ -119,7 +125,13 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "6 cells changed"
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data/orders.csv",
+                  "snapshot": "from"
+                }
               }
             ],
             "tags": [

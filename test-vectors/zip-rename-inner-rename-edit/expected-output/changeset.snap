@@ -53,7 +53,13 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "1 cell changed"
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data.zip/>old.csv",
+                  "snapshot": "from"
+                }
               }
             ],
             "tags": [

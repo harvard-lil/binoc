@@ -44,6 +44,11 @@ expression: "&stable_changeset"
                   "age"
                 ]
               },
+              "summary": [
+                {
+                  "text": "Columns reordered"
+                }
+              ],
               "verb": "tabular.reorder_columns"
             },
             {

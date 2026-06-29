@@ -112,6 +112,11 @@ expression: "&stable_changeset"
                     ],
                     "examples_truncated": false
                   },
+                  "summary": [
+                    {
+                      "text": "Document values changed"
+                    }
+                  ],
                   "verb": "document.value_change"
                 }
               ]

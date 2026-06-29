@@ -5,9 +5,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tsv**:
-  - Moved from data.csv
-  - 1 row added; 1 cell changed
+- **data.tsv**: Moved from data.csv
   - Changed cells
     - row 2, column 'age': '25' -> '26'
   - Rows added

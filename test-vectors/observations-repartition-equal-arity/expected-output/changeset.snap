@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "3 cells changed"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "observations_north.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
@@ -80,7 +86,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "3 cells changed"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "observations_south.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [

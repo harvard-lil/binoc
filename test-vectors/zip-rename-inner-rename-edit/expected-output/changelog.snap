@@ -6,8 +6,6 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **archive.zip**: Moved from data.zip
-- **archive.zip/>new.csv**:
-  - Moved from data.zip/>old.csv
-  - 1 cell changed
+- **archive.zip/>new.csv**: Moved from data.zip/>old.csv
   - Changed cells
     - row 5, column 'score': '60' -> '61'
