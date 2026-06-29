@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **by-state**: Added
 - **by-state/AL**: Moved from data
 - **by-state/AL/records.csv**: Moved from data/state_AL.csv

@@ -126,6 +126,7 @@ nav:
           - Dataset config: users/reference/dataset-config.md
           - Performance tuning: users/reference/performance-tuning.md
           - Changeset JSON schema: users/reference/changeset-schema.md
+          - Plugin registry: users/reference/plugin-registry.md
           - Third-party plugins: users/reference/third-party-plugins.md
       - Explanation:
           - Why Binoc exists: users/explanation/why-binoc-exists.md

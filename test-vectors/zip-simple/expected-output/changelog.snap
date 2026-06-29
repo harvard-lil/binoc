@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **archive.zip/>data.txt**: 1 line added; 1 line removed
   - Line changes
     - line 1: 'hello from zip A' -> 'hello from zip B'

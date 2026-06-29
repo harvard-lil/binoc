@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: Column removed: 'city'
   - Set Headers: from: ["name","age","city"]; to: ["name","age"]
   - Remove Column: name: 'city'; values: {"total_values":2,"truncated":false,"values":["NYC","LA"]}

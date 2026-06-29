@@ -18,6 +18,7 @@ formats. If you need a concrete walkthrough, see the
 - **Python plugin author** — start with [Python API](../../plugin-developers/reference/python.md).
 - **Rust plugin author** — start with [Rust SDK](../../plugin-developers/reference/sdk.md) and
   [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md).
+- **Plugin consumer reading changelog output** — start with [Plugin registry](plugin-registry.md).
 - **Plugin consumer** — start with [Third-party plugins](third-party-plugins.md).
 
 ## CLI and APIs
@@ -36,5 +37,7 @@ formats. If you need a concrete walkthrough, see the
   and what it does.
 - [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md) — entry-point spec for Python and
   Rust plugins.
+- [Plugin registry](plugin-registry.md) — built-in and in-tree plugins readers
+  will meet in rendered changelogs.
 - [Third-party plugins](third-party-plugins.md) — add-on plugins by file
   format; generated from `third_party_plugins.json`.

@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.parquet**: Column added: 'in_stock'
   - Set Headers: from: ["id","name","price"]; to: ["id","name","price","in_stock"]
   - Add Column: name: 'in_stock'; values: {"total_values":3,"truncated":false,"values":[true,false,true]}

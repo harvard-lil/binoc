@@ -5,6 +5,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 14 cells changed
   - Changed cells (showing 3 of 14)
     - changed cells by column: id 4, name 5, score 5

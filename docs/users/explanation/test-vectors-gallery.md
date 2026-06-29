@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **63 shared examples** in this gallery.
+Binoc currently ships **64 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -40,11 +40,11 @@ just materialize
 | [`csv-keyed-row-diff`](#csv-keyed-row-diff) | Configured CSV row keys match reordered rows and report keyed row/cell changes | data.csv: 1 row added; 1 row removed; 1 row modified by key | Custom config |
 | [`csv-mid-row-insertion`](#csv-mid-row-insertion) | A mid-table row insertion compacts while column reorder/addition rules remain independent | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
-| [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and modified: detected as a single move by fuzzy correlation | data_v2.csv: | Default pipeline |
+| [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and modified: detected as a single move by fuzzy correlation | data_v2.csv: Moved from data.csv | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
 | [`csv-stacked-tables`](#csv-stacked-tables) | Detects two logical tables stacked in one messy CSV | data.csv/>table_2: 1 row added | Default pipeline |
-| [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: | Default pipeline |
+| [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: Moved from data.csv | Default pipeline |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`csv-vintage-benchmark`](#csv-vintage-benchmark) | A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore. | facilities.csv: Column added: 'region'; 1 cell changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
@@ -53,7 +53,7 @@ just materialize
 | [`enforcement-actions-merge-years`](#enforcement-actions-merge-years) | Per-year CSVs merged row-wise into one file; detected as a clean partition merge (CFM-72) | actions_2023.csv, actions_2024.csv merged into actions.csv | Default pipeline |
 | [`file-correspondence-container`](#file-correspondence-container) | Config declares a correspondence between renamed zip containers | archive.zip: Moved from data.zip | Custom config |
 | [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | by-state: Added | Custom config |
-| [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list_as_of_2023.csv: | Custom config |
+| [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list_as_of_2023.csv: Moved from running_list_as_of_2022.csv | Custom config |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Added | Default pipeline |
 | [`geojson-feature-cell-change`](#geojson-feature-cell-change) | A GeoJSON FeatureCollection where one feature's property changes; transcoded to a tabular artifact with the geometry as… | places.geojson: 1 cell changed | Default pipeline |
@@ -66,9 +66,10 @@ just materialize
 | [`jsonl-row-addition`](#jsonl-row-addition) | JSONL stream of like-shaped objects parsed as a table; a record is appended | events.jsonl: 1 row added | Default pipeline |
 | [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: Document values changed | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/>inventory.csv: 1 row added | Default pipeline |
-| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: | Default pipeline |
+| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: Moved from observations_north.csv | Default pipeline |
 | [`observations-split-by-year`](#observations-split-by-year) | One CSV split row-wise into per-year files; detected as a clean partition split (CFM-72) | observations.csv split into observations_2024.csv, observations_2025.csv | Default pipeline |
-| [`observations-split-residual`](#observations-split-residual) | A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest… | observations_2024.csv: | Default pipeline |
+| [`observations-split-residual`](#observations-split-residual) | A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest… | observations_2024.csv: Moved from observations.csv | Default pipeline |
+| [`per-path-dispatch-override`](#per-path-dispatch-override) | Per-path dispatch overrides promote extensionless CSV content before tabular row keying | forced: 1 row modified by key | Custom config |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: Added | Default pipeline |
 | [`single-file-modify-binary`](#single-file-modify-binary) | Binary file, different hash | data.bin: 1 edit | Default pipeline |
 | [`single-file-modify-csv`](#single-file-modify-csv) | CSV file compared directly (file-to-file, not via directory) | data.csv: 1 row added | Default pipeline |
@@ -78,14 +79,14 @@ just materialize
 | [`stacked-csv-broken-out`](#stacked-csv-broken-out) | Stacked-CSV tables broken out into one file per table; whole-table rehoming (reshape + 1:1), NOT a partition split (CFM… | changes.csv: Moved from report.csv/>table_1 | Default pipeline |
 | [`tar-nested`](#tar-nested) | Nested tar.gz containing CSV | outer.tar.gz/>inner.tar.gz/>data.csv: 1 row added | Default pipeline |
 | [`tar-simple`](#tar-simple) | Tar.gz archive with changes inside | archive.tar.gz/>data.csv: 1 row added | Default pipeline |
-| [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: | Default pipeline |
+| [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt | Default pipeline |
 | [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: Document values changed | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
-| [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | # Changelog: snapshot-a → snapshot-b | Default pipeline |
-| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | # Changelog: snapshot-a → snapshot-b | Default pipeline |
+| [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/referen… | Default pipeline |
+| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/referen… | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: Document values changed | Default pipeline |
-| [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: | Custom config |
+| [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: Moved from outer.zip/>records-old.zip | Custom config |
 | [`zip-json-key-order-reexport`](#zip-json-key-order-reexport) | JSON files inside zip expansion get parsed and rendered as serialization-only changes | archive.zip/>metadata.json: Document serialization changed | Default pipeline |
 | [`zip-nested`](#zip-nested) | Nested zip containing CSV | outer.zip/>inner.zip/>data.csv: 1 row added | Default pipeline |
 | [`zip-rename-contents-rewritten`](#zip-rename-contents-rewritten) | Documents a known gap — a renamed zip whose children were all renamed AND rewritten (no content similarity) yields unpa… | data.zip: Removed | Default pipeline |
@@ -111,6 +112,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.parquet**: Binary content changed; 1 extracted string added, 1 extracted string removed
   - Extracted strings added
     - 'after!\n'
@@ -135,6 +138,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **firmware.bin**: Binary content changed; 2 extracted strings added, 2 extracted strings removed
   - Extracted strings added
@@ -163,6 +168,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 2 cells changed
   - Changed cells
     - row 1, column 'score': '85' -> '92'
@@ -187,6 +194,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: Column added: 'email'
   - Set Headers: from: ["name","age"]; to: ["name","age","email"]
   - Add Column: name: 'email'; values: {"total_values":2,"truncated":false,"values":["alice@test.com","bob@test.com"]}
@@ -210,6 +219,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: Column removed: 'city'
   - Set Headers: from: ["name","age","city"]; to: ["name","age"]
   - Remove Column: name: 'city'; values: {"total_values":2,"truncated":false,"values":["NYC","LA"]}
@@ -232,6 +243,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: Columns reordered
 ```
@@ -267,11 +280,14 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 4 rows modified by key
   - Changed cells (showing 3 of 5)
+    - changed cells by column: score 4, label 1
     - key id '1', column 'score': '10' -> '12'
-    - key id '2', column 'score': '20' -> '35'
     - key id '2', column 'label': 'beta' -> 'beta2'
+    - key id '2', column 'score': '20' -> '35'
 ```
 
 ## csv-keyed-null-duplicate
@@ -309,8 +325,11 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 14 cells changed
   - Changed cells (showing 3 of 14)
+    - changed cells by column: id 4, name 5, score 5
     - row 1, column 'id': 'a' -> 'b'
     - row 1, column 'name': 'Alice' -> 'Bob'
     - row 1, column 'score': '10' -> '21'
@@ -350,6 +369,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 1 row added; 1 row removed; 1 row modified by key
   - Changed cells
     - key id 'p2', column 'price': '20' -> '25'
@@ -377,6 +398,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
     - row 2: 'LA', 'Bob', '25'
@@ -400,6 +423,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
@@ -425,9 +450,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data_v2.csv**:
-  - Moved from data.csv
-  - Column added: 'email'
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **data_v2.csv**: Moved from data.csv
   - Set Headers: from: ["name","age","city"]; to: ["name","age","city","email"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["alice@test.com","bob@test.com","carol@test.com"]}
 ```
@@ -449,6 +474,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: 2 rows added
   - Rows added
@@ -474,6 +501,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv**: 2 rows removed
   - Rows removed
     - row 2: 'Bob', '25'
@@ -498,6 +527,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.csv/>table_2**: 1 row added
   - Rows added
     - row 12: '761012', 'Mu', 'Mu Pharma'
@@ -521,9 +552,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tsv**:
-  - Moved from data.csv
-  - 1 row added; 1 cell changed
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **data.tsv**: Moved from data.csv
   - Changed cells
     - row 2, column 'age': '25' -> '26'
   - Rows added
@@ -557,6 +588,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: 5 cells changed
   - Sources
@@ -645,6 +678,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 ## Schema & vocabulary changes
 
 - **facilities.csv**: Column added: 'region'; 1 cell changed
@@ -683,6 +718,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **duplicate.txt**: Copied from original.txt
 ```
 
@@ -703,6 +740,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data/records.csv**: 1 row added
   - Rows added
@@ -731,6 +770,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.tar.gz/>records.csv**: 1 cell changed
   - Changed cells
     - row 2, column 'count': '20' -> '25'
@@ -756,6 +797,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 Claims
 
@@ -798,6 +841,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **archive.zip**: Moved from data.zip
 ```
 
@@ -838,11 +883,11 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **by-state**: Added
 - **by-state/AL**: Moved from data
-- **by-state/AL/records.csv**:
-  - Moved from data/state_AL.csv
-  - 1 row added
+- **by-state/AL/records.csv**: Moved from data/state_AL.csv
   - Rows added
     - row 2: '2', 'Birmingham'
 ```
@@ -884,9 +929,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **running_list_as_of_2023.csv**:
-  - Moved from running_list_as_of_2022.csv
-  - 1 row added
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **running_list_as_of_2023.csv**: Moved from running_list_as_of_2022.csv
   - Rows added
     - row 3: '3', 'Cy'
 ```
@@ -909,6 +954,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **documentation**: Moved from docs
 ```
 
@@ -929,6 +976,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **FoodData_Central_csv_2026-04-30**: Added
 - **FoodData_Central_csv_2026-04-30/README.txt**: Moved from FoodData_Central_csv_2025-12-18/README.txt
@@ -963,6 +1012,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **places.geojson**: 1 cell changed
   - Changed cells
     - row 1, column 'properties': {"name":"Boston","population":650000} -> {"name":"Boston","population":675000}
@@ -985,6 +1036,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **census.txt.gz/>census.txt**: 1 line added; 1 line removed
   - Line changes
@@ -1014,8 +1067,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **config.ini**: Document values changed
-  - Value Change: changes: [{"from":"\"3\"","kind":"replace","path":"$.replicas","to":"\"5\""}]; examples_truncated: false
 ```
 
 ## json-array-order-significant
@@ -1036,8 +1090,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **metadata.json**: Document values changed
-  - Value Change: changes: [{"from":"2","kind":"replace","path":"$.ids[1]","to":"3"},{"from":"3","kind":"replace","path":"$.ids[2]","to":"2"}]; examples_truncated: false
 ```
 
 ## json-key-order-reexport
@@ -1057,6 +1112,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **metadata.json**: Document serialization changed
 ```
@@ -1078,6 +1135,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.json**: 2 cells changed
   - Changed cells
@@ -1103,6 +1162,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **people.json**: 1 cell changed
   - Changed cells
     - row 2, column 'meta': {"role":"user","tags":["z"]} -> {"role":"editor","tags":["z"]}
@@ -1125,6 +1186,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **events.jsonl**: 1 row added
   - Rows added
@@ -1149,8 +1212,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **person.jsonld**: Document values changed
-  - Value Change: changes: [{"from":"\"Mathematician\"","kind":"replace","path":"$.jobTitle","to":"\"Computer Scientist\""}]; examples_truncated: false
 ```
 
 ## kitchen-sink
@@ -1170,6 +1234,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.tar.gz/>inventory.csv**: 1 row added
   - Rows added
@@ -1215,16 +1281,14 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **observations_2024.csv**:
-  - Moved from observations_north.csv
-  - 3 cells changed
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **observations_2024.csv**: Moved from observations_north.csv
   - Changed cells
     - row 2, column 'year': '2025' -> '2024'
     - row 2, column 'region': 'north' -> 'south'
     - row 2, column 'count': '15' -> '12'
-- **observations_2025.csv**:
-  - Moved from observations_south.csv
-  - 3 cells changed
+- **observations_2025.csv**: Moved from observations_south.csv
   - Changed cells
     - row 1, column 'year': '2024' -> '2025'
     - row 1, column 'region': 'south' -> 'north'
@@ -1253,6 +1317,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 Claims
 
 - observations.csv split into observations_2024.csv, observations_2025.csv
@@ -1279,9 +1345,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **observations_2024.csv**:
-  - Moved from observations.csv
-  - 2 rows removed
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **observations_2024.csv**: Moved from observations.csv
   - Rows removed
     - row 3: '2025', 'north', '15'
     - row 4: '2025', 'south', '9'
@@ -1290,6 +1356,54 @@ Result:
 ## Suggestions
 
 - 'observations.csv' shares rows with other unmatched tables but the relationship is not a clean partition (residual, shared, or extra rows); left as add/remove (`binoc.pair.partition`) [binoc.possible_split]
+```
+
+## per-path-dispatch-override
+
+Per-path dispatch overrides promote extensionless CSV content before tabular row keying
+
+- **Browse source:** [per-path-dispatch-override](https://github.com/harvard-lil/binoc/tree/main/test-vectors/per-path-dispatch-override)
+- **Tags:** `config`, `dispatch`, `csv`, `keyed`
+- **Snapshots:** `snapshot-a` has 2 files — `forced`, `records`; `snapshot-b` has 2 files — `forced`, `records`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/per-path-dispatch-override.yaml`:
+
+```yaml
+dataset:
+  defaults:
+    row_identity:
+      columns:
+        - id
+  paths:
+    - match: **/records
+      content_type: text/csv
+    - match: forced
+      rule: binoc.parse.csv
+      row_identity:
+        columns:
+          - id
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/per-path-dispatch-override/snapshot-a \
+  ./test-vectors-materialized/per-path-dispatch-override/snapshot-b \
+  --config /tmp/per-path-dispatch-override.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **forced**: 1 row modified by key
+  - Changed cells
+    - key id '1', column 'value': 'old' -> 'new'
+- **records**: 1 row modified by key
+  - Changed cells
+    - key id '1', column 'value': 'old' -> 'new'
 ```
 
 ## single-file-add
@@ -1309,6 +1423,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **new_file.txt**: Added
 ```
@@ -1331,6 +1447,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.bin**: 1 edit
 ```
 
@@ -1351,6 +1469,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: 1 row added
   - Rows added
@@ -1375,6 +1495,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
     - line 2: 'Line 2' -> 'Line 2 revised'
@@ -1397,6 +1519,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
@@ -1421,6 +1545,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **removed_file.txt**: Removed
 ```
 
@@ -1441,6 +1567,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **changes.csv**: Moved from report.csv/>table_1
 - **products.csv**: Reshaped from report.csv (stacked tables → tabular)
@@ -1465,6 +1593,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **outer.tar.gz/>inner.tar.gz/>data.csv**: 1 row added
   - Rows added
     - row 2: 'Bob', '25'
@@ -1487,6 +1617,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.tar.gz/>data.csv**: 1 row added
   - Rows added
@@ -1512,9 +1644,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **meeting-notes-v2.txt**:
-  - Moved from notes.txt
-  - 2 lines added
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **meeting-notes-v2.txt**: Moved from notes.txt
   - Line changes (showing 3 of 4)
     - line 10: '' -> '- Marketing strategy update'
     - line 11: 'Action Items:' -> ''
@@ -1539,8 +1671,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **config.toml**: Document values changed
-  - Value Change: changes: [{"from":"3","kind":"replace","path":"$.replicas","to":"5"}]; examples_truncated: false
 ```
 
 ## tree-wide-correlation
@@ -1560,6 +1693,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **gamma-renamed.txt**: Moved from outer.zip/>inner.zip/>gamma.txt
 - **kept-copy.txt**: Copied from kept.txt
@@ -1587,6 +1722,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 ```
 
 ## trivial-identical-csv
@@ -1606,6 +1743,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 ```
 
 ## tsv-cell-changes
@@ -1625,6 +1764,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.tsv**: 2 cells changed
   - Changed cells
@@ -1650,8 +1791,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **config.yaml**: Document values changed
-  - Value Change: changes: [{"from":"3","kind":"replace","path":"$.replicas","to":"5"}]; examples_truncated: false
 ```
 
 ## zip-declared-container
@@ -1691,9 +1833,12 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **outer.zip/>records.zip**:
-  - Moved from outer.zip/>records-old.zip
-  - 1 cell changed
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **outer.zip/>records.zip**: Moved from outer.zip/>records-old.zip
+- **outer.zip/>records.zip/>data.csv**: 1 cell changed
+  - Changed cells
+    - row 2, column 'score': '24' -> '25'
 ```
 
 ## zip-json-key-order-reexport
@@ -1713,6 +1858,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.zip/>metadata.json**: Document serialization changed
 ```
@@ -1734,6 +1881,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **outer.zip/>inner.zip/>data.csv**: 1 row added
   - Rows added
@@ -1757,6 +1906,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.zip**: Removed
 - **data.zip/>x.csv**: Removed
@@ -1786,6 +1937,8 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **archive.zip**: Moved from data.zip
 ```
 
@@ -1807,10 +1960,10 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **archive.zip**: Moved from data.zip
-- **archive.zip/>new.csv**:
-  - Moved from data.zip/>old.csv
-  - 1 cell changed
+- **archive.zip/>new.csv**: Moved from data.zip/>old.csv
   - Changed cells
     - row 5, column 'score': '60' -> '61'
 ```
@@ -1832,6 +1985,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.zip/>data.txt**: 1 line added; 1 line removed
   - Line changes
