@@ -1032,6 +1032,7 @@ fn load_parser_metadata(
 pub struct FallbackWriter;
 
 pub struct TextWriter;
+pub struct TextMediaWriter;
 
 /// Diffs the generic `structured_document` artifact (JSON, YAML, TOML, INI,
 /// CBOR, MessagePack, BSON, Plist, Ion, ...). The emitted `item_type` is the
@@ -1315,86 +1316,7 @@ impl EditListWriter for TextWriter {
     }
 
     fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
-        let left = ctx.view.item(ctx.link.left);
-        let right = ctx.view.item(ctx.link.right);
-        let left_bytes = data.read_bytes(left)?;
-        let right_bytes = data.read_bytes(right)?;
-        if left_bytes == right_bytes {
-            return Ok(Some(Vec::new().into()));
-        }
-
-        let left_facts = TextFacts::from_bytes(&left_bytes);
-        let right_facts = TextFacts::from_bytes(&right_bytes);
-        let mut edits = text_fact_edits(&left_facts, &right_facts);
-        if left_facts.normalized_text == right_facts.normalized_text {
-            return Ok(Some(edits.into()));
-        }
-        if whitespace_signature(&left_facts.normalized_text)
-            == whitespace_signature(&right_facts.normalized_text)
-        {
-            edits.push(
-                Edit::new(
-                    "text.whitespace_only_changed",
-                    json!({
-                        "left_line_count": left_facts.lines.len(),
-                        "right_line_count": right_facts.lines.len(),
-                    }),
-                )
-                .with_item_type("text")
-                .with_tag("binoc.whitespace-only-change"),
-            );
-            return Ok(Some(edits.into()));
-        }
-
-        let left_text = left_facts.normalized_text.as_str();
-        let right_text = right_facts.normalized_text.as_str();
-        let left_lines: Vec<&str> = left_text.lines().collect();
-        let right_lines: Vec<&str> = right_text.lines().collect();
-        let diff = TextDiff::from_lines(left_text, right_text);
-        let mut lines_added = 0u64;
-        let mut lines_removed = 0u64;
-        for change in diff.iter_all_changes() {
-            match change.tag() {
-                ChangeTag::Insert => lines_added += 1,
-                ChangeTag::Delete => lines_removed += 1,
-                ChangeTag::Equal => {}
-            }
-        }
-        let common = left_lines.len().min(right_lines.len());
-        let mut examples = Vec::new();
-        for index in 0..common {
-            if left_lines[index] != right_lines[index] {
-                examples.push(json!({
-                    "line": index + 1,
-                    "from": truncate_preview(left_lines[index]),
-                    "to": truncate_preview(right_lines[index]),
-                }));
-            }
-            if examples.len() >= MAX_TEXT_LINE_EXAMPLES {
-                break;
-            }
-        }
-        let mut edit = Edit::new(
-            "text.replace_lines",
-            json!({
-                "left_line_count": left_lines.len(),
-                "right_line_count": right_lines.len(),
-                "lines_added": lines_added,
-                "lines_removed": lines_removed,
-                "examples": examples,
-                "examples_truncated": examples.len() >= MAX_TEXT_LINE_EXAMPLES,
-            }),
-        )
-        .with_item_type("text")
-        .with_tag("binoc.content-changed");
-        if lines_added > 0 {
-            edit = edit.with_tag("binoc.lines-added");
-        }
-        if lines_removed > 0 {
-            edit = edit.with_tag("binoc.lines-removed");
-        }
-        edits.push(edit);
-        Ok(Some(edits.into()))
+        write_text(ctx, data)
     }
 
     fn extract(
@@ -1404,27 +1326,148 @@ impl EditListWriter for TextWriter {
         aspect: &str,
         data: &dyn DataAccess,
     ) -> BinocResult<Option<ExtractResult>> {
-        let left = ctx.view.item(ctx.link.left);
-        let right = ctx.view.item(ctx.link.right);
-        let left_bytes = data.read_bytes(left)?;
-        let right_bytes = data.read_bytes(right)?;
-        let left_text = String::from_utf8_lossy(&left_bytes);
-        let right_text = String::from_utf8_lossy(&right_bytes);
-        Ok(match aspect {
-            "content_left" => Some(ExtractResult::Text(left_text.into_owned())),
-            "content_right" => Some(ExtractResult::Text(right_text.into_owned())),
-            "content" | "full" => Some(ExtractResult::Text(format!(
-                "--- left\n{}+++ right\n{}",
-                ensure_trailing_newline(&left_text),
-                ensure_trailing_newline(&right_text)
-            ))),
-            "diff" => Some(ExtractResult::Text(text_diff_extract(
-                &left_text,
-                &right_text,
-            ))),
-            _ => None,
-        })
+        extract_text(ctx, aspect, data)
     }
+}
+
+impl EditListWriter for TextMediaWriter {
+    fn descriptor(&self) -> WriterDescriptor {
+        WriterDescriptor {
+            name: "binoc.write.text_media".into(),
+            formats: vec![],
+            input: NodeMatch {
+                is_dir: Some(false),
+                media_types: vec!["text/plain".into()],
+                ..NodeMatch::default()
+            },
+            shape: ShapeFilter::Leaf,
+            fallback: false,
+        }
+    }
+
+    fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+        write_text(ctx, data)
+    }
+
+    fn extract(
+        &self,
+        ctx: &LinkCtx<'_>,
+        _edits: &[Edit],
+        aspect: &str,
+        data: &dyn DataAccess,
+    ) -> BinocResult<Option<ExtractResult>> {
+        extract_text(ctx, aspect, data)
+    }
+}
+
+fn write_text(ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+    let left = ctx.view.item(ctx.link.left);
+    let right = ctx.view.item(ctx.link.right);
+    let left_bytes = data.read_bytes(left)?;
+    let right_bytes = data.read_bytes(right)?;
+    if left_bytes == right_bytes {
+        return Ok(Some(Vec::new().into()));
+    }
+
+    let left_facts = TextFacts::from_bytes(&left_bytes);
+    let right_facts = TextFacts::from_bytes(&right_bytes);
+    let mut edits = text_fact_edits(&left_facts, &right_facts);
+    if left_facts.normalized_text == right_facts.normalized_text {
+        return Ok(Some(edits.into()));
+    }
+    if whitespace_signature(&left_facts.normalized_text)
+        == whitespace_signature(&right_facts.normalized_text)
+    {
+        edits.push(
+            Edit::new(
+                "text.whitespace_only_changed",
+                json!({
+                    "left_line_count": left_facts.lines.len(),
+                    "right_line_count": right_facts.lines.len(),
+                }),
+            )
+            .with_item_type("text")
+            .with_tag("binoc.whitespace-only-change"),
+        );
+        return Ok(Some(edits.into()));
+    }
+
+    let left_text = left_facts.normalized_text.as_str();
+    let right_text = right_facts.normalized_text.as_str();
+    let left_lines: Vec<&str> = left_text.lines().collect();
+    let right_lines: Vec<&str> = right_text.lines().collect();
+    let diff = TextDiff::from_lines(left_text, right_text);
+    let mut lines_added = 0u64;
+    let mut lines_removed = 0u64;
+    for change in diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Insert => lines_added += 1,
+            ChangeTag::Delete => lines_removed += 1,
+            ChangeTag::Equal => {}
+        }
+    }
+    let common = left_lines.len().min(right_lines.len());
+    let mut examples = Vec::new();
+    for index in 0..common {
+        if left_lines[index] != right_lines[index] {
+            examples.push(json!({
+                "line": index + 1,
+                "from": truncate_preview(left_lines[index]),
+                "to": truncate_preview(right_lines[index]),
+            }));
+        }
+        if examples.len() >= MAX_TEXT_LINE_EXAMPLES {
+            break;
+        }
+    }
+    let mut edit = Edit::new(
+        "text.replace_lines",
+        json!({
+            "left_line_count": left_lines.len(),
+            "right_line_count": right_lines.len(),
+            "lines_added": lines_added,
+            "lines_removed": lines_removed,
+            "examples": examples,
+            "examples_truncated": examples.len() >= MAX_TEXT_LINE_EXAMPLES,
+        }),
+    )
+    .with_item_type("text")
+    .with_tag("binoc.content-changed");
+    if lines_added > 0 {
+        edit = edit.with_tag("binoc.lines-added");
+    }
+    if lines_removed > 0 {
+        edit = edit.with_tag("binoc.lines-removed");
+    }
+    edits.push(edit);
+    Ok(Some(edits.into()))
+}
+
+fn extract_text(
+    ctx: &LinkCtx<'_>,
+    aspect: &str,
+    data: &dyn DataAccess,
+) -> BinocResult<Option<ExtractResult>> {
+    let left = ctx.view.item(ctx.link.left);
+    let right = ctx.view.item(ctx.link.right);
+    let left_bytes = data.read_bytes(left)?;
+    let right_bytes = data.read_bytes(right)?;
+    let left_text = String::from_utf8_lossy(&left_bytes);
+    let right_text = String::from_utf8_lossy(&right_bytes);
+    Ok(match aspect {
+        "content_left" => Some(ExtractResult::Text(left_text.into_owned())),
+        "content_right" => Some(ExtractResult::Text(right_text.into_owned())),
+        "content" | "full" => Some(ExtractResult::Text(format!(
+            "--- left\n{}+++ right\n{}",
+            ensure_trailing_newline(&left_text),
+            ensure_trailing_newline(&right_text)
+        ))),
+        "diff" => Some(ExtractResult::Text(text_diff_extract(
+            &left_text,
+            &right_text,
+        ))),
+        _ => None,
+    })
 }
 
 #[derive(Debug, Clone)]

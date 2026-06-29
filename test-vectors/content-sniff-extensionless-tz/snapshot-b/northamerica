@@ -1,0 +1,3 @@
+Rule    US  1967    2006    -   Oct lastSun   2:00    0   S
+Rule    US  2007    max -   Mar Sun>=8    2:00    1:00    D
+Zone    America/New_York -4:56:02 -   LMT 1883 Nov 18 17:00u

@@ -1,0 +1,19 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **asia**: 1 line added
+  - Content type inference: treated asia as text (content sniff, no extension)
+  - Line changes
+    - line 2: 'Zone    Asia/Tokyo  9:18:59 -   LMT 1887 Dec 31 15:00u' -> 'Rule    Japan   1949    only    -   Apr Sat>=1  24:00   1:00    D'
+- **europe**: 1 line added
+  - Content type inference: treated europe as text (content sniff, no extension)
+  - Line changes
+    - line 2: 'Zone    Europe/Paris    0:09:21 -   LMT 1891 Mar 16' -> 'Rule    EU  1996    max -   Oct lastSun   1:00u   0   -'
+- **northamerica**: 1 line added
+  - Content type inference: treated northamerica as text (content sniff, no extension)
+  - Line changes
+    - line 2: 'Zone    America/New_York -4:56:02 -   LMT 1883 Nov 18 17:00u' -> 'Rule    US  2007    max -   Mar Sun>=8    2:00    1:00    D'
+- **tzdata.binless**: 1 edit
