@@ -172,6 +172,10 @@ nav:
           # BEGIN-ADR-NAV
           - adr/README.md
           - 'Fat-binoc Distribution and the ABI Canary': adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md
+          - 'Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug': adr/2026-06-29-renderer_ecosystem_ignorance.md
+          - 'Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop': adr/2026-06-29-inference_disclosure_and_high_churn_guardrail.md
+          - 'Binary Byte-Range Edit Kind': adr/2026-06-29-binary_byte_range_edit_kind.md
+          - 'A Unified Per-Path Dataset Config Model': adr/2026-06-29-per_path_dataset_config_model.md
           - 'The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading': adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md
           - 'Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact': adr/2026-06-15-tiered_artifact_metadata.md
           - 'The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First': adr/2026-06-15-engine_overhaul_retrospective.md

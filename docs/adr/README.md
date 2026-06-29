@@ -7,9 +7,10 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | Date | Title | Status |
 |---|---|---|
 | 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented |
-| 2026-06-29 | [A Unified Per-Path Dataset Config Model](2026-06-29-per_path_dataset_config_model.md) | Accepted |
-| 2026-06-29 | [Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop](2026-06-29-inference_disclosure_and_high_churn_guardrail.md) | Accepted |
 | 2026-06-29 | [Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug](2026-06-29-renderer_ecosystem_ignorance.md) | Accepted |
+| 2026-06-29 | [Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop](2026-06-29-inference_disclosure_and_high_churn_guardrail.md) | Accepted |
+| 2026-06-29 | [Binary Byte-Range Edit Kind](2026-06-29-binary_byte_range_edit_kind.md) | Proposed |
+| 2026-06-29 | [A Unified Per-Path Dataset Config Model](2026-06-29-per_path_dataset_config_model.md) | Accepted |
 | 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deliberately deferred) |
 | 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers in CFM-80; rendering + significance in CFM-82) |
 | 2026-06-15 | [The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First](2026-06-15-engine_overhaul_retrospective.md) | Retrospective |
