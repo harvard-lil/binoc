@@ -206,6 +206,14 @@ fn format_diagnostics_section(
             out.push_str(&format!(" (`{location}`)"));
         }
         out.push_str(&format!(" [{}]\n", diagnostic.code));
+        if let Some(extract) = &diagnostic.extract {
+            if let Some(location) = &diagnostic.location {
+                out.push_str(&format!(
+                    "  - use `binoc extract CHANGESET \"{location}\" {}`\n",
+                    extract.aspect
+                ));
+            }
+        }
     }
     out.push('\n');
 }
@@ -1843,6 +1851,25 @@ mod tests {
         let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
         assert!(md.contains("No changes detected."));
         assert!(md.contains("## Suggestions"));
+    }
+
+    #[test]
+    fn suggestion_diagnostics_render_extract_command_when_available() {
+        let mut changeset = Changeset::new("v1", "v2", None);
+        changeset.push_diagnostic(
+            Diagnostic::suggestion(
+                "binoc.keyed_row_identity_degraded",
+                "configured row keys had duplicate values; fell back to positional row comparison",
+            )
+            .with_location("data.csv")
+            .with_extract_hint(ExtractHint::new("content")),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("use `binoc extract CHANGESET \"data.csv\" content`"),
+            "missing extract hint in markdown:\n{md}"
+        );
     }
 
     #[test]
