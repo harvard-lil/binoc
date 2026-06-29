@@ -6,13 +6,15 @@ mod tabular;
 pub mod writers;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::sync::Arc;
 
 use binoc_sdk::{
-    BinocResult, CoreRule, CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig,
-    DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit, FileSelector, ItemRef,
-    PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPolicies, Summary, TabularParseConfig,
+    tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
+    CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
+    FileSelector, ItemRef, ParseRule, PathConfigEntry, ProjectionAnnotationContext,
+    ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies, Summary,
+    TabularParseConfig,
 };
 use regex::Regex;
 
@@ -162,7 +164,14 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 entries: semantics.paths.clone(),
             }));
         }
-        let row_identity = row_identity_for_paths(&semantics, &left_paths, &right_paths);
+        let row_identity = row_identity_for_paths(
+            &semantics,
+            &left_paths,
+            &right_paths,
+            left_root,
+            right_root,
+            data,
+        )?;
         config.row_keys = row_identity
             .iter()
             .map(|(path, identity)| (path.clone(), identity.columns.clone()))
@@ -536,7 +545,12 @@ fn row_identity_for_paths(
     semantics: &DatasetSemanticsV1,
     left_paths: &[String],
     right_paths: &[String],
-) -> BTreeMap<String, RowIdentity> {
+    left_root: &ItemRef,
+    right_root: &ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<BTreeMap<String, RowIdentity>> {
+    let left_root_physical = data.local_path(left_root)?;
+    let right_root_physical = data.local_path(right_root)?;
     let mut paths = left_paths
         .iter()
         .chain(right_paths)
@@ -548,18 +562,25 @@ fn row_identity_for_paths(
     let defaults = dataset_default_row_identity(semantics);
     let mut row_identity = BTreeMap::new();
     for path in paths {
+        let path_entry = first_path_entry(&semantics.paths, &path);
+        let path_is_tabular = path_emits_tabular_artifact(
+            &path,
+            left_root,
+            &left_root_physical,
+            right_root,
+            &right_root_physical,
+            path_entry,
+            data,
+        )?;
         if !semantics.paths.is_empty() {
-            let entry = first_path_entry(&semantics.paths, &path);
-            let has_path_row_identity = entry
+            let has_path_row_identity = path_entry
                 .and_then(|entry| entry.row_identity.as_ref())
                 .is_some_and(row_identity_configured);
             let has_default_row_identity = row_identity_configured(defaults);
-            if (has_default_row_identity || has_path_row_identity)
-                && path_resolves_to_tabular(&path, entry)
-            {
+            if (has_default_row_identity || has_path_row_identity) && path_is_tabular {
                 let identity = merge_row_identity(
                     defaults,
-                    entry.and_then(|entry| entry.row_identity.as_ref()),
+                    path_entry.and_then(|entry| entry.row_identity.as_ref()),
                 );
                 if row_identity_configured(&identity) {
                     row_identity.insert(path, identity);
@@ -568,7 +589,7 @@ fn row_identity_for_paths(
             continue;
         }
 
-        if !is_tabular_path(&path) {
+        if !path_is_tabular {
             continue;
         }
         let mut identity = defaults.clone();
@@ -588,7 +609,7 @@ fn row_identity_for_paths(
             row_identity.insert(path, identity);
         }
     }
-    row_identity
+    Ok(row_identity)
 }
 
 fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
@@ -640,19 +661,6 @@ fn parse_config_for_entry(entry: &PathConfigEntry) -> Option<TabularParseConfig>
         parse
     })
 }
-
-fn path_resolves_to_tabular(path: &str, entry: Option<&PathConfigEntry>) -> bool {
-    is_tabular_path(path)
-        || entry.is_some_and(|entry| {
-            entry
-                .content_type
-                .as_deref()
-                .is_some_and(content_type_is_tabular)
-                || entry.rule.as_deref() == Some("binoc.parse.csv")
-                || entry.rule.as_deref() == Some("binoc.parse.csv_media")
-        })
-}
-
 fn first_path_entry<'a>(entries: &'a [PathConfigEntry], path: &str) -> Option<&'a PathConfigEntry> {
     entries
         .iter()
@@ -715,8 +723,8 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 Diagnostic::error(
                     "binoc.dataset_config.facet_kind_mismatch",
                     Summary::new()
-                        .text("row_identity is only meaningful for tabular paths; add ")
-                        .text("content_type: text/csv or rule: binoc.parse.csv for this match"),
+                        .text("row_identity is only meaningful for paths that can parse as ")
+                        .text("tabular data; use a tabular-producing match, content_type, or rule"),
                 )
                 .with_location(location.clone()),
             );
@@ -757,17 +765,26 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
 }
 
 fn entry_declares_tabular(entry: &PathConfigEntry) -> bool {
-    glob_can_match_tabular_extension(&entry.match_)
+    glob_can_match_tabular_artifact(&entry.match_)
         || entry
             .content_type
             .as_deref()
-            .is_some_and(content_type_is_tabular)
-        || entry.rule.as_deref() == Some("binoc.parse.csv")
-        || entry.rule.as_deref() == Some("binoc.parse.csv_media")
+            .is_some_and(content_type_can_emit_tabular_artifact)
+        || entry
+            .rule
+            .as_deref()
+            .is_some_and(rule_can_emit_tabular_artifact)
 }
 
-fn content_type_is_tabular(content_type: &str) -> bool {
-    matches!(content_type, "text/csv" | "text/tab-separated-values")
+fn content_type_can_emit_tabular_artifact(content_type: &str) -> bool {
+    matches!(
+        content_type,
+        "text/csv"
+            | "text/tab-separated-values"
+            | "application/json"
+            | "application/ld+json"
+            | "application/geo+json"
+    )
 }
 
 fn projection_for_content_type(content_type: &str) -> ProjectionHint {
@@ -780,8 +797,12 @@ fn projection_for_content_type(content_type: &str) -> ProjectionHint {
     }
 }
 
-fn glob_can_match_tabular_extension(pattern: &str) -> bool {
-    pattern.ends_with(".csv") || pattern.ends_with(".tsv")
+fn glob_can_match_tabular_artifact(pattern: &str) -> bool {
+    [
+        ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".geojson", ".jsonld", ".json-ld",
+    ]
+    .iter()
+    .any(|extension| pattern.ends_with(extension))
 }
 
 fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Vec<String>> {
@@ -883,8 +904,114 @@ fn glob_matches_path(pattern: &str, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn is_tabular_path(path: &str) -> bool {
-    path.ends_with(".csv") || path.ends_with(".tsv")
+fn path_emits_tabular_artifact(
+    path: &str,
+    left_root: &ItemRef,
+    left_root_physical: &Path,
+    right_root: &ItemRef,
+    right_root_physical: &Path,
+    path_entry: Option<&PathConfigEntry>,
+    data: &dyn DataAccess,
+) -> BinocResult<bool> {
+    for (root, physical) in [
+        (left_root, left_root_physical),
+        (right_root, right_root_physical),
+    ] {
+        let Some(item) = item_for_logical_path(root, physical, path, path_entry, data)? else {
+            continue;
+        };
+        if item_emits_tabular_artifact(&item, path_entry, data) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn item_for_logical_path(
+    root: &ItemRef,
+    root_physical: &Path,
+    logical_path: &str,
+    path_entry: Option<&PathConfigEntry>,
+    data: &dyn DataAccess,
+) -> BinocResult<Option<ItemRef>> {
+    if root_physical.is_file() {
+        let Some(mut item) = (root.logical_path == logical_path).then_some(root.clone()) else {
+            return Ok(None);
+        };
+        apply_path_dispatch_overrides(&mut item, path_entry);
+        return Ok(Some(item));
+    }
+    let physical = root_physical.join(logical_path);
+    if !physical.exists() {
+        return Ok(None);
+    }
+    let mut item = data.register_local(&physical, logical_path)?;
+    apply_path_dispatch_overrides(&mut item, path_entry);
+    Ok(Some(item))
+}
+
+fn apply_path_dispatch_overrides(item: &mut ItemRef, path_entry: Option<&PathConfigEntry>) {
+    let Some(path_entry) = path_entry else {
+        return;
+    };
+    if let Some(content_type) = &path_entry.content_type {
+        item.media_type = Some(content_type.clone());
+    }
+    if let Some(parse) = parse_config_for_entry(path_entry) {
+        item.tabular_parse = Some(parse);
+    }
+}
+
+fn item_emits_tabular_artifact(
+    item: &ItemRef,
+    path_entry: Option<&PathConfigEntry>,
+    data: &dyn DataAccess,
+) -> bool {
+    let csv = parse::CsvParse;
+    let csv_media = parse::CsvMediaParse;
+    let json_records = parse::JsonRecordsParse;
+    let json_media_records = parse::JsonMediaRecordsParse;
+    if let Some(forced) = path_entry
+        .and_then(|entry| entry.rule.as_deref())
+        .and_then(forced_tabular_parse_rule)
+    {
+        if let Ok(output) = forced.parse(item, data) {
+            return !output.bytes.is_empty();
+        }
+    }
+    let rules = [
+        &csv as &dyn ParseRule,
+        &csv_media as &dyn ParseRule,
+        &json_records as &dyn ParseRule,
+        &json_media_records as &dyn ParseRule,
+    ];
+    for rule in rules {
+        let descriptor = rule.descriptor();
+        if descriptor.output != tabular_v1() || !descriptor.input.matches(item) {
+            continue;
+        }
+        let Ok(output) = rule.parse(item, data) else {
+            continue;
+        };
+        if !output.bytes.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
+fn forced_tabular_parse_rule(rule_name: &str) -> Option<&'static dyn ParseRule> {
+    match rule_name {
+        "binoc.parse.csv" => Some(&parse::CsvParse),
+        "binoc.parse.csv_media" => Some(&parse::CsvMediaParse),
+        "binoc.parse.json_records" => Some(&parse::JsonRecordsParse),
+        "binoc.parse.json_media_records" => Some(&parse::JsonMediaRecordsParse),
+        _ => None,
+    }
+}
+
+fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
+    forced_tabular_parse_rule(rule_name).is_some()
 }
 
 #[cfg(test)]

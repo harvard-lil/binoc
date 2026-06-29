@@ -1,0 +1,12 @@
+[vector]
+name = "json-keyed-row-diff"
+description = "Configured JSON record keys match reordered rows and report keyed row/cell changes"
+tags = ["json", "keyed", "row-addition", "row-removal", "cell-change"]
+
+[[config.dataset.tables]]
+path_regex = '^data\.json$'
+columns = ["id"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-addition", "binoc.row-removal", "binoc.cell-change"]
