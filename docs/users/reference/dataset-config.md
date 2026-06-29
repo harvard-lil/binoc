@@ -84,6 +84,8 @@ common dataset semantics:
   paths are the same logical file.
 - `dataset.tables` declares table row keys. It can be a list for the common
   case, or an object with `defaults` and `entries` when shared policy is useful.
+- `dataset.paths` declares per-path facets such as dispatch overrides, tabular
+  shape, row identity, and JSON `records_path` extraction.
 - `dataset.correspondence.expand_renamed_unchanged_collections` controls a
   correspondence-engine performance tradeoff for renamed unchanged containers.
 
@@ -109,6 +111,12 @@ dataset:
     - path: data.csv
       columns: ['id']
 
+  paths:
+    - match: '**/*.stix.json'
+      records_path: '$.objects'
+      row_identity:
+        columns: ['id']
+
   correspondence:
     expand_renamed_unchanged_collections: true
 ```
@@ -116,6 +124,8 @@ dataset:
 `cardinality` is currently `one-to-one`. `on_null_key` and
 `on_duplicate_key` accept `diagnostic`, `error`, or `ignore`; plugins decide how
 to apply those policies for the semantics they implement.
+`records_path` uses a simple dotted JSON path such as `$.objects` and must point
+to a non-empty array of consistently shaped records.
 
 ### `dataset.files.correspondences`
 

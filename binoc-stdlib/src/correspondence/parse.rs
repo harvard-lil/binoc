@@ -182,11 +182,16 @@ impl ParseRule for JsonRecordsParse {
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
-        let table = match item.extension().as_deref() {
-            Some(".jsonl") | Some(".ndjson") => jsonl_records(&bytes),
-            _ => match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                Ok(value) => json_records(&value),
-                Err(_) => None,
+        let table = match records_path_config(item.tabular_parse.as_ref()) {
+            Some(_) => serde_json::from_slice::<serde_json::Value>(&bytes)
+                .map_err(|err| BinocError::Other(format!("parse JSON: {err}")))
+                .and_then(|value| json_records(&value, item.tabular_parse.as_ref()))?,
+            None => match item.extension().as_deref() {
+                Some(".jsonl") | Some(".ndjson") => jsonl_records(&bytes),
+                _ => match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    Ok(value) => json_records(&value, item.tabular_parse.as_ref())?,
+                    Err(_) => None,
+                },
             },
         };
         match table {
@@ -220,7 +225,10 @@ impl ParseRule for JsonMediaRecordsParse {
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
         let table = match serde_json::from_slice::<serde_json::Value>(&bytes) {
-            Ok(value) => json_records(&value),
+            Ok(value) => json_records(&value, item.tabular_parse.as_ref())?,
+            Err(err) if records_path_config(item.tabular_parse.as_ref()).is_some() => {
+                return Err(BinocError::Other(format!("parse JSON: {err}")));
+            }
             Err(_) => None,
         };
         match table {
@@ -232,13 +240,33 @@ impl ParseRule for JsonMediaRecordsParse {
     }
 }
 
+fn records_path_config(config: Option<&TabularParseConfig>) -> Option<&str> {
+    config.and_then(|config| config.records_path.as_deref())
+}
+
+fn json_records(
+    value: &serde_json::Value,
+    config: Option<&TabularParseConfig>,
+) -> BinocResult<Option<TabularData>> {
+    if let Some(records_path) = records_path_config(config) {
+        if records_path.trim().is_empty() {
+            return Err(BinocError::Config(
+                "records_path must be a non-empty JSON path".into(),
+            ));
+        }
+        return records_from_path(value, records_path).map(Some);
+    }
+
+    Ok(detect_json_records(value))
+}
+
 /// Detect a consistently-shaped record collection in a parsed JSON value.
 ///
 /// An array whose elements are all objects becomes a named table (columns are
 /// the union of keys in first-seen order; missing keys are `Null`). An array
 /// whose elements are all arrays becomes a headerless, positional table.
 /// Anything else returns `None` (the document is not record-shaped).
-fn json_records(value: &serde_json::Value) -> Option<TabularData> {
+fn detect_json_records(value: &serde_json::Value) -> Option<TabularData> {
     if let Some(table) = geojson_records(value) {
         return Some(table);
     }
@@ -253,6 +281,67 @@ fn json_records(value: &serde_json::Value) -> Option<TabularData> {
     } else {
         None
     }
+}
+
+fn records_from_path(value: &serde_json::Value, path: &str) -> BinocResult<TabularData> {
+    let records = resolve_simple_json_path(value, path)?;
+    let Some(array) = records.as_array() else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} did not resolve to an array"
+        )));
+    };
+    if array.is_empty() {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} resolved to an empty array"
+        )));
+    }
+    if array.iter().all(serde_json::Value::is_object) {
+        Ok(table_from_objects(array))
+    } else if array.iter().all(serde_json::Value::is_array) {
+        Ok(table_from_arrays(array))
+    } else {
+        Err(BinocError::Config(format!(
+            "records_path {path:?} resolved to an array that is not consistently objects or arrays"
+        )))
+    }
+}
+
+fn resolve_simple_json_path<'a>(
+    mut value: &'a serde_json::Value,
+    path: &str,
+) -> BinocResult<&'a serde_json::Value> {
+    let Some(rest) = path.strip_prefix('$') else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} must start with '$'"
+        )));
+    };
+    if rest.is_empty() {
+        return Ok(value);
+    }
+    let Some(rest) = rest.strip_prefix('.') else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} must use simple dotted form like '$.objects'"
+        )));
+    };
+    for key in rest.split('.') {
+        if key.is_empty() {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} contains an empty path segment"
+            )));
+        }
+        let Some(object) = value.as_object() else {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} cannot descend through non-object segment {key:?}"
+            )));
+        };
+        let Some(next) = object.get(key) else {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} did not resolve; missing segment {key:?}"
+            )));
+        };
+        value = next;
+    }
+    Ok(value)
 }
 
 /// Detect a GeoJSON `FeatureCollection` and build a table from its features.
@@ -387,7 +476,7 @@ fn parse_json_item(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOu
         .map_err(|err| BinocError::Other(format!("parse JSON: {err}")))?;
     // Record collections are handled as `tabular` by JsonRecordsParse; decline
     // here so the same document is not also published as a structured_document.
-    if json_records(&value).is_some() {
+    if json_records(&value, item.tabular_parse.as_ref())?.is_some() {
         return Ok(ParseOutput::default());
     }
     let source = json_source_facts(&bytes)?;

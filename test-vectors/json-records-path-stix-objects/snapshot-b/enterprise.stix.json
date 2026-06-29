@@ -1,0 +1,18 @@
+{
+  "type": "bundle",
+  "id": "bundle--right",
+  "objects": [
+    {
+      "type": "malware",
+      "id": "malware--2",
+      "name": "Same",
+      "modified": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "type": "attack-pattern",
+      "id": "attack-pattern--1",
+      "name": "New Name",
+      "modified": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}

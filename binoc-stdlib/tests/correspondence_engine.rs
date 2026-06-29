@@ -1470,6 +1470,96 @@ fn path_row_identity_applies_to_json_records_after_tabular_parse() {
 }
 
 #[test]
+fn records_path_builds_keyed_table_from_nested_json_collection() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("enterprise.stix.json"),
+        serde_json::json!({
+            "type": "bundle",
+            "id": "bundle--left",
+            "objects": [
+                { "type": "attack-pattern", "id": "attack-pattern--1", "name": "Old Name" },
+                { "type": "malware", "id": "malware--2", "name": "Same" }
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(
+        right.join("enterprise.stix.json"),
+        serde_json::json!({
+            "type": "bundle",
+            "id": "bundle--right",
+            "objects": [
+                { "type": "malware", "id": "malware--2", "name": "Same" },
+                { "type": "attack-pattern", "id": "attack-pattern--1", "name": "New Name" }
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let controller =
+        Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "**/*.stix.json",
+                "records_path": "$.objects",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }));
+    let changeset = controller
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "enterprise.stix.json").expect("enterprise.stix.json");
+    assert_eq!(node.item_type, "tabular");
+    assert!(node.tags.contains("binoc.cell-change"));
+    assert!(!node.tags.contains("binoc.document-value-change"));
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1, "{edits:?}");
+    assert_eq!(edits[0]["verb"], "tabular.edit_cell");
+    assert_eq!(edits[0]["params"]["key"]["id"], "attack-pattern--1");
+    assert_eq!(edits[0]["params"]["column"], "name");
+}
+
+#[test]
+fn records_path_missing_array_reports_config_error() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.json"), "{\"items\":[]}\n").unwrap();
+    fs::write(right.join("data.json"), "{\"items\":[{\"id\":\"1\"}]}\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.json",
+                "records_path": "$.objects",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    assert!(
+        changeset.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "binoc.rule.parse_failed"
+                && diagnostic.severity == DiagnosticSeverity::Error
+                && diagnostic.message.to_string().contains("records_path")
+                && diagnostic.message.to_string().contains("missing segment")
+        }),
+        "{:?}",
+        changeset.diagnostics
+    );
+}
+
+#[test]
 fn correspondence_engine_resolves_declared_pairs_against_live_archive_view() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");

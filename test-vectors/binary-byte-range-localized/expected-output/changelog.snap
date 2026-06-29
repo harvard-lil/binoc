@@ -4,4 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **payload.bin**: 1 changed byte range; 66.667% unchanged; first range left [65,536, 131,072) to right [65,536, 131,072)
