@@ -13,7 +13,7 @@ use binoc_sdk::{
     tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
     CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
     FileSelector, ItemRef, ParseRule, PathConfigEntry, ProjectionAnnotationContext,
-    ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies, Summary,
+    ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies, Summary, TableConfig,
     TabularParseConfig,
 };
 use regex::Regex;
@@ -161,10 +161,11 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
         let diagnostics = validate_path_entries(&semantics);
-        if !semantics.paths.is_empty() {
+        if !semantics.paths.is_empty() || table_config_has_parse_overrides(&semantics.tables) {
             config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
                 entries: semantics.paths.clone(),
                 default_row_identity: dataset_default_row_identity(&semantics).clone(),
+                tables: semantics.tables.clone(),
             }));
         }
         let row_identity = row_identity_for_paths(
@@ -208,11 +209,15 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
 struct StdlibPathDispatchResolver {
     entries: Vec<PathConfigEntry>,
     default_row_identity: RowIdentity,
+    tables: TableConfig,
 }
 
 impl DispatchResolver for StdlibPathDispatchResolver {
     fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>> {
         let Some(entry) = first_path_entry(&self.entries, &item.logical_path) else {
+            if let Some(parse) = legacy_tabular_parse_for_path(&self.tables, &item.logical_path) {
+                item.tabular_parse = Some(parse);
+            }
             return Ok(Vec::new());
         };
         if let Some(content_type) = &entry.content_type {
@@ -228,7 +233,7 @@ impl DispatchResolver for StdlibPathDispatchResolver {
             item.media_type = None;
             item.projection_hint = ProjectionHint::default().item_type("tabular");
         }
-        if let Some(parse) = parse_config_for_entry(entry) {
+        if let Some(parse) = path_tabular_parse_for_path(&self.tables, entry, &item.logical_path) {
             item.tabular_parse = Some(parse);
             if !item.is_dir {
                 item.projection_hint = ProjectionHint::default().item_type("tabular");
@@ -712,6 +717,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
         }
         if entry.content_type.is_none()
             && entry.rule.is_none()
+            && entry.dialect.is_none()
             && entry.shape.is_none()
             && entry.records_path.is_none()
             && entry.row_identity.is_none()
@@ -778,6 +784,17 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 );
             }
         }
+        if entry.dialect.is_some() && !entry_declares_tabular(entry) {
+            diagnostics.push(
+                Diagnostic::error(
+                    "binoc.dataset_config.facet_kind_mismatch",
+                    Summary::new()
+                        .text("dialect is only meaningful for tabular paths; add ")
+                        .text("content_type: text/csv or rule: binoc.parse.csv for this match"),
+                )
+                .with_location(location.clone()),
+            );
+        }
         if entry.shape.is_some() && !entry_declares_tabular(entry) {
             diagnostics.push(
                 Diagnostic::error(
@@ -811,6 +828,100 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
         }
     }
     diagnostics
+}
+
+fn path_tabular_parse_for_path(
+    tables: &TableConfig,
+    entry: &PathConfigEntry,
+    path: &str,
+) -> Option<TabularParseConfig> {
+    let mut parse = legacy_tabular_parse_for_path(tables, path).unwrap_or_default();
+    if let Some(shape) = &entry.shape {
+        shape.apply_to_parse_config(&mut parse);
+    }
+    if let Some(dialect) = &entry.dialect {
+        let merged = parse.dialect.get_or_insert_with(Default::default);
+        if dialect.delimiter.is_some() {
+            merged.delimiter = dialect.delimiter.clone();
+        }
+        if dialect.quote.is_some() {
+            merged.quote = dialect.quote.clone();
+        }
+        if dialect.escape.is_some() {
+            merged.escape = dialect.escape.clone();
+        }
+        if dialect.bom.is_some() {
+            merged.bom = dialect.bom;
+        }
+        if dialect.newline.is_some() {
+            merged.newline = dialect.newline.clone();
+        }
+    }
+    normalize_tabular_parse(parse)
+}
+
+fn legacy_tabular_parse_for_path(tables: &TableConfig, path: &str) -> Option<TabularParseConfig> {
+    if !is_tabular_path(path) {
+        return None;
+    }
+    let mut parse = tables.defaults.parse.clone();
+    for entry in &tables.entries {
+        if table_entry_matches_path(entry, path) {
+            if !entry.parse.header {
+                parse.header = false;
+            }
+            if entry.parse.delimiter.is_some() {
+                parse.delimiter = entry.parse.delimiter.clone();
+            }
+            if let Some(dialect) = &entry.parse.dialect {
+                let merged = parse.dialect.get_or_insert_with(Default::default);
+                if dialect.delimiter.is_some() {
+                    merged.delimiter = dialect.delimiter.clone();
+                }
+                if dialect.quote.is_some() {
+                    merged.quote = dialect.quote.clone();
+                }
+                if dialect.escape.is_some() {
+                    merged.escape = dialect.escape.clone();
+                }
+                if dialect.bom.is_some() {
+                    merged.bom = dialect.bom;
+                }
+                if dialect.newline.is_some() {
+                    merged.newline = dialect.newline.clone();
+                }
+            }
+            break;
+        }
+    }
+    normalize_tabular_parse(parse)
+}
+
+fn normalize_tabular_parse(mut parse: TabularParseConfig) -> Option<TabularParseConfig> {
+    if let Some(delimiter) = parse.delimiter.clone() {
+        let dialect = parse.dialect.get_or_insert_with(Default::default);
+        if dialect.delimiter.is_none() {
+            dialect.delimiter = Some(delimiter);
+        }
+    }
+    if parse.header != TabularParseConfig::default().header
+        || parse.delimiter.is_some()
+        || parse.dialect.is_some()
+        || parse.header_line.is_some()
+        || parse.skip_lines.is_some()
+    {
+        Some(parse)
+    } else {
+        None
+    }
+}
+
+fn table_config_has_parse_overrides(tables: &TableConfig) -> bool {
+    normalize_tabular_parse(tables.defaults.parse.clone()).is_some()
+        || tables
+            .entries
+            .iter()
+            .any(|entry| normalize_tabular_parse(entry.parse.clone()).is_some())
 }
 
 fn entry_declares_tabular(entry: &PathConfigEntry) -> bool {

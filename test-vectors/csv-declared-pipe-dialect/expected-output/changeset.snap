@@ -1,0 +1,72 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "text",
+        "path": "data.txt",
+        "sources": [
+          {
+            "path": "data.txt",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row modified by key; 1 line added; 1 line removed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.content-changed",
+          "binoc.lines-added",
+          "binoc.lines-removed"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "value",
+                "from": "old",
+                "key": {
+                  "id": "1"
+                },
+                "to": "new"
+              },
+              "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "examples": [
+                  {
+                    "from": "1|old",
+                    "line": 2,
+                    "to": "1|new"
+                  }
+                ],
+                "examples_truncated": false,
+                "left_line_count": 3,
+                "lines_added": 1,
+                "lines_removed": 1,
+                "right_line_count": 3
+              },
+              "verb": "text.replace_lines"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

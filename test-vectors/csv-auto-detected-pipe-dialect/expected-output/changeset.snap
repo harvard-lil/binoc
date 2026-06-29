@@ -14,50 +14,6 @@ expression: "&stable_changeset"
       {
         "action": "modify",
         "item_type": "tabular",
-        "path": "forced",
-        "sources": [
-          {
-            "path": "forced",
-            "side": "from",
-            "evidence": "binoc.pair.name",
-            "action": "modify"
-          }
-        ],
-        "summary": [
-          {
-            "text": "1 row modified by key"
-          }
-        ],
-        "tags": [
-          "binoc.cell-change",
-          "binoc.dialect-inferred"
-        ],
-        "details": {
-          "edits": [
-            {
-              "params": {
-                "column": "value",
-                "from": "old",
-                "key": {
-                  "id": "1"
-                },
-                "to": "new"
-              },
-              "verb": "tabular.edit_cell"
-            }
-          ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
-      },
-      {
-        "action": "modify",
-        "item_type": "tabular",
         "path": "records",
         "sources": [
           {
@@ -95,7 +51,7 @@ expression: "&stable_changeset"
           {
             "package": "binoc",
             "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
+            "value": "detected `|`-delimited, no quoting, newline LF"
           }
         ]
       }
