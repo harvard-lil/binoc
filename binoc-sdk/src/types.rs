@@ -594,6 +594,7 @@ impl<'de> Deserialize<'de> for TableConfig {
     where
         D: serde::Deserializer<'de>,
     {
+        #[allow(clippy::large_enum_variant)]
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum Repr {
