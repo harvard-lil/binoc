@@ -1,0 +1,56 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.json",
+        "sources": [
+          {
+            "path": "data.json",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Column type changed: 'year' number -> string"
+          }
+        ],
+        "tags": [
+          "binoc.column-type-change",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "cells": 3,
+                "column": "year",
+                "from_type": "number",
+                "to_type": "string"
+              },
+              "summary": [
+                {
+                  "text": "Column type changed: 'year' number -> string"
+                }
+              ],
+              "verb": "tabular.column_type_changed"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

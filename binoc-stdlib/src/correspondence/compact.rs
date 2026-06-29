@@ -1,7 +1,8 @@
 use binoc_sdk::{
-    tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, TabularData, Value,
+    tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, Summary, TabularData, Value,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 
 use super::tabular::load_tabular;
 
@@ -12,6 +13,8 @@ const COLUMN_RENAME_MIN_MATCH_RATIO: f64 = 0.10;
 pub struct ColumnReorder;
 
 pub struct ColumnRename;
+
+pub struct TypeOnlyColumnChange;
 
 impl CompactionRule for ColumnReorder {
     fn name(&self) -> &str {
@@ -89,6 +92,186 @@ impl CompactionRule for ColumnRename {
             return Ok(None);
         };
         Ok(rewrite_column_renames(edits, &left, &right))
+    }
+}
+
+impl CompactionRule for TypeOnlyColumnChange {
+    fn name(&self) -> &str {
+        "binoc.compact.type_only_column_change"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        _ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        Ok(rewrite_type_only_column_changes(edits))
+    }
+}
+
+fn rewrite_type_only_column_changes(edits: &[Edit]) -> Option<Vec<Edit>> {
+    let type_only = type_only_column_groups(edits);
+    if type_only.is_empty() {
+        return None;
+    }
+
+    let mut out = Vec::new();
+    let mut rewrote = false;
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit) else {
+            out.push(edit.clone());
+            continue;
+        };
+        let Some(group) = type_only.get(column) else {
+            out.push(edit.clone());
+            continue;
+        };
+        if edit_cell_is_type_only(edit) {
+            if index == group.first_index {
+                out.push(type_only_column_edit(column, group));
+            }
+            rewrote = true;
+        } else {
+            out.push(edit.clone());
+        }
+    }
+
+    rewrote.then_some(out)
+}
+
+#[derive(Debug, Clone)]
+struct TypeOnlyColumnGroup {
+    first_index: usize,
+    from_type: &'static str,
+    to_type: &'static str,
+    count: usize,
+}
+
+fn type_only_column_groups(edits: &[Edit]) -> BTreeMap<String, TypeOnlyColumnGroup> {
+    let mut candidates: BTreeMap<String, TypeOnlyColumnGroup> = BTreeMap::new();
+    let mut disqualified = Vec::new();
+
+    for (index, edit) in edits
+        .iter()
+        .enumerate()
+        .filter(|(_, edit)| edit.verb == "tabular.edit_cell")
+    {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        if !edit_cell_is_type_only(edit) {
+            disqualified.push(column);
+            continue;
+        }
+        let from_type = cell_type_name(&edit.params["from"]);
+        let to_type = cell_type_name(&edit.params["to"]);
+        let column_key = column.clone();
+        candidates
+            .entry(column)
+            .and_modify(|group| {
+                if group.from_type != from_type || group.to_type != to_type {
+                    disqualified.push(column_key.clone());
+                }
+                group.first_index = group.first_index.min(index);
+                group.count += 1;
+            })
+            .or_insert(TypeOnlyColumnGroup {
+                first_index: index,
+                from_type,
+                to_type,
+                count: 1,
+            });
+    }
+
+    for column in disqualified {
+        candidates.remove(&column);
+    }
+    candidates
+}
+
+fn edit_cell_column(edit: &Edit) -> Option<&str> {
+    (edit.verb == "tabular.edit_cell")
+        .then(|| edit.params.get("column")?.as_str())
+        .flatten()
+}
+
+fn edit_cell_is_type_only(edit: &Edit) -> bool {
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    from != to && canonical_cell_equal(from, to)
+}
+
+fn type_only_column_edit(column: &str, group: &TypeOnlyColumnGroup) -> Edit {
+    Edit::new(
+        "tabular.column_type_changed",
+        json!({
+            "column": column,
+            "from_type": group.from_type,
+            "to_type": group.to_type,
+            "cells": group.count,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.column-type-change")
+    .with_tag("binoc.schema-change")
+    .with_summary(
+        Summary::new()
+            .text("Column type changed: '")
+            .text(column.to_string())
+            .text("' ")
+            .text(group.from_type)
+            .text(" -> ")
+            .text(group.to_type),
+    )
+}
+
+fn cell_type_name(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "bool",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
+/// Conservative cross-type cell equality for detecting representation-only
+/// tabular changes.
+///
+/// Policy:
+/// - Values with the same JSON type use ordinary JSON equality.
+/// - JSON numbers and strings compare equal only when the string is non-empty
+///   and is byte-for-byte identical to serde_json's canonical number spelling.
+///   This makes `2024` equal to `"2024"` and `1.0` equal to `"1.0"`, while
+///   `"007"` is not equal to `7`, `"1"` is not equal to `1.0`, and whitespace
+///   is significant.
+/// - Booleans do not equal strings (`true` != `"true"`).
+/// - Null does not equal an empty string.
+/// - Dates and timestamps have no special parsing; date-like strings are only
+///   equal by exact string equality. We do not normalize time zones, calendars,
+///   or formats.
+/// - Arrays/objects do not cross-compare with strings, because stringified
+///   nested values are often lossy producer choices rather than typed cells.
+fn canonical_cell_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    if left == right {
+        return true;
+    }
+    match (left, right) {
+        (serde_json::Value::Number(number), serde_json::Value::String(string))
+        | (serde_json::Value::String(string), serde_json::Value::Number(number)) => {
+            !string.is_empty() && number.to_string() == *string
+        }
+        _ => false,
     }
 }
 
@@ -691,6 +874,39 @@ mod tests {
         .with_tag("binoc.schema-change")
     }
 
+    fn cell(row: u64, column: &str, from: serde_json::Value, to: serde_json::Value) -> Edit {
+        Edit::new(
+            "tabular.edit_cell",
+            json!({
+                "row": row,
+                "column": column,
+                "from": from,
+                "to": to,
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.cell-change")
+    }
+
+    fn keyed_cell(
+        key: serde_json::Value,
+        column: &str,
+        from: serde_json::Value,
+        to: serde_json::Value,
+    ) -> Edit {
+        Edit::new(
+            "tabular.edit_cell",
+            json!({
+                "key": key,
+                "column": column,
+                "from": from,
+                "to": to,
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.cell-change")
+    }
+
     fn table(headers: &[&str], rows: &[&[&str]]) -> TabularData {
         TabularData::from_string_rows(
             headers.iter().map(|header| (*header).to_string()).collect(),
@@ -698,6 +914,80 @@ mod tests {
                 .map(|row| row.iter().map(|value| (*value).to_string()).collect())
                 .collect(),
         )
+    }
+
+    #[test]
+    fn canonical_cell_equality_is_conservative() {
+        assert!(canonical_cell_equal(&json!(2024), &json!("2024")));
+        assert!(canonical_cell_equal(&json!("2024"), &json!(2024)));
+        assert!(canonical_cell_equal(&json!(1.0), &json!("1.0")));
+        assert!(!canonical_cell_equal(&json!(7), &json!("007")));
+        assert!(!canonical_cell_equal(&json!(1.0), &json!("1")));
+        assert!(!canonical_cell_equal(&json!(true), &json!("true")));
+        assert!(!canonical_cell_equal(&json!(null), &json!("")));
+        assert!(!canonical_cell_equal(
+            &json!("2024-01-01T00:00:00Z"),
+            &json!("2024-01-01")
+        ));
+    }
+
+    #[test]
+    fn type_only_column_change_collapses_to_one_claim() {
+        let edits = vec![
+            cell(0, "year", json!(2024), json!("2024")),
+            cell(1, "year", json!(2025), json!("2025")),
+            cell(0, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let rewritten = rewrite_type_only_column_changes(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.column_type_changed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "year",
+                "from_type": "number",
+                "to_type": "string",
+                "cells": 2,
+            })
+        );
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Column type changed: 'year' number -> string"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+        assert_eq!(rewritten[1].params["column"], json!("name"));
+    }
+
+    #[test]
+    fn type_only_column_change_keeps_mixed_semantic_column_changes() {
+        let edits = vec![
+            cell(0, "year", json!(2024), json!("2024")),
+            cell(1, "year", json!(2025), json!("FY2025")),
+        ];
+
+        assert!(rewrite_type_only_column_changes(&edits).is_none());
+    }
+
+    #[test]
+    fn type_only_column_change_rewrites_keyed_cell_edits() {
+        let edits = vec![
+            keyed_cell(json!({"id": 1}), "year", json!(2024), json!("2024")),
+            keyed_cell(json!({"id": 2}), "year", json!(2025), json!("2025")),
+        ];
+
+        let rewritten = rewrite_type_only_column_changes(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.column_type_changed");
+        assert_eq!(rewritten[0].params["cells"], json!(2));
     }
 
     fn basis(left: &[&str], right: &[&str], right_rows: Vec<serde_json::Value>) -> Edit {
