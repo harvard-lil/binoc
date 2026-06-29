@@ -55,7 +55,8 @@ impl CompactionRule for ColumnReorder {
                     Edit::new("tabular.reorder_columns", json!({ "order": common_to }))
                         .with_item_type("tabular")
                         .with_tag("binoc.column-reorder")
-                        .with_tag("binoc.schema-change"),
+                        .with_tag("binoc.schema-change")
+                        .with_summary("Columns reordered"),
                 );
             } else {
                 out.push(edit.clone());
@@ -114,7 +115,15 @@ fn rewrite_column_renames(
                 )
                 .with_item_type("tabular")
                 .with_tag("binoc.column-rename")
-                .with_tag("binoc.schema-change"),
+                .with_tag("binoc.schema-change")
+                .with_summary(
+                    binoc_sdk::Summary::new()
+                        .text("Column renamed: '")
+                        .text(rename.from.clone())
+                        .text("' -> '")
+                        .text(rename.to.clone())
+                        .text("'"),
+                ),
             );
             out.extend(rename.value_edits.clone());
             continue;

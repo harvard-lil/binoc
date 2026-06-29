@@ -4,9 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **observations_2024.csv**:
-  - Moved from observations.csv
-  - 2 rows removed
+- **observations_2024.csv**: Moved from observations.csv
   - Rows removed
     - row 3: '2025', 'north', '15'
     - row 4: '2025', 'south', '9'

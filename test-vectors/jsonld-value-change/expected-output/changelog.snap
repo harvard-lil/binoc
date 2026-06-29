@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **person.jsonld**: Document values changed
-  - Value Change: changes: [{"from":"\"Mathematician\"","kind":"replace","path":"$.jobTitle","to":"\"Computer Scientist\""}]; examples_truncated: false

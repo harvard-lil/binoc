@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **metadata.xml**: Document values changed
-  - Value Change: changes: [{"from":"\"2024-03-01\"","kind":"replace","path":"$[\"gmd:MD_Metadata\"][\"gmd:identificationInfo\"][\"gmd:MD_DataIdentification\"][\"gmd:citation\"][\"gmd:CI_...; examples_truncated: false

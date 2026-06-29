@@ -86,7 +86,13 @@ expression: "&stable_changeset"
                 ],
                 "summary": [
                   {
-                    "text": "1 row added"
+                    "text": "Moved from "
+                  },
+                  {
+                    "path": {
+                      "value": "data/state_AL.csv",
+                      "snapshot": "from"
+                    }
                   }
                 ],
                 "tags": [

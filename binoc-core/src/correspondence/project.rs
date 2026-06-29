@@ -535,10 +535,15 @@ fn reconciled_item_type(line: &ActionLine) -> String {
 }
 
 fn edits_json(edits: &[Edit]) -> serde_json::Value {
-    json!(edits
-        .iter()
-        .map(|edit| json!({ "verb": edit.verb, "params": edit.params }))
-        .collect::<Vec<_>>())
+    json!(edits.iter().map(edit_json).collect::<Vec<_>>())
+}
+
+fn edit_json(edit: &Edit) -> serde_json::Value {
+    let mut value = json!({ "verb": edit.verb, "params": edit.params });
+    if let Some(summary) = &edit.projection.hint.summary {
+        value["summary"] = json!(summary);
+    }
+    value
 }
 
 fn merge_action(left: &str, right: &str) -> &'static str {

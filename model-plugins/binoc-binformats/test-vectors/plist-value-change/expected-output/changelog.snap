@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.plist**: Document values changed
-  - Value Change: changes: [{"from":"3","kind":"replace","path":"$.replicas","to":"6"}]; examples_truncated: false

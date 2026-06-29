@@ -830,6 +830,7 @@ pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
     }
 
     check_no_parent_child_edit_duplication(name, root);
+    check_empty_tag_map_markdown_legibility(name, changeset);
 }
 
 /// Collect the JSON edit objects (`{ "verb", "params" }`) recorded under a
@@ -875,6 +876,30 @@ fn collect_descendant_edits(node: &DiffNode, out: &mut HashSet<String>) {
     for child in &node.children {
         collect_descendant_edits(child, out);
     }
+}
+
+/// Built-in markdown must remain legible when tag categorization is disabled:
+/// tags may drive grouping, but rule-specific phrasing has to arrive as
+/// summaries/details from the producing rules.
+fn check_empty_tag_map_markdown_legibility(name: &str, changeset: &Changeset) {
+    let mut changeset = changeset.clone();
+    changeset.diagnostics.clear();
+    let md = markdown::render_markdown(
+        &[changeset],
+        &markdown::MarkdownRendererConfig {
+            groups: Vec::new(),
+            ..Default::default()
+        },
+    );
+
+    assert!(
+        !md.contains("binoc."),
+        "[{name}] Markdown rendered with an empty tag_map leaked raw binoc vocabulary:\n{md}"
+    );
+    assert!(
+        !md.contains("linked endpoints have different content hashes, but no visible edit explained the difference"),
+        "[{name}] Markdown rendered with an empty tag_map exposed the opaque content-hash fallback:\n{md}"
+    );
 }
 
 fn collect_invariant_violations<'a>(node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {

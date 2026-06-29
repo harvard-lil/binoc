@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: Rows reordered (same data, different sort order)
-  - Reorder Rows: row_count: 3

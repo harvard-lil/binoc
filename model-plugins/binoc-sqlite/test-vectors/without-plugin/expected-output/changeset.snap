@@ -48,6 +48,11 @@ expression: "&stable_changeset"
                   "scan_truncated": false
                 }
               },
+              "summary": [
+                {
+                  "text": "Binary content changed (extracted strings unchanged)"
+                }
+              ],
               "verb": "binary.contents-differ"
             }
           ]

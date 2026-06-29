@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Column added: 'email'"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "data.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [

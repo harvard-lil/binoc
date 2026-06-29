@@ -202,12 +202,21 @@ impl ProjectionAnnotator for StdlibProjectionAnnotator {
         }
         if ctx.action == "move" && !ctx.edits.is_empty() {
             hint = hint.tag("binoc.move.modified").tag("binoc.content-changed");
+            if let Some(source_path) = ctx.source_path {
+                hint = hint.summary(
+                    Summary::new()
+                        .text("Moved from ")
+                        .path(source_path.to_string(), binoc_sdk::Side::From),
+                );
+            }
         }
         if ctx.unlinked_side.is_some() && !ctx.container {
             hint = hint.tag("binoc.content-changed");
         }
-        if let Some(summary) = summarize_known_edits(ctx.edits) {
-            hint = hint.summary(summary);
+        if ctx.action != "move" {
+            if let Some(summary) = summarize_known_edits(ctx.edits) {
+                hint = hint.summary(summary);
+            }
         }
         hint
     }

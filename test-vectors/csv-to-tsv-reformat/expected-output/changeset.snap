@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row added; 1 cell changed"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "data.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
