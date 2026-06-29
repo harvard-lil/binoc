@@ -9,7 +9,6 @@ expression: "&md"
   - Moved from observations_north.csv
   - 3 cells changed
   - Changed cells
-    - changed cells by column: year 1, region 1, count 1
     - row 2, column 'year': '2025' -> '2024'
     - row 2, column 'region': 'north' -> 'south'
     - row 2, column 'count': '15' -> '12'
@@ -17,7 +16,6 @@ expression: "&md"
   - Moved from observations_south.csv
   - 3 cells changed
   - Changed cells
-    - changed cells by column: year 1, region 1, count 1
     - row 1, column 'year': '2024' -> '2025'
     - row 1, column 'region': 'south' -> 'north'
     - row 1, column 'count': '12' -> '15'

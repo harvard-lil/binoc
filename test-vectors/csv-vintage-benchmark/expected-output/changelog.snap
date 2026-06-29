@@ -9,7 +9,6 @@ expression: "&md"
 
 - **facilities.csv**: Column added: 'region'; 1 cell changed
   - Changed cells
-    - changed cells by column: status 1
     - row 2, column 'status': 'active' -> 'decommissioned'
   - Set Headers: from: ["facility_id","name","status"]; to: ["facility_id","name","status","region"]
   - Add Column: name: 'region'; values: {"total_values":4,"truncated":false,"values":["north","east","west","south"]}
@@ -18,7 +17,6 @@ expression: "&md"
 
 - **inspections.csv**: 2 rows added; 3 cells changed
   - Changed cells
-    - changed cells by column: score 3
     - row 1, column 'score': '82' -> '85'
     - row 3, column 'score': '90' -> '91'
     - row 4, column 'score': '68' -> '70'

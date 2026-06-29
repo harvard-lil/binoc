@@ -13,7 +13,6 @@ expression: "&md"
     - line 1: 'Version 1 notes.' -> 'Version 2 notes.'
 - **data.csv**: 2 cells changed
   - Changed cells
-    - changed cells by column: age 1, city 1
     - row 1, column 'age': '30' -> '31'
     - row 3, column 'city': 'Seattle' -> 'Portland'
 - **docs/readme.txt**: 2 lines added; 2 lines removed

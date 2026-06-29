@@ -1131,7 +1131,7 @@ fn render_tabular_cell_details(
     ) {
         return;
     }
-    if config.verbosity == Verbosity::Full {
+    if config.verbosity == Verbosity::Full || shown >= cells.len() {
         for edit in cells.into_iter().take(shown) {
             if !push_tabular_cell_example(out, edit, config, detail_budget) {
                 return;
@@ -2186,6 +2186,7 @@ mod tests {
         assert!(md.contains("row 1, column 'score': '10' -> '12'"));
         assert!(md.contains("row 2, column 'score': '20' -> '22'"));
         assert!(!md.contains("row 3, column 'score': '30' -> '32'"));
+        assert!(!md.contains("changed cells by column"));
     }
 
     #[test]
@@ -2299,6 +2300,42 @@ mod tests {
             .unwrap();
         assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
         assert!(!md.contains("row 2, column 'score': '20' -> '22'"));
+    }
+
+    #[test]
+    fn examples_verbosity_without_truncation_keeps_linear_cell_examples() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("3 cells changed");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {"verb": "tabular.edit_cell", "params": {"row": 0, "column": "score", "from": "10", "to": "12"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 1, "column": "date", "from": "2025-06-01", "to": "2025-06-02"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 2, "column": "status", "from": "open", "to": "closed"}}
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "v1",
+                "v2",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                max_examples_per_block: 3,
+                ..Default::default()
+            },
+        );
+
+        assert!(!md.contains("changed cells by column"));
+        let score_pos = md.find("row 1, column 'score': '10' -> '12'").unwrap();
+        let date_pos = md
+            .find("row 2, column 'date': '2025-06-01' -> '2025-06-02'")
+            .unwrap();
+        let status_pos = md
+            .find("row 3, column 'status': 'open' -> 'closed'")
+            .unwrap();
+        assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
     }
 
     #[test]

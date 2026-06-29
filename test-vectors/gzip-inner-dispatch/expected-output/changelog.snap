@@ -10,7 +10,6 @@ expression: "&md"
     - line 2: '1|Aroostook|120' -> '1|Aroostook|121'
 - **data.csv.gz/>data.csv**: 1 row added; 1 cell changed
   - Changed cells
-    - changed cells by column: name 1
     - row 2, column 'name': 'Bob' -> 'Robert'
   - Rows added
     - row 3: '3', 'Carla'

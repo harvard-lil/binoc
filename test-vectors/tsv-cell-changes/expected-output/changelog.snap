@@ -7,6 +7,5 @@ expression: "&md"
 
 - **data.tsv**: 2 cells changed
   - Changed cells
-    - changed cells by column: age 1, city 1
     - row 1, column 'age': '30' -> '31'
     - row 2, column 'city': 'Boston' -> 'Cambridge'

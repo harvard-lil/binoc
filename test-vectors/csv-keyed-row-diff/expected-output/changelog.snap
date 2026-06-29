@@ -7,7 +7,6 @@ expression: "&md"
 
 - **data.csv**: 1 row added; 1 row removed; 1 row modified by key
   - Changed cells
-    - changed cells by column: price 1
     - key id 'p2', column 'price': '20' -> '25'
   - Rows added
     - key id 'p4': 'p4', 'Delta', '40'
