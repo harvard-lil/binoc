@@ -1,12 +1,15 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::io;
 
 use binoc_sdk::{
     file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
     BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractResult,
-    IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, ShapeFilter,
-    StructuredDocument, TabularData, TabularDataPair, Value, WriteOutput, WriterDescriptor,
+    IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment, ShapeFilter,
+    StructuredDocument, Summary, TabularData, TabularDataPair, Value, WriteOutput,
+    WriterDescriptor,
 };
+use fastcdc::v2020::StreamCDC;
 use rust_strings::{strings, BytesConfig, Encoding};
 use serde_json::json;
 use similar::{ChangeTag, TextDiff};
@@ -33,6 +36,18 @@ const MAX_STRINGS_EXAMPLES: usize = 32;
 /// projection stays bounded for very large binaries. Extraction beyond this
 /// prefix is skipped and flagged via `scan_truncated`.
 const MAX_STRINGS_SCAN_BYTES: usize = 1 << 20; // 1 MiB
+
+/// FastCDC parameters for opaque binary localization. The average chunk size is
+/// large enough for long-tail binary files while still localizing common small
+/// embedded rewrites to useful byte ranges.
+const BINARY_CDC_MIN_CHUNK_BYTES: usize = 4 * 1024;
+const BINARY_CDC_AVG_CHUNK_BYTES: usize = 16 * 1024;
+const BINARY_CDC_MAX_CHUNK_BYTES: usize = 64 * 1024;
+/// Cap the resident per-side chunk vectors. At the configured average chunk
+/// size this covers roughly 512 MiB per side while keeping metadata bounded.
+const MAX_BINARY_CDC_CHUNKS: usize = 32 * 1024;
+/// Keep output deterministic and compact even when many regions differ.
+const MAX_BINARY_CDC_REGIONS: usize = 32;
 
 pub struct ContainerWriter;
 
@@ -1029,6 +1044,8 @@ fn load_parser_metadata(
         .map_err(|err| BinocError::Other(format!("decode parser metadata artifact: {err}")))
 }
 
+pub struct BinaryChunkWriter;
+
 pub struct FallbackWriter;
 
 pub struct TextWriter;
@@ -1585,6 +1602,316 @@ fn text_diff_extract(left: &str, right: &str) -> String {
         out.push_str(change.value());
     }
     out
+}
+
+impl EditListWriter for BinaryChunkWriter {
+    fn descriptor(&self) -> WriterDescriptor {
+        WriterDescriptor {
+            name: "binoc.write.binary_chunks".into(),
+            formats: vec![],
+            input: NodeMatch {
+                is_dir: Some(false),
+                ..NodeMatch::default()
+            },
+            shape: ShapeFilter::Leaf,
+            fallback: true,
+        }
+    }
+
+    fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+        let left = ctx.view.item(ctx.link.left);
+        let right = ctx.view.item(ctx.link.right);
+        if left.resolve_hash(data)? == right.resolve_hash(data)? {
+            return Ok(Some(Vec::new().into()));
+        }
+
+        Ok(Some(
+            binary_chunk_diff(left, right, data)
+                .into_iter()
+                .collect::<Vec<_>>()
+                .into(),
+        ))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct BinaryChunkKey {
+    digest: [u8; 32],
+    len: u64,
+}
+
+#[derive(Debug, Clone)]
+struct BinaryChunk {
+    start: u64,
+    len: u64,
+    key: BinaryChunkKey,
+}
+
+#[derive(Debug)]
+struct BinaryChunkList {
+    chunks: Vec<BinaryChunk>,
+    analyzed_bytes: u64,
+    scan_truncated: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BinaryChunkMatch {
+    left_index: usize,
+    right_index: usize,
+}
+
+#[derive(Debug, Clone)]
+struct BinaryChangedRegion {
+    left_start: u64,
+    left_len: u64,
+    right_start: u64,
+    right_len: u64,
+}
+
+fn binary_chunk_diff(
+    left: &binoc_sdk::ItemRef,
+    right: &binoc_sdk::ItemRef,
+    data: &dyn DataAccess,
+) -> Option<Edit> {
+    let left_size = left.resolve_size(data).ok()?;
+    let right_size = right.resolve_size(data).ok()?;
+    let left_chunks = collect_binary_chunks(left, data).ok()?;
+    let right_chunks = collect_binary_chunks(right, data).ok()?;
+    if left_chunks.chunks.is_empty() || right_chunks.chunks.is_empty() {
+        return None;
+    }
+
+    let matches = align_binary_chunks(&left_chunks.chunks, &right_chunks.chunks);
+    let unchanged_bytes = matches
+        .iter()
+        .map(|matched| left_chunks.chunks[matched.left_index].len)
+        .sum::<u64>();
+    if unchanged_bytes == 0 {
+        return None;
+    }
+
+    let (changed_region_count, regions, regions_truncated) = changed_regions(
+        &left_chunks,
+        &right_chunks,
+        &matches,
+        MAX_BINARY_CDC_REGIONS,
+    );
+    if changed_region_count == 0 {
+        return None;
+    }
+
+    let unchanged_ratio = if left_size + right_size == 0 {
+        1.0
+    } else {
+        (2.0 * unchanged_bytes as f64) / (left_size + right_size) as f64
+    };
+    let chunk_scan_truncated = left_chunks.scan_truncated || right_chunks.scan_truncated;
+
+    let params = json!({
+        "left_size": left_size,
+        "right_size": right_size,
+        "left_analyzed_bytes": left_chunks.analyzed_bytes,
+        "right_analyzed_bytes": right_chunks.analyzed_bytes,
+        "unchanged_bytes": unchanged_bytes,
+        "unchanged_ratio": unchanged_ratio,
+        "changed_region_count": changed_region_count,
+        "regions_truncated": regions_truncated,
+        "chunk_scan_truncated": chunk_scan_truncated,
+        "chunk_count_limit": MAX_BINARY_CDC_CHUNKS,
+        "chunking": {
+            "algorithm": "fastcdc.v2020",
+            "min_bytes": BINARY_CDC_MIN_CHUNK_BYTES,
+            "avg_bytes": BINARY_CDC_AVG_CHUNK_BYTES,
+            "max_bytes": BINARY_CDC_MAX_CHUNK_BYTES,
+        },
+        "regions": regions.iter().map(|region| json!({
+            "left_start": region.left_start,
+            "left_len": region.left_len,
+            "right_start": region.right_start,
+            "right_len": region.right_len,
+        })).collect::<Vec<_>>(),
+    });
+
+    Some(
+        Edit::new("binary.byte_ranges_changed", params)
+            .with_item_type("file")
+            .with_tag("binoc.content-changed")
+            .with_tag("binoc.binary-byte-range-change")
+            .with_summary(binary_chunk_summary(
+                changed_region_count,
+                unchanged_ratio,
+                regions.first(),
+                regions_truncated,
+                chunk_scan_truncated,
+            )),
+    )
+}
+
+fn collect_binary_chunks(
+    item: &binoc_sdk::ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<BinaryChunkList> {
+    let reader = data.open_read(item)?;
+    let chunker = StreamCDC::new(
+        reader,
+        BINARY_CDC_MIN_CHUNK_BYTES,
+        BINARY_CDC_AVG_CHUNK_BYTES,
+        BINARY_CDC_MAX_CHUNK_BYTES,
+    );
+    let mut chunks = Vec::new();
+    let mut analyzed_bytes = 0u64;
+    let mut scan_truncated = false;
+
+    for entry in chunker {
+        let chunk = entry.map_err(|err| BinocError::Io(io::Error::from(err)))?;
+        if chunks.len() >= MAX_BINARY_CDC_CHUNKS {
+            scan_truncated = true;
+            break;
+        }
+        let digest = blake3::hash(&chunk.data);
+        let len = chunk.length as u64;
+        chunks.push(BinaryChunk {
+            start: chunk.offset,
+            len,
+            key: BinaryChunkKey {
+                digest: *digest.as_bytes(),
+                len,
+            },
+        });
+        analyzed_bytes = chunk.offset + len;
+    }
+
+    Ok(BinaryChunkList {
+        chunks,
+        analyzed_bytes,
+        scan_truncated,
+    })
+}
+
+fn align_binary_chunks(left: &[BinaryChunk], right: &[BinaryChunk]) -> Vec<BinaryChunkMatch> {
+    let mut right_by_key: HashMap<BinaryChunkKey, Vec<usize>> = HashMap::new();
+    for (index, chunk) in right.iter().enumerate().rev() {
+        right_by_key.entry(chunk.key).or_default().push(index);
+    }
+
+    let mut matches = Vec::new();
+    let mut min_right_index = 0usize;
+    for (left_index, left_chunk) in left.iter().enumerate() {
+        let Some(candidates) = right_by_key.get_mut(&left_chunk.key) else {
+            continue;
+        };
+        while let Some(right_index) = candidates.pop() {
+            if right_index >= min_right_index {
+                matches.push(BinaryChunkMatch {
+                    left_index,
+                    right_index,
+                });
+                min_right_index = right_index.saturating_add(1);
+                break;
+            }
+        }
+    }
+    matches
+}
+
+fn changed_regions(
+    left: &BinaryChunkList,
+    right: &BinaryChunkList,
+    matches: &[BinaryChunkMatch],
+    region_limit: usize,
+) -> (usize, Vec<BinaryChangedRegion>, bool) {
+    let mut count = 0usize;
+    let mut retained = Vec::new();
+    let mut left_cursor = 0u64;
+    let mut right_cursor = 0u64;
+
+    for matched in matches {
+        let left_chunk = &left.chunks[matched.left_index];
+        let right_chunk = &right.chunks[matched.right_index];
+        push_changed_region(
+            &mut count,
+            &mut retained,
+            region_limit,
+            left_cursor,
+            left_chunk.start.saturating_sub(left_cursor),
+            right_cursor,
+            right_chunk.start.saturating_sub(right_cursor),
+        );
+        left_cursor = left_chunk.start + left_chunk.len;
+        right_cursor = right_chunk.start + right_chunk.len;
+    }
+    push_changed_region(
+        &mut count,
+        &mut retained,
+        region_limit,
+        left_cursor,
+        left.analyzed_bytes.saturating_sub(left_cursor),
+        right_cursor,
+        right.analyzed_bytes.saturating_sub(right_cursor),
+    );
+
+    let truncated = count > retained.len();
+    (count, retained, truncated)
+}
+
+fn push_changed_region(
+    count: &mut usize,
+    retained: &mut Vec<BinaryChangedRegion>,
+    limit: usize,
+    left_start: u64,
+    left_len: u64,
+    right_start: u64,
+    right_len: u64,
+) {
+    if left_len == 0 && right_len == 0 {
+        return;
+    }
+    *count += 1;
+    if retained.len() < limit {
+        retained.push(BinaryChangedRegion {
+            left_start,
+            left_len,
+            right_start,
+            right_len,
+        });
+    }
+}
+
+fn binary_chunk_summary(
+    changed_region_count: usize,
+    unchanged_ratio: f64,
+    first_region: Option<&BinaryChangedRegion>,
+    regions_truncated: bool,
+    chunk_scan_truncated: bool,
+) -> Summary {
+    let mut summary = Summary(vec![
+        Segment::Uint(changed_region_count as u64),
+        Segment::Text(format!(
+            " changed byte range{}; ",
+            if changed_region_count == 1 { "" } else { "s" }
+        )),
+        Segment::Float(unchanged_ratio * 100.0),
+        Segment::Text("% unchanged".into()),
+    ]);
+    if let Some(region) = first_region {
+        summary = summary
+            .text("; first range left [")
+            .uint(region.left_start)
+            .text(", ")
+            .uint(region.left_start + region.left_len)
+            .text(") to right [")
+            .uint(region.right_start)
+            .text(", ")
+            .uint(region.right_start + region.right_len)
+            .text(")");
+    }
+    if regions_truncated {
+        summary = summary.text("; regions truncated");
+    }
+    if chunk_scan_truncated {
+        summary = summary.text("; scan truncated");
+    }
+    summary
 }
 
 impl EditListWriter for FallbackWriter {

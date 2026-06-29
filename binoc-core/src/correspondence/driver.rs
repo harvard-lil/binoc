@@ -996,7 +996,9 @@ fn build_edit_lists(
         //     `Some` (the substitutability / dialect axis);
         //   * each applicable structural writer (empty `formats`), excluding
         //     the fallback;
-        //   * the fallback, but only when nothing above claimed the link.
+        //   * fallback-tier writers, but only when nothing above claimed the
+        //     link. Multiple fallback-tier writers may compose; this lets a
+        //     bounded localization layer run before the durable byte/hash fact.
         // Each contribution's edits are stamped with the producer's
         // provenance so downstream compaction/extract/summary stay
         // per-content-type. Ordering is deterministic: artifact formats in
@@ -1004,7 +1006,7 @@ fn build_edit_lists(
         let mut writers_used: BTreeSet<String> = BTreeSet::new();
         let mut artifact_segments: BTreeMap<ArtifactFormat, Vec<Edit>> = BTreeMap::new();
         let mut structural_edits: Vec<Edit> = Vec::new();
-        let mut fallback: Option<&Arc<dyn binoc_sdk::EditListWriter>> = None;
+        let mut fallback_writers: Vec<&Arc<dyn binoc_sdk::EditListWriter>> = Vec::new();
         // A link is "claimed" once any non-fallback writer returns `Some`
         // (even an empty edit list), exactly as the old first-match loop's
         // `break` claimed it. The fallback fires only on unclaimed links.
@@ -1017,9 +1019,9 @@ fn build_edit_lists(
             }
             let is_fallback = descriptor.formats.is_empty() && is_fallback_writer(&descriptor);
             if is_fallback {
-                // Defer the fallback until we know whether the link was
-                // claimed by anything else.
-                fallback.get_or_insert(writer);
+                // Defer fallback-tier writers until we know whether the link
+                // was claimed by anything else.
+                fallback_writers.push(writer);
                 continue;
             }
             let provenance = writer_provenance(&descriptor);
@@ -1057,7 +1059,7 @@ fn build_edit_lists(
         composed.extend(structural_edits);
 
         if !claimed {
-            if let Some(writer) = fallback {
+            for writer in fallback_writers {
                 let descriptor = writer.descriptor();
                 if let Some(output) = writer.write(&ctx, data)? {
                     append_rule_diagnostics(diagnostics, &descriptor.name, output.diagnostics);
@@ -2150,11 +2152,55 @@ mod tests {
             dataset_configurator: None,
             dispatch_resolver: None,
         };
-        let result = run(&only_fallback, left, right, &data).expect("run");
+        let result = run(&only_fallback, left.clone(), right.clone(), &data).expect("run");
         let writers = result.stats.writer_used.values().next().expect("writers");
         assert_eq!(
             writers.iter().cloned().collect::<Vec<_>>(),
             vec!["fallback"]
+        );
+
+        struct SecondFallback;
+        impl binoc_sdk::EditListWriter for SecondFallback {
+            fn descriptor(&self) -> WriterDescriptor {
+                WriterDescriptor {
+                    name: "fallback_second".into(),
+                    formats: vec![],
+                    input: Default::default(),
+                    shape: ShapeFilter::Any,
+                    fallback: true,
+                }
+            }
+            fn write(
+                &self,
+                _ctx: &LinkCtx<'_>,
+                _data: &dyn DataAccess,
+            ) -> BinocResult<Option<binoc_sdk::WriteOutput>> {
+                Ok(Some(
+                    vec![Edit::new("fallback_second.edit", serde_json::json!({}))].into(),
+                ))
+            }
+        }
+
+        let two_fallbacks = CorrespondenceEngineConfig {
+            rules: vec![CoreRule::Pair(Arc::new(SingleRootPair))],
+            writers: vec![Arc::new(ClaimingFallback), Arc::new(SecondFallback)],
+            compaction: vec![],
+            annotators: vec![],
+            identity_extractors: vec![],
+            row_keys: BTreeMap::new(),
+            row_identity_policies: BTreeMap::new(),
+            root_projection: ProjectionHint::default(),
+            dataset_configurator: None,
+            dispatch_resolver: None,
+        };
+        let result = run(&two_fallbacks, left.clone(), right.clone(), &data).expect("run");
+        let edits = result.edit_lists.values().next().expect("edits");
+        assert_eq!(
+            edits
+                .iter()
+                .map(|edit| edit.verb.as_str())
+                .collect::<Vec<_>>(),
+            vec!["fallback.edit", "fallback_second.edit"]
         );
     }
 
