@@ -196,6 +196,11 @@ pub struct CorrespondenceEngineConfig {
     pub row_identity_policies: BTreeMap<String, RowIdentityPolicies>,
     pub root_projection: ProjectionHint,
     pub dataset_configurator: Option<Arc<dyn CorrespondenceDatasetConfigurator>>,
+    /// Optional path-scoped dispatch resolver installed by a rule pack's dataset
+    /// configurator. Core treats it as opaque: it may annotate an item before
+    /// declarative dispatch and may restrict dispatch to a named rule for that
+    /// item.
+    pub dispatch_resolver: Option<Arc<dyn DispatchResolver>>,
 }
 
 pub trait CorrespondenceDatasetConfigurator: Send + Sync {
@@ -207,6 +212,14 @@ pub trait CorrespondenceDatasetConfigurator: Send + Sync {
         right_root: &ItemRef,
         data: &dyn DataAccess,
     ) -> BinocResult<Vec<Diagnostic>>;
+}
+
+pub trait DispatchResolver: Send + Sync {
+    fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>>;
+
+    fn forced_rule_for(&self, _item: &ItemRef) -> Option<String> {
+        None
+    }
 }
 
 /// Metadata-only declarative filter over an [`ItemRef`].

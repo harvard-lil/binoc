@@ -413,11 +413,86 @@ impl ParserMetadata {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatasetSemanticsV1 {
     #[serde(default)]
+    pub defaults: DatasetDefaults,
+    #[serde(default)]
+    pub paths: Vec<PathConfigEntry>,
+    #[serde(default)]
     pub files: FileIdentityConfig,
     #[serde(default)]
     pub tables: TableConfig,
     #[serde(default)]
     pub correspondence: CorrespondenceConfig,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatasetDefaults {
+    #[serde(default)]
+    pub row_identity: RowIdentity,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PathConfigEntry {
+    #[serde(default, rename = "match")]
+    pub match_: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_identity: Option<RowIdentity>,
+    #[serde(skip)]
+    pub unknown_fields: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for PathConfigEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawPathConfigEntry {
+            #[serde(default, rename = "match")]
+            match_: String,
+            #[serde(default)]
+            content_type: Option<String>,
+            #[serde(default)]
+            rule: Option<String>,
+            #[serde(default)]
+            row_identity: Option<RowIdentity>,
+            #[serde(default)]
+            columns: Vec<String>,
+            #[serde(default)]
+            on_null_key: Option<IdentityFailurePolicy>,
+            #[serde(default)]
+            on_duplicate_key: Option<IdentityFailurePolicy>,
+            #[serde(flatten)]
+            extra: BTreeMap<String, serde_json::Value>,
+        }
+
+        let raw = RawPathConfigEntry::deserialize(deserializer)?;
+        let mut row_identity = raw.row_identity;
+        if !raw.columns.is_empty() || raw.on_null_key.is_some() || raw.on_duplicate_key.is_some() {
+            let mut identity = row_identity.unwrap_or_default();
+            if identity.columns.is_empty() {
+                identity.columns = raw.columns;
+            }
+            if let Some(policy) = raw.on_null_key {
+                identity.on_null_key = policy;
+            }
+            if let Some(policy) = raw.on_duplicate_key {
+                identity.on_duplicate_key = policy;
+            }
+            row_identity = Some(identity);
+        }
+
+        Ok(Self {
+            match_: raw.match_,
+            content_type: raw.content_type,
+            rule: raw.rule,
+            row_identity,
+            unknown_fields: raw.extra.into_keys().collect(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -645,6 +645,7 @@ fn fuzzy_candidate_limit_surfaces_diagnostic() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
     assert!(changeset
@@ -677,6 +678,7 @@ fn unsafe_zip_entry_skip_surfaces_diagnostic() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
     assert!(changeset
@@ -720,6 +722,7 @@ fn low_archive_cap_triggers_overflow_diagnostic() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
     let overflow = changeset
@@ -781,6 +784,7 @@ fn raised_archive_cap_allows_expansion() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
     assert!(
@@ -827,6 +831,7 @@ fn keyed_row_exclusion_degrades_with_diagnostic() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
     assert!(changeset
@@ -974,6 +979,117 @@ fn keyed_row_degradation_honors_failure_policies() {
 }
 
 #[test]
+fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("records"), "id,value\n1,old\n2,same\n").unwrap();
+    fs::write(right.join("records"), "id,value\n2,same\n1,new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "defaults": {
+                "row_identity": { "columns": ["id"] }
+            },
+            "paths": [{
+                "match": "**/records",
+                "content_type": "text/csv"
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "records").expect("records");
+    assert_eq!(node.item_type, "tabular");
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| {
+                edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
+            }),
+        "{:?}",
+        node.details["edits"]
+    );
+}
+
+#[test]
+fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("forced"), "id,value\n1,old\n2,same\n").unwrap();
+    fs::write(right.join("forced"), "id,value\n2,same\n1,new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "forced",
+                "rule": "binoc.parse.csv",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "forced").expect("forced");
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| {
+                edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
+            }),
+        "{:?}",
+        node.details["edits"]
+    );
+}
+
+#[test]
+fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("notes.txt"), "old\n").unwrap();
+    fs::write(right.join("notes.txt"), "new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [
+                { "match": "notes.txt", "row_identity": { "columns": ["id"] } },
+                { "match": "empty" },
+                { "match": "notes.txt", "unknown_facet": true }
+            ]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    for code in [
+        "binoc.dataset_config.facet_kind_mismatch",
+        "binoc.dataset_config.path_entry_empty",
+        "binoc.dataset_config.unknown_facet",
+    ] {
+        assert!(
+            changeset.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == code && diagnostic.severity == DiagnosticSeverity::Error
+            }),
+            "missing diagnostic {code}: {:?}",
+            changeset.diagnostics
+        );
+    }
+}
+
+#[test]
 fn stacked_csv_decomposes_into_table_children() {
     let (_guard, left, right) = materialized_vector("csv-stacked-tables");
     let result = run_engine(&left, &right, &default_engine_config());
@@ -1079,6 +1195,7 @@ fn expand_rule_failure_degrades_one_node_and_continues() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
 
@@ -1126,6 +1243,7 @@ fn parse_rule_failure_degrades_one_node_and_continues() {
         row_identity_policies: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
+        dispatch_resolver: None,
     };
     let changeset = diff_with_config(&left, &right, config);
 
