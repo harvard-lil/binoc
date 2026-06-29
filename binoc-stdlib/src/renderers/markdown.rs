@@ -873,11 +873,19 @@ fn specialized_detail_verb(verb: &str) -> bool {
     )
 }
 
+/// True when the node summary already states this edit, so a generic detail
+/// bullet would only repeat it (and, for structural edits, dump raw params).
+/// Each arm pairs the edit verb with the tag that proves the summary covers it.
 fn summary_covered_generic_verb(node: &DiffNode, edit: &serde_json::Value) -> bool {
     let Some(verb) = edit.get("verb").and_then(|value| value.as_str()) else {
         return false;
     };
-    matches!(verb, "tabular.rename_column") && node.tags.contains("binoc.column-rename")
+    match verb {
+        "tabular.rename_column" => node.tags.contains("binoc.column-rename"),
+        "tabular.reorder_columns" => node.tags.contains("binoc.column-reorder"),
+        "document.serialization_change" => node.tags.contains("binoc.serialization-change"),
+        _ => false,
+    }
 }
 
 fn humanize_edit_verb(verb: &str) -> String {
