@@ -553,11 +553,8 @@ impl ExpandRule for GzipExpand {
         let mut child = data.register_local(&physical, &logical)?;
         child.content_hash = stats.hash;
         child.size = Some(stats.bytes_written);
-        child.projection_hint = projection_for(
-            &logical,
-            child.is_dir,
-            Some(stats.prefix.as_slice()),
-        );
+        child.projection_hint =
+            projection_for(&logical, child.is_dir, Some(stats.prefix.as_slice()));
         if child
             .projection_hint
             .tags

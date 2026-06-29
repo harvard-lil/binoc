@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Annotation, ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult,
-    GlobalClaim,
-    IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment, Summary,
+    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment,
+    Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
