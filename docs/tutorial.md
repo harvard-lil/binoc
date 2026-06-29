@@ -53,7 +53,6 @@ binoc diff ./test-vectors-materialized/trivial-identical/snapshot-a ./test-vecto
 ```output
 # Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a → ./test-vectors-materialized/trivial-identical/snapshot-b
 
-No changes detected.
 
 ```
 
@@ -90,7 +89,9 @@ binoc diff ./test-vectors-materialized/single-file-modify-text/snapshot-a ./test
 ```output
 # Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a → ./test-vectors-materialized/single-file-modify-text/snapshot-b
 
-- **story.txt**: 2 lines added, 1 removed
+- **story.txt**: 2 lines added; 1 line removed
+  - Line changes
+    - line 2: 'Line 2' -> 'Line 2 revised'
 
 ```
 
@@ -127,7 +128,7 @@ binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vect
 ```output
 # Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
-- **data.csv**: Columns reordered (content unchanged)
+- **data.csv**: Columns reordered
 
 ```
 
@@ -145,7 +146,10 @@ binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vecto
 ```output
 # Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a → ./test-vectors-materialized/csv-mixed-changes/snapshot-b
 
-- **data.csv**: Column added: 'email'; columns reordered; 1 row added
+- **data.csv**: Column added: 'email'; Columns reordered; 1 row added
+  - Rows added
+    - row 3: 'SF', 'Charlie', '35'
+  - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["a@test.com","b@test.com","c@test.com"]}
 
 ```
 
@@ -163,8 +167,10 @@ binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-mate
 ```output
 # Changelog: ./test-vectors-materialized/zip-simple/snapshot-a → ./test-vectors-materialized/zip-simple/snapshot-b
 
-- **archive.zip/data.txt**: 1 line added, 1 removed
-- **archive.zip/extra.txt**: New file (1 line)
+- **archive.zip/>data.txt**: 1 line added; 1 line removed
+  - Line changes
+    - line 1: 'hello from zip A' -> 'hello from zip B'
+- **archive.zip/>extra.txt**: Added
 
 ```
 
@@ -184,11 +190,11 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 ```output
 # Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
 
-- **sequences.fasta**: Content changed (92 bytes → 102 bytes)
-
-## Suggestions
-
-- Compared as binary; a plugin may provide a more semantic diff. (`sequences.fasta`) [binoc.binary-fallback]
+- **sequences.fasta**: Binary content changed; 1 extracted string added, 1 extracted string removed
+  - Extracted strings added
+    - '>gene_1 source=NCBI retrieved=2024-06\nATCGATCGATCG\n>gene_2 source=NCBI retrieved=2024-06\nGCTAGCTAGCTA\n'
+  - Extracted strings removed
+    - '>gene_1 src=GenBank date=2024-01\nATCGATCGATCG\n>gene_2 src=GenBank date=2024-01\nGCTAGCTAGCTA\n'
 
 ```
 
