@@ -173,10 +173,12 @@ docs-browser-demo:
     fi
     ls -lh "${OUTPUT}"
 
-# Regenerate docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+# Regenerate the plugin registry and third-party plugin catalog from their
+# root-level JSON sources.
 docs-plugin-catalog:
     #!/usr/bin/env bash
     set -euo pipefail
+    uv run --quiet --script scripts/build_plugin_registry_page.py
     uv run --quiet --script scripts/build_third_party_plugins_page.py
 
 # Regenerate docs/users/reference/changeset-schema.{json,md} from the binoc-sdk IR

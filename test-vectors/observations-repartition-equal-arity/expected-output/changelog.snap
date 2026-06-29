@@ -5,6 +5,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **observations_2024.csv**: Moved from observations_north.csv
   - Changed cells
     - row 2, column 'year': '2025' -> '2024'

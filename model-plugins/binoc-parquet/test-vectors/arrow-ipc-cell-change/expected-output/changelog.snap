@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **data.arrow**: 1 cell changed
   - Changed cells
     - row 2, column 'price': 14.5 -> 19.75

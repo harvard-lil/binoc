@@ -95,7 +95,7 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
             changeset.from_snapshot, changeset.to_snapshot
         ));
         out.push_str(
-            "Need plugin background? See the [plugin registry](/users/reference/plugin-registry/).\n\n",
+            "Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).\n\n",
         );
 
         format_claims_section(&mut out, changeset);

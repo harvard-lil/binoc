@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
 - **meeting-notes-v2.txt**: Moved from notes.txt
   - Line changes (showing 3 of 4)
     - line 10: '' -> '- Marketing strategy update'
