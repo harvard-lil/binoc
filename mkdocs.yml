@@ -119,6 +119,7 @@ nav:
           - Diff two snapshots: users/howto/diff-two-snapshots.md
           - Save and render changesets: users/howto/save-and-render-changesets.md
           - Extract changed data: users/howto/extract-changed-data.md
+          - Diff SEC monthly notes bundles: users/howto/diff-sec-monthly-notes.md
           - Install and use plugins: users/howto/install-and-use-plugins.md
       - Reference:
           - users/reference/index.md

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,8 +8,8 @@ use binoc_sdk::{
     ArtifactDecodeCache, ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule,
     CorrespondenceEngineConfig, DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule,
     ExtractResult, GlobalClaim, IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef,
-    NodeId, ParseGroup, ParseOutput, ParseRule, ProjectionAnnotator, ShapeFilter, Side, Summary,
-    TreeSide, WriterDescriptor,
+    NodeId, ParseGroup, ParseOutput, ParseRule, ProjectionAnnotator, RowIdentityPolicies,
+    ShapeFilter, Side, Summary, TreeSide, WriterDescriptor,
 };
 use rayon::prelude::*;
 
@@ -917,19 +918,41 @@ fn link_ctx<'a>(
     config: &'a CorrespondenceEngineConfig,
     artifact_cache: &'a ArtifactDecodeCache,
 ) -> LinkCtx<'a> {
+    let (row_keys, row_identity_policies) = config
+        .row_keys
+        .get(right_path)
+        .map(|keys| {
+            (
+                Cow::Borrowed(keys.as_slice()),
+                config
+                    .row_identity_policies
+                    .get(right_path)
+                    .copied()
+                    .unwrap_or_default(),
+            )
+        })
+        .or_else(|| {
+            config
+                .dispatch_resolver
+                .as_ref()
+                .and_then(|resolver| resolver.row_identity_for(right_path))
+                .filter(|identity| !identity.columns.is_empty())
+                .map(|identity| {
+                    (
+                        Cow::Owned(identity.columns),
+                        RowIdentityPolicies {
+                            on_null_key: identity.on_null_key,
+                            on_duplicate_key: identity.on_duplicate_key,
+                        },
+                    )
+                })
+        })
+        .unwrap_or_else(|| (Cow::Borrowed(&[]), RowIdentityPolicies::default()));
     LinkCtx {
         view,
         link,
-        row_keys: config
-            .row_keys
-            .get(right_path)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]),
-        row_identity_policies: config
-            .row_identity_policies
-            .get(right_path)
-            .copied()
-            .unwrap_or_default(),
+        row_keys,
+        row_identity_policies,
         artifact_cache,
     }
 }

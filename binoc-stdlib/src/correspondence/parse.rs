@@ -27,6 +27,8 @@ pub struct TomlParse;
 /// Transcodes INI / cfg / properties files into a `structured_document`.
 pub struct IniParse;
 
+pub(crate) const LARGE_TABULAR_THRESHOLD_BYTES: u64 = 32 * 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonSourceFacts {
     pub byte_len: usize,
@@ -60,6 +62,9 @@ impl ParseRule for CsvParse {
     }
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        if item.resolve_size(data)? > LARGE_TABULAR_THRESHOLD_BYTES {
+            return Ok(ParseOutput::default());
+        }
         let bytes = data.read_bytes(item)?;
         let records = parse_csv_records(&bytes, delimiter_for(item))?;
         let tabular =

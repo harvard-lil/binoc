@@ -11,7 +11,9 @@ use binoc_sdk::{
     ParseDescriptor, ParseOutput, ParseRule, ProjectionHint, ShapeFilter, Side, Source,
     TabularData, TreeSide, WriteOutput, WriterDescriptor,
 };
-use binoc_stdlib::correspondence::{default_engine_config, expand, pair, parse, writers};
+use binoc_stdlib::correspondence::{
+    default_engine_config, engine_config_for_dataset_config, expand, pair, parse, writers,
+};
 use binoc_stdlib::test_vectors::{
     check_changeset_invariants, materialize_snapshots, stdlib_materializers, VectorMaterializer,
 };
@@ -1165,6 +1167,72 @@ fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
         "{:?}",
         node.details["edits"]
     );
+}
+
+#[test]
+fn large_configured_tsv_uses_streaming_keyed_summary_without_tabular_artifact() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    write_large_tsv(&left.join("data.tsv"), 0, 40_000, Some((20_000, "before")));
+    write_large_tsv(&right.join("data.tsv"), 1, 40_001, Some((20_000, "after")));
+
+    let dataset = serde_json::json!({
+        "paths": [{
+            "match": "data.tsv",
+            "content_type": "text/tab-separated-values",
+            "row_identity": { "columns": ["id"] }
+        }]
+    });
+    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
+    let left_root = data.register_local(&left, "").expect("left root");
+    let right_root = data.register_local(&right, "").expect("right root");
+    let mut config = engine_config_for_dataset_config(&dataset);
+    let configurator = config.dataset_configurator.clone().expect("configurator");
+    configurator
+        .configure(&mut config, &dataset, &left_root, &right_root, &data)
+        .expect("configure dataset");
+
+    let run =
+        correspondence::driver::run(&config, left_root, right_root, &data).expect("engine run");
+    assert_eq!(run.stats.fires_of("binoc.parse.csv"), 0);
+    assert_eq!(run.stats.fires_of("binoc.parse.csv_media"), 0);
+
+    let changeset = run.project().to_changeset("snapshot-a", "snapshot-b");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.tsv").expect("data.tsv");
+    let edits = node.details["edits"].as_array().expect("edits");
+    let stream = edits
+        .iter()
+        .find(|edit| edit["verb"] == "tabular.keyed_stream_summary")
+        .expect("stream summary edit");
+    assert_eq!(stream["params"]["row_additions"], 1);
+    assert_eq!(stream["params"]["row_removals"], 1);
+    assert_eq!(stream["params"]["modified_rows"], 1);
+    assert_eq!(
+        node.summary.as_ref().expect("summary").plain_text(),
+        "1 row added; 1 row removed; 1 row modified by key"
+    );
+}
+
+fn write_large_tsv(
+    path: &std::path::Path,
+    start: u32,
+    end: u32,
+    override_row: Option<(u32, &str)>,
+) {
+    let mut file = std::io::BufWriter::new(fs::File::create(path).expect("create tsv"));
+    writeln!(file, "id\tvalue").expect("header");
+    let filler = "x".repeat(900);
+    for id in start..end {
+        let value = override_row
+            .filter(|(override_id, _)| *override_id == id)
+            .map(|(_, value)| value)
+            .unwrap_or("same");
+        writeln!(file, "{id}\t{value}-{filler}").expect("row");
+    }
 }
 
 #[test]

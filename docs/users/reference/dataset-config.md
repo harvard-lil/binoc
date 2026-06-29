@@ -196,6 +196,26 @@ Omit a key to keep its default. Raise a cap only as high as your real data
 requires; the bound is what protects you from a maliciously crafted archive
 that expands to far more than its compressed size.
 
+### `dataset.paths`
+
+`paths` is the preferred per-path shape when one logical path needs dispatch
+semantics and table semantics together. Entries are checked in order, first
+match wins, and `match` is a glob:
+
+```yaml
+dataset:
+  paths:
+    - match: "**/num.tsv"
+      content_type: text/tab-separated-values
+      row_identity:
+        columns: ["adsh", "tag", "version", "ddate", "qtrs", "uom", "dimh", "iprx"]
+```
+
+Use `content_type` to pin media-type dispatch before parse rules run. Use
+`row_identity` to declare table keys for the same matched path. Archive
+decompose boundaries match like path boundaries for globs, so `**/num.tsv`
+matches both `exports/num.tsv` and `bundle.zip/>num.tsv`.
+
 ### `dataset.tables`
 
 Tabular row identity is optional. Without it, `binoc.tabular_analyzer` keeps
