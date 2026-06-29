@@ -17,6 +17,7 @@ expression: "&md"
   - Moved from data/orders.csv
   - 6 cells changed
   - Changed cells (showing 3 of 6)
+    - changed cells by column: id 2, customer_id 2, total 2
     - row 1, column 'id': '100' -> 100
     - row 1, column 'customer_id': '1' -> 1
     - row 1, column 'total': '42' -> 42

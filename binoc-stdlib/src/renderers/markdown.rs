@@ -1131,19 +1131,114 @@ fn render_tabular_cell_details(
     ) {
         return;
     }
-    for edit in cells.into_iter().take(shown) {
-        let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
-        let example = DetailExample {
-            locator: edit_locator(params, &["key", "row", "column"]),
-            before: params.get("from").map(value_preview_from_json),
-            after: params.get("to").map(value_preview_from_json),
-            fields: BTreeMap::new(),
-        };
-        let line = format_tabular_cell_example(&example, config);
-        if !detail_budget.push_line(out, format!("    - {line}\n")) {
+    if config.verbosity == Verbosity::Full || shown >= cells.len() {
+        for edit in cells.into_iter().take(shown) {
+            if !push_tabular_cell_example(out, edit, config, detail_budget) {
+                return;
+            }
+        }
+        return;
+    }
+    let grouped_cells = grouped_tabular_cell_edits(&cells);
+    let shown_columns = example_count(grouped_cells.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!(
+            "    - changed cells by column: {}\n",
+            summarize_tabular_cell_columns(&grouped_cells, shown_columns, config)
+        ),
+    ) {
+        return;
+    }
+    for edit in round_robin_tabular_cell_edits(&grouped_cells, shown) {
+        if !push_tabular_cell_example(out, edit, config, detail_budget) {
             return;
         }
     }
+}
+
+fn push_tabular_cell_example(
+    out: &mut String,
+    edit: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+    let example = DetailExample {
+        locator: edit_locator(params, &["key", "row", "column"]),
+        before: params.get("from").map(value_preview_from_json),
+        after: params.get("to").map(value_preview_from_json),
+        fields: BTreeMap::new(),
+    };
+    let line = format_tabular_cell_example(&example, config);
+    detail_budget.push_line(out, format!("    - {line}\n"))
+}
+
+fn grouped_tabular_cell_edits<'a>(
+    edits: &[&'a serde_json::Value],
+) -> Vec<(String, Vec<&'a serde_json::Value>)> {
+    let mut groups: Vec<(String, Vec<&'a serde_json::Value>)> = Vec::new();
+    for edit in edits {
+        let column = edit
+            .get("params")
+            .and_then(|params| params.get("column"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string();
+        if let Some((_, group_edits)) = groups
+            .iter_mut()
+            .find(|(group_column, _)| group_column == &column)
+        {
+            group_edits.push(*edit);
+        } else {
+            groups.push((column, vec![*edit]));
+        }
+    }
+    groups
+}
+
+fn summarize_tabular_cell_columns(
+    grouped_cells: &[(String, Vec<&serde_json::Value>)],
+    shown_columns: usize,
+    config: &MarkdownRendererConfig,
+) -> String {
+    let mut parts = grouped_cells
+        .iter()
+        .take(shown_columns)
+        .map(|(column, edits)| {
+            let (column, _) = truncate_text(column, config.max_value_chars);
+            format!("{column} {}", edits.len())
+        })
+        .collect::<Vec<_>>();
+    if shown_columns < grouped_cells.len() {
+        parts.push("...".into());
+    }
+    parts.join(", ")
+}
+
+fn round_robin_tabular_cell_edits<'a>(
+    grouped_cells: &'a [(String, Vec<&'a serde_json::Value>)],
+    shown: usize,
+) -> Vec<&'a serde_json::Value> {
+    let mut out = Vec::with_capacity(shown);
+    let mut indices = vec![0usize; grouped_cells.len()];
+    while out.len() < shown {
+        let mut progressed = false;
+        for (group_index, (_, edits)) in grouped_cells.iter().enumerate() {
+            if out.len() >= shown {
+                break;
+            }
+            if let Some(edit) = edits.get(indices[group_index]) {
+                out.push(*edit);
+                indices[group_index] += 1;
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    out
 }
 
 fn render_tabular_row_details(
@@ -2091,6 +2186,7 @@ mod tests {
         assert!(md.contains("row 1, column 'score': '10' -> '12'"));
         assert!(md.contains("row 2, column 'score': '20' -> '22'"));
         assert!(!md.contains("row 3, column 'score': '30' -> '32'"));
+        assert!(!md.contains("changed cells by column"));
     }
 
     #[test]
@@ -2115,13 +2211,42 @@ mod tests {
 
     #[test]
     fn full_verbosity_renders_all_captured_examples() {
+        let mut block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(4)
+            .with_extract_hint(ExtractHint::new("cells_changed").with_label("All changed cells"));
+
+        for (row, column, before, after) in [
+            (0, "score", "10", "12"),
+            (1, "score", "20", "22"),
+            (2, "date", "2025-06-01", "2025-06-02"),
+            (3, "status", "open", "closed"),
+        ] {
+            let mut example = DetailExample::new();
+            example.locator.insert("row".into(), serde_json::json!(row));
+            example
+                .locator
+                .insert("column".into(), serde_json::json!(column));
+            example.before = Some(ValuePreview {
+                value: serde_json::json!(before),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            example.after = Some(ValuePreview {
+                value: serde_json::json!(after),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            block.examples.push(example);
+        }
+
         let changeset = Changeset::new(
             "v1",
             "v2",
             Some(
                 DiffNode::new("modify", "tabular", "data.csv")
                     .with_summary("4 cells changed")
-                    .with_detail_block(sample_detail_block(4)),
+                    .with_detail_block(block),
             ),
         );
         let config = MarkdownRendererConfig {
@@ -2130,8 +2255,87 @@ mod tests {
             ..Default::default()
         };
         let md = render_markdown(&[changeset], &config);
-        assert!(md.contains("row 4, column 'score': '40' -> '42'"));
+        assert!(md.contains("row 1, column 'score': '10' -> '12'"));
+        assert!(md.contains("row 3, column 'date': '2025-06-01' -> '2025-06-02'"));
+        assert!(md.contains("row 4, column 'status': 'open' -> 'closed'"));
         assert!(!md.contains("showing 1 of 4"));
+        assert!(!md.contains("changed cells by column"));
+    }
+
+    #[test]
+    fn examples_verbosity_round_robins_cell_examples_across_columns() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("6 cells changed");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {"verb": "tabular.edit_cell", "params": {"row": 0, "column": "score", "from": "10", "to": "12"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 1, "column": "score", "from": "20", "to": "22"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 2, "column": "score", "from": "30", "to": "32"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 3, "column": "date", "from": "2025-06-01", "to": "2025-06-02"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 4, "column": "date", "from": "2025-06-03", "to": "2025-06-04"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 5, "column": "status", "from": "open", "to": "closed"}}
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "v1",
+                "v2",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                max_examples_per_block: 3,
+                ..Default::default()
+            },
+        );
+
+        assert!(md.contains("changed cells by column: score 3, date 2, status 1"));
+        let score_pos = md.find("row 1, column 'score': '10' -> '12'").unwrap();
+        let date_pos = md
+            .find("row 4, column 'date': '2025-06-01' -> '2025-06-02'")
+            .unwrap();
+        let status_pos = md
+            .find("row 6, column 'status': 'open' -> 'closed'")
+            .unwrap();
+        assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
+        assert!(!md.contains("row 2, column 'score': '20' -> '22'"));
+    }
+
+    #[test]
+    fn examples_verbosity_without_truncation_keeps_linear_cell_examples() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("3 cells changed");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {"verb": "tabular.edit_cell", "params": {"row": 0, "column": "score", "from": "10", "to": "12"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 1, "column": "date", "from": "2025-06-01", "to": "2025-06-02"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 2, "column": "status", "from": "open", "to": "closed"}}
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "v1",
+                "v2",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                max_examples_per_block: 3,
+                ..Default::default()
+            },
+        );
+
+        assert!(!md.contains("changed cells by column"));
+        let score_pos = md.find("row 1, column 'score': '10' -> '12'").unwrap();
+        let date_pos = md
+            .find("row 2, column 'date': '2025-06-01' -> '2025-06-02'")
+            .unwrap();
+        let status_pos = md
+            .find("row 3, column 'status': 'open' -> 'closed'")
+            .unwrap();
+        assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
     }
 
     #[test]
