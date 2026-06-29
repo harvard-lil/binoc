@@ -1,9 +1,11 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
 - **people.json**: 1 cell changed
   - Changed cells
+    - changed cells by column: meta 1
     - row 2, column 'meta': {"role":"user","tags":["z"]} -> {"role":"editor","tags":["z"]}

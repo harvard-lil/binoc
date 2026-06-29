@@ -1124,7 +1124,6 @@ fn render_tabular_cell_details(
     if cells.is_empty() {
         return;
     }
-    let grouped_cells = grouped_tabular_cell_edits(&cells);
     let shown = example_count(cells.len(), config);
     if !detail_budget.push_line(
         out,
@@ -1132,6 +1131,15 @@ fn render_tabular_cell_details(
     ) {
         return;
     }
+    if config.verbosity == Verbosity::Full {
+        for edit in cells.into_iter().take(shown) {
+            if !push_tabular_cell_example(out, edit, config, detail_budget) {
+                return;
+            }
+        }
+        return;
+    }
+    let grouped_cells = grouped_tabular_cell_edits(&cells);
     let shown_columns = example_count(grouped_cells.len(), config);
     if !detail_budget.push_line(
         out,
@@ -1143,18 +1151,27 @@ fn render_tabular_cell_details(
         return;
     }
     for edit in round_robin_tabular_cell_edits(&grouped_cells, shown) {
-        let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
-        let example = DetailExample {
-            locator: edit_locator(params, &["key", "row", "column"]),
-            before: params.get("from").map(value_preview_from_json),
-            after: params.get("to").map(value_preview_from_json),
-            fields: BTreeMap::new(),
-        };
-        let line = format_tabular_cell_example(&example, config);
-        if !detail_budget.push_line(out, format!("    - {line}\n")) {
+        if !push_tabular_cell_example(out, edit, config, detail_budget) {
             return;
         }
     }
+}
+
+fn push_tabular_cell_example(
+    out: &mut String,
+    edit: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+    let example = DetailExample {
+        locator: edit_locator(params, &["key", "row", "column"]),
+        before: params.get("from").map(value_preview_from_json),
+        after: params.get("to").map(value_preview_from_json),
+        fields: BTreeMap::new(),
+    };
+    let line = format_tabular_cell_example(&example, config);
+    detail_budget.push_line(out, format!("    - {line}\n"))
 }
 
 fn grouped_tabular_cell_edits<'a>(
@@ -2193,13 +2210,42 @@ mod tests {
 
     #[test]
     fn full_verbosity_renders_all_captured_examples() {
+        let mut block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(4)
+            .with_extract_hint(ExtractHint::new("cells_changed").with_label("All changed cells"));
+
+        for (row, column, before, after) in [
+            (0, "score", "10", "12"),
+            (1, "score", "20", "22"),
+            (2, "date", "2025-06-01", "2025-06-02"),
+            (3, "status", "open", "closed"),
+        ] {
+            let mut example = DetailExample::new();
+            example.locator.insert("row".into(), serde_json::json!(row));
+            example
+                .locator
+                .insert("column".into(), serde_json::json!(column));
+            example.before = Some(ValuePreview {
+                value: serde_json::json!(before),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            example.after = Some(ValuePreview {
+                value: serde_json::json!(after),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            block.examples.push(example);
+        }
+
         let changeset = Changeset::new(
             "v1",
             "v2",
             Some(
                 DiffNode::new("modify", "tabular", "data.csv")
                     .with_summary("4 cells changed")
-                    .with_detail_block(sample_detail_block(4)),
+                    .with_detail_block(block),
             ),
         );
         let config = MarkdownRendererConfig {
@@ -2208,8 +2254,11 @@ mod tests {
             ..Default::default()
         };
         let md = render_markdown(&[changeset], &config);
-        assert!(md.contains("row 4, column 'score': '40' -> '42'"));
+        assert!(md.contains("row 1, column 'score': '10' -> '12'"));
+        assert!(md.contains("row 3, column 'date': '2025-06-01' -> '2025-06-02'"));
+        assert!(md.contains("row 4, column 'status': 'open' -> 'closed'"));
         assert!(!md.contains("showing 1 of 4"));
+        assert!(!md.contains("changed cells by column"));
     }
 
     #[test]

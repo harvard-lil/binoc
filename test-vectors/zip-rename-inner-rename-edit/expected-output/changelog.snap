@@ -1,5 +1,6 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
@@ -9,4 +10,5 @@ expression: "&md"
   - Moved from data.zip/>old.csv
   - 1 cell changed
   - Changed cells
+    - changed cells by column: score 1
     - row 5, column 'score': '60' -> '61'

@@ -1,11 +1,13 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: 14 cells changed
   - Changed cells (showing 3 of 14)
+    - changed cells by column: id 4, name 5, score 5
     - row 1, column 'id': 'a' -> 'b'
     - row 1, column 'name': 'Alice' -> 'Bob'
     - row 1, column 'score': '10' -> '21'
