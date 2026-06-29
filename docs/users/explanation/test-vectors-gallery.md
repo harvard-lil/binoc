@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **62 shared examples** in this gallery.
+Binoc currently ships **63 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -46,6 +46,7 @@ just materialize
 | [`csv-stacked-tables`](#csv-stacked-tables) | Detects two logical tables stacked in one messy CSV | data.csv/>table_2: 1 row added | Default pipeline |
 | [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: | Default pipeline |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
+| [`csv-vintage-benchmark`](#csv-vintage-benchmark) | A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore. | facilities.csv: Column added: 'region'; 1 cell changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/records.csv: 1 row added | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data.tar.gz/>records.csv: 1 cell changed | Default pipeline |
@@ -233,7 +234,6 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **data.csv**: Columns reordered
-  - Reorder Columns: order: ["city","name","age"]
 ```
 
 ## csv-distribution-shift
@@ -380,7 +380,6 @@ Result:
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
     - row 2: 'LA', 'Bob', '25'
-  - Reorder Columns: order: ["city","name","age"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["alice@example.test","bob@example.test","charlie@example.test"]}
 ```
 
@@ -405,7 +404,6 @@ Result:
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
     - row 3: 'SF', 'Charlie', '35'
-  - Reorder Columns: order: ["city","name","age"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["a@test.com","b@test.com","c@test.com"]}
 ```
 
@@ -569,6 +567,102 @@ Result:
     - row 3, column 'score': '30' -> '31'
     - row 4, column 'score': '40' -> '41'
     - row 5, column 'score': '50' -> '51'
+```
+
+## csv-vintage-benchmark
+
+A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore.
+
+- **Browse source:** [csv-vintage-benchmark](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-vintage-benchmark)
+- **Tags:** `csv`, `vintage`, `metadata`, `benchmark`
+- **Snapshots:** `snapshot-a` has 2 files — `facilities.csv`, `inspections.csv`; `snapshot-b` has 2 files — `facilities.csv`, `inspections.csv`
+- **Setup:** The dataset is a yearly facilities register published as a small directory of
+CSVs. Between the two editions:
+
+  * `facilities.csv` gains a `region` column (schema change) and one row's
+    `status` moves to a brand-new category value, `decommissioned`
+    (a *vocabulary* shift — the set of distinct values in a categorical column
+    grew).
+  * `inspections.csv` changes only in its data: several scores are edited and
+    two rows are appended. This is exactly the churn a vintage reader does not
+    want to read.
+
+The markdown config models the vintage stance as significance: schema/structural
+tags are the high-priority group, bulk cell/row tags the low-priority group.
+Because `classify_tags` promotes a node to the highest-priority group among its
+tags, `facilities.csv` (which carries both schema and cell tags) floats up to
+"Schema & vocabulary changes" while the pure-data `inspections.csv` sinks to
+"Bulk data updates". That file-granularity separation is the best vintage view
+binoc offers today.
+
+WHAT THIS BENCHMARK IS FOR — the gap between today's output (see
+`expected-output/changelog.snap`) and the target (see `VINTAGE-IDEAL.md`):
+
+  1. Within-node significance. `facilities.csv`'s `region` addition and its
+     `status` cell edit live on one node, so they cannot be separated: the
+     vintage reader still sees the cell bullet. There is no config-driven
+     edit-level drop/keep (only `EditProjection.visible`, set by writers).
+  2. Vocabulary as a first-class change. The `active -> decommissioned` shift is
+     reported as an ordinary `binoc.cell-change`, not as "the `status` vocabulary
+     gained a value". Columns are not first-class nodes and distinct-value-set
+     diffing does not exist.
+  3. Summary statistics. `inspections.csv` is rendered as full cell/row detail,
+     not as a one-line vintage statistic ("142 -> 144 rows, 3 cells changed").
+     The Summary/GlobalClaim seams exist to carry such a fact; no rule emits one.
+
+This vector is a kept benchmark, not a feature. It is expected to PASS against
+current output; as the vintage story improves, update the snapshot and watch it
+converge on VINTAGE-IDEAL.md. See docs/adr for the design rationale.
+Save this dataset config as `/tmp/csv-vintage-benchmark.yaml`:
+
+```yaml
+output:
+  markdown:
+    groups:
+      - heading: Schema & vocabulary changes
+        tags:
+          - binoc.schema-change
+          - binoc.column-addition
+          - binoc.column-removal
+          - binoc.column-rename
+          - binoc.metadata.value-label-set
+      - heading: Bulk data updates
+        tags:
+          - binoc.cell-change
+          - binoc.row-addition
+          - binoc.row-removal
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-vintage-benchmark/snapshot-a \
+  ./test-vectors-materialized/csv-vintage-benchmark/snapshot-b \
+  --config /tmp/csv-vintage-benchmark.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a → snapshot-b
+
+## Schema & vocabulary changes
+
+- **facilities.csv**: Column added: 'region'; 1 cell changed
+  - Changed cells
+    - row 2, column 'status': 'active' -> 'decommissioned'
+  - Set Headers: from: ["facility_id","name","status"]; to: ["facility_id","name","status","region"]
+  - Add Column: name: 'region'; values: {"total_values":4,"truncated":false,"values":["north","east","west","south"]}
+
+## Bulk data updates
+
+- **inspections.csv**: 2 rows added; 3 cells changed
+  - Changed cells
+    - row 1, column 'score': '82' -> '85'
+    - row 3, column 'score': '90' -> '91'
+    - row 4, column 'score': '68' -> '70'
+  - Rows added
+    - row 5: 'I104', 'F001', '88'
+    - row 6: 'I105', 'F002', '73'
 ```
 
 ## directory-file-copy
@@ -965,7 +1059,6 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **metadata.json**: Document serialization changed
-  - Serialization Change: kinds: ["object_key_order","formatting"]; left: {"byte_len":70,"line_ending":"lf","object_key_orders":[{"keys":["id","name"],"path":"$.fields"},{"keys":["name","version","fields"],"path":"$"}],"trailing_newli...; right: {"byte_len":98,"indentation":"2 spaces","line_ending":"lf","object_key_orders":[{"keys":["name","id"],"path":"$.fields"},{"keys":["fields","version","name"],"pa...
 ```
 
 ## json-records-cell-change
@@ -1101,7 +1194,6 @@ Result:
     - '\nFAKEICONv1'
 - **license-copy.txt**: Copied from license.txt
 - **metrics.csv**: Columns reordered
-  - Reorder Columns: order: ["category","year","value"]
 - **summary.txt**: Moved from report.txt
 ```
 
@@ -1623,7 +1715,6 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **archive.zip/>metadata.json**: Document serialization changed
-  - Serialization Change: kinds: ["object_key_order","formatting"]; left: {"byte_len":82,"line_ending":"lf","object_key_orders":[{"keys":["id","name"],"path":"$.schema"},{"keys":["dataset","issued","schema"],"path":"$"}],"trailing_new...; right: {"byte_len":110,"indentation":"2 spaces","line_ending":"lf","object_key_orders":[{"keys":["name","id"],"path":"$.schema"},{"keys":["schema","issued","dataset"],...
 ```
 
 ## zip-nested

@@ -129,7 +129,6 @@ binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vect
 # Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
 - **data.csv**: Columns reordered
-  - Reorder Columns: order: ["city","name","age"]
 
 ```
 
@@ -150,7 +149,6 @@ binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vecto
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
     - row 3: 'SF', 'Charlie', '35'
-  - Reorder Columns: order: ["city","name","age"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["a@test.com","b@test.com","c@test.com"]}
 
 ```

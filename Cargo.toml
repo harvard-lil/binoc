@@ -44,7 +44,7 @@ debug = "line-tables-only"
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/harvard-lil/binoc"
 homepage = "https://github.com/harvard-lil/binoc"

@@ -7,5 +7,4 @@ expression: "&md"
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
     - row 3: 'SF', 'Charlie', '35'
-  - Reorder Columns: order: ["city","name","age"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["a@test.com","b@test.com","c@test.com"]}

@@ -6,7 +6,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
-| 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deferred) |
+| 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deliberately deferred) |
 | 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers in CFM-80; rendering + significance in CFM-82) |
 | 2026-06-15 | [The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First](2026-06-15-engine_overhaul_retrospective.md) | Retrospective |
 | 2026-06-15 | [Partition Identities: a JIT, Format-Owned Capability for N↔M Correspondence (CFM-72)](2026-06-15-partition_identities_jit_format_capability.md) | Implemented |
@@ -42,7 +42,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | 2026-04-16 | [Test vector materialization: plugin trait, not a runtime plugin point](2026-04-16-test_vector_materialization.md) | Implemented |
 | 2026-04-16 | [Opportunistic ItemRef Metadata, Transformer-Hydrated for Correlation](2026-04-16-opportunistic_itemref_metadata.md) | Implemented |
 | 2026-04-10 | [Security posture and how to audit Binoc (core and plugins)](2026-04-10-security_posture_and_auditing.md) | Accepted |
-| 2026-04-10 | [Rust MSRV and dependency update policy](2026-04-10-rust_msrv_and_dependency_update_policy.md) | Implemented |
+| 2026-04-10 | [Rust MSRV and dependency update policy](2026-04-10-rust_msrv_and_dependency_update_policy.md) | Implemented (MSRV raised to 1.95 on 2026-06-29 — see Addendum) |
 | 2026-04-10 | [Independent release tags and published version policy](2026-04-10-independent_release_tags_and_published_version_policy.md) | Implemented |
 | 2026-04-08 | [Release Surface And Automated Publishing](2026-04-08-release_surface_and_automated_publishing.md) | Implemented |
 | 2026-03-20 | [Transformer Dispatch Refinement](2026-03-20-transformer_dispatch_refinement.md) | Implemented |

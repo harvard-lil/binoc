@@ -1,7 +1,18 @@
 # Rust MSRV and dependency update policy
 
 **Date:** 2026-04-10
-**Status:** Implemented
+**Status:** Implemented (MSRV raised to 1.95 on 2026-06-29 — see Addendum)
+
+## Addendum (2026-06-29): MSRV raised to 1.95
+
+The workspace MSRV is now `1.95` (was `1.88`). This is the intentional,
+called-out bump the policy below requires: the `rusqlite` 0.39 → 0.40 update
+pulls `libsqlite3-sys` 0.38, whose build script uses `cfg_select!`, stabilized
+in Rust 1.95. Rather than pin `rusqlite` back to hold the 1.88 floor, we accept
+the bump — the project is pre-1.0 and moving quickly, and contributors and CI
+already run ≥1.95. `rust-version` in the workspace manifest and the MSRV CI job
+(`.github/workflows/ci.yml`) move together to `1.95.0`. The original 1.88
+decision and its rationale are preserved below.
 
 ## Context
 

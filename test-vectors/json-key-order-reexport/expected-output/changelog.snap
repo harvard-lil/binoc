@@ -5,4 +5,3 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **metadata.json**: Document serialization changed
-  - Serialization Change: kinds: ["object_key_order","formatting"]; left: {"byte_len":70,"line_ending":"lf","object_key_orders":[{"keys":["id","name"],"path":"$.fields"},{"keys":["name","version","fields"],"path":"$"}],"trailing_newli...; right: {"byte_len":98,"indentation":"2 spaces","line_ending":"lf","object_key_orders":[{"keys":["name","id"],"path":"$.fields"},{"keys":["fields","version","name"],"pa...
