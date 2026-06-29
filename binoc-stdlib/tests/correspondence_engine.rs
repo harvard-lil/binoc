@@ -1006,6 +1006,11 @@ fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
     assert_eq!(node.item_type, "tabular");
     assert!(!node.tags.contains("binoc.inference.content-sniffed-type"));
     assert!(node.binoc_annotation("content_type_inference").is_none());
+    assert!(!node.tags.contains("binoc.row-identity-inferred"));
+    assert!(!changeset
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "binoc.tabular_auto_key"));
     assert!(
         node.details["edits"]
             .as_array()
@@ -1135,6 +1140,11 @@ fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
     assert_eq!(node.item_type, "tabular");
     assert!(!node.tags.contains("binoc.inference.content-sniffed-type"));
     assert!(node.binoc_annotation("content_type_inference").is_none());
+    assert!(!node.tags.contains("binoc.row-identity-inferred"));
+    assert!(!changeset
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "binoc.tabular_auto_key"));
     assert!(
         node.details["edits"]
             .as_array()
@@ -1386,6 +1396,76 @@ fn correspondence_engine_uses_dataset_row_keys_on_production_path() {
         .root
         .expect("root");
     let node = find(&root, "data.csv").expect("data.csv");
+    assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
+}
+
+#[test]
+fn correspondence_engine_uses_dataset_row_keys_on_json_records_production_path() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.json"),
+        "[{\"id\":\"1\",\"value\":\"a\"},{\"id\":\"2\",\"value\":\"b\"}]\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.json"),
+        "[{\"id\":\"2\",\"value\":\"b\"},{\"id\":\"1\",\"value\":\"c\"}]\n",
+    )
+    .unwrap();
+
+    let controller =
+        Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
+            "tables": [{ "path_regex": "^data\\.json$", "columns": ["id"] }]
+        }));
+    let changeset = controller
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.json").expect("data.json");
+    assert!(!node.tags.contains("binoc.row-identity-inferred"));
+    assert!(!changeset
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "binoc.tabular_auto_key"));
+    assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
+}
+
+#[test]
+fn path_row_identity_applies_to_json_records_after_tabular_parse() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.json"),
+        "[{\"id\":\"1\",\"value\":\"a\"},{\"id\":\"2\",\"value\":\"b\"}]\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.json"),
+        "[{\"id\":\"2\",\"value\":\"b\"},{\"id\":\"1\",\"value\":\"c\"}]\n",
+    )
+    .unwrap();
+
+    let controller =
+        Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
+            "paths": [{ "match": "data.json", "row_identity": { "columns": ["id"] } }]
+        }));
+    let changeset = controller
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.json").expect("data.json");
+    assert!(!node.tags.contains("binoc.row-identity-inferred"));
+    assert!(!changeset
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "binoc.tabular_auto_key"));
     assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
 }
 

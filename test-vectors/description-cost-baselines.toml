@@ -2261,3 +2261,31 @@ writers = ["binoc.write.text"]
 settled = false
 edit_count = 1
 edit_cost = 23
+
+[[vectors]]
+name = "json-keyed-row-diff"
+description_cost = 54
+edit_cost = 52
+link_count = 2
+
+[[vectors.links]]
+index = 0
+left_path = ""
+right_path = ""
+evidence = "binoc.pair.root"
+proposer = "binoc.pair.root"
+writers = ["binoc.write.container"]
+settled = false
+edit_count = 0
+edit_cost = 0
+
+[[vectors.links]]
+index = 1
+left_path = "data.json"
+right_path = "data.json"
+evidence = "binoc.pair.name"
+proposer = "binoc.pair.name"
+writers = ["binoc.write.tabular"]
+settled = false
+edit_count = 3
+edit_cost = 52

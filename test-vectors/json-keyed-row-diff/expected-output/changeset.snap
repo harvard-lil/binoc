@@ -1,0 +1,92 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.json",
+        "sources": [
+          {
+            "path": "data.json",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row added; 1 row removed; 1 row modified by key"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.row-addition",
+          "binoc.row-removal"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "index": 2,
+                "key": {
+                  "id": "p3"
+                },
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "p3",
+                    "Gamma",
+                    30,
+                    "retired"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_row"
+            },
+            {
+              "params": {
+                "index": 1,
+                "key": {
+                  "id": "p4"
+                },
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "p4",
+                    "Delta",
+                    40,
+                    "active"
+                  ]
+                }
+              },
+              "verb": "tabular.add_row"
+            },
+            {
+              "params": {
+                "column": "price",
+                "from": 20,
+                "key": {
+                  "id": "p2"
+                },
+                "to": 25
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
