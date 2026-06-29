@@ -6,6 +6,64 @@ use binoc_sdk::{
     ExpandDescriptor, ExpandOutput, ExpandRule, ItemRef, NodeMatch, ProjectionHint,
 };
 
+const CONTENT_SNIFF_PREFIX_BYTES: usize = 8192;
+const CONTENT_SNIFF_CONTROL_PCT_LIMIT: usize = 2;
+const TAG_CONTENT_TYPE_INFERENCE: &str = "binoc.inference.content-sniffed-type";
+const SNIFFED_TEXT_CONTENT_TYPE: &str = "text/plain";
+const KNOWN_EXTENSION_DISPATCHES: &[&str] = &[
+    "csv",
+    "tsv",
+    "txt",
+    "md",
+    "vcf",
+    "json",
+    "geojson",
+    "jsonld",
+    "json-ld",
+    "jsonl",
+    "ndjson",
+    "yaml",
+    "yml",
+    "toml",
+    "ini",
+    "cfg",
+    "properties",
+    "xml",
+    "rdf",
+    "kml",
+    "gml",
+    "atom",
+    "rss",
+    "xlsx",
+    "xls",
+    "xlsm",
+    "xlsb",
+    "ods",
+    "zip",
+    "gz",
+    "tar",
+    "cbor",
+    "msgpack",
+    "mp",
+    "bson",
+    "plist",
+    "ion",
+    "arrow",
+    "feather",
+    "ipc",
+    "parquet",
+    "dbf",
+    "xpt",
+    "avro",
+    "sqlite",
+    "sqlite3",
+    "db",
+    "shp",
+    "shx",
+    "prj",
+    "cpg",
+];
+
 /// Default decompression caps. These are bomb-defense bounds, not correctness
 /// limits: they only need to sit comfortably above the largest real bundle we
 /// expect to expand. The previous 256 MB / 512 MB values rejected real
@@ -85,6 +143,7 @@ struct StreamTotalCap<'a> {
 struct StreamCopyStats {
     bytes_written: u64,
     hash: Option<String>,
+    prefix: Vec<u8>,
 }
 
 fn stream_copy_with_caps<R: Read>(
@@ -93,12 +152,14 @@ fn stream_copy_with_caps<R: Read>(
     entry_cap: StreamCap<'_>,
     mut total_cap: Option<StreamTotalCap<'_>>,
     hash_output: bool,
+    prefix_bytes: usize,
 ) -> Result<StreamCopyStats, StreamCopyError> {
     let result = (|| {
         let mut out = std::fs::File::create(dest).map_err(StreamCopyError::OutputIo)?;
         let mut buffer = [0u8; STREAM_COPY_BUFFER_BYTES];
         let mut entry_total = 0u64;
         let mut hasher = hash_output.then(blake3::Hasher::new);
+        let mut prefix = Vec::with_capacity(prefix_bytes.min(CONTENT_SNIFF_PREFIX_BYTES));
 
         loop {
             let entry_remaining = entry_cap.cap.saturating_sub(entry_total);
@@ -155,6 +216,10 @@ fn stream_copy_with_caps<R: Read>(
             if let Some(hasher) = hasher.as_mut() {
                 hasher.update(&buffer[..bytes_read]);
             }
+            if prefix.len() < prefix_bytes {
+                let remaining = prefix_bytes - prefix.len();
+                prefix.extend_from_slice(&buffer[..bytes_read.min(remaining)]);
+            }
             entry_total = new_entry_total;
             if let (Some(total), Some(new_total)) = (total_cap.as_mut(), new_total) {
                 *total.current = new_total;
@@ -165,6 +230,7 @@ fn stream_copy_with_caps<R: Read>(
         Ok(StreamCopyStats {
             bytes_written: entry_total,
             hash: hasher.map(|hasher| hasher.finalize().to_hex().to_string()),
+            prefix,
         })
     })();
 
@@ -204,38 +270,71 @@ impl ChildSep {
     }
 }
 
-fn projection_for(logical_path: &str, is_dir: bool) -> ProjectionHint {
+fn projection_for(logical_path: &str, is_dir: bool, bytes_prefix: Option<&[u8]>) -> ProjectionHint {
     if is_dir {
         return ProjectionHint::default().item_type("directory");
     }
-    match Path::new(logical_path)
+    let extension = Path::new(logical_path)
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
+        .map(str::to_ascii_lowercase);
+    let sniffable_unknown = extension.is_none()
+        || extension.as_ref().is_some_and(|ext| {
+            !KNOWN_EXTENSION_DISPATCHES.contains(&ext.as_str())
+                && mime_guess::from_path(logical_path).first_raw().is_none()
+        });
+    match extension.as_deref() {
         Some("csv" | "tsv") => ProjectionHint::default().item_type("tabular"),
         Some("txt" | "md") => ProjectionHint::default().item_type("text"),
+        _ if sniffable_unknown => sniff_text_projection(logical_path, bytes_prefix)
+            .unwrap_or_else(|| ProjectionHint::default().item_type("file")),
         _ => ProjectionHint::default().item_type("file"),
     }
 }
 
 fn make_child(physical: &Path, logical: String, data: &dyn DataAccess) -> BinocResult<ItemRef> {
     let mut item = data.register_local(physical, &logical)?;
+    let mut content_prefix = None;
     if !item.is_dir {
-        let (hash, size) = hash_and_size(&item, data)?;
+        let (hash, size, prefix) = hash_size_and_prefix(&item, data)?;
         item.content_hash = Some(hash);
         item.size = Some(size);
+        content_prefix = Some(prefix);
     }
-    item.projection_hint = projection_for(&logical, item.is_dir);
+    item.projection_hint = projection_for(&logical, item.is_dir, content_prefix.as_deref());
+    if item
+        .projection_hint
+        .tags
+        .iter()
+        .any(|tag| tag == TAG_CONTENT_TYPE_INFERENCE)
+    {
+        item.media_type = Some(SNIFFED_TEXT_CONTENT_TYPE.into());
+    }
     Ok(item)
 }
 
-fn hash_and_size(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, u64)> {
+fn hash_size_and_prefix(
+    item: &ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<(String, u64, Vec<u8>)> {
     let mut reader = data.open_read(item)?;
     let mut hasher = blake3::Hasher::new();
-    let size = std::io::copy(&mut reader, &mut hasher).map_err(BinocError::Io)?;
-    Ok((hasher.finalize().to_hex().to_string(), size))
+    let mut size = 0u64;
+    let mut prefix = Vec::with_capacity(CONTENT_SNIFF_PREFIX_BYTES);
+    let mut buffer = [0u8; 8192];
+    loop {
+        let read = reader.read(&mut buffer).map_err(BinocError::Io)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        size += read as u64;
+        if prefix.len() < CONTENT_SNIFF_PREFIX_BYTES {
+            let remaining = CONTENT_SNIFF_PREFIX_BYTES - prefix.len();
+            prefix.extend_from_slice(&buffer[..read.min(remaining)]);
+        }
+    }
+    Ok((hasher.finalize().to_hex().to_string(), size, prefix))
 }
 
 fn expand_physical_dir(
@@ -360,6 +459,7 @@ fn extract_zip(zip_path: &Path, dest: &Path, caps: ExpandCaps) -> BinocResult<Ve
                 ),
             }),
             false,
+            0,
         )
         .map_err(|err| err.into_format_error(BinocError::Zip))?;
     }
@@ -446,17 +546,62 @@ impl ExpandRule for GzipExpand {
             },
             None,
             true,
+            CONTENT_SNIFF_PREFIX_BYTES,
         )
         .map_err(|err| err.into_format_error(BinocError::Gzip))?;
         let logical = decompose_child(&item.logical_path, inner_name);
         let mut child = data.register_local(&physical, &logical)?;
         child.content_hash = stats.hash;
         child.size = Some(stats.bytes_written);
-        child.projection_hint = projection_for(&logical, child.is_dir);
+        child.projection_hint =
+            projection_for(&logical, child.is_dir, Some(stats.prefix.as_slice()));
+        if child
+            .projection_hint
+            .tags
+            .iter()
+            .any(|tag| tag == TAG_CONTENT_TYPE_INFERENCE)
+        {
+            child.media_type = Some(SNIFFED_TEXT_CONTENT_TYPE.into());
+        }
         Ok(vec![child].into())
     }
 }
 
+fn sniff_text_projection(
+    logical_path: &str,
+    bytes_prefix: Option<&[u8]>,
+) -> Option<ProjectionHint> {
+    if is_likely_text(bytes_prefix?) {
+        Some(
+            ProjectionHint::default()
+                .item_type("text")
+                .tag(TAG_CONTENT_TYPE_INFERENCE)
+                .annotate(
+                    "binoc",
+                    "content_type_inference",
+                    serde_json::json!(format!(
+                        "treated {logical_path} as text (content sniff, no extension)"
+                    )),
+                ),
+        )
+    } else {
+        None
+    }
+}
+
+fn is_likely_text(bytes: &[u8]) -> bool {
+    if bytes.contains(&0) || std::str::from_utf8(bytes).is_err() {
+        return false;
+    }
+    if bytes.is_empty() {
+        return true;
+    }
+    let disallowed_controls = bytes
+        .iter()
+        .filter(|byte| byte.is_ascii_control() && !matches!(byte, b'\n' | b'\r' | b'\t'))
+        .count();
+    disallowed_controls * 100 <= bytes.len() * CONTENT_SNIFF_CONTROL_PCT_LIMIT
+}
 fn safe_archive_path(path: &Path) -> Option<PathBuf> {
     let mut out = PathBuf::new();
     for component in path.components() {
@@ -523,6 +668,7 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, caps: ExpandCaps) -> BinocResult
                 ),
             }),
             false,
+            0,
         )
         .map_err(|err| err.into_format_error(BinocError::Tar))?;
     }
@@ -556,6 +702,7 @@ mod tests {
                 message: "total cap",
             }),
             true,
+            CONTENT_SNIFF_PREFIX_BYTES,
         )
         .expect("copy succeeds");
 
@@ -566,6 +713,7 @@ mod tests {
             stats.hash.as_deref(),
             Some(blake3::hash(payload).to_hex().as_str())
         );
+        assert_eq!(stats.prefix, payload);
     }
 
     #[test]
@@ -588,6 +736,7 @@ mod tests {
                 message: "total cap",
             }),
             false,
+            0,
         )
         .expect_err("entry cap should fail");
 
@@ -616,6 +765,7 @@ mod tests {
                 message: "total cap",
             }),
             false,
+            0,
         )
         .expect_err("total cap should fail");
 

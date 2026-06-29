@@ -1004,6 +1004,8 @@ fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
     let root = changeset.root.expect("root");
     let node = find(&root, "records").expect("records");
     assert_eq!(node.item_type, "tabular");
+    assert!(!node.tags.contains("binoc.inference.content-sniffed-type"));
+    assert!(node.binoc_annotation("content_type_inference").is_none());
     assert!(
         node.details["edits"]
             .as_array()
@@ -1015,6 +1017,96 @@ fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
         "{:?}",
         node.details["edits"]
     );
+}
+
+#[test]
+fn path_content_type_promotes_extensionless_text_silently() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("northamerica"), "old line\n").unwrap();
+    fs::write(right.join("northamerica"), "old line\nnew line\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "**/northamerica",
+                "content_type": "text/plain"
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "northamerica").expect("northamerica");
+    assert_eq!(node.item_type, "text");
+    assert!(!node.tags.contains("binoc.inference.content-sniffed-type"));
+    assert!(node.binoc_annotation("content_type_inference").is_none());
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| edit["verb"] == "text.replace_lines"),
+        "{:?}",
+        node.details["edits"]
+    );
+}
+
+#[test]
+fn extensionless_text_is_sniffed_and_binary_stays_fallback() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("northamerica"),
+        "Zone America/New_York -4:56:02 - LMT 1883 Nov 18 17:00u\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("northamerica"),
+        "Zone America/New_York -4:56:02 - LMT 1883 Nov 18 17:00u\nRule US 2007 max - Mar Sun>=8 2:00 1:00 D\n",
+    )
+    .unwrap();
+    fs::write(left.join("blob"), [0, 159, 146, 150, 0, 1, 2]).unwrap();
+    fs::write(right.join("blob"), [0, 159, 146, 150, 0, 1, 3]).unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let text = find(&root, "northamerica").expect("northamerica");
+    assert_eq!(text.item_type, "text");
+    assert!(text.tags.contains("binoc.inference.content-sniffed-type"));
+    assert_eq!(
+        text.binoc_annotation("content_type_inference")
+            .and_then(|annotation| annotation.as_str()),
+        Some("treated northamerica as text (content sniff, no extension)")
+    );
+    assert!(
+        text.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| edit["verb"] == "text.replace_lines"),
+        "{:?}",
+        text.details["edits"]
+    );
+
+    let blob = find(&root, "blob").expect("blob");
+    assert_eq!(blob.item_type, "file");
+    assert!(
+        blob.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| edit["verb"] == "binary.contents-differ"),
+        "{:?}",
+        blob.details["edits"]
+    );
+    assert!(!blob.tags.contains("binoc.inference.content-sniffed-type"));
+    assert!(blob.binoc_annotation("content_type_inference").is_none());
 }
 
 #[test]
@@ -1040,6 +1132,9 @@ fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
 
     let root = changeset.root.expect("root");
     let node = find(&root, "forced").expect("forced");
+    assert_eq!(node.item_type, "tabular");
+    assert!(!node.tags.contains("binoc.inference.content-sniffed-type"));
+    assert!(node.binoc_annotation("content_type_inference").is_none());
     assert!(
         node.details["edits"]
             .as_array()
@@ -1048,6 +1143,15 @@ fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
             .any(|edit| {
                 edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
             }),
+        "{:?}",
+        node.details["edits"]
+    );
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|edit| edit["verb"] != "text.replace_lines"),
         "{:?}",
         node.details["edits"]
     );

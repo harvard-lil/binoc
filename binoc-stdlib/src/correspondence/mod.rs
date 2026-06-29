@@ -104,6 +104,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             Arc::new(writers::ParserMetadataWriter),
             Arc::new(writers::StructuredDocumentWriter),
             Arc::new(writers::TextWriter),
+            Arc::new(writers::TextMediaWriter),
             Arc::new(writers::ContainerWriter),
             Arc::new(writers::FallbackWriter),
         ],
@@ -209,6 +210,7 @@ impl DispatchResolver for StdlibPathDispatchResolver {
             Some("binoc.parse.csv" | "binoc.parse.csv_media")
         ) && !item.is_dir
         {
+            item.media_type = None;
             item.projection_hint = ProjectionHint::default().item_type("tabular");
         }
         if let Some(parse) = parse_config_for_entry(entry) {

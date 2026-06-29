@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult, GlobalClaim,
-    IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment, Summary,
+    Annotation, ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult,
+    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment,
+    Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
@@ -140,6 +141,8 @@ pub struct ProjectionHint {
     pub retract_tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Summary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<Annotation>,
 }
 
 pub fn projection_hint_is_default(hint: &ProjectionHint) -> bool {
@@ -175,6 +178,16 @@ impl ProjectionHint {
         self
     }
 
+    pub fn annotate(
+        mut self,
+        package: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> Self {
+        upsert_annotation(&mut self.annotations, package.into(), key.into(), value);
+        self
+    }
+
     pub fn merge_from(&mut self, other: &ProjectionHint) {
         if self.action.is_none() {
             self.action = other.action.clone();
@@ -186,6 +199,7 @@ impl ProjectionHint {
             self.summary = other.summary.clone();
         }
         self.merge_tags(other);
+        merge_annotations_if_missing(&mut self.annotations, &other.annotations);
     }
 
     /// Union `other`'s tags and retractions into `self`, then honor the combined
@@ -216,6 +230,44 @@ impl ProjectionHint {
             self.summary = other.summary.clone();
         }
         self.merge_tags(other);
+        overlay_annotations(&mut self.annotations, &other.annotations);
+    }
+}
+
+fn merge_annotations_if_missing(target: &mut Vec<Annotation>, source: &[Annotation]) {
+    for annotation in source {
+        if !target.iter().any(|existing| {
+            existing.package == annotation.package && existing.key == annotation.key
+        }) {
+            target.push(annotation.clone());
+        }
+    }
+}
+
+fn overlay_annotations(target: &mut Vec<Annotation>, source: &[Annotation]) {
+    for annotation in source {
+        upsert_annotation(
+            target,
+            annotation.package.clone(),
+            annotation.key.clone(),
+            annotation.value.clone(),
+        );
+    }
+}
+
+fn upsert_annotation(
+    annotations: &mut Vec<Annotation>,
+    package: String,
+    key: String,
+    value: serde_json::Value,
+) {
+    if let Some(existing) = annotations
+        .iter_mut()
+        .find(|annotation| annotation.package == package && annotation.key == key)
+    {
+        existing.value = value;
+    } else {
+        annotations.push(Annotation::new(package, key, value));
     }
 }
 
@@ -941,5 +993,28 @@ mod projection_hint_tests {
             .retract_tag("binoc.move");
         acc.merge_from(&hint);
         assert!(!acc.tags.contains(&"binoc.move".to_string()));
+    }
+
+    #[test]
+    fn overlay_replaces_annotation_value_by_key() {
+        let mut acc = ProjectionHint::default().annotate(
+            "binoc",
+            "content_type_inference",
+            serde_json::json!("left"),
+        );
+        let overlay = ProjectionHint::default().annotate(
+            "binoc",
+            "content_type_inference",
+            serde_json::json!("right"),
+        );
+        acc.overlay_from(&overlay);
+        assert_eq!(
+            acc.annotations,
+            vec![Annotation::new(
+                "binoc",
+                "content_type_inference",
+                serde_json::json!("right")
+            )]
+        );
     }
 }
