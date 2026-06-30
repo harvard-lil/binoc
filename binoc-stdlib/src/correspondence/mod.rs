@@ -682,12 +682,15 @@ fn positional_column_name(position: usize) -> String {
 }
 
 fn parse_config_for_entry(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
-    if entry.shape.is_none() && entry.records_path.is_none() {
+    if entry.shape.is_none() && entry.dialect.is_none() && entry.records_path.is_none() {
         return None;
     }
     let mut parse = TabularParseConfig::default();
     if let Some(shape) = &entry.shape {
         shape.apply_to_parse_config(&mut parse);
+    }
+    if let Some(dialect) = &entry.dialect {
+        merge_csv_dialect(&mut parse, dialect);
     }
     parse.records_path = entry.records_path.clone();
     Some(parse)
@@ -840,22 +843,10 @@ fn path_tabular_parse_for_path(
         shape.apply_to_parse_config(&mut parse);
     }
     if let Some(dialect) = &entry.dialect {
-        let merged = parse.dialect.get_or_insert_with(Default::default);
-        if dialect.delimiter.is_some() {
-            merged.delimiter = dialect.delimiter.clone();
-        }
-        if dialect.quote.is_some() {
-            merged.quote = dialect.quote.clone();
-        }
-        if dialect.escape.is_some() {
-            merged.escape = dialect.escape.clone();
-        }
-        if dialect.bom.is_some() {
-            merged.bom = dialect.bom;
-        }
-        if dialect.newline.is_some() {
-            merged.newline = dialect.newline.clone();
-        }
+        merge_csv_dialect(&mut parse, dialect);
+    }
+    if entry.records_path.is_some() {
+        parse.records_path = entry.records_path.clone();
     }
     normalize_tabular_parse(parse)
 }
@@ -874,27 +865,34 @@ fn legacy_tabular_parse_for_path(tables: &TableConfig, path: &str) -> Option<Tab
                 parse.delimiter = entry.parse.delimiter.clone();
             }
             if let Some(dialect) = &entry.parse.dialect {
-                let merged = parse.dialect.get_or_insert_with(Default::default);
-                if dialect.delimiter.is_some() {
-                    merged.delimiter = dialect.delimiter.clone();
-                }
-                if dialect.quote.is_some() {
-                    merged.quote = dialect.quote.clone();
-                }
-                if dialect.escape.is_some() {
-                    merged.escape = dialect.escape.clone();
-                }
-                if dialect.bom.is_some() {
-                    merged.bom = dialect.bom;
-                }
-                if dialect.newline.is_some() {
-                    merged.newline = dialect.newline.clone();
-                }
+                merge_csv_dialect(&mut parse, dialect);
+            }
+            if entry.parse.records_path.is_some() {
+                parse.records_path = entry.parse.records_path.clone();
             }
             break;
         }
     }
     normalize_tabular_parse(parse)
+}
+
+fn merge_csv_dialect(parse: &mut TabularParseConfig, dialect: &binoc_sdk::CsvDialectConfig) {
+    let merged = parse.dialect.get_or_insert_with(Default::default);
+    if dialect.delimiter.is_some() {
+        merged.delimiter = dialect.delimiter.clone();
+    }
+    if dialect.quote.is_some() {
+        merged.quote = dialect.quote.clone();
+    }
+    if dialect.escape.is_some() {
+        merged.escape = dialect.escape.clone();
+    }
+    if dialect.bom.is_some() {
+        merged.bom = dialect.bom;
+    }
+    if dialect.newline.is_some() {
+        merged.newline = dialect.newline.clone();
+    }
 }
 
 fn normalize_tabular_parse(mut parse: TabularParseConfig) -> Option<TabularParseConfig> {
@@ -909,6 +907,7 @@ fn normalize_tabular_parse(mut parse: TabularParseConfig) -> Option<TabularParse
         || parse.dialect.is_some()
         || parse.header_line.is_some()
         || parse.skip_lines.is_some()
+        || parse.records_path.is_some()
     {
         Some(parse)
     } else {

@@ -36,6 +36,7 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.cell-change",
+          "binoc.dialect-inferred",
           "binoc.value-rounded"
         ],
         "details": {
@@ -63,7 +64,14 @@ expression: "&stable_changeset"
               "verb": "tabular.values_rounded"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, quote `\"`, newline LF"
+          }
+        ]
       }
     ]
   }
