@@ -103,6 +103,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
         ],
         writers: vec![
             Arc::new(writers::TabularWriter),
+            Arc::new(writers::LargeTabularStreamWriter),
             Arc::new(writers::ParserMetadataWriter),
             Arc::new(writers::StructuredDocumentWriter),
             Arc::new(writers::TextWriter),
@@ -163,6 +164,7 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         if !semantics.paths.is_empty() {
             config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
                 entries: semantics.paths.clone(),
+                default_row_identity: dataset_default_row_identity(&semantics).clone(),
             }));
         }
         let row_identity = row_identity_for_paths(
@@ -205,6 +207,7 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
 #[derive(Debug, Clone)]
 struct StdlibPathDispatchResolver {
     entries: Vec<PathConfigEntry>,
+    default_row_identity: RowIdentity,
 }
 
 impl DispatchResolver for StdlibPathDispatchResolver {
@@ -236,6 +239,24 @@ impl DispatchResolver for StdlibPathDispatchResolver {
 
     fn forced_rule_for(&self, item: &ItemRef) -> Option<String> {
         first_path_entry(&self.entries, &item.logical_path).and_then(|entry| entry.rule.clone())
+    }
+
+    fn row_identity_for(&self, path: &str) -> Option<RowIdentity> {
+        let entry = first_path_entry(&self.entries, path);
+        let has_default_row_identity = !self.default_row_identity.columns.is_empty();
+        let has_path_row_identity = entry
+            .and_then(|entry| entry.row_identity.as_ref())
+            .is_some();
+        let path_can_be_tabular =
+            glob_can_match_tabular_artifact(path) || entry.is_some_and(entry_declares_tabular);
+        if !(has_default_row_identity || has_path_row_identity) || !path_can_be_tabular {
+            return None;
+        }
+        let identity = merge_row_identity(
+            &self.default_row_identity,
+            entry.and_then(|entry| entry.row_identity.as_ref()),
+        );
+        (!identity.columns.is_empty()).then_some(identity)
     }
 }
 
@@ -898,6 +919,14 @@ fn selector_captures(selector: &FileSelector, path: &str) -> Option<BTreeMap<Str
 }
 
 fn glob_matches_path(pattern: &str, path: &str) -> bool {
+    glob_matches_path_exact(pattern, path)
+        || path
+            .contains("/>")
+            .then(|| path.replace("/>", "/"))
+            .is_some_and(|normalized| glob_matches_path_exact(pattern, &normalized))
+}
+
+fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
     if pattern.is_empty() {
         return false;
     }
@@ -1130,5 +1159,14 @@ mod tests {
     fn reshape_requires_a_known_source_kind() {
         // An unlinked add/remove carries no source kind, so it never reshapes.
         assert!(container_reshape_hint(&ctx(true, None, "SQLite database", None)).is_none());
+    }
+
+    #[test]
+    fn glob_matching_treats_decompose_boundaries_like_path_boundaries() {
+        assert!(glob_matches_path(
+            "**/num.tsv",
+            "2026_03_notes.zip/>num.tsv"
+        ));
+        assert!(glob_matches_path("**/num.tsv", "expanded/num.tsv"));
     }
 }

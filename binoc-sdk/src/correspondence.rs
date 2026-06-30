@@ -1,4 +1,5 @@
 use std::any::{Any, TypeId};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
@@ -6,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Annotation, ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult,
-    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment,
-    Summary,
+    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, RowIdentity,
+    Segment, Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
@@ -355,6 +356,10 @@ pub trait DispatchResolver: Send + Sync {
     fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>>;
 
     fn forced_rule_for(&self, _item: &ItemRef) -> Option<String> {
+        None
+    }
+
+    fn row_identity_for(&self, _path: &str) -> Option<RowIdentity> {
         None
     }
 }
@@ -881,7 +886,7 @@ pub struct WriterDescriptor {
 pub struct LinkCtx<'a> {
     pub view: &'a dyn EngineView,
     pub link: LinkRef,
-    pub row_keys: &'a [String],
+    pub row_keys: Cow<'a, [String]>,
     pub row_identity_policies: RowIdentityPolicies,
     pub artifact_cache: &'a ArtifactDecodeCache,
 }

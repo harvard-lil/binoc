@@ -1,0 +1,45 @@
+dataset:
+  correspondence:
+    expand_renamed_unchanged_collections: false
+  paths:
+    - match: "**/sub.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["adsh"] }
+    - match: "**/tag.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["tag", "version"] }
+    - match: "**/dim.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["dimhash"] }
+    - match: "**/num.tsv"
+      content_type: text/tab-separated-values
+      row_identity:
+        columns: ["adsh", "tag", "version", "ddate", "qtrs", "uom", "dimh", "iprx"]
+    - match: "**/txt.tsv"
+      content_type: text/tab-separated-values
+      row_identity:
+        columns: ["adsh", "tag", "version", "ddate", "qtrs", "dimh", "iprx"]
+    - match: "**/ren.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["adsh", "report"] }
+    - match: "**/pre.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["adsh", "report", "line"] }
+    - match: "**/cal.tsv"
+      content_type: text/tab-separated-values
+      row_identity: { columns: ["adsh", "grp", "arc"] }
+
+output:
+  markdown:
+    verbosity: examples
+    groups:
+      - heading: "Submission and disclosure rows"
+        tags:
+          - binoc.row-addition
+          - binoc.row-removal
+          - binoc.cell-change
+      - heading: "Schema or identity diagnostics"
+        tags:
+          - binoc.schema-change
+          - binoc.null-key
+          - binoc.duplicate-key

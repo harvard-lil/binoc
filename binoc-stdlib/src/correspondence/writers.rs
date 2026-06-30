@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 
 use binoc_sdk::{
@@ -15,6 +15,7 @@ use serde_json::json;
 use similar::{ChangeTag, TextDiff};
 
 use super::parse::JsonSourceFacts;
+use super::parse::LARGE_TABULAR_THRESHOLD_BYTES;
 use super::tabular::load_tabular;
 
 const MAX_CAPTURED_VALUES: usize = 16;
@@ -163,9 +164,16 @@ impl EditListWriter for TabularWriter {
         let metadata_edits = tabular_metadata_edits(&left, &right);
 
         if !ctx.row_keys.is_empty() {
-            if let Some((left_keyed, right_keyed)) = keyed_tables(ctx.row_keys, &left, &right) {
+            if let Some((left_keyed, right_keyed)) =
+                keyed_tables(ctx.row_keys.as_ref(), &left, &right)
+            {
                 if keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
-                    write_keyed_row_edits(&mut edits, ctx.row_keys, &left_keyed, &right_keyed);
+                    write_keyed_row_edits(
+                        &mut edits,
+                        ctx.row_keys.as_ref(),
+                        &left_keyed,
+                        &right_keyed,
+                    );
                     edits.extend(metadata_edits);
                     return Ok(Some(WriteOutput { edits, diagnostics }));
                 }
@@ -277,6 +285,445 @@ impl EditListWriter for TabularWriter {
             ),
             aspect,
         ))
+    }
+}
+
+pub struct LargeTabularStreamWriter;
+
+impl EditListWriter for LargeTabularStreamWriter {
+    fn descriptor(&self) -> WriterDescriptor {
+        WriterDescriptor {
+            name: "binoc.write.tabular_stream".into(),
+            formats: vec![],
+            input: NodeMatch {
+                is_dir: Some(false),
+                ..NodeMatch::default()
+            },
+            shape: ShapeFilter::Leaf,
+            fallback: false,
+        }
+    }
+
+    fn write(&self, ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+        if ctx.row_keys.is_empty() {
+            return Ok(None);
+        }
+
+        let left_item = ctx.view.item(ctx.link.left);
+        let right_item = ctx.view.item(ctx.link.right);
+        if !streaming_item_is_tabular(left_item) || !streaming_item_is_tabular(right_item) {
+            return Ok(None);
+        }
+        let largest = left_item
+            .resolve_size(data)?
+            .max(right_item.resolve_size(data)?);
+        if largest <= LARGE_TABULAR_THRESHOLD_BYTES {
+            return Ok(None);
+        }
+
+        stream_keyed_tabular_diff(left_item, right_item, ctx.row_keys.as_ref(), data)
+            .map(|edit| edit.map(|edit| vec![edit].into()))
+    }
+}
+
+fn streaming_item_is_tabular(item: &binoc_sdk::ItemRef) -> bool {
+    matches!(
+        item.media_type.as_deref(),
+        Some("text/csv" | "text/tab-separated-values")
+    ) || matches!(item.extension().as_deref(), Some(".csv" | ".tsv"))
+}
+
+type KeyDigest = [u8; 16];
+type RowDigest = [u8; 16];
+
+#[derive(Debug, Clone)]
+struct StreamedRightRow {
+    row_hash: RowDigest,
+    index: u64,
+    seen: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct StreamedExample {
+    index: u64,
+    key: serde_json::Value,
+    values: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct StreamedModifiedExample {
+    left_index: u64,
+    right_index: u64,
+    key: serde_json::Value,
+    before: Option<serde_json::Value>,
+    after: Option<serde_json::Value>,
+}
+
+fn stream_keyed_tabular_diff(
+    left_item: &binoc_sdk::ItemRef,
+    right_item: &binoc_sdk::ItemRef,
+    keys: &[String],
+    data: &dyn DataAccess,
+) -> BinocResult<Option<Edit>> {
+    let mut right_reader = streaming_csv_reader(right_item, data)?;
+    let right_headers = read_headers(&mut right_reader)?;
+    let right_key_columns = resolve_stream_key_columns(&right_headers, keys)?;
+    let mut right_index = HashMap::<KeyDigest, StreamedRightRow>::new();
+    let mut right_rows = 0u64;
+    let mut right_null_keys = 0u64;
+    let mut right_duplicate_keys = 0u64;
+    let mut record = csv::ByteRecord::new();
+    while right_reader
+        .read_byte_record(&mut record)
+        .map_err(|err| BinocError::Csv(err.to_string()))?
+    {
+        let Some(key) = record_key_digest(&record, &right_key_columns) else {
+            right_null_keys += 1;
+            right_rows += 1;
+            continue;
+        };
+        let row_hash = record_digest(&record);
+        if right_index
+            .insert(
+                key,
+                StreamedRightRow {
+                    row_hash,
+                    index: right_rows,
+                    seen: false,
+                },
+            )
+            .is_some()
+        {
+            right_duplicate_keys += 1;
+        }
+        right_rows += 1;
+    }
+
+    let mut left_reader = streaming_csv_reader(left_item, data)?;
+    let left_headers = read_headers(&mut left_reader)?;
+    let left_key_columns = resolve_stream_key_columns(&left_headers, keys)?;
+    let mut left_rows = 0u64;
+    let mut left_null_keys = 0u64;
+    let mut left_duplicate_keys = 0u64;
+    let mut left_seen = HashSet::<KeyDigest>::new();
+    let mut removed_rows = 0u64;
+    let mut modified_rows = 0u64;
+    let mut removed_examples = Vec::new();
+    let mut modified_examples = Vec::new();
+    let mut modified_example_keys = HashSet::new();
+    let mut record = csv::ByteRecord::new();
+    while left_reader
+        .read_byte_record(&mut record)
+        .map_err(|err| BinocError::Csv(err.to_string()))?
+    {
+        let Some(key) = record_key_digest(&record, &left_key_columns) else {
+            left_null_keys += 1;
+            left_rows += 1;
+            continue;
+        };
+        if !left_seen.insert(key) {
+            left_duplicate_keys += 1;
+        }
+        match right_index.get_mut(&key) {
+            Some(right_row) => {
+                right_row.seen = true;
+                if right_row.row_hash != record_digest(&record) {
+                    modified_rows += 1;
+                    if modified_examples.len() < MAX_CAPTURED_VALUES {
+                        modified_example_keys.insert(key);
+                        modified_examples.push(StreamedModifiedExample {
+                            left_index: left_rows,
+                            right_index: right_row.index,
+                            key: key_preview(keys, &record, &left_key_columns),
+                            before: Some(capture_byte_record(&record)),
+                            after: None,
+                        });
+                    }
+                }
+            }
+            None => {
+                removed_rows += 1;
+                if removed_examples.len() < MAX_CAPTURED_VALUES {
+                    removed_examples.push(StreamedExample {
+                        index: left_rows,
+                        key: key_preview(keys, &record, &left_key_columns),
+                        values: Some(capture_byte_record(&record)),
+                    });
+                }
+            }
+        }
+        left_rows += 1;
+    }
+
+    let added_rows = right_index.values().filter(|row| !row.seen).count() as u64;
+    let mut added_examples = Vec::new();
+    if added_rows > 0 || !modified_example_keys.is_empty() {
+        let mut right_reader = streaming_csv_reader(right_item, data)?;
+        let _ = read_headers(&mut right_reader)?;
+        let mut index = 0u64;
+        let mut record = csv::ByteRecord::new();
+        while right_reader
+            .read_byte_record(&mut record)
+            .map_err(|err| BinocError::Csv(err.to_string()))?
+        {
+            if let Some(key) = record_key_digest(&record, &right_key_columns) {
+                if added_examples.len() < MAX_CAPTURED_VALUES
+                    && right_index.get(&key).is_some_and(|row| !row.seen)
+                {
+                    added_examples.push(StreamedExample {
+                        index,
+                        key: key_preview(keys, &record, &right_key_columns),
+                        values: Some(capture_byte_record(&record)),
+                    });
+                }
+                if modified_example_keys.contains(&key) {
+                    for example in &mut modified_examples {
+                        if example.after.is_none() && example.right_index == index {
+                            example.after = Some(capture_byte_record(&record));
+                            break;
+                        }
+                    }
+                }
+            }
+            if added_examples.len() >= MAX_CAPTURED_VALUES
+                && modified_examples
+                    .iter()
+                    .all(|example| example.after.is_some())
+            {
+                break;
+            }
+            index += 1;
+        }
+    }
+
+    let added_columns = right_headers
+        .iter()
+        .filter(|header| !left_headers.contains(header))
+        .cloned()
+        .collect::<Vec<_>>();
+    let removed_columns = left_headers
+        .iter()
+        .filter(|header| !right_headers.contains(header))
+        .cloned()
+        .collect::<Vec<_>>();
+    let has_key_quality_findings = left_null_keys > 0
+        || right_null_keys > 0
+        || left_duplicate_keys > 0
+        || right_duplicate_keys > 0;
+    if added_rows == 0
+        && removed_rows == 0
+        && modified_rows == 0
+        && left_headers == right_headers
+        && !has_key_quality_findings
+    {
+        return Ok(None);
+    }
+
+    let mut edit = Edit::new(
+        "tabular.keyed_stream_summary",
+        json!({
+            "mode": "streaming_keyed_summary",
+            "keys": keys,
+            "left_rows": left_rows,
+            "right_rows": right_rows,
+            "row_additions": added_rows,
+            "row_removals": removed_rows,
+            "modified_rows": modified_rows,
+            "left_null_keys": left_null_keys,
+            "right_null_keys": right_null_keys,
+            "left_duplicate_keys": left_duplicate_keys,
+            "right_duplicate_keys": right_duplicate_keys,
+            "left_headers": left_headers,
+            "right_headers": right_headers,
+            "added_columns": added_columns,
+            "removed_columns": removed_columns,
+            "examples": {
+                "added": added_examples.into_iter().map(streamed_example_json).collect::<Vec<_>>(),
+                "removed": removed_examples.into_iter().map(streamed_example_json).collect::<Vec<_>>(),
+                "modified": modified_examples.into_iter().map(streamed_modified_example_json).collect::<Vec<_>>(),
+                "truncated": added_rows > MAX_CAPTURED_VALUES as u64
+                    || removed_rows > MAX_CAPTURED_VALUES as u64
+                    || modified_rows > MAX_CAPTURED_VALUES as u64
+            }
+        }),
+    )
+    .with_item_type("tabular")
+    .with_summary(stream_keyed_summary(added_rows, removed_rows, modified_rows));
+    if added_rows > 0 {
+        edit = edit.with_tag("binoc.row-addition");
+    }
+    if removed_rows > 0 {
+        edit = edit.with_tag("binoc.row-removal");
+    }
+    if modified_rows > 0 {
+        edit = edit.with_tag("binoc.cell-change");
+    }
+    if left_headers != right_headers {
+        edit = edit.with_tag("binoc.schema-change");
+    }
+    if left_null_keys > 0 || right_null_keys > 0 {
+        edit = edit.with_tag("binoc.null-key");
+    }
+    if left_duplicate_keys > 0 || right_duplicate_keys > 0 {
+        edit = edit.with_tag("binoc.duplicate-key");
+    }
+    Ok(Some(edit))
+}
+
+fn streaming_csv_reader(
+    item: &binoc_sdk::ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<csv::Reader<Box<dyn std::io::Read + Send>>> {
+    Ok(csv::ReaderBuilder::new()
+        .delimiter(delimiter_for_streaming_item(item))
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(data.open_read(item)?))
+}
+
+fn delimiter_for_streaming_item(item: &binoc_sdk::ItemRef) -> u8 {
+    if item.media_type.as_deref() == Some("text/tab-separated-values") {
+        return b'\t';
+    }
+    match item.extension().as_deref() {
+        Some(".tsv") => b'\t',
+        _ => b',',
+    }
+}
+
+fn read_headers<R: std::io::Read>(reader: &mut csv::Reader<R>) -> BinocResult<Vec<String>> {
+    let mut record = csv::ByteRecord::new();
+    if !reader
+        .read_byte_record(&mut record)
+        .map_err(|err| BinocError::Csv(err.to_string()))?
+    {
+        return Ok(Vec::new());
+    }
+    Ok(record.iter().map(bytes_preview).collect())
+}
+
+fn resolve_stream_key_columns(headers: &[String], keys: &[String]) -> BinocResult<Vec<usize>> {
+    keys.iter()
+        .map(|key| {
+            headers
+                .iter()
+                .position(|header| header == key)
+                .ok_or_else(|| {
+                    BinocError::Other(format!("configured row key column '{key}' was not found"))
+                })
+        })
+        .collect()
+}
+
+fn record_key_digest(record: &csv::ByteRecord, key_columns: &[usize]) -> Option<KeyDigest> {
+    let mut hasher = blake3::Hasher::new();
+    for &index in key_columns {
+        let field = record.get(index).unwrap_or_default();
+        if field.is_empty() {
+            return None;
+        }
+        hash_field(&mut hasher, field);
+    }
+    Some(first_16(hasher.finalize()))
+}
+
+fn record_digest(record: &csv::ByteRecord) -> RowDigest {
+    let mut hasher = blake3::Hasher::new();
+    for field in record {
+        hash_field(&mut hasher, field);
+    }
+    first_16(hasher.finalize())
+}
+
+fn hash_field(hasher: &mut blake3::Hasher, field: &[u8]) {
+    hasher.update(&(field.len() as u64).to_le_bytes());
+    hasher.update(field);
+}
+
+fn first_16(hash: blake3::Hash) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&hash.as_bytes()[..16]);
+    out
+}
+
+fn key_preview(
+    keys: &[String],
+    record: &csv::ByteRecord,
+    key_columns: &[usize],
+) -> serde_json::Value {
+    let mut object = serde_json::Map::new();
+    for (key, index) in keys.iter().zip(key_columns) {
+        object.insert(
+            key.clone(),
+            serde_json::Value::String(truncate_preview(&bytes_preview(
+                record.get(*index).unwrap_or_default(),
+            ))),
+        );
+    }
+    serde_json::Value::Object(object)
+}
+
+fn capture_byte_record(record: &csv::ByteRecord) -> serde_json::Value {
+    let values = record
+        .iter()
+        .take(MAX_CAPTURED_VALUES)
+        .map(|field| serde_json::Value::String(truncate_preview(&bytes_preview(field))))
+        .collect::<Vec<_>>();
+    json!({
+        "values": values,
+        "total_values": record.len(),
+        "truncated": record.len() > MAX_CAPTURED_VALUES
+    })
+}
+
+fn bytes_preview(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn streamed_example_json(example: StreamedExample) -> serde_json::Value {
+    json!({
+        "index": example.index,
+        "key": example.key,
+        "values": example.values
+    })
+}
+
+fn streamed_modified_example_json(example: StreamedModifiedExample) -> serde_json::Value {
+    json!({
+        "left_index": example.left_index,
+        "right_index": example.right_index,
+        "key": example.key,
+        "before": example.before,
+        "after": example.after
+    })
+}
+
+fn stream_keyed_summary(added: u64, removed: u64, modified: u64) -> String {
+    let mut parts = Vec::new();
+    if added > 0 {
+        parts.push(count_phrase_u64(added, "row added", "rows added"));
+    }
+    if removed > 0 {
+        parts.push(count_phrase_u64(removed, "row removed", "rows removed"));
+    }
+    if modified > 0 {
+        parts.push(format!(
+            "{} modified by key",
+            count_phrase_u64(modified, "row", "rows")
+        ));
+    }
+    if parts.is_empty() {
+        "No keyed row changes".into()
+    } else {
+        parts.join("; ")
+    }
+}
+
+fn count_phrase_u64(count: u64, singular: &str, plural: &str) -> String {
+    if count == 1 {
+        format!("1 {singular}")
+    } else {
+        format!("{count} {plural}")
     }
 }
 

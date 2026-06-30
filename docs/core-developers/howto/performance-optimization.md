@@ -50,6 +50,13 @@ The same binary can measure real snapshot pairs:
 just perf --left snapshot-a --right snapshot-b
 ```
 
+Pass a dataset config when the real pair needs the same semantics as
+`binoc diff --config`, such as declared row identity or path dispatch overrides:
+
+```bash
+just perf --left snapshot-a --right snapshot-b --config dataset.yaml
+```
+
 The underlying binary is:
 
 ```bash
