@@ -1,5 +1,7 @@
 use assert_cmd::Command;
+use predicates::prelude::Predicate;
 use predicates::prelude::PredicateBooleanExt;
+use serde_json::Value;
 
 fn vectors_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -236,6 +238,81 @@ fn diff_explicit_format_prefix() {
 
     let content = std::fs::read_to_string(&out_path).unwrap();
     assert!(content.contains("from_snapshot"));
+}
+
+#[test]
+fn report_bundle_copies_snapshots_and_reproduces_changeset() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bundle_dir = tmp.path().join("report");
+    let rerun_changeset = tmp.path().join("rerun.json");
+    let dir = vectors_dir().join("single-file-modify-text");
+
+    binoc()
+        .arg("report")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--output-dir")
+        .arg(&bundle_dir)
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("Wrote report bundle"));
+
+    assert!(bundle_dir.join("dataset-config.yaml").exists());
+    assert!(bundle_dir.join("changeset.json").exists());
+    assert!(bundle_dir.join("changelog.md").exists());
+    assert!(bundle_dir.join("run.trace.json").exists());
+    assert!(bundle_dir.join("metadata.json").exists());
+    assert!(bundle_dir.join("README.md").exists());
+    assert!(bundle_dir.join("snapshots/snapshot-a/story.txt").exists());
+    assert!(bundle_dir.join("snapshots/snapshot-b/story.txt").exists());
+
+    let metadata = std::fs::read_to_string(bundle_dir.join("metadata.json")).unwrap();
+    assert!(metadata.contains("\"snapshot_mode\": \"copy\""));
+    assert!(metadata.contains("\"bundled_path\": \"snapshots/snapshot-a\""));
+
+    let original_changeset = std::fs::read_to_string(bundle_dir.join("changeset.json")).unwrap();
+    binoc()
+        .arg("diff")
+        .arg(bundle_dir.join("snapshots/snapshot-a"))
+        .arg(bundle_dir.join("snapshots/snapshot-b"))
+        .arg("--format")
+        .arg("json")
+        .arg("-q")
+        .arg("-o")
+        .arg(&rerun_changeset)
+        .assert()
+        .success();
+    let mut original: Value = serde_json::from_str(&original_changeset).unwrap();
+    let mut rerun: Value =
+        serde_json::from_str(&std::fs::read_to_string(&rerun_changeset).unwrap()).unwrap();
+    original["from_snapshot"] = Value::String("<normalized>".into());
+    original["to_snapshot"] = Value::String("<normalized>".into());
+    rerun["from_snapshot"] = Value::String("<normalized>".into());
+    rerun["to_snapshot"] = Value::String("<normalized>".into());
+    assert_eq!(original, rerun);
+}
+
+#[test]
+fn report_reference_mode_skips_snapshot_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bundle_dir = tmp.path().join("report");
+    let dir = vectors_dir().join("single-file-modify-text");
+
+    binoc()
+        .arg("report")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--output-dir")
+        .arg(&bundle_dir)
+        .arg("--snapshot-mode")
+        .arg("reference")
+        .assert()
+        .success();
+
+    assert!(!bundle_dir.join("snapshots").exists());
+    let metadata = std::fs::read_to_string(bundle_dir.join("metadata.json")).unwrap();
+    assert!(metadata.contains("\"snapshot_mode\": \"reference\""));
+    assert!(predicates::str::contains("\"bundled_path\": null").eval(&metadata));
 }
 
 #[test]

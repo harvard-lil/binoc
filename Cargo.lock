@@ -507,7 +507,9 @@ dependencies = [
  "clap",
  "clap-markdown",
  "predicates",
+ "serde",
  "serde_json",
+ "serde_yaml",
  "tempfile",
  "zip 8.6.0",
 ]

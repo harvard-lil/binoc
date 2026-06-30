@@ -1,13 +1,17 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use serde::Serialize;
 
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
 use binoc_core::output;
 use binoc_sdk::{BinocError, Changeset, CorrespondenceEngineConfig, ExtractResult, Renderer};
+
+const DEFAULT_REPORT_MAX_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -76,6 +80,36 @@ enum Commands {
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
+    /// Prepare a local bug-report bundle for an imperfect diff result.
+    ///
+    /// Re-runs a two-snapshot diff with trace capture and writes a local
+    /// directory containing the snapshots, the resolved config, the replay
+    /// trace, rendered output, and version metadata. The bundle is never
+    /// uploaded anywhere; its purpose is to give a user one directory they can
+    /// inspect and share if they choose.
+    Report {
+        /// "Before" snapshot path.
+        snapshot_a: PathBuf,
+        /// "After" snapshot path.
+        snapshot_b: PathBuf,
+        /// Path to a dataset config YAML file. If omitted, the registry's
+        /// default config is used.
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Output directory for the report bundle. The command refuses to
+        /// reuse an existing path.
+        #[arg(long, short = 'd')]
+        output_dir: PathBuf,
+        /// Whether to copy the snapshot bytes into the bundle or merely record
+        /// their original paths. `copy` is reproducible but can be large;
+        /// `reference` is lighter but not self-contained.
+        #[arg(long, value_enum, default_value_t = SnapshotMode::Copy)]
+        snapshot_mode: SnapshotMode,
+        /// Refuse to copy more than this many bytes of snapshot payload unless
+        /// explicitly raised. Applies only with `--snapshot-mode copy`.
+        #[arg(long, default_value_t = DEFAULT_REPORT_MAX_BYTES)]
+        max_snapshot_bytes: u64,
+    },
     /// Generate a human-readable changelog from one or more saved changesets.
     ///
     /// Reads each changeset JSON file and renders the combined result.
@@ -134,6 +168,60 @@ enum Commands {
 struct OutputSpec {
     format: Option<String>,
     path: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SnapshotMode {
+    Copy,
+    Reference,
+}
+
+#[derive(Debug, Serialize)]
+struct ReportMetadata {
+    tool: &'static str,
+    version: &'static str,
+    created_unix_seconds: u64,
+    snapshot_mode: SnapshotMode,
+    snapshot_a: ReportSnapshotMetadata,
+    snapshot_b: ReportSnapshotMetadata,
+    artifacts: ReportArtifacts,
+}
+
+#[derive(Debug, Serialize)]
+struct ReportSnapshotMetadata {
+    original_path: String,
+    file_count: u64,
+    total_bytes: u64,
+    bundled_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ReportArtifacts {
+    config: &'static str,
+    changeset: &'static str,
+    changelog: &'static str,
+    trace: &'static str,
+    metadata: &'static str,
+    readme: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SnapshotStats {
+    file_count: u64,
+    total_bytes: u64,
+}
+
+struct ReportBundleRequest<'a> {
+    output_dir: &'a Path,
+    snapshot_a: &'a Path,
+    snapshot_b: &'a Path,
+    dataset_config: &'a DatasetConfig,
+    changeset: &'a Changeset,
+    changelog: &'a str,
+    run_trace: &'a binoc_core::correspondence::RunTrace,
+    snapshot_mode: SnapshotMode,
+    max_snapshot_bytes: u64,
 }
 
 impl OutputSpec {
@@ -280,6 +368,207 @@ fn write_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
         }
     }
     std::fs::write(path, bytes)
+}
+
+fn ensure_new_directory(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if path.exists() {
+        return Err(BinocError::Config(format!(
+            "report output directory already exists: {}",
+            path.display()
+        ))
+        .into());
+    }
+    std::fs::create_dir_all(path)?;
+    Ok(())
+}
+
+fn snapshot_stats(path: &Path) -> Result<SnapshotStats, Box<dyn std::error::Error>> {
+    let metadata = std::fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(BinocError::Other(format!(
+            "report bundles do not support symlinks: {}",
+            path.display()
+        ))
+        .into());
+    }
+    if metadata.is_file() {
+        return Ok(SnapshotStats {
+            file_count: 1,
+            total_bytes: metadata.len(),
+        });
+    }
+    if metadata.is_dir() {
+        let mut stats = SnapshotStats {
+            file_count: 0,
+            total_bytes: 0,
+        };
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let child = snapshot_stats(&entry.path())?;
+            stats.file_count += child.file_count;
+            stats.total_bytes += child.total_bytes;
+        }
+        return Ok(stats);
+    }
+    Err(BinocError::Other(format!(
+        "unsupported snapshot kind for report bundle: {}",
+        path.display()
+    ))
+    .into())
+}
+
+fn copy_snapshot(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = std::fs::symlink_metadata(src)?;
+    if metadata.file_type().is_symlink() {
+        return Err(BinocError::Other(format!(
+            "report bundles do not support symlinks: {}",
+            src.display()
+        ))
+        .into());
+    }
+    if metadata.is_file() {
+        if let Some(parent) = dst.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        std::fs::copy(src, dst)?;
+        return Ok(());
+    }
+    if metadata.is_dir() {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            copy_snapshot(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+    Err(BinocError::Other(format!(
+        "unsupported snapshot kind for report bundle: {}",
+        src.display()
+    ))
+    .into())
+}
+
+fn report_readme(snapshot_mode: SnapshotMode) -> String {
+    let snapshot_note = match snapshot_mode {
+        SnapshotMode::Copy => {
+            "This bundle includes exact copies of both snapshots under `snapshots/`, so rerunning `binoc diff` inside the bundle should reproduce the saved output."
+        }
+        SnapshotMode::Reference => {
+            "This bundle records the original snapshot paths in `metadata.json` but does not copy snapshot bytes, so it is not self-contained."
+        }
+    };
+    format!(
+        "# Binoc bug-report bundle\n\n\
+         This directory was produced by `binoc report` for a user to inspect and share manually.\n\
+         Nothing in this command uploads data or opens a network connection.\n\n\
+         {snapshot_note}\n\n\
+         Contents:\n\n\
+         - `dataset-config.yaml`: resolved dataset config used for the run\n\
+         - `changeset.json`: raw changeset IR\n\
+         - `changelog.md`: rendered Markdown output\n\
+         - `run.trace.json`: detailed correspondence replay trace\n\
+         - `metadata.json`: tool version, source paths, and bundle layout\n"
+    )
+}
+
+fn write_report_bundle(request: ReportBundleRequest<'_>) -> Result<(), Box<dyn std::error::Error>> {
+    let ReportBundleRequest {
+        output_dir,
+        snapshot_a,
+        snapshot_b,
+        dataset_config,
+        changeset,
+        changelog,
+        run_trace,
+        snapshot_mode,
+        max_snapshot_bytes,
+    } = request;
+    let stats_a = snapshot_stats(snapshot_a)?;
+    let stats_b = snapshot_stats(snapshot_b)?;
+    if snapshot_mode == SnapshotMode::Copy
+        && stats_a.total_bytes + stats_b.total_bytes > max_snapshot_bytes
+    {
+        return Err(BinocError::Config(format!(
+            "snapshot payload is {} bytes, above --max-snapshot-bytes {}; rerun with a higher cap or --snapshot-mode reference",
+            stats_a.total_bytes + stats_b.total_bytes,
+            max_snapshot_bytes
+        ))
+        .into());
+    }
+
+    ensure_new_directory(output_dir)?;
+
+    let snapshot_root = output_dir.join("snapshots");
+    let bundled_a = match snapshot_mode {
+        SnapshotMode::Copy => {
+            let path = snapshot_root.join("snapshot-a");
+            copy_snapshot(snapshot_a, &path)?;
+            Some("snapshots/snapshot-a".to_string())
+        }
+        SnapshotMode::Reference => None,
+    };
+    let bundled_b = match snapshot_mode {
+        SnapshotMode::Copy => {
+            let path = snapshot_root.join("snapshot-b");
+            copy_snapshot(snapshot_b, &path)?;
+            Some("snapshots/snapshot-b".to_string())
+        }
+        SnapshotMode::Reference => None,
+    };
+
+    write_file(
+        &output_dir.join("dataset-config.yaml"),
+        serde_yaml::to_string(dataset_config)?.as_bytes(),
+    )?;
+    write_file(
+        &output_dir.join("changeset.json"),
+        output::to_json(changeset)?.as_bytes(),
+    )?;
+    write_file(&output_dir.join("changelog.md"), changelog.as_bytes())?;
+    write_file(
+        &output_dir.join("run.trace.json"),
+        serde_json::to_string_pretty(run_trace)?.as_bytes(),
+    )?;
+
+    let created_unix_seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let metadata = ReportMetadata {
+        tool: "binoc",
+        version: env!("CARGO_PKG_VERSION"),
+        created_unix_seconds,
+        snapshot_mode,
+        snapshot_a: ReportSnapshotMetadata {
+            original_path: snapshot_a.display().to_string(),
+            file_count: stats_a.file_count,
+            total_bytes: stats_a.total_bytes,
+            bundled_path: bundled_a,
+        },
+        snapshot_b: ReportSnapshotMetadata {
+            original_path: snapshot_b.display().to_string(),
+            file_count: stats_b.file_count,
+            total_bytes: stats_b.total_bytes,
+            bundled_path: bundled_b,
+        },
+        artifacts: ReportArtifacts {
+            config: "dataset-config.yaml",
+            changeset: "changeset.json",
+            changelog: "changelog.md",
+            trace: "run.trace.json",
+            metadata: "metadata.json",
+            readme: "README.md",
+        },
+    };
+    write_file(
+        &output_dir.join("metadata.json"),
+        serde_json::to_string_pretty(&metadata)?.as_bytes(),
+    )?;
+    write_file(
+        &output_dir.join("README.md"),
+        report_readme(snapshot_mode).as_bytes(),
+    )?;
+
+    Ok(())
 }
 
 /// Embed a run-trace JSON into the standalone replay viewer template. The JSON
@@ -439,6 +728,44 @@ pub fn run(
             if !out_path.as_os_str().is_empty() {
                 eprintln!("Wrote replay to {}", out_path.display());
             }
+        }
+        Commands::Report {
+            snapshot_a,
+            snapshot_b,
+            config,
+            output_dir,
+            snapshot_mode,
+            max_snapshot_bytes,
+        } => {
+            let dataset_config = match config {
+                Some(path) => DatasetConfig::from_file(&path)?,
+                None => DatasetConfig::default_config(),
+            };
+            let resolved = resolve_renderers_only(&registry, &dataset_config)?;
+            let controller = diff_controller(&dataset_config);
+            let snapshot_a_str = snapshot_a.to_string_lossy().to_string();
+            let snapshot_b_str = snapshot_b.to_string_lossy().to_string();
+            let (changeset, mut run_trace) =
+                controller.diff_with_trace(&snapshot_a_str, &snapshot_b_str)?;
+            let markdown = render(
+                &resolve_format_name("markdown", &resolved)?,
+                std::slice::from_ref(&changeset),
+                &dataset_config,
+            )?;
+            run_trace.output = Some(markdown.clone());
+
+            write_report_bundle(ReportBundleRequest {
+                output_dir: &output_dir,
+                snapshot_a: &snapshot_a,
+                snapshot_b: &snapshot_b,
+                dataset_config: &dataset_config,
+                changeset: &changeset,
+                changelog: &markdown,
+                run_trace: &run_trace,
+                snapshot_mode,
+                max_snapshot_bytes,
+            })?;
+            eprintln!("Wrote report bundle to {}", output_dir.display());
         }
         Commands::Changelog {
             changesets: changeset_paths,
