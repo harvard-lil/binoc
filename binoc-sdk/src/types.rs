@@ -441,6 +441,8 @@ pub struct PathConfigEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<TabularShapeConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialect: Option<CsvDialectConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub records_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_identity: Option<RowIdentity>,
@@ -461,6 +463,8 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             content_type: Option<String>,
             #[serde(default)]
             rule: Option<String>,
+            #[serde(default)]
+            dialect: Option<CsvDialectConfig>,
             #[serde(default)]
             shape: Option<TabularShapeConfig>,
             #[serde(default)]
@@ -497,6 +501,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             match_: raw.match_,
             content_type: raw.content_type,
             rule: raw.rule,
+            dialect: raw.dialect,
             shape: raw.shape,
             records_path: raw.records_path,
             row_identity,
@@ -589,6 +594,7 @@ impl<'de> Deserialize<'de> for TableConfig {
     where
         D: serde::Deserializer<'de>,
     {
+        #[allow(clippy::large_enum_variant)]
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum Repr {
@@ -703,6 +709,8 @@ pub struct TabularParseConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delimiter: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialect: Option<CsvDialectConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub header_line: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skip_lines: Option<usize>,
@@ -717,6 +725,7 @@ impl Default for TabularParseConfig {
         Self {
             header: true,
             delimiter: None,
+            dialect: None,
             header_line: None,
             skip_lines: None,
             records_path: None,
@@ -726,6 +735,21 @@ impl Default for TabularParseConfig {
 
 fn default_header() -> bool {
     true
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct CsvDialectConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escape: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bom: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newline: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -972,9 +996,8 @@ pub struct ItemRef {
     /// file names, media types, or plugin-specific tags.
     #[serde(default, skip_serializing_if = "crate::projection_hint_is_default")]
     pub projection_hint: crate::ProjectionHint,
-    /// Optional tabular parser options resolved by a dispatch configurator.
-    /// Core carries this through without interpreting it; tabular parse rules
-    /// decide whether it applies to their format.
+    /// Optional stdlib-resolved tabular parse hints carried from dataset config
+    /// to whichever tabular parser eventually claims this item.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tabular_parse: Option<TabularParseConfig>,
     /// Opaque identifier used by DataAccess implementations to locate data.

@@ -1,0 +1,18 @@
+[vector]
+name = "csv-declared-pipe-dialect"
+description = "Per-path declared pipe dialect parses a .txt table silently and reports keyed cell changes"
+tags = ["csv", "dialect", "pipe", "per-path"]
+
+[config.dataset]
+
+[[config.dataset.paths]]
+match = "data.txt"
+content_type = "text/csv"
+row_identity = { columns = ["id"] }
+
+[config.dataset.paths.dialect]
+delimiter = "|"
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

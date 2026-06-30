@@ -7,6 +7,7 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows added
     - row 2: 'LA', 'Bob', '25'
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["alice@example.test","bob@example.test","charlie@example.test"]}

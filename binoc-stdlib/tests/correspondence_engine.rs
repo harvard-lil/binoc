@@ -1236,6 +1236,128 @@ fn write_large_tsv(
 }
 
 #[test]
+fn path_declared_dialect_parses_pipe_delimited_without_provenance_annotation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.txt"), "id|value\n1|old\n2|same\n").unwrap();
+    fs::write(right.join("data.txt"), "id|value\n1|new\n2|same\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.txt",
+                "content_type": "text/csv",
+                "dialect": { "delimiter": "|" },
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.txt").expect("data.txt");
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| {
+                edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
+            }),
+        "{:?}",
+        node.details["edits"]
+    );
+    assert!(!node.tags.contains("binoc.dialect-inferred"));
+    assert!(node.binoc_annotation("dialect_provenance").is_none());
+}
+
+#[test]
+fn path_inferred_dialect_is_disclosed_on_extensionless_tabular_input() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("records"), "id|value\n1|old\n2|same\n").unwrap();
+    fs::write(right.join("records"), "id|value\n1|new\n2|same\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "records",
+                "content_type": "text/csv",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "records").expect("records");
+    assert!(node.tags.contains("binoc.dialect-inferred"));
+    assert_eq!(
+        node.binoc_annotation("dialect_provenance")
+            .and_then(|annotation| annotation.as_str()),
+        Some("detected `|`-delimited, no quoting, newline LF")
+    );
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| {
+                edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
+            }),
+        "{:?}",
+        node.details["edits"]
+    );
+}
+
+#[test]
+fn csv_extension_with_undeclared_semicolon_dialect_is_sniffed_and_disclosed() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "id;value\n1;old\n2;same\n").unwrap();
+    fs::write(right.join("data.csv"), "id;value\n1;new\n2;same\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.csv").expect("data.csv");
+    assert!(node.tags.contains("binoc.dialect-inferred"));
+    assert_eq!(
+        node.binoc_annotation("dialect_provenance")
+            .and_then(|annotation| annotation.as_str()),
+        Some("detected semicolon-delimited, no quoting, newline LF")
+    );
+    assert!(
+        node.details["edits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edit| {
+                edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"
+            }),
+        "{:?}",
+        node.details["edits"]
+    );
+}
+
+#[test]
 fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");

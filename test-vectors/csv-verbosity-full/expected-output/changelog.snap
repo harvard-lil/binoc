@@ -9,6 +9,7 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 - **data.csv**: 5 cells changed
   - Sources
     - data.csv (from, modify, binoc.pair.name)
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 1, column 'score': '10' -> '11'
     - row 2, column 'score': '20' -> '21'

@@ -10,6 +10,7 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 - **FoodData_Central_csv_2026-04-30/README.txt**: Moved from FoodData_Central_csv_2025-12-18/README.txt
 - **FoodData_Central_csv_2026-04-30/data**: Moved from FoodData_Central_csv_2025-12-18/data
 - **FoodData_Central_csv_2026-04-30/data/new-table.csv**: Added
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **FoodData_Central_csv_2026-04-30/docs**: Added
 - **FoodData_Central_csv_2026-04-30/docs/changelog-note.txt**: Moved from FoodData_Central_csv_2025-12-18/docs/changelog-note.txt
 - **FoodData_Central_csv_2026-04-30/docs/license.txt**: Moved from FoodData_Central_csv_2025-12-18/docs/license.txt

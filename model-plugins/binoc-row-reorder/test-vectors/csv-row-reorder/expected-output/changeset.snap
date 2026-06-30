@@ -29,6 +29,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
+          "binoc.dialect-inferred",
           "binoc.row-reorder"
         ],
         "details": {
@@ -45,7 +46,14 @@ expression: "&stable_changeset"
               "verb": "tabular.reorder_rows"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
+        ]
       }
     ]
   }

@@ -7,8 +7,10 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **forced**: 1 row modified by key
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - key id '1', column 'value': 'old' -> 'new'
 - **records**: 1 row modified by key
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - key id '1', column 'value': 'old' -> 'new'

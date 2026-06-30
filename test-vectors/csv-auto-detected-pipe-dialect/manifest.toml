@@ -1,0 +1,15 @@
+[vector]
+name = "csv-auto-detected-pipe-dialect"
+description = "Extensionless tabular input auto-detects a pipe dialect, discloses the inference, and still reports keyed cell changes"
+tags = ["csv", "dialect", "pipe", "inference", "extensionless"]
+
+[config.dataset]
+
+[[config.dataset.paths]]
+match = "records"
+content_type = "text/csv"
+row_identity = { columns = ["id"] }
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change", "binoc.dialect-inferred"]

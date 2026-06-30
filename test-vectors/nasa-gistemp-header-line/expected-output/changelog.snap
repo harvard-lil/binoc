@@ -7,5 +7,6 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **GLB.Ts+dSST.csv**: 1 row modified by key
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - key Year '2024', column 'Feb': '118' -> '119'

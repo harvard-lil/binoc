@@ -11,3 +11,4 @@ Claims
 - actions_2023.csv, actions_2024.csv merged into actions.csv
 
 - **actions.csv**: Merged from actions_2023.csv, actions_2024.csv
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF

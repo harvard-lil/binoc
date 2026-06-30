@@ -1,6 +1,5 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 373
 expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
@@ -8,11 +7,13 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **observations_2024.csv**: Moved from observations_north.csv
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 2, column 'year': '2025' -> '2024'
     - row 2, column 'region': 'north' -> 'south'
     - row 2, column 'count': '15' -> '12'
 - **observations_2025.csv**: Moved from observations_south.csv
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 1, column 'year': '2024' -> '2025'
     - row 1, column 'region': 'south' -> 'north'

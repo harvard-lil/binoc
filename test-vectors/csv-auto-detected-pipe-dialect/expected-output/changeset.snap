@@ -1,0 +1,60 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "records",
+        "sources": [
+          {
+            "path": "records",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row modified by key"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.dialect-inferred"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "value",
+                "from": "old",
+                "key": {
+                  "id": "1"
+                },
+                "to": "new"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected `|`-delimited, no quoting, newline LF"
+          }
+        ]
+      }
+    ]
+  }
+}
