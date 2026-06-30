@@ -1,5 +1,6 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
+assertion_line: 372
 expression: "&stable_changeset"
 ---
 {
@@ -177,7 +178,10 @@ expression: "&stable_changeset"
           "text": "configured row keys had null values; fell back to positional row comparison"
         }
       ],
-      "location": "binoc.write.tabular"
+      "location": "data.csv",
+      "extract": {
+        "aspect": "content"
+      }
     }
   ]
 }

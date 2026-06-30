@@ -205,6 +205,8 @@ pub struct Diagnostic {
     pub message: Summary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extract: Option<ExtractHint>,
 }
 
 impl Diagnostic {
@@ -218,6 +220,7 @@ impl Diagnostic {
             code: code.into(),
             message: message.into(),
             location: None,
+            extract: None,
         }
     }
 
@@ -235,6 +238,11 @@ impl Diagnostic {
 
     pub fn with_location(mut self, location: impl Into<String>) -> Self {
         self.location = Some(location.into());
+        self
+    }
+
+    pub fn with_extract_hint(mut self, hint: ExtractHint) -> Self {
+        self.extract = Some(hint);
         self
     }
 
@@ -711,7 +719,7 @@ pub struct ValuePreview {
 }
 
 /// Pointer to an extract aspect that can return exhaustive content.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExtractHint {
     /// Aspect name accepted by `binoc extract`.
@@ -1007,7 +1015,10 @@ mod tests {
         let child = DiffNode::new("modify", "tabular", "dir/data.csv")
             .with_artifact(artifact.clone())
             .with_source_items(source_items.clone())
-            .with_diagnostic(Diagnostic::suggestion("binoc.demo", "Try a richer plugin"));
+            .with_diagnostic(
+                Diagnostic::suggestion("binoc.demo", "Try a richer plugin")
+                    .with_extract_hint(ExtractHint::new("content")),
+            );
         let root = DiffNode::new("modify", "directory", "dir").with_children(vec![child]);
 
         let json = serde_json::to_string(&root).unwrap();
@@ -1022,6 +1033,13 @@ mod tests {
             "child source_items missing"
         );
         assert_eq!(restored_child.diagnostics.len(), 1);
+        assert_eq!(
+            restored_child.diagnostics[0]
+                .extract
+                .as_ref()
+                .map(|hint| hint.aspect.as_str()),
+            Some("content")
+        );
     }
 
     #[test]

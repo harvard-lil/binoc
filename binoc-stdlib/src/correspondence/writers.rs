@@ -4,9 +4,9 @@ use std::io;
 
 use binoc_sdk::{
     file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
-    BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractResult,
-    IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment, ShapeFilter,
-    StructuredDocument, Summary, TabularData, TabularDataPair, Value, WriteOutput,
+    BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractHint,
+    ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment,
+    ShapeFilter, StructuredDocument, Summary, TabularData, TabularDataPair, Value, WriteOutput,
     WriterDescriptor,
 };
 use fastcdc::v2020::StreamCDC;
@@ -112,6 +112,7 @@ impl EditListWriter for TabularWriter {
             return Ok(None);
         };
 
+        let location = &ctx.view.item(ctx.link.right).logical_path;
         let mut edits = Vec::new();
         let mut diagnostics = Vec::new();
         if left.headers != right.headers {
@@ -178,7 +179,12 @@ impl EditListWriter for TabularWriter {
                     return Ok(Some(WriteOutput { edits, diagnostics }));
                 }
                 let quality = key_quality(&left_keyed.index, &right_keyed.index);
-                push_key_quality_diagnostics(&mut diagnostics, quality, ctx.row_identity_policies);
+                push_key_quality_diagnostics(
+                    &mut diagnostics,
+                    location,
+                    quality,
+                    ctx.row_identity_policies,
+                );
                 if let Some(edit) = key_quality_edit(quality, ctx.row_identity_policies) {
                     edits.push(edit);
                 }
@@ -761,17 +767,20 @@ fn key_quality(left: &KeyedIndex<'_>, right: &KeyedIndex<'_>) -> KeyQuality {
 
 fn push_key_quality_diagnostics(
     diagnostics: &mut Vec<Diagnostic>,
+    location: &str,
     quality: KeyQuality,
     policies: binoc_sdk::RowIdentityPolicies,
 ) {
     push_key_quality_diagnostic(
         diagnostics,
+        location,
         quality.has_null,
         policies.on_null_key,
         "configured row keys had null values",
     );
     push_key_quality_diagnostic(
         diagnostics,
+        location,
         quality.has_duplicate,
         policies.on_duplicate_key,
         "configured row keys had duplicate values",
@@ -780,6 +789,7 @@ fn push_key_quality_diagnostics(
 
 fn push_key_quality_diagnostic(
     diagnostics: &mut Vec<Diagnostic>,
+    location: &str,
     present: bool,
     policy: IdentityFailurePolicy,
     reason: &str,
@@ -788,15 +798,19 @@ fn push_key_quality_diagnostic(
         return;
     }
     let message = format!("{reason}; fell back to positional row comparison");
-    diagnostics.push(match policy {
-        IdentityFailurePolicy::Diagnostic => {
-            Diagnostic::warning("binoc.keyed_row_identity_degraded", message)
+    diagnostics.push(
+        match policy {
+            IdentityFailurePolicy::Diagnostic => {
+                Diagnostic::warning("binoc.keyed_row_identity_degraded", message)
+            }
+            IdentityFailurePolicy::Error => {
+                Diagnostic::error("binoc.keyed_row_identity_degraded", message)
+            }
+            IdentityFailurePolicy::Ignore => unreachable!("ignore returned above"),
         }
-        IdentityFailurePolicy::Error => {
-            Diagnostic::error("binoc.keyed_row_identity_degraded", message)
-        }
-        IdentityFailurePolicy::Ignore => unreachable!("ignore returned above"),
-    });
+        .with_location(location)
+        .with_extract_hint(ExtractHint::new("content")),
+    );
 }
 
 fn key_quality_edit(quality: KeyQuality, policies: binoc_sdk::RowIdentityPolicies) -> Option<Edit> {

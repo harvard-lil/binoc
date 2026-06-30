@@ -1411,6 +1411,8 @@ fn append_rule_diagnostics(
     target.extend(diagnostics.into_iter().map(|mut diagnostic| {
         if diagnostic.location.is_none() {
             diagnostic.location = Some(rule_name.to_string());
+        } else if diagnostic.extract.is_some() {
+            // Extract-capable diagnostics use `location` as the CLI node path.
         } else {
             diagnostic.location = Some(format!(
                 "{}:{}",
@@ -1709,8 +1711,8 @@ impl EngineView for CoreEngineView<'_> {
 mod tests {
     use super::*;
     use binoc_sdk::{
-        ArtifactFormat, CompactionRule, Edit, PairRule, ParseDescriptor, ParseOutput, ParseRule,
-        ProjectionHint,
+        ArtifactFormat, CompactionRule, Diagnostic, Edit, ExtractHint, PairRule, ParseDescriptor,
+        ParseOutput, ParseRule, ProjectionHint,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1812,6 +1814,23 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn append_rule_diagnostics_preserves_extract_locations() {
+        let mut out = Vec::new();
+        append_rule_diagnostics(
+            &mut out,
+            "binoc.write.tabular",
+            vec![
+                Diagnostic::warning("binoc.keyed_row_identity_degraded", "fallback")
+                    .with_location("data.csv")
+                    .with_extract_hint(ExtractHint::new("content")),
+            ],
+        );
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].location.as_deref(), Some("data.csv"));
     }
 
     struct NonDecreasingCompaction;
