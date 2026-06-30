@@ -382,6 +382,38 @@ edit_cost = 24
 "binoc.compact.row_alignment" = 1
 
 [[vectors]]
+name = "csv-row-insertion-suppression-sentinels"
+description_cost = 26
+edit_cost = 24
+link_count = 2
+
+[[vectors.links]]
+index = 0
+left_path = ""
+right_path = ""
+evidence = "binoc.pair.root"
+proposer = "binoc.pair.root"
+writers = ["binoc.write.container"]
+settled = false
+edit_count = 0
+edit_cost = 0
+
+[[vectors.links]]
+index = 1
+left_path = "data.csv"
+right_path = "data.csv"
+evidence = "binoc.pair.name"
+proposer = "binoc.pair.name"
+writers = ["binoc.write.tabular"]
+settled = false
+edit_count = 1
+edit_cost = 24
+
+[vectors.compaction_accepted]
+"binoc.compact.row_addition" = 1
+"binoc.compact.row_alignment" = 1
+
+[[vectors]]
 name = "csv-row-removal"
 description_cost = 30
 edit_cost = 28

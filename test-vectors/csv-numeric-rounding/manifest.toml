@@ -1,0 +1,8 @@
+[vector]
+name = "csv-numeric-rounding"
+description = "CSV numeric cells rounded to a common modulus and representation-only numeric differences ignored"
+tags = ["csv", "cell-change", "value-rounding"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.value-rounded"]
