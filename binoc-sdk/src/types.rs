@@ -514,6 +514,11 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
 pub struct CorrespondenceConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expand_renamed_unchanged_collections: Option<bool>,
+    /// Byte threshold above which stdlib tabular rules skip in-memory
+    /// `tabular_v1` materialization and use the bounded streaming keyed-writer
+    /// path instead. `None` uses the stdlib default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub large_tabular_threshold_bytes: Option<u64>,
     /// Maximum decompressed size of a single gzip stream, in bytes. `None` uses
     /// the stdlib default. Raise this for legitimately large `.gz` payloads;
     /// the cap exists only as a decompression-bomb bound, so any value over a
