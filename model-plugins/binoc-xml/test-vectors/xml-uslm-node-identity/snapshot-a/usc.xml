@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uscDoc>
+  <title>
+    <section identifier="/us/usc/t54/s100501">
+      <num>100501</num>
+      <heading>Definitions</heading>
+      <content>Old definition text.</content>
+    </section>
+    <section identifier="/us/usc/t54/s100502">
+      <num>100502</num>
+      <heading>Removed program</heading>
+      <content>This section is removed.</content>
+    </section>
+  </title>
+</uscDoc>

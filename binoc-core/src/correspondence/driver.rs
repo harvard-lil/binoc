@@ -948,11 +948,23 @@ fn link_ctx<'a>(
                 })
         })
         .unwrap_or_else(|| (Cow::Borrowed(&[]), RowIdentityPolicies::default()));
+    let node_identity = config
+        .node_identities
+        .get(right_path)
+        .map(Cow::Borrowed)
+        .or_else(|| {
+            config
+                .dispatch_resolver
+                .as_ref()
+                .and_then(|resolver| resolver.node_identity_for(right_path))
+                .map(Cow::Owned)
+        });
     LinkCtx {
         view,
         link,
         row_keys,
         row_identity_policies,
+        node_identity,
         artifact_cache,
     }
 }
@@ -1795,6 +1807,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,
@@ -2078,6 +2091,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,
@@ -2169,6 +2183,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,
@@ -2190,6 +2205,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,
@@ -2231,6 +2247,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,
@@ -2264,6 +2281,7 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
             dispatch_resolver: None,

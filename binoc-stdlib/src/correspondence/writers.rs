@@ -2083,6 +2083,12 @@ impl EditListWriter for StructuredDocumentWriter {
             ));
         }
 
+        if let Some(identity) = ctx.node_identity.as_deref() {
+            if let Some(edits) = keyed_tree_edits(identity, &left, &right, &item_type) {
+                return Ok(Some(edits.into()));
+            }
+        }
+
         let changes = json_value_changes(&left.value, &right.value);
         Ok(Some(
             vec![
@@ -2101,6 +2107,198 @@ impl EditListWriter for StructuredDocumentWriter {
             .into(),
         ))
     }
+}
+
+struct KeyedDocumentNode<'a> {
+    path: String,
+    value: &'a serde_json::Value,
+}
+
+fn keyed_tree_edits(
+    identity: &binoc_sdk::NodeIdentity,
+    left: &StructuredDocument,
+    right: &StructuredDocument,
+    item_type: &str,
+) -> Option<Vec<Edit>> {
+    let key_field = node_identity_attribute_key(&identity.key_attribute)?;
+    let left_nodes = collect_keyed_document_nodes(&left.value, &key_field)?;
+    let right_nodes = collect_keyed_document_nodes(&right.value, &key_field)?;
+    if left_nodes.is_empty() && right_nodes.is_empty() {
+        return None;
+    }
+
+    let left_keys: BTreeSet<&String> = left_nodes.keys().collect();
+    let right_keys: BTreeSet<&String> = right_nodes.keys().collect();
+    let mut edits = Vec::new();
+    for key in left_keys.difference(&right_keys) {
+        let node = left_nodes.get(*key).expect("known left key");
+        edits.push(keyed_document_remove_edit(
+            item_type,
+            &identity.key_attribute,
+            key,
+            node,
+        ));
+    }
+    for key in right_keys.difference(&left_keys) {
+        let node = right_nodes.get(*key).expect("known right key");
+        edits.push(keyed_document_add_edit(
+            item_type,
+            &identity.key_attribute,
+            key,
+            node,
+        ));
+    }
+    for key in left_keys.intersection(&right_keys) {
+        let left_node = left_nodes.get(*key).expect("known left key");
+        let right_node = right_nodes.get(*key).expect("known right key");
+        if left_node.value != right_node.value {
+            edits.push(keyed_document_edit(
+                item_type,
+                &identity.key_attribute,
+                key,
+                left_node,
+                right_node,
+            ));
+        }
+    }
+    (!edits.is_empty()).then_some(edits)
+}
+
+fn node_identity_attribute_key(key_attribute: &str) -> Option<String> {
+    let trimmed = key_attribute.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(if trimmed.starts_with('@') {
+        trimmed.to_string()
+    } else {
+        format!("@{trimmed}")
+    })
+}
+
+fn collect_keyed_document_nodes<'a>(
+    value: &'a serde_json::Value,
+    key_field: &str,
+) -> Option<BTreeMap<String, KeyedDocumentNode<'a>>> {
+    let mut nodes = BTreeMap::new();
+    let mut duplicate = false;
+    collect_keyed_document_nodes_at("$", value, key_field, &mut nodes, &mut duplicate);
+    (!duplicate).then_some(nodes)
+}
+
+fn collect_keyed_document_nodes_at<'a>(
+    path: &str,
+    value: &'a serde_json::Value,
+    key_field: &str,
+    nodes: &mut BTreeMap<String, KeyedDocumentNode<'a>>,
+    duplicate: &mut bool,
+) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(key) = map
+                .get(key_field)
+                .and_then(serde_json::Value::as_str)
+                .filter(|key| !key.is_empty())
+            {
+                if nodes
+                    .insert(
+                        key.to_string(),
+                        KeyedDocumentNode {
+                            path: path.to_string(),
+                            value,
+                        },
+                    )
+                    .is_some()
+                {
+                    *duplicate = true;
+                }
+            }
+            for (child_key, child) in map {
+                collect_keyed_document_nodes_at(
+                    &json_child_path(path, child_key),
+                    child,
+                    key_field,
+                    nodes,
+                    duplicate,
+                );
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                collect_keyed_document_nodes_at(
+                    &format!("{path}[{index}]"),
+                    child,
+                    key_field,
+                    nodes,
+                    duplicate,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
+fn keyed_document_remove_edit(
+    item_type: &str,
+    key_attribute: &str,
+    key: &str,
+    node: &KeyedDocumentNode<'_>,
+) -> Edit {
+    Edit::new(
+        "document.remove_node",
+        json!({
+            "key_attribute": key_attribute,
+            "key": key,
+            "path": node.path,
+            "value": json_value_preview(node.value),
+        }),
+    )
+    .with_item_type(item_type.to_string())
+    .with_tag("binoc.content-changed")
+    .with_tag("binoc.document-node-removal")
+}
+
+fn keyed_document_add_edit(
+    item_type: &str,
+    key_attribute: &str,
+    key: &str,
+    node: &KeyedDocumentNode<'_>,
+) -> Edit {
+    Edit::new(
+        "document.add_node",
+        json!({
+            "key_attribute": key_attribute,
+            "key": key,
+            "path": node.path,
+            "value": json_value_preview(node.value),
+        }),
+    )
+    .with_item_type(item_type.to_string())
+    .with_tag("binoc.content-changed")
+    .with_tag("binoc.document-node-addition")
+}
+
+fn keyed_document_edit(
+    item_type: &str,
+    key_attribute: &str,
+    key: &str,
+    left: &KeyedDocumentNode<'_>,
+    right: &KeyedDocumentNode<'_>,
+) -> Edit {
+    Edit::new(
+        "document.edit_node",
+        json!({
+            "key_attribute": key_attribute,
+            "key": key,
+            "left_path": left.path,
+            "right_path": right.path,
+            "changes": json_value_changes(left.value, right.value),
+            "examples_truncated": json_change_count(left.value, right.value) > MAX_JSON_CHANGE_EXAMPLES,
+        }),
+    )
+    .with_item_type(item_type.to_string())
+    .with_tag("binoc.content-changed")
+    .with_tag("binoc.document-node-edit")
 }
 
 fn load_structured_document(
