@@ -89,12 +89,15 @@ The concrete cap for this round is:
 - The SEC 2026-02 -> 2026-03 capstone must complete under **1 GiB peak RSS** on
   the reference developer-machine class used for the existing measurements.
 - Full in-memory `TabularData` is a small-input implementation strategy only.
-  It is acceptable when each side's tabular source is at or below **32 MiB**,
-  or **64 MiB total for the pair**. Above that, stdlib tabular rules need a
-  bounded path: streaming summaries, chunk/spill indexes, compact keyed indexes,
-  or source reopen for extraction. This ceiling is grounded in the measured
-  amplification above: 36.0 MiB total input used 463.4 MiB RSS, while 145.0 MiB
-  total input used 1,869.3 MiB RSS.
+  It is acceptable when each side's tabular source is at or below the
+  stdlib-owned dataset setting
+  `dataset.correspondence.large_tabular_threshold_bytes` (default **32 MiB**),
+  or twice that total for the pair at the default. Above the configured
+  threshold, stdlib tabular rules need a bounded path: streaming summaries,
+  chunk/spill indexes, compact keyed indexes, or source reopen for extraction.
+  The default ceiling is grounded in the measured amplification above: 36.0 MiB
+  total input used 463.4 MiB RSS, while 145.0 MiB total input used 1,869.3 MiB
+  RSS.
 - #110 must remove whole-member decompression buffers. Zip, tar, and gzip
   expansion should copy through fixed buffers and enforce caps incrementally.
 - #111 may keep full `TabularData` for the small-input path, but large keyed-row

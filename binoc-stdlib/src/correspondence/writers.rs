@@ -15,7 +15,6 @@ use serde_json::json;
 use similar::{ChangeTag, TextDiff};
 
 use super::parse::JsonSourceFacts;
-use super::parse::LARGE_TABULAR_THRESHOLD_BYTES;
 use super::tabular::load_tabular;
 
 const MAX_CAPTURED_VALUES: usize = 16;
@@ -327,7 +326,9 @@ impl EditListWriter for TabularWriter {
     }
 }
 
-pub struct LargeTabularStreamWriter;
+pub struct LargeTabularStreamWriter {
+    pub threshold_bytes: u64,
+}
 
 impl EditListWriter for LargeTabularStreamWriter {
     fn descriptor(&self) -> WriterDescriptor {
@@ -356,7 +357,7 @@ impl EditListWriter for LargeTabularStreamWriter {
         let largest = left_item
             .resolve_size(data)?
             .max(right_item.resolve_size(data)?);
-        if largest <= LARGE_TABULAR_THRESHOLD_BYTES {
+        if largest <= self.threshold_bytes {
             return Ok(None);
         }
 

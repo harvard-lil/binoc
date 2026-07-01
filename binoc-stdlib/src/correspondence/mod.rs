@@ -24,6 +24,9 @@ pub struct CorrespondenceOptions {
     /// left unsettled so expansion can recover copy/move-out provenance under
     /// the renamed collection. Set false for the fast short-circuit posture.
     pub expand_renamed_unchanged_collections: bool,
+    /// Byte threshold above which stdlib tabular rules stop materializing full
+    /// in-memory `tabular_v1` artifacts and rely on the bounded streaming path.
+    pub large_tabular_threshold_bytes: u64,
     /// Decompression-bomb size caps for the archive/gzip expand rules. Defaults
     /// to [`expand::ExpandCaps::default`]; per-dataset config overrides
     /// individual caps (see [`engine_config_for_dataset_config`]).
@@ -34,6 +37,7 @@ impl Default for CorrespondenceOptions {
     fn default() -> Self {
         Self {
             expand_renamed_unchanged_collections: true,
+            large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
             expand_caps: expand::ExpandCaps::default(),
         }
     }
@@ -49,6 +53,9 @@ pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> Correspo
         let correspondence = &semantics.correspondence;
         if let Some(value) = correspondence.expand_renamed_unchanged_collections {
             options.expand_renamed_unchanged_collections = value;
+        }
+        if let Some(bytes) = correspondence.large_tabular_threshold_bytes {
+            options.large_tabular_threshold_bytes = bytes;
         }
         if let Some(bytes) = correspondence.max_gzip_bytes {
             options.expand_caps.gzip_max_bytes = bytes;
@@ -93,8 +100,12 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             CoreRule::Parse(Arc::new(parse::JsonMediaRecordsParse)),
             CoreRule::Parse(Arc::new(parse::JsonParse)),
             CoreRule::Parse(Arc::new(parse::JsonMediaParse)),
-            CoreRule::Parse(Arc::new(parse::CsvParse)),
-            CoreRule::Parse(Arc::new(parse::CsvMediaParse)),
+            CoreRule::Parse(Arc::new(parse::CsvParse {
+                large_tabular_threshold_bytes: options.large_tabular_threshold_bytes,
+            })),
+            CoreRule::Parse(Arc::new(parse::CsvMediaParse {
+                large_tabular_threshold_bytes: options.large_tabular_threshold_bytes,
+            })),
             CoreRule::Parse(Arc::new(parse::YamlParse)),
             CoreRule::Parse(Arc::new(parse::YamlMediaParse)),
             CoreRule::Parse(Arc::new(parse::TomlParse)),
@@ -103,7 +114,9 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
         ],
         writers: vec![
             Arc::new(writers::TabularWriter),
-            Arc::new(writers::LargeTabularStreamWriter),
+            Arc::new(writers::LargeTabularStreamWriter {
+                threshold_bytes: options.large_tabular_threshold_bytes,
+            }),
             Arc::new(writers::ParserMetadataWriter),
             Arc::new(writers::StructuredDocumentWriter),
             Arc::new(writers::TextWriter),
@@ -1138,15 +1151,19 @@ fn item_emits_tabular_artifact(
     path_entry: Option<&PathConfigEntry>,
     data: &dyn DataAccess,
 ) -> bool {
-    let csv = parse::CsvParse;
-    let csv_media = parse::CsvMediaParse;
+    let csv = parse::CsvParse {
+        large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+    };
+    let csv_media = parse::CsvMediaParse {
+        large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+    };
     let json_records = parse::JsonRecordsParse;
     let json_media_records = parse::JsonMediaRecordsParse;
-    if let Some(forced) = path_entry
+    if let Some(rule_name) = path_entry
         .and_then(|entry| entry.rule.as_deref())
-        .and_then(forced_tabular_parse_rule)
+        .filter(|rule_name| rule_can_emit_tabular_artifact(rule_name))
     {
-        if let Ok(output) = forced.parse(item, data) {
+        if let Ok(output) = parse_forced_tabular_rule(rule_name, item, data) {
             return !output.bytes.is_empty();
         }
     }
@@ -1171,18 +1188,34 @@ fn item_emits_tabular_artifact(
     false
 }
 
-fn forced_tabular_parse_rule(rule_name: &str) -> Option<&'static dyn ParseRule> {
+fn parse_forced_tabular_rule(
+    rule_name: &str,
+    item: &ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<binoc_sdk::ParseOutput> {
     match rule_name {
-        "binoc.parse.csv" => Some(&parse::CsvParse),
-        "binoc.parse.csv_media" => Some(&parse::CsvMediaParse),
-        "binoc.parse.json_records" => Some(&parse::JsonRecordsParse),
-        "binoc.parse.json_media_records" => Some(&parse::JsonMediaRecordsParse),
-        _ => None,
+        "binoc.parse.csv" => parse::CsvParse {
+            large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+        }
+        .parse(item, data),
+        "binoc.parse.csv_media" => parse::CsvMediaParse {
+            large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+        }
+        .parse(item, data),
+        "binoc.parse.json_records" => parse::JsonRecordsParse.parse(item, data),
+        "binoc.parse.json_media_records" => parse::JsonMediaRecordsParse.parse(item, data),
+        _ => unreachable!("rule_can_emit_tabular_artifact filters unknown rules"),
     }
 }
 
 fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
-    forced_tabular_parse_rule(rule_name).is_some()
+    matches!(
+        rule_name,
+        "binoc.parse.csv"
+            | "binoc.parse.csv_media"
+            | "binoc.parse.json_records"
+            | "binoc.parse.json_media_records"
+    )
 }
 
 #[cfg(test)]

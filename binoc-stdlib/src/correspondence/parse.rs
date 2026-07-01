@@ -10,8 +10,12 @@ use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 const CSV_SNIFF_BYTES: usize = 16 * 1024;
 const CSV_DELIMITER_CANDIDATES: &[u8] = b",\t|;:";
 
-pub struct CsvParse;
-pub struct CsvMediaParse;
+pub struct CsvParse {
+    pub large_tabular_threshold_bytes: u64,
+}
+pub struct CsvMediaParse {
+    pub large_tabular_threshold_bytes: u64,
+}
 pub struct JsonParse;
 pub struct JsonMediaParse;
 /// Routes JSON / JSONL whose top level is a consistently-shaped record
@@ -30,6 +34,10 @@ pub struct TomlParse;
 /// Transcodes INI / cfg / properties files into a `structured_document`.
 pub struct IniParse;
 
+/// Default byte threshold above which stdlib tabular rules switch from
+/// in-memory `tabular_v1` materialization to the streaming keyed-writer path.
+/// The runtime value is configurable via
+/// `dataset.correspondence.large_tabular_threshold_bytes`.
 pub(crate) const LARGE_TABULAR_THRESHOLD_BYTES: u64 = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,7 +73,7 @@ impl ParseRule for CsvParse {
     }
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
-        if item.resolve_size(data)? > LARGE_TABULAR_THRESHOLD_BYTES {
+        if item.resolve_size(data)? > self.large_tabular_threshold_bytes {
             return Ok(ParseOutput::default());
         }
         let bytes = data.read_bytes(item)?;
@@ -128,7 +136,10 @@ impl ParseRule for CsvMediaParse {
     }
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
-        CsvParse.parse(item, data)
+        CsvParse {
+            large_tabular_threshold_bytes: self.large_tabular_threshold_bytes,
+        }
+        .parse(item, data)
     }
 }
 
