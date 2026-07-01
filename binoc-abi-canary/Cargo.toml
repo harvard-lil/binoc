@@ -1,0 +1,28 @@
+[package]
+name = "binoc-abi-canary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "ABI canary: a native renderer built as a cdylib and loaded over the plugin C ABI in tests, so the boundary stays compiler/linker-enforced"
+publish = false
+
+[lib]
+name = "binoc_abi_canary"
+crate-type = ["cdylib", "rlib"]
+
+# `export_plugin!` emits a `#[cfg(feature = "python")]` pymodule. This crate
+# deliberately has no `python` feature (no pyo3); tell check-cfg the value is
+# expected rather than declaring a feature that would fail to build if enabled.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("python"))'] }
+
+[dependencies]
+binoc-sdk = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+libloading = "0.9.0"

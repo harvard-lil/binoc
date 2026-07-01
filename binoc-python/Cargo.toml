@@ -22,3 +22,10 @@ binoc-cli = { workspace = true }
 libloading = "0.9.0"
 pyo3 = { workspace = true }
 serde_json = { workspace = true }
+
+[features]
+# Re-export the fat bundle so a slim wheel can be built with
+# `--no-default-features`. See
+# docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
+default = ["bundled"]
+bundled = ["binoc-cli/bundled"]
