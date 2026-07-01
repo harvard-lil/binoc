@@ -11,10 +11,10 @@ use std::sync::Arc;
 
 use binoc_sdk::{
     structured_document_v1, tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
-    CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
-    FileSelector, ItemRef, NodeIdentity, ParseRule, PathConfigEntry, ProjectionAnnotationContext,
-    ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies, Summary, TableConfig,
-    TabularParseConfig,
+    Cardinality, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic,
+    DispatchResolver, Edit, FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity, ParseRule,
+    PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
+    RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -768,10 +768,21 @@ fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentity>) -> Ro
     let Some(entry) = entry else {
         return canonicalize_row_identity(defaults.clone());
     };
-    let mut identity = entry.clone();
-    if !row_identity_configured(&identity) {
-        identity.columns = defaults.columns.clone();
-        identity.by_position = defaults.by_position.clone();
+    let mut identity = defaults.clone();
+    if !entry.columns.is_empty() {
+        identity.columns = entry.columns.clone();
+    }
+    if !entry.by_position.is_empty() {
+        identity.by_position = entry.by_position.clone();
+    }
+    if entry.cardinality != Cardinality::default() {
+        identity.cardinality = entry.cardinality;
+    }
+    if entry.on_null_key != IdentityFailurePolicy::default() {
+        identity.on_null_key = entry.on_null_key;
+    }
+    if entry.on_duplicate_key != IdentityFailurePolicy::default() {
+        identity.on_duplicate_key = entry.on_duplicate_key;
     }
     canonicalize_row_identity(identity)
 }
@@ -1669,5 +1680,31 @@ mod tests {
 
         assert!(row_identity.is_empty());
         assert!(data.take_log().is_empty());
+    }
+
+    #[test]
+    fn merge_row_identity_keeps_default_policy_when_entry_only_overrides_columns() {
+        let defaults = RowIdentity {
+            columns: vec!["id".into()],
+            by_position: vec![1],
+            cardinality: Cardinality::default(),
+            on_null_key: IdentityFailurePolicy::Error,
+            on_duplicate_key: IdentityFailurePolicy::Ignore,
+        };
+        let entry = RowIdentity {
+            columns: vec!["email".into()],
+            by_position: Vec::new(),
+            cardinality: Cardinality::default(),
+            on_null_key: IdentityFailurePolicy::default(),
+            on_duplicate_key: IdentityFailurePolicy::default(),
+        };
+
+        let merged = merge_row_identity(&defaults, Some(&entry));
+
+        assert_eq!(merged.columns, vec!["email"]);
+        assert!(merged.by_position.is_empty());
+        assert_eq!(merged.cardinality, Cardinality::default());
+        assert_eq!(merged.on_null_key, IdentityFailurePolicy::Error);
+        assert_eq!(merged.on_duplicate_key, IdentityFailurePolicy::Ignore);
     }
 }

@@ -725,6 +725,8 @@ pub struct ExtractHint {
     /// Aspect name accepted by `binoc extract`.
     pub aspect: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changeset_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }
 
@@ -732,8 +734,14 @@ impl ExtractHint {
     pub fn new(aspect: impl Into<String>) -> Self {
         Self {
             aspect: aspect.into(),
+            changeset_path: None,
             label: None,
         }
+    }
+
+    pub fn with_changeset_path(mut self, path: impl Into<String>) -> Self {
+        self.changeset_path = Some(path.into());
+        self
     }
 
     pub fn with_label(mut self, label: impl Into<String>) -> Self {

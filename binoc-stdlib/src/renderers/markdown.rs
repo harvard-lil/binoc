@@ -208,8 +208,9 @@ fn format_diagnostics_section(
         out.push_str(&format!(" [{}]\n", diagnostic.code));
         if let Some(extract) = &diagnostic.extract {
             if let Some(location) = &diagnostic.location {
+                let changeset_path = extract.changeset_path.as_deref().unwrap_or("CHANGESET");
                 out.push_str(&format!(
-                    "  - use `binoc extract CHANGESET \"{location}\" {}`\n",
+                    "  - use `binoc extract {changeset_path} \"{location}\" {}`\n",
                     extract.aspect
                 ));
             }
@@ -1862,14 +1863,30 @@ mod tests {
                 "configured row keys had duplicate values; fell back to positional row comparison",
             )
             .with_location("data.csv")
-            .with_extract_hint(ExtractHint::new("content")),
+            .with_extract_hint(ExtractHint::new("content").with_changeset_path("changeset.md")),
         );
 
         let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
         assert!(
-            md.contains("use `binoc extract CHANGESET \"data.csv\" content`"),
+            md.contains("use `binoc extract changeset.md \"data.csv\" content`"),
             "missing extract hint in markdown:\n{md}"
         );
+    }
+
+    #[test]
+    fn suggestion_diagnostics_falls_back_to_changeset_placeholder_when_path_unknown() {
+        let mut changeset = Changeset::new("v1", "v2", None);
+        changeset.push_diagnostic(
+            Diagnostic::suggestion(
+                "binoc.keyed_row_identity_degraded",
+                "configured row keys had duplicate values; fell back to positional row comparison",
+            )
+            .with_location("data.csv")
+            .with_extract_hint(ExtractHint::new("content")),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("use `binoc extract CHANGESET \"data.csv\" content`"));
     }
 
     #[test]
