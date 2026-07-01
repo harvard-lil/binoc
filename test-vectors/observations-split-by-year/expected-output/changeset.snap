@@ -75,15 +75,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.dialect-inferred",
           "binoc.tabular_split"
-        ],
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
         ]
       },
       {
@@ -110,15 +102,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.dialect-inferred",
           "binoc.tabular_split"
-        ],
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
         ]
       }
     ]

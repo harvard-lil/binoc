@@ -7,14 +7,12 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.tar.gz/>inventory.csv**: 1 row added
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows added
     - row 3: 'sprockets', '20'
 - **bundle.zip/>notes.txt**: 2 lines added; 1 line removed
   - Line changes
     - line 1: 'Version 1 notes.' -> 'Version 2 notes.'
 - **data.csv**: 2 cells changed
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 1, column 'age': '30' -> '31'
     - row 3, column 'city': 'Seattle' -> 'Portland'
@@ -31,5 +29,4 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
     - '\nFAKEICONv1'
 - **license-copy.txt**: Copied from license.txt
 - **metrics.csv**: Columns reordered
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **summary.txt**: Moved from report.txt

@@ -68,7 +68,6 @@ expression: "&stable_changeset"
             "tags": [
               "binoc.column-type-change",
               "binoc.content-changed",
-              "binoc.dialect-inferred",
               "binoc.move",
               "binoc.move.modified",
               "binoc.row-addition",
@@ -107,14 +106,7 @@ expression: "&stable_changeset"
                   "verb": "tabular.add_row"
                 }
               ]
-            },
-            "annotations": [
-              {
-                "package": "binoc",
-                "key": "dialect_provenance",
-                "value": "detected comma-delimited, no quoting, newline LF"
-              }
-            ]
+            }
           },
           {
             "action": "move",
@@ -143,7 +135,6 @@ expression: "&stable_changeset"
               "binoc.cell-change",
               "binoc.column-type-change",
               "binoc.content-changed",
-              "binoc.dialect-inferred",
               "binoc.move",
               "binoc.move.modified",
               "binoc.schema-change",
@@ -198,14 +189,7 @@ expression: "&stable_changeset"
                   "verb": "tabular.edit_cell"
                 }
               ]
-            },
-            "annotations": [
-              {
-                "package": "binoc",
-                "key": "dialect_provenance",
-                "value": "detected comma-delimited, no quoting, newline LF"
-              }
-            ]
+            }
           }
         ]
       }

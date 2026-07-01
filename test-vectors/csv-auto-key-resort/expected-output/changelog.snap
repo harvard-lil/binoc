@@ -7,7 +7,6 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: 1 row modified by key
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - key id 'brfss-003', column 'rate': '14.8' -> '15.0'
 

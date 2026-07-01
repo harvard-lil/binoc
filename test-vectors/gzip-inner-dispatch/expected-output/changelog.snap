@@ -10,7 +10,6 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
   - Line changes
     - line 2: '1|Aroostook|120' -> '1|Aroostook|121'
 - **data.csv.gz/>data.csv**: 1 row added; 1 cell changed
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 2, column 'name': 'Bob' -> 'Robert'
   - Rows added

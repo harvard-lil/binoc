@@ -7,12 +7,10 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **observations_2024.csv**: Moved from observations.csv
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows removed
     - row 3: '2025', 'north', '15'
     - row 4: '2025', 'south', '9'
 - **observations_2025.csv**: Added
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 
 ## Suggestions
 

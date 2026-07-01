@@ -7,7 +7,5 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **changes.csv**: Moved from report.csv/>table_1
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **products.csv**: Reshaped from report.csv (stacked tables → tabular)
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **report.csv/>table_2**: Removed

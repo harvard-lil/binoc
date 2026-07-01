@@ -35,7 +35,6 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.dialect-inferred",
           "binoc.row-correspondence-uncertain"
         ],
         "details": {
@@ -84,14 +83,7 @@ expression: "&stable_changeset"
               "verb": "tabular.row_correspondence_uncertain"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   },
