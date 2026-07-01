@@ -595,7 +595,8 @@ fn is_likely_text(bytes: &[u8]) -> bool {
     }
     let bytes = match std::str::from_utf8(bytes) {
         Ok(_) => bytes,
-        Err(err) => &bytes[..err.valid_up_to()],
+        Err(err) if err.error_len().is_none() => &bytes[..err.valid_up_to()],
+        Err(_) => return false,
     };
     if bytes.is_empty() {
         return true;
@@ -784,5 +785,13 @@ mod tests {
         bytes.push(0xC3);
 
         assert!(is_likely_text(&bytes));
+    }
+
+    #[test]
+    fn is_likely_text_rejects_invalid_utf8_inside_sniff_prefix() {
+        let mut bytes = vec![b'a'; 32];
+        bytes[16] = 0xFF;
+
+        assert!(!is_likely_text(&bytes));
     }
 }
