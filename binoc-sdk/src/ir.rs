@@ -748,6 +748,12 @@ impl ExtractHint {
         self.label = Some(label.into());
         self
     }
+
+    fn fill_changeset_path_if_missing(&mut self, path: &str) {
+        if self.changeset_path.is_none() {
+            self.changeset_path = Some(path.to_string());
+        }
+    }
 }
 
 /// A structured description of how to get from one snapshot to the next.
@@ -812,11 +818,51 @@ impl Changeset {
         self.diagnostics = deduped;
     }
 
+    pub fn fill_missing_extract_hint_paths(&mut self, path: impl AsRef<str>) {
+        let path = path.as_ref();
+        for diagnostic in &mut self.diagnostics {
+            diagnostic.fill_changeset_path_if_missing(path);
+        }
+        if let Some(root) = self.root.as_mut() {
+            root.fill_changeset_path_if_missing(path);
+        }
+    }
+
     /// Recursively clear session-scoped transient fields on the root and all
     /// descendants. See [`DiffNode::strip_transient`].
     pub fn strip_transient(&mut self) {
         if let Some(root) = self.root.as_mut() {
             root.strip_transient();
+        }
+    }
+}
+
+impl Diagnostic {
+    fn fill_changeset_path_if_missing(&mut self, path: &str) {
+        if let Some(extract) = self.extract.as_mut() {
+            extract.fill_changeset_path_if_missing(path);
+        }
+    }
+}
+
+impl DetailBlock {
+    fn fill_changeset_path_if_missing(&mut self, path: &str) {
+        for extract in &mut self.extract {
+            extract.fill_changeset_path_if_missing(path);
+        }
+    }
+}
+
+impl DiffNode {
+    fn fill_changeset_path_if_missing(&mut self, path: &str) {
+        for detail_block in &mut self.detail_blocks {
+            detail_block.fill_changeset_path_if_missing(path);
+        }
+        for diagnostic in &mut self.diagnostics {
+            diagnostic.fill_changeset_path_if_missing(path);
+        }
+        for child in &mut self.children {
+            child.fill_changeset_path_if_missing(path);
         }
     }
 }
@@ -1108,5 +1154,57 @@ mod tests {
     fn changeset_node_count_none_root() {
         let changeset = Changeset::new("v1", "v2", None);
         assert_eq!(changeset.node_count(), 0);
+    }
+
+    #[test]
+    fn fill_missing_extract_hint_paths_updates_nested_hints_only_when_missing() {
+        let child = DiffNode::new("modify", "file", "child.csv")
+            .with_detail_block(
+                DetailBlock::new("cells", "binoc.tabular.cell_changes.v1")
+                    .with_extract_hint(ExtractHint::new("cells_changed")),
+            )
+            .with_diagnostic(
+                Diagnostic::warning("binoc.child", "child diagnostic")
+                    .with_extract_hint(ExtractHint::new("content")),
+            );
+        let root = DiffNode::new("modify", "file", "root.csv")
+            .with_detail_block(
+                DetailBlock::new("rows", "binoc.tabular.row_changes.v1").with_extract_hint(
+                    ExtractHint::new("rows_changed").with_changeset_path("already-set.json"),
+                ),
+            )
+            .with_children(vec![child]);
+        let mut changeset = Changeset::new("v1", "v2", Some(root));
+        changeset.push_diagnostic(
+            Diagnostic::warning("binoc.root", "top diagnostic")
+                .with_extract_hint(ExtractHint::new("content")),
+        );
+
+        changeset.fill_missing_extract_hint_paths("changeset.json");
+
+        assert_eq!(
+            changeset.diagnostics[0]
+                .extract
+                .as_ref()
+                .and_then(|hint| hint.changeset_path.as_deref()),
+            Some("changeset.json")
+        );
+        let root = changeset.root.as_ref().unwrap();
+        assert_eq!(
+            root.detail_blocks[0].extract[0].changeset_path.as_deref(),
+            Some("already-set.json")
+        );
+        let child = &root.children[0];
+        assert_eq!(
+            child.detail_blocks[0].extract[0].changeset_path.as_deref(),
+            Some("changeset.json")
+        );
+        assert_eq!(
+            child.diagnostics[0]
+                .extract
+                .as_ref()
+                .and_then(|hint| hint.changeset_path.as_deref()),
+            Some("changeset.json")
+        );
     }
 }
