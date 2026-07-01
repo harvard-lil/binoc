@@ -2,7 +2,7 @@ use binoc_sdk::{
     tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, Summary, TabularData, Value,
 };
 use serde_json::json;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::tabular::load_tabular;
 
@@ -16,7 +16,27 @@ pub struct ColumnRename;
 
 pub struct TypeOnlyColumnChange;
 
-pub struct ReducedPrecision;
+#[derive(Debug, Clone)]
+pub struct ReducedPrecision {
+    suppression_sentinels: BTreeSet<String>,
+}
+
+impl Default for ReducedPrecision {
+    fn default() -> Self {
+        Self::new(["*", "(D)", "(S)", ""])
+    }
+}
+
+impl ReducedPrecision {
+    pub fn new(suppression_sentinels: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            suppression_sentinels: suppression_sentinels
+                .into_iter()
+                .map(|sentinel| sentinel.into().trim().to_string())
+                .collect(),
+        }
+    }
+}
 
 impl CompactionRule for ColumnReorder {
     fn name(&self) -> &str {
@@ -131,7 +151,10 @@ impl CompactionRule for ReducedPrecision {
         edits: &[Edit],
         _data: &dyn DataAccess,
     ) -> BinocResult<Option<Vec<Edit>>> {
-        Ok(rewrite_reduced_precision(edits))
+        Ok(rewrite_reduced_precision(
+            edits,
+            &self.suppression_sentinels,
+        ))
     }
 }
 
@@ -297,7 +320,10 @@ fn canonical_cell_equal(left: &serde_json::Value, right: &serde_json::Value) -> 
     }
 }
 
-fn rewrite_reduced_precision(edits: &[Edit]) -> Option<Vec<Edit>> {
+fn rewrite_reduced_precision(
+    edits: &[Edit],
+    suppression_sentinels: &BTreeSet<String>,
+) -> Option<Vec<Edit>> {
     let semantic_edits: Vec<Edit> = edits
         .iter()
         .filter(|edit| !edit_cell_is_numeric_noop(edit))
@@ -308,7 +334,7 @@ fn rewrite_reduced_precision(edits: &[Edit]) -> Option<Vec<Edit>> {
         return Some(vec![numeric_noop_edit()]);
     }
 
-    let suppressed = suppressed_value_groups(&semantic_edits);
+    let suppressed = suppressed_value_groups(&semantic_edits, suppression_sentinels);
     let rounded = rounded_value_groups(&semantic_edits);
     if suppressed.is_empty() && rounded.is_empty() {
         return removed_numeric_noops.then_some(semantic_edits);
@@ -358,13 +384,16 @@ enum RoundingBasis {
     Modulus(NumericValue),
 }
 
-fn suppressed_value_groups(edits: &[Edit]) -> BTreeMap<usize, CellGroup> {
+fn suppressed_value_groups(
+    edits: &[Edit],
+    suppression_sentinels: &BTreeSet<String>,
+) -> BTreeMap<usize, CellGroup> {
     let mut by_column: BTreeMap<String, CellGroup> = BTreeMap::new();
     for (index, edit) in edits.iter().enumerate() {
         let Some(column) = edit_cell_column(edit).map(str::to_string) else {
             continue;
         };
-        if !edit_cell_is_value_suppressed(edit) {
+        if !edit_cell_is_value_suppressed(edit, suppression_sentinels) {
             continue;
         }
         by_column
@@ -435,7 +464,7 @@ fn edit_cell_is_numeric_noop(edit: &Edit) -> bool {
             .is_some_and(|(from, to)| from.value == to.value)
 }
 
-fn edit_cell_is_value_suppressed(edit: &Edit) -> bool {
+fn edit_cell_is_value_suppressed(edit: &Edit, suppression_sentinels: &BTreeSet<String>) -> bool {
     if edit.verb != "tabular.edit_cell" {
         return false;
     }
@@ -445,7 +474,7 @@ fn edit_cell_is_value_suppressed(edit: &Edit) -> bool {
     let Some(to) = edit.params.get("to") else {
         return false;
     };
-    value_is_present(from) && value_is_suppression_sentinel(from, to)
+    value_is_present(from) && value_is_suppression_sentinel(from, to, suppression_sentinels)
 }
 
 fn edit_cell_rounding_basis(edit: &Edit) -> Option<RoundingBasis> {
@@ -539,14 +568,20 @@ fn value_is_present(value: &serde_json::Value) -> bool {
     }
 }
 
-fn value_is_suppression_sentinel(from: &serde_json::Value, to: &serde_json::Value) -> bool {
+fn value_is_suppression_sentinel(
+    from: &serde_json::Value,
+    to: &serde_json::Value,
+    suppression_sentinels: &BTreeSet<String>,
+) -> bool {
     match to {
-        serde_json::Value::Null => NumericCell::parse(from).is_some(),
-        serde_json::Value::String(text) => match text.trim() {
-            "*" | "(D)" | "(S)" => true,
-            "" => NumericCell::parse(from).is_some(),
-            _ => false,
-        },
+        serde_json::Value::Null => {
+            NumericCell::parse(from).is_some() && suppression_sentinels.contains("")
+        }
+        serde_json::Value::String(text) => {
+            let trimmed = text.trim();
+            suppression_sentinels.contains(trimmed)
+                && (!trimmed.is_empty() || NumericCell::parse(from).is_some())
+        }
         _ => false,
     }
 }
@@ -1512,7 +1547,8 @@ mod tests {
             cell(1, "rate", json!("2.50"), json!("2.5")),
         ];
 
-        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
 
         assert_eq!(rewritten.len(), 1);
         assert_eq!(rewritten[0].verb, "tabular.numeric_canonical_equal");
@@ -1531,7 +1567,8 @@ mod tests {
             cell(2, "name", json!("Alice"), json!("Alicia")),
         ];
 
-        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
 
         assert_eq!(rewritten.len(), 2);
         assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
@@ -1561,6 +1598,23 @@ mod tests {
     }
 
     #[test]
+    fn reduced_precision_honors_custom_suppression_sentinels() {
+        let edits = vec![
+            cell(0, "count", json!("123"), json!("N/A")),
+            cell(1, "count", json!("456"), json!("N/A")),
+            cell(2, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let suppression_sentinels = ["N/A", ""].into_iter().map(str::to_string).collect();
+        let rewritten = rewrite_reduced_precision(&edits, &suppression_sentinels).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(rewritten[0].params["cells"], json!(2));
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+    }
+
+    #[test]
     fn reduced_precision_collapses_numeric_rounding_by_column_and_modulus() {
         let edits = vec![
             cell(0, "population", json!("12,345"), json!("12,000")),
@@ -1568,7 +1622,8 @@ mod tests {
             cell(2, "name", json!("Alpha"), json!("Alfa")),
         ];
 
-        let rewritten = rewrite_reduced_precision(&edits).expect("rewrite");
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
 
         assert_eq!(rewritten.len(), 2);
         assert_eq!(rewritten[0].verb, "tabular.values_rounded");
@@ -1913,14 +1968,16 @@ mod tests {
             .with_tag("binoc.row-addition"),
         ];
 
-        let prematurely_reduced = rewrite_reduced_precision(&edits).expect("old-order rewrite");
+        let prematurely_reduced =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels())
+                .expect("old-order rewrite");
         assert!(prematurely_reduced
             .iter()
             .any(|edit| edit.verb == "tabular.values_suppressed"));
 
         let aligned = rewrite_row_alignment(&edits).expect("alignment rewrite");
         assert!(!aligned.iter().any(|edit| edit.verb == "tabular.edit_cell"));
-        assert!(rewrite_reduced_precision(&aligned).is_none());
+        assert!(rewrite_reduced_precision(&aligned, &default_suppression_sentinels()).is_none());
     }
 
     #[test]
@@ -1941,5 +1998,12 @@ mod tests {
         let rewritten = rewrite_row_alignment(&edits).expect("basis cleanup");
 
         assert_eq!(rewritten, vec![cell]);
+    }
+
+    fn default_suppression_sentinels() -> BTreeSet<String> {
+        ["*", "(D)", "(S)", ""]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
     }
 }

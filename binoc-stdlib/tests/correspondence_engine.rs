@@ -629,6 +629,56 @@ fn renamed_row_identity_key_still_compacts_to_column_rename() {
 }
 
 #[test]
+fn reduced_precision_uses_dataset_configured_suppression_sentinels() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.csv"),
+        "county,count,rate\nAlpha,123,4.5\nBeta,456,6.7\nGamma,789,8.9\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.csv"),
+        "county,count,rate\nAlpha,N/A,4.5\nBeta,N/A,6.7\nGamma,789,9.1\n",
+    )
+    .unwrap();
+
+    let root = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "reduced_precision": {
+                "suppression_sentinels": ["N/A", ""]
+            }
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff")
+        .root
+        .expect("root");
+    let node = find(&root, "data.csv").expect("data.csv node");
+
+    let edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .expect("edits");
+    let verbs: Vec<&str> = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(
+        verbs,
+        vec!["tabular.values_suppressed", "tabular.edit_cell"]
+    );
+    assert_eq!(
+        edits[0]["params"],
+        serde_json::json!({"column": "count", "cells": 2})
+    );
+    assert!(node.tags.contains("binoc.value-suppressed"));
+}
+
+#[test]
 fn correspondence_engine_reports_copy_without_double_counting_container_edits() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");

@@ -45,6 +45,7 @@ pub fn default_engine_config() -> CorrespondenceEngineConfig {
 
 pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> CorrespondenceEngineConfig {
     let mut options = CorrespondenceOptions::default();
+    let mut reduced_precision = compact::ReducedPrecision::default();
     if let Ok(semantics) = serde_json::from_value::<DatasetSemanticsV1>(dataset.clone()) {
         let correspondence = &semantics.correspondence;
         if let Some(value) = correspondence.expand_renamed_unchanged_collections {
@@ -59,11 +60,20 @@ pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> Correspo
         if let Some(bytes) = correspondence.max_archive_total_bytes {
             options.expand_caps.archive_max_total_bytes = bytes;
         }
+        reduced_precision =
+            compact::ReducedPrecision::new(semantics.reduced_precision.suppression_sentinels);
     }
-    engine_config_with_options(options)
+    engine_config_with_options_and_reduced_precision(options, reduced_precision)
 }
 
 pub fn engine_config_with_options(options: CorrespondenceOptions) -> CorrespondenceEngineConfig {
+    engine_config_with_options_and_reduced_precision(options, compact::ReducedPrecision::default())
+}
+
+fn engine_config_with_options_and_reduced_precision(
+    options: CorrespondenceOptions,
+    reduced_precision: compact::ReducedPrecision,
+) -> CorrespondenceEngineConfig {
     CorrespondenceEngineConfig {
         rules: vec![
             CoreRule::Pair(Arc::new(pair::HashPair {
@@ -117,7 +127,7 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             Arc::new(compact::ColumnReorder),
             Arc::new(compact::TypeOnlyColumnChange),
             Arc::new(compact::RowAlignment),
-            Arc::new(compact::ReducedPrecision),
+            Arc::new(reduced_precision),
             Arc::new(compact::RowAdditionConsolidation),
         ],
         annotators: vec![Arc::new(StdlibProjectionAnnotator)],
@@ -157,6 +167,8 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 )]);
             }
         };
+
+        configure_reduced_precision(config, &semantics);
 
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
@@ -203,6 +215,26 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         }
         Ok(diagnostics)
     }
+}
+
+fn configure_reduced_precision(
+    config: &mut CorrespondenceEngineConfig,
+    semantics: &DatasetSemanticsV1,
+) {
+    config
+        .compaction
+        .retain(|rule| rule.name() != "binoc.compact.reduced_precision");
+    let index = config
+        .compaction
+        .iter()
+        .position(|rule| rule.name() == "binoc.compact.row_addition")
+        .unwrap_or(config.compaction.len());
+    config.compaction.insert(
+        index,
+        Arc::new(compact::ReducedPrecision::new(
+            semantics.reduced_precision.suppression_sentinels.clone(),
+        )),
+    );
 }
 
 #[derive(Debug, Clone)]

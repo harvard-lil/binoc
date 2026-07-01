@@ -422,6 +422,29 @@ pub struct DatasetSemanticsV1 {
     pub tables: TableConfig,
     #[serde(default)]
     pub correspondence: CorrespondenceConfig,
+    #[serde(default)]
+    pub reduced_precision: ReducedPrecisionConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReducedPrecisionConfig {
+    /// String sentinels that represent a suppressed published value after
+    /// reduced-precision post-processing. The empty string covers both blank
+    /// cells and `null`, preserving the historical blank/null sentinel.
+    #[serde(default = "default_suppression_sentinels")]
+    pub suppression_sentinels: Vec<String>,
+}
+
+impl Default for ReducedPrecisionConfig {
+    fn default() -> Self {
+        Self {
+            suppression_sentinels: default_suppression_sentinels(),
+        }
+    }
+}
+
+fn default_suppression_sentinels() -> Vec<String> {
+    vec!["*".into(), "(D)".into(), "(S)".into(), "".into()]
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
