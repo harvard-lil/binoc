@@ -144,6 +144,7 @@ struct StreamCopyStats {
     bytes_written: u64,
     hash: Option<String>,
     prefix: Vec<u8>,
+    prefix_truncated: bool,
 }
 
 fn stream_copy_with_caps<R: Read>(
@@ -160,6 +161,7 @@ fn stream_copy_with_caps<R: Read>(
         let mut entry_total = 0u64;
         let mut hasher = hash_output.then(blake3::Hasher::new);
         let mut prefix = Vec::with_capacity(prefix_bytes.min(CONTENT_SNIFF_PREFIX_BYTES));
+        let mut prefix_truncated = false;
 
         loop {
             let entry_remaining = entry_cap.cap.saturating_sub(entry_total);
@@ -219,6 +221,11 @@ fn stream_copy_with_caps<R: Read>(
             if prefix.len() < prefix_bytes {
                 let remaining = prefix_bytes - prefix.len();
                 prefix.extend_from_slice(&buffer[..bytes_read.min(remaining)]);
+                if bytes_read > remaining {
+                    prefix_truncated = true;
+                }
+            } else if prefix_bytes > 0 {
+                prefix_truncated = true;
             }
             entry_total = new_entry_total;
             if let (Some(total), Some(new_total)) = (total_cap.as_mut(), new_total) {
@@ -231,6 +238,7 @@ fn stream_copy_with_caps<R: Read>(
             bytes_written: entry_total,
             hash: hasher.map(|hasher| hasher.finalize().to_hex().to_string()),
             prefix,
+            prefix_truncated,
         })
     })();
 
@@ -270,7 +278,12 @@ impl ChildSep {
     }
 }
 
-fn projection_for(logical_path: &str, is_dir: bool, bytes_prefix: Option<&[u8]>) -> ProjectionHint {
+fn projection_for(
+    logical_path: &str,
+    is_dir: bool,
+    bytes_prefix: Option<&[u8]>,
+    prefix_truncated: bool,
+) -> ProjectionHint {
     if is_dir {
         return ProjectionHint::default().item_type("directory");
     }
@@ -286,22 +299,31 @@ fn projection_for(logical_path: &str, is_dir: bool, bytes_prefix: Option<&[u8]>)
     match extension.as_deref() {
         Some("csv" | "tsv") => ProjectionHint::default().item_type("tabular"),
         Some("txt" | "md") => ProjectionHint::default().item_type("text"),
-        _ if sniffable_unknown => sniff_text_projection(logical_path, bytes_prefix)
-            .unwrap_or_else(|| ProjectionHint::default().item_type("file")),
+        _ if sniffable_unknown => {
+            sniff_text_projection(logical_path, bytes_prefix, prefix_truncated)
+                .unwrap_or_else(|| ProjectionHint::default().item_type("file"))
+        }
         _ => ProjectionHint::default().item_type("file"),
     }
 }
 
 fn make_child(physical: &Path, logical: String, data: &dyn DataAccess) -> BinocResult<ItemRef> {
     let mut item = data.register_local(physical, &logical)?;
-    let mut content_prefix = None;
+    let mut content_sniff = None;
     if !item.is_dir {
-        let (hash, size, prefix) = hash_size_and_prefix(&item, data)?;
+        let (hash, size, prefix, prefix_truncated) = hash_size_and_prefix(&item, data)?;
         item.content_hash = Some(hash);
         item.size = Some(size);
-        content_prefix = Some(prefix);
+        content_sniff = Some((prefix, prefix_truncated));
     }
-    item.projection_hint = projection_for(&logical, item.is_dir, content_prefix.as_deref());
+    item.projection_hint = projection_for(
+        &logical,
+        item.is_dir,
+        content_sniff.as_ref().map(|(prefix, _)| prefix.as_slice()),
+        content_sniff
+            .as_ref()
+            .is_some_and(|(_, prefix_truncated)| *prefix_truncated),
+    );
     if item
         .projection_hint
         .tags
@@ -316,12 +338,13 @@ fn make_child(physical: &Path, logical: String, data: &dyn DataAccess) -> BinocR
 fn hash_size_and_prefix(
     item: &ItemRef,
     data: &dyn DataAccess,
-) -> BinocResult<(String, u64, Vec<u8>)> {
+) -> BinocResult<(String, u64, Vec<u8>, bool)> {
     let mut reader = data.open_read(item)?;
     let mut hasher = blake3::Hasher::new();
     let mut size = 0u64;
     let mut prefix = Vec::with_capacity(CONTENT_SNIFF_PREFIX_BYTES);
     let mut buffer = [0u8; 8192];
+    let mut prefix_truncated = false;
     loop {
         let read = reader.read(&mut buffer).map_err(BinocError::Io)?;
         if read == 0 {
@@ -332,9 +355,19 @@ fn hash_size_and_prefix(
         if prefix.len() < CONTENT_SNIFF_PREFIX_BYTES {
             let remaining = CONTENT_SNIFF_PREFIX_BYTES - prefix.len();
             prefix.extend_from_slice(&buffer[..read.min(remaining)]);
+            if read > remaining {
+                prefix_truncated = true;
+            }
+        } else {
+            prefix_truncated = true;
         }
     }
-    Ok((hasher.finalize().to_hex().to_string(), size, prefix))
+    Ok((
+        hasher.finalize().to_hex().to_string(),
+        size,
+        prefix,
+        prefix_truncated,
+    ))
 }
 
 fn expand_physical_dir(
@@ -553,8 +586,12 @@ impl ExpandRule for GzipExpand {
         let mut child = data.register_local(&physical, &logical)?;
         child.content_hash = stats.hash;
         child.size = Some(stats.bytes_written);
-        child.projection_hint =
-            projection_for(&logical, child.is_dir, Some(stats.prefix.as_slice()));
+        child.projection_hint = projection_for(
+            &logical,
+            child.is_dir,
+            Some(stats.prefix.as_slice()),
+            stats.prefix_truncated,
+        );
         if child
             .projection_hint
             .tags
@@ -570,8 +607,9 @@ impl ExpandRule for GzipExpand {
 fn sniff_text_projection(
     logical_path: &str,
     bytes_prefix: Option<&[u8]>,
+    prefix_truncated: bool,
 ) -> Option<ProjectionHint> {
-    if is_likely_text(bytes_prefix?) {
+    if is_likely_text(bytes_prefix?, prefix_truncated) {
         Some(
             ProjectionHint::default()
                 .item_type("text")
@@ -589,10 +627,15 @@ fn sniff_text_projection(
     }
 }
 
-fn is_likely_text(bytes: &[u8]) -> bool {
-    if bytes.contains(&0) || std::str::from_utf8(bytes).is_err() {
+fn is_likely_text(bytes: &[u8], prefix_truncated: bool) -> bool {
+    if bytes.contains(&0) {
         return false;
     }
+    let bytes = match std::str::from_utf8(bytes) {
+        Ok(_) => bytes,
+        Err(err) if prefix_truncated && err.error_len().is_none() => &bytes[..err.valid_up_to()],
+        Err(_) => return false,
+    };
     if bytes.is_empty() {
         return true;
     }
@@ -714,6 +757,7 @@ mod tests {
             Some(blake3::hash(payload).to_hex().as_str())
         );
         assert_eq!(stats.prefix, payload);
+        assert!(!stats.prefix_truncated);
     }
 
     #[test]
@@ -772,5 +816,29 @@ mod tests {
         assert!(matches!(err, StreamCopyError::Cap(message) if message == "total cap"));
         assert!(!out_path.exists(), "partial output should be removed");
         assert_eq!(total, 5);
+    }
+
+    #[test]
+    fn is_likely_text_ignores_truncated_utf8_at_sniff_boundary() {
+        let mut bytes = vec![b'a'; CONTENT_SNIFF_PREFIX_BYTES - 1];
+        bytes.push(0xC3);
+
+        assert!(is_likely_text(&bytes, true));
+    }
+
+    #[test]
+    fn is_likely_text_rejects_invalid_utf8_inside_sniff_prefix() {
+        let mut bytes = vec![b'a'; 32];
+        bytes[16] = 0xFF;
+
+        assert!(!is_likely_text(&bytes, false));
+    }
+
+    #[test]
+    fn is_likely_text_rejects_truncated_utf8_at_eof() {
+        let mut bytes = vec![b'a'; 32];
+        bytes.push(0xC3);
+
+        assert!(!is_likely_text(&bytes, false));
     }
 }
