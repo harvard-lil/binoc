@@ -29,8 +29,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.cell-change",
-          "binoc.dialect-inferred"
+          "binoc.cell-change"
         ],
         "details": {
           "edits": [
@@ -46,14 +45,7 @@ expression: "&stable_changeset"
               "verb": "tabular.edit_cell"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       },
       {
         "action": "modify",
@@ -73,8 +65,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.cell-change",
-          "binoc.dialect-inferred"
+          "binoc.cell-change"
         ],
         "details": {
           "edits": [
@@ -90,14 +81,7 @@ expression: "&stable_changeset"
               "verb": "tabular.edit_cell"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   }

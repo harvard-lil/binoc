@@ -31,7 +31,6 @@ expression: "&stable_changeset"
         "tags": [
           "binoc.column-addition",
           "binoc.column-reorder",
-          "binoc.dialect-inferred",
           "binoc.row-addition",
           "binoc.schema-change"
         ],
@@ -84,14 +83,7 @@ expression: "&stable_changeset"
               "verb": "tabular.add_row"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   }

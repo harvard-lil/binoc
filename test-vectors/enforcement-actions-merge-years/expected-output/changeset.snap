@@ -90,15 +90,7 @@ expression: "&stable_changeset"
           }
         ],
         "tags": [
-          "binoc.dialect-inferred",
           "binoc.tabular_merge"
-        ],
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
         ]
       }
     ]

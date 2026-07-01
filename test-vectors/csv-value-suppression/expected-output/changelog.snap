@@ -7,4 +7,3 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: Suppressed 3 cells in 'count'
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF

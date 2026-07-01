@@ -116,15 +116,7 @@ expression: "&stable_changeset"
                   }
                 ],
                 "tags": [
-                  "binoc.content-changed",
-                  "binoc.dialect-inferred"
-                ],
-                "annotations": [
-                  {
-                    "package": "binoc",
-                    "key": "dialect_provenance",
-                    "value": "detected comma-delimited, no quoting, newline LF"
-                  }
+                  "binoc.content-changed"
                 ]
               }
             ]

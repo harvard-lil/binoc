@@ -8,15 +8,9 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 
 - **data.zip**: Removed
 - **data.zip/>x.csv**: Removed
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **data.zip/>y.csv**: Removed
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **data.zip/>z.csv**: Removed
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **archive.zip**: Added
 - **archive.zip/>p.csv**: Added
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **archive.zip/>q.csv**: Added
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 - **archive.zip/>r.csv**: Added
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF

@@ -7,7 +7,6 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: row correspondence uncertain; 1 changed-cell fraction
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
 
 ## Suggestions
 

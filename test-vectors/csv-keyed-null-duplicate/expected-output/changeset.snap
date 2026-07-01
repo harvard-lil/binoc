@@ -1,6 +1,5 @@
 ---
 source: binoc-stdlib/src/test_vectors.rs
-assertion_line: 372
 expression: "&stable_changeset"
 ---
 {
@@ -31,7 +30,6 @@ expression: "&stable_changeset"
         ],
         "tags": [
           "binoc.cell-change",
-          "binoc.dialect-inferred",
           "binoc.duplicate-key",
           "binoc.identity-diagnostic",
           "binoc.null-key",
@@ -166,14 +164,7 @@ expression: "&stable_changeset"
               "verb": "tabular.edit_cell"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   },

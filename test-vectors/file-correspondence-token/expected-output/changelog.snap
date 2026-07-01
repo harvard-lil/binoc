@@ -7,6 +7,5 @@ expression: "&md"
 Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **running_list_as_of_2023.csv**: Moved from running_list_as_of_2022.csv
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows added
     - row 3: '3', 'Cy'

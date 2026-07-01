@@ -74,7 +74,7 @@ impl ParseRule for CsvParse {
         let tabular =
             table_from_csv_records_with_config(records.clone(), item.tabular_parse.as_ref());
         let sections = detect_stacked_sections_from_rows(&records);
-        let projection = if dialect.inferred {
+        let projection = if dialect.should_disclose_provenance() {
             ProjectionHint::default()
                 .tag("binoc.dialect-inferred")
                 .annotate(
@@ -909,6 +909,18 @@ impl ResolvedCsvDialect {
             _ => None,
         }
     }
+
+    fn should_disclose_provenance(&self) -> bool {
+        self.inferred && !self.matches_boring_default()
+    }
+
+    fn matches_boring_default(&self) -> bool {
+        self.delimiter == b','
+            && matches!(self.quote, None | Some(b'"'))
+            && self.escape.is_none()
+            && !self.bom
+            && self.newline.as_deref() == Some("\n")
+    }
 }
 
 fn resolve_csv_dialect(item: &ItemRef, bytes: &[u8]) -> BinocResult<ResolvedCsvDialect> {
@@ -1360,6 +1372,40 @@ mod tests {
             dialect_provenance_summary(&dialect),
             "detected `|`-delimited, no quoting, newline LF"
         );
+    }
+
+    #[test]
+    fn default_inferred_csv_without_quoted_fields_is_silent() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,old\n2,same\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert!(dialect.matches_boring_default());
+        assert!(!dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn default_inferred_csv_with_double_quotes_is_silent() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,\"old\"\n2,\"same\"\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert_eq!(dialect.quote, Some(b'"'));
+        assert!(dialect.matches_boring_default());
+        assert!(!dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn inferred_non_default_csv_keeps_provenance() {
+        let dialect = sniff_csv_dialect(b"id\tvalue\n1\told\n2\tsame\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert!(!dialect.matches_boring_default());
+        assert!(dialect.should_disclose_provenance());
     }
 
     #[test]

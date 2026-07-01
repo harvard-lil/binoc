@@ -9,6 +9,5 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 - **by-state**: Added
 - **by-state/AL**: Moved from data
 - **by-state/AL/records.csv**: Moved from data/state_AL.csv
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Rows added
     - row 2: '2', 'Birmingham'

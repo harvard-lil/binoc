@@ -8,6 +8,5 @@ Need plugin background? See the [plugin registry](https://harvard-lil.github.io/
 
 - **archive.zip**: Moved from data.zip
 - **archive.zip/>new.csv**: Moved from data.zip/>old.csv
-  - Dialect provenance: detected comma-delimited, no quoting, newline LF
   - Changed cells
     - row 5, column 'score': '60' -> '61'
