@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "binoc"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -58,8 +58,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "binoc", editable = "." },
-    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.7,<2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.14.1,<2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
 ]
 provides-extras = ["dev"]
