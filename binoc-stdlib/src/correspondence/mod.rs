@@ -10,11 +10,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use binoc_sdk::{
-    structured_document_v1, tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
-    Cardinality, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic,
-    DispatchResolver, Edit, FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity, ParseRule,
-    PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
+    structured_document_v1, tabular_v1, BinocResult, Cardinality, CoreRule,
+    CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1,
+    Diagnostic, DispatchResolver, Edit, FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity,
+    ParseRule, PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint,
+    RowIdentity, RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -717,12 +717,7 @@ fn row_identity_for_paths(
         let mut identity = defaults.clone();
         for entry in &semantics.tables.entries {
             if table_entry_matches_path(entry, &path) {
-                let mut entry_identity = entry.row_identity.clone();
-                if !row_identity_configured(&entry_identity) {
-                    entry_identity.columns = identity.columns.clone();
-                    entry_identity.by_position = identity.by_position.clone();
-                }
-                identity = entry_identity;
+                identity = merge_row_identity(&identity, Some(&entry.row_identity));
                 break;
             }
         }
@@ -1706,5 +1701,53 @@ mod tests {
         assert_eq!(merged.cardinality, Cardinality::default());
         assert_eq!(merged.on_null_key, IdentityFailurePolicy::Error);
         assert_eq!(merged.on_duplicate_key, IdentityFailurePolicy::Ignore);
+    }
+
+    #[test]
+    fn table_row_identity_entry_columns_inherit_default_policy() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let left = temp.path().join("left");
+        let right = temp.path().join("right");
+        std::fs::create_dir_all(&left).expect("create left");
+        std::fs::create_dir_all(&right).expect("create right");
+        std::fs::write(left.join("data.csv"), "id,email\n1,a@example.test\n").expect("write left");
+        std::fs::write(right.join("data.csv"), "id,email\n1,b@example.test\n")
+            .expect("write right");
+
+        let data = LocalDataAccess::new();
+        let left_root = data.register_local(&left, "").expect("left root");
+        let right_root = data.register_local(&right, "").expect("right root");
+
+        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
+            "tables": {
+                "defaults": {
+                    "row_identity": {
+                        "on_null_key": "error",
+                        "on_duplicate_key": "ignore"
+                    }
+                },
+                "entries": [{
+                    "path_regex": "^data\\.csv$",
+                    "columns": ["email"]
+                }]
+            }
+        }))
+        .expect("dataset semantics");
+
+        let identities = row_identity_for_paths(
+            &semantics,
+            large_tabular_threshold_bytes(&semantics),
+            &[String::from("data.csv")],
+            &[String::from("data.csv")],
+            &left_root,
+            &right_root,
+            &data,
+        )
+        .expect("row identity");
+
+        let identity = identities.get("data.csv").expect("data.csv identity");
+        assert_eq!(identity.columns, vec!["email"]);
+        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Error);
+        assert_eq!(identity.on_duplicate_key, IdentityFailurePolicy::Ignore);
     }
 }
