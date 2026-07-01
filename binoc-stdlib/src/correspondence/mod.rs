@@ -54,9 +54,7 @@ pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> Correspo
         if let Some(value) = correspondence.expand_renamed_unchanged_collections {
             options.expand_renamed_unchanged_collections = value;
         }
-        if let Some(bytes) = correspondence.large_tabular_threshold_bytes {
-            options.large_tabular_threshold_bytes = bytes;
-        }
+        options.large_tabular_threshold_bytes = large_tabular_threshold_bytes(&semantics);
         if let Some(bytes) = correspondence.max_gzip_bytes {
             options.expand_caps.gzip_max_bytes = bytes;
         }
@@ -183,6 +181,7 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         }
         let row_identity = row_identity_for_paths(
             &semantics,
+            large_tabular_threshold_bytes(&semantics),
             &left_paths,
             &right_paths,
             left_root,
@@ -583,6 +582,7 @@ fn count_phrase(count: usize, singular: &str, plural: &str) -> String {
 
 fn row_identity_for_paths(
     semantics: &DatasetSemanticsV1,
+    large_tabular_threshold_bytes: u64,
     left_paths: &[String],
     right_paths: &[String],
     left_root: &ItemRef,
@@ -605,10 +605,11 @@ fn row_identity_for_paths(
         let path_entry = first_path_entry(&semantics.paths, &path);
         let path_is_tabular = path_emits_tabular_artifact(
             &path,
-            left_root,
-            &left_root_physical,
-            right_root,
-            &right_root_physical,
+            large_tabular_threshold_bytes,
+            [
+                (left_root, left_root_physical.as_path()),
+                (right_root, right_root_physical.as_path()),
+            ],
             path_entry,
             data,
         )?;
@@ -658,6 +659,13 @@ fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity 
     } else {
         &semantics.tables.defaults.row_identity
     }
+}
+
+fn large_tabular_threshold_bytes(semantics: &DatasetSemanticsV1) -> u64 {
+    semantics
+        .correspondence
+        .large_tabular_threshold_bytes
+        .unwrap_or(parse::LARGE_TABULAR_THRESHOLD_BYTES)
 }
 
 fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentity>) -> RowIdentity {
@@ -1090,21 +1098,16 @@ fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
 
 fn path_emits_tabular_artifact(
     path: &str,
-    left_root: &ItemRef,
-    left_root_physical: &Path,
-    right_root: &ItemRef,
-    right_root_physical: &Path,
+    large_tabular_threshold_bytes: u64,
+    roots: [(&ItemRef, &Path); 2],
     path_entry: Option<&PathConfigEntry>,
     data: &dyn DataAccess,
 ) -> BinocResult<bool> {
-    for (root, physical) in [
-        (left_root, left_root_physical),
-        (right_root, right_root_physical),
-    ] {
+    for (root, physical) in roots {
         let Some(item) = item_for_logical_path(root, physical, path, path_entry, data)? else {
             continue;
         };
-        if item_emits_tabular_artifact(&item, path_entry, data) {
+        if item_emits_tabular_artifact(&item, path_entry, data, large_tabular_threshold_bytes) {
             return Ok(true);
         }
     }
@@ -1150,12 +1153,13 @@ fn item_emits_tabular_artifact(
     item: &ItemRef,
     path_entry: Option<&PathConfigEntry>,
     data: &dyn DataAccess,
+    large_tabular_threshold_bytes: u64,
 ) -> bool {
     let csv = parse::CsvParse {
-        large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+        large_tabular_threshold_bytes,
     };
     let csv_media = parse::CsvMediaParse {
-        large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+        large_tabular_threshold_bytes,
     };
     let json_records = parse::JsonRecordsParse;
     let json_media_records = parse::JsonMediaRecordsParse;
@@ -1163,7 +1167,9 @@ fn item_emits_tabular_artifact(
         .and_then(|entry| entry.rule.as_deref())
         .filter(|rule_name| rule_can_emit_tabular_artifact(rule_name))
     {
-        if let Ok(output) = parse_forced_tabular_rule(rule_name, item, data) {
+        if let Ok(output) =
+            parse_forced_tabular_rule(rule_name, item, data, large_tabular_threshold_bytes)
+        {
             return !output.bytes.is_empty();
         }
     }
@@ -1192,14 +1198,15 @@ fn parse_forced_tabular_rule(
     rule_name: &str,
     item: &ItemRef,
     data: &dyn DataAccess,
+    large_tabular_threshold_bytes: u64,
 ) -> BinocResult<binoc_sdk::ParseOutput> {
     match rule_name {
         "binoc.parse.csv" => parse::CsvParse {
-            large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+            large_tabular_threshold_bytes,
         }
         .parse(item, data),
         "binoc.parse.csv_media" => parse::CsvMediaParse {
-            large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
+            large_tabular_threshold_bytes,
         }
         .parse(item, data),
         "binoc.parse.json_records" => parse::JsonRecordsParse.parse(item, data),
