@@ -307,17 +307,41 @@ fn diff_controller(config: &DatasetConfig) -> Controller {
 fn correspondence_engine_config(config: &DatasetConfig) -> CorrespondenceEngineConfig {
     let mut engine =
         binoc_stdlib::correspondence::engine_config_for_dataset_config(&config.dataset);
-    register_optional_correspondence_rules(&mut engine);
+    register_bundled_correspondence_rules(&mut engine);
     engine
 }
 
-#[cfg(feature = "sqlite")]
-fn register_optional_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
+/// Register the first-party format packs that were compiled in via cargo
+/// features (the fat-binoc bundle). Shared by the standalone CLI and the Python
+/// host (`binoc-python`) so both honour the same in-process registration seam
+/// rather than any privileged shortcut.
+///
+/// See docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
+pub fn register_bundled_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
+    // Keep `config` "used" even when no format features are enabled (e.g. the
+    // lean standalone CLI build with `default = []`).
+    let _ = &mut *config;
+    #[cfg(feature = "sqlite")]
     binoc_sqlite::register_correspondence_rules(config);
+    #[cfg(feature = "excel")]
+    binoc_excel::register_correspondence_rules(config);
+    #[cfg(feature = "parquet")]
+    binoc_parquet::register_correspondence_rules(config);
+    #[cfg(feature = "avro")]
+    binoc_avro::register_correspondence_rules(config);
+    #[cfg(feature = "dbf")]
+    binoc_dbf::register_correspondence_rules(config);
+    #[cfg(feature = "xml")]
+    binoc_xml::register_correspondence_rules(config);
+    #[cfg(feature = "shapefile")]
+    binoc_shapefile::register_correspondence_rules(config);
+    #[cfg(feature = "binformats")]
+    binoc_binformats::register_correspondence_rules(config);
+    #[cfg(feature = "stat-binary")]
+    binoc_stat_binary::register_correspondence_rules(config);
+    #[cfg(feature = "row-reorder")]
+    binoc_row_reorder::register_correspondence_rules(config);
 }
-
-#[cfg(not(feature = "sqlite"))]
-fn register_optional_correspondence_rules(_config: &mut CorrespondenceEngineConfig) {}
 
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the
 /// `emit-cli-markdown` binary that regenerates `docs/users/reference/cli.md`) can

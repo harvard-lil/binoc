@@ -405,15 +405,18 @@ release package:
     git fetch origin main --tags
     REMOTE_MAIN="$(git rev-parse origin/main)"
 
+    # binoc-sqlite and binoc-stat-binary publishing is paused; both ship
+    # in-process via the fat `binoc` wheel. See
+    # docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
     case "$PACKAGE" in
-      binoc|binoc-sqlite|binoc-stat-binary|binoc-sdk)
+      binoc|binoc-sdk)
         packages=("$PACKAGE")
         ;;
       all)
-        packages=("binoc" "binoc-sqlite" "binoc-stat-binary" "binoc-sdk")
+        packages=("binoc" "binoc-sdk")
         ;;
       *)
-        echo "Usage: just release [binoc|binoc-sqlite|binoc-stat-binary|binoc-sdk|all]" >&2
+        echo "Usage: just release [binoc|binoc-sdk|all]" >&2
         exit 1
         ;;
     esac

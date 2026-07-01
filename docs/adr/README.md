@@ -6,6 +6,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
+| 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented |
 | 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deliberately deferred) |
 | 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers in CFM-80; rendering + significance in CFM-82) |
 | 2026-06-15 | [The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First](2026-06-15-engine_overhaul_retrospective.md) | Retrospective |

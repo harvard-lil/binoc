@@ -1080,12 +1080,14 @@ fn build_controller(
     config: &PyConfig,
     _registry: Option<&PyPluginRegistry>,
 ) -> PyResult<Controller> {
-    Ok(Controller::new(
-        binoc_stdlib::correspondence::engine_config_for_dataset_config(
-            &config.dataset_config.dataset,
-        ),
-    )
-    .with_dataset_config(config.dataset_config.dataset.clone()))
+    let mut engine = binoc_stdlib::correspondence::engine_config_for_dataset_config(
+        &config.dataset_config.dataset,
+    );
+    // Register the fat-binoc format bundle through the same in-process seam the
+    // CLI uses, so `diff`/`extract` and the `binoc` CLI are equally fat.
+    // See docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
+    binoc_cli::register_bundled_correspondence_rules(&mut engine);
+    Ok(Controller::new(engine).with_dataset_config(config.dataset_config.dataset.clone()))
 }
 
 /// Diff two snapshots and return the resulting :class:`Changeset`.

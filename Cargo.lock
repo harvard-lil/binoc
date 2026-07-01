@@ -446,6 +446,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "binoc-abi-canary"
+version = "0.2.0"
+dependencies = [
+ "binoc-sdk",
+ "libloading",
+ "serde_json",
+]
+
+[[package]]
 name = "binoc-avro"
 version = "0.2.0"
 dependencies = [
@@ -482,10 +491,19 @@ name = "binoc-cli"
 version = "0.2.0"
 dependencies = [
  "assert_cmd",
+ "binoc-avro",
+ "binoc-binformats",
  "binoc-core",
+ "binoc-dbf",
+ "binoc-excel",
+ "binoc-parquet",
+ "binoc-row-reorder",
  "binoc-sdk",
+ "binoc-shapefile",
  "binoc-sqlite",
+ "binoc-stat-binary",
  "binoc-stdlib",
+ "binoc-xml",
  "clap",
  "clap-markdown",
  "predicates",
