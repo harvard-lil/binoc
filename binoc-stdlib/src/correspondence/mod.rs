@@ -576,6 +576,10 @@ fn row_identity_for_paths(
     right_root: &ItemRef,
     data: &dyn DataAccess,
 ) -> BinocResult<BTreeMap<String, RowIdentity>> {
+    if !dataset_has_row_identity_config(semantics) {
+        return Ok(BTreeMap::new());
+    }
+
     let left_root_physical = data.local_path(left_root)?;
     let right_root_physical = data.local_path(right_root)?;
     let mut paths = left_paths
@@ -637,6 +641,21 @@ fn row_identity_for_paths(
         }
     }
     Ok(row_identity)
+}
+
+fn dataset_has_row_identity_config(semantics: &DatasetSemanticsV1) -> bool {
+    row_identity_configured(&semantics.defaults.row_identity)
+        || row_identity_configured(&semantics.tables.defaults.row_identity)
+        || semantics
+            .paths
+            .iter()
+            .filter_map(|entry| entry.row_identity.as_ref())
+            .any(row_identity_configured)
+        || semantics
+            .tables
+            .entries
+            .iter()
+            .any(|entry| row_identity_configured(&entry.row_identity))
 }
 
 fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
@@ -1188,6 +1207,8 @@ fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use binoc_sdk::test_support::RecordingDataAccess;
+    use binoc_sdk::LocalDataAccess;
 
     fn ctx<'a>(
         container: bool,
@@ -1282,5 +1303,44 @@ mod tests {
             "2026_03_notes.zip/>num.tsv"
         ));
         assert!(glob_matches_path("**/num.tsv", "expanded/num.tsv"));
+    }
+
+    #[test]
+    fn row_identity_probe_skips_trial_parse_when_no_key_is_configured_anywhere() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let left = temp.path().join("left");
+        let right = temp.path().join("right");
+        std::fs::create_dir_all(&left).expect("create left");
+        std::fs::create_dir_all(&right).expect("create right");
+        std::fs::write(left.join("records.json"), "{not valid json]\n").expect("write left");
+        std::fs::write(right.join("records.json"), "{still not valid json]\n")
+            .expect("write right");
+
+        let data = RecordingDataAccess::new(LocalDataAccess::new());
+        let left_root = data.register_local(&left, "").expect("left root");
+        let right_root = data.register_local(&right, "").expect("right root");
+        data.take_log();
+
+        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
+            "paths": [{
+                "match": "**/*.json",
+                "content_type": "application/json",
+                "records_path": "$.records"
+            }]
+        }))
+        .expect("dataset semantics");
+
+        let row_identity = row_identity_for_paths(
+            &semantics,
+            &[String::from("records.json")],
+            &[String::from("records.json")],
+            &left_root,
+            &right_root,
+            &data,
+        )
+        .expect("row identity");
+
+        assert!(row_identity.is_empty());
+        assert!(data.take_log().is_empty());
     }
 }
