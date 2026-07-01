@@ -590,9 +590,13 @@ fn sniff_text_projection(
 }
 
 fn is_likely_text(bytes: &[u8]) -> bool {
-    if bytes.contains(&0) || std::str::from_utf8(bytes).is_err() {
+    if bytes.contains(&0) {
         return false;
     }
+    let bytes = match std::str::from_utf8(bytes) {
+        Ok(_) => bytes,
+        Err(err) => &bytes[..err.valid_up_to()],
+    };
     if bytes.is_empty() {
         return true;
     }
@@ -772,5 +776,13 @@ mod tests {
         assert!(matches!(err, StreamCopyError::Cap(message) if message == "total cap"));
         assert!(!out_path.exists(), "partial output should be removed");
         assert_eq!(total, 5);
+    }
+
+    #[test]
+    fn is_likely_text_ignores_truncated_utf8_at_sniff_boundary() {
+        let mut bytes = vec![b'a'; CONTENT_SNIFF_PREFIX_BYTES - 1];
+        bytes.push(0xC3);
+
+        assert!(is_likely_text(&bytes));
     }
 }
