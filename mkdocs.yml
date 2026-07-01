@@ -171,6 +171,7 @@ nav:
       - Architectural decisions:
           # BEGIN-ADR-NAV
           - adr/README.md
+          - 'Fat-binoc Distribution and the ABI Canary': adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md
           - 'The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading': adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md
           - 'Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact': adr/2026-06-15-tiered_artifact_metadata.md
           - 'The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First': adr/2026-06-15-engine_overhaul_retrospective.md
