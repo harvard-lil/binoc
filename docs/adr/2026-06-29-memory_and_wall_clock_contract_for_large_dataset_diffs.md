@@ -15,8 +15,10 @@ The motivating shape is ordinary data for binoc's audience, not a stress-only
 case. SEC Financial Statement and Notes monthly bundles are roughly 300 MB zip
 files; the target 2026-02 -> 2026-03 showcase includes `txt.tsv` at roughly
 118 MB and `num.tsv` at roughly 5 million rows. CDC BRFSS is the other current
-large keyed-row reference: a 176 MB, 1.77 million row run with a 9-column
-composite key measured 94 seconds before the #111 writer-speedup work.
+large keyed-row reference. The replayable BRFSS showcase pair used for the
+2026-07-01 remeasurement has 1,773,430 data rows per side (1,773,431 lines
+including the header), 1,066,296,995 total bytes across both CSV snapshots,
+and the same 9-column composite key that motivated #111.
 
 The current implementation has two known memory-scaling sites:
 
@@ -51,12 +53,28 @@ Existing measurements set the scale:
 | #56 pre-streaming SEC-shaped baseline | 36.0 MiB total tabular input | 0.863 s | 463.4 MiB |
 | #56 pre-streaming SEC-shaped baseline | 145.0 MiB total tabular input | 2.022 s | 1,869.3 MiB |
 | #56 streaming spike, summary-only path | 730.0 MiB total tabular input | 1.992 s | 369.5 MiB |
-| CDC BRFSS keyed-row reference | 176 MB, 1.77M rows, 9-column key | 94 s | not recorded |
+| CDC BRFSS keyed-row baseline (`c03c4f7`, pre-#111) | 1.07 GB total CSV input, 1.77M rows/side, 9-column key | 78.51 s | 10.3 GiB |
+| CDC BRFSS keyed-row current tip (2026-07-01) | 1.07 GB total CSV input, 1.77M rows/side, 9-column key | 18.49 s | 511 MiB |
 
 The pre-streaming SEC-shaped baseline proves the old whole-table path is not a
 valid large-data posture. The streaming spike is not a guarantee for current
 mainline behavior, but it proves that a bounded-memory path is practical for
 SEC-scale input when the large table is not retained as one JSON artifact.
+
+On 2026-07-01, #111 was remeasured against the replayable BRFSS showcase pair
+using the same input snapshots and the same 9-column row identity on both the
+pre-#111 baseline commit (`c03c4f7`) and current tip. The direct release
+`binoc diff` wall-clock dropped from 78.51 s to 18.49 s, a 4.25x speedup
+(76.4% less wall time), while peak memory footprint fell from 10.3 GiB to
+511 MiB (95.2% lower). On current tip, `just perf` over the same snapshots
+reports `binoc.write.tabular_stream` as the selected writer for the BRFSS CSV
+and 11,672 ms driver wall time with a 209 MiB high-water RSS increase during
+the measured run. `just profile-diff` on the same pair shows the old
+materializing writer dominated the hot path through
+`binoc_stdlib::correspondence::writers::write_keyed_row_edits`, while the new
+path reduces writer-module leaf self samples from 5.2% to 1.8%, with the
+remaining leaf time spread across streaming digest helpers
+(`record_digest`, `record_key_digest`) instead of row materialization.
 
 ## Decision
 
@@ -102,7 +120,9 @@ The concrete cap for this round is:
   expansion should copy through fixed buffers and enforce caps incrementally.
 - #111 may keep full `TabularData` for the small-input path, but large keyed-row
   writers must not hold both complete row vectors plus unbounded derived maps.
-  The CDC BRFSS 176 MB / 1.77M-row run is the regression fixture for that work.
+  The replayable CDC BRFSS showcase pair above is now the measured regression
+  fixture for that work: 78.51 s / 10.3 GiB at `c03c4f7`, 18.49 s / 511 MiB on
+  current tip, with `binoc.write.tabular_stream` selected by `just perf`.
 
 The wall-clock expectation is order-of-magnitude, not a service-level
 guarantee: a large-to-large semantic diff should take **minutes, not hours**.
@@ -131,6 +151,10 @@ All performance follow-ups use the existing measurement path:
   structural metrics and changeset hashes are exact.
 - Record the machine class, command, input shape, wall-clock, peak RSS, and
   relevant phase/rule time for #110, #111, and the SEC capstone.
+- Do not commit large real benchmark inputs to this repo. The BRFSS replayable
+  snapshots remain in the external showcase workspace; this round records the
+  measured numbers but does not add a CI wall-clock threshold because the
+  representative input is out-of-tree and shared-runner timing would be noisy.
 
 ## Alternatives Considered
 
