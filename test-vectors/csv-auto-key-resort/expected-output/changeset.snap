@@ -1,0 +1,73 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row modified by key"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.dialect-inferred",
+          "binoc.row-identity-inferred"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "rate",
+                "from": "14.8",
+                "key": {
+                  "id": "brfss-003"
+                },
+                "to": "15.0"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "severity": "suggestion",
+      "code": "binoc.tabular_auto_key",
+      "message": [
+        {
+          "text": "inferred row identity column 'id' from unique values with 100% overlap"
+        }
+      ],
+      "location": "binoc.write.tabular"
+    }
+  ]
+}

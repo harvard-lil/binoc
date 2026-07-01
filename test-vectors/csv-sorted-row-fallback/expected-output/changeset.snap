@@ -1,0 +1,61 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "rows reordered; cell values unchanged under inferred row alignment"
+          }
+        ],
+        "tags": [
+          "binoc.dialect-inferred",
+          "binoc.row-reorder"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "alignment": "sorted_row_content",
+                "rows": 4
+              },
+              "summary": [
+                {
+                  "text": "rows reordered; cell values unchanged under inferred row alignment"
+                }
+              ],
+              "verb": "tabular.reorder_rows"
+            }
+          ]
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
+        ]
+      }
+    ]
+  }
+}

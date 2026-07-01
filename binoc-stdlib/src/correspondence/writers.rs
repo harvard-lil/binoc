@@ -24,6 +24,7 @@ const MAX_TEXT_LINE_EXAMPLES: usize = 8;
 const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
 const AUTO_KEY_MIN_JACCARD: f64 = 0.80;
 const AUTO_KEY_MAX_ROWS: usize = 10_000;
+const TABULAR_CHURN_GUARDRAIL_THRESHOLD: f64 = 0.50;
 const MAX_JSON_CHANGE_EXAMPLES: usize = 16;
 const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
 
@@ -191,73 +192,105 @@ impl EditListWriter for TabularWriter {
             }
         } else if ctx.row_keys.is_empty() {
             if let Some(auto_key) = infer_auto_key(&left, &right) {
-                diagnostics.push(Diagnostic::suggestion(
-                    "binoc.tabular_auto_key",
-                    format!(
-                        "inferred row identity column '{}' from unique values with {:.0}% overlap",
-                        auto_key.column,
-                        auto_key.jaccard * 100.0
-                    ),
-                ));
-                edits.push(
-                    Edit::new(
-                        "tabular.auto_detected_key",
-                        json!({
-                            "columns": [auto_key.column.clone()],
-                            "overlap": auto_key.jaccard,
-                            "left_rows": left.rows.len(),
-                            "right_rows": right.rows.len(),
-                        }),
-                    )
-                    .with_item_type("tabular")
-                    .with_tag("binoc.row-identity-inferred")
-                    .hidden(),
-                );
-                let keys = vec![auto_key.column];
+                let keys = vec![auto_key.column.clone()];
                 if let Some((left_keyed, right_keyed)) = keyed_tables(&keys, &left, &right) {
-                    write_keyed_row_edits(&mut edits, &keys, &left_keyed, &right_keyed);
+                    let stats = keyed_churn_stats(&keys, &left_keyed, &right_keyed);
+                    if stats.exceeds_guardrail() {
+                        push_high_churn_guardrail(
+                            &mut edits,
+                            &mut diagnostics,
+                            location,
+                            "auto_key",
+                            stats,
+                            candidate_key_columns(&left, &right),
+                        );
+                        edits.extend(metadata_edits);
+                        return Ok(Some(WriteOutput { edits, diagnostics }));
+                    }
+                    diagnostics.push(Diagnostic::suggestion(
+                        "binoc.tabular_auto_key",
+                        format!(
+                            "inferred row identity column '{}' from unique values with {:.0}% overlap",
+                            auto_key.column,
+                            auto_key.jaccard * 100.0
+                        ),
+                    ));
+                    edits.push(
+                        Edit::new(
+                            "tabular.auto_detected_key",
+                            json!({
+                                "columns": [auto_key.column.clone()],
+                                "overlap": auto_key.jaccard,
+                                "left_rows": left.rows.len(),
+                                "right_rows": right.rows.len(),
+                            }),
+                        )
+                        .with_item_type("tabular")
+                        .with_tag("binoc.row-identity-inferred")
+                        .hidden(),
+                    );
+                    let mut row_edits = Vec::new();
+                    write_keyed_row_edits(&mut row_edits, &keys, &left_keyed, &right_keyed);
+                    if row_edits.is_empty() {
+                        edits.push(row_reorder_edit(
+                            "auto_key",
+                            Some(keys.as_slice()),
+                            right.rows.len(),
+                        ));
+                    } else {
+                        edits.extend(row_edits);
+                    }
                 }
                 edits.extend(metadata_edits);
                 return Ok(Some(WriteOutput { edits, diagnostics }));
             }
         }
 
-        let common = common_columns(&left, &right);
-        if left.rows.len() != right.rows.len()
-            && left.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
-            && right.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
-            && !common.is_empty()
-        {
-            edits.push(row_alignment_basis(&left, &right, &common));
-        }
-        let min_rows = left.rows.len().min(right.rows.len());
-        for index in 0..min_rows {
-            for column in &common {
-                let left_value = left.rows[index]
-                    .get(column.left_index)
-                    .unwrap_or(&Value::Null);
-                let right_value = right.rows[index]
-                    .get(column.right_index)
-                    .unwrap_or(&Value::Null);
-                if left_value != right_value {
-                    edits.push(cell_edit(json!({
-                        "row": index,
-                        "column": column.name,
-                        "from": value_preview(left_value),
-                        "to": value_preview(right_value)
-                    })));
+        if ctx.row_keys.is_empty() {
+            let common = common_columns(&left, &right);
+            let row_alignment_basis = (left.rows.len() != right.rows.len()
+                && left.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
+                && right.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
+                && !common.is_empty())
+            .then(|| row_alignment_basis(&left, &right, &common));
+            let positional = positional_row_edits(&left, &right, &common);
+            let (row_edits, stats) =
+                match sorted_row_content_edits(&left, &right, &common, positional.stats) {
+                    Some(sorted) => sorted,
+                    None => (positional.edits, positional.stats),
+                };
+            let candidate_keys = candidate_key_columns(&left, &right);
+            let has_high_overlap_candidate = candidate_keys
+                .iter()
+                .any(|candidate| candidate.jaccard >= AUTO_KEY_MIN_JACCARD);
+            if left.rows.len() == right.rows.len()
+                && stats.exceeds_guardrail()
+                && !has_high_overlap_candidate
+            {
+                push_high_churn_guardrail(
+                    &mut edits,
+                    &mut diagnostics,
+                    location,
+                    stats.mode,
+                    stats,
+                    candidate_keys,
+                );
+            } else {
+                if let Some(edit) = row_alignment_basis {
+                    edits.push(edit);
                 }
+                edits.extend(row_edits);
             }
-        }
-        for (index, row) in right.rows.iter().enumerate().skip(min_rows) {
-            edits.push(row_add_edit(
-                json!({ "index": index, "values": capture_row(row) }),
-            ));
-        }
-        for (index, row) in left.rows.iter().enumerate().skip(min_rows) {
-            edits.push(row_remove_edit(
-                json!({ "index": index, "values": capture_row(row) }),
-            ));
+        } else {
+            let common = common_columns(&left, &right);
+            if left.rows.len() != right.rows.len()
+                && left.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
+                && right.rows.len() <= MAX_ROW_ALIGNMENT_ROWS
+                && !common.is_empty()
+            {
+                edits.push(row_alignment_basis(&left, &right, &common));
+            }
+            edits.extend(positional_row_edits(&left, &right, &common).edits);
         }
 
         edits.extend(metadata_edits);
@@ -834,6 +867,98 @@ fn key_quality_edit(quality: KeyQuality, policies: binoc_sdk::RowIdentityPolicie
     Some(edit)
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TabularChurnStats {
+    mode: &'static str,
+    changed_cells: usize,
+    total_cells: usize,
+    changed_rows: usize,
+    total_rows: usize,
+}
+
+impl TabularChurnStats {
+    fn fraction(self) -> f64 {
+        if self.total_cells > 0 {
+            return (self.changed_cells as f64 / self.total_cells as f64).min(1.0);
+        }
+        if self.total_rows > 0 {
+            return (self.changed_rows as f64 / self.total_rows as f64).min(1.0);
+        }
+        0.0
+    }
+
+    fn exceeds_guardrail(self) -> bool {
+        self.fraction() > TABULAR_CHURN_GUARDRAIL_THRESHOLD
+    }
+}
+
+#[derive(Debug)]
+struct RowEditPlan {
+    edits: Vec<Edit>,
+    stats: TabularChurnStats,
+}
+
+fn push_high_churn_guardrail(
+    edits: &mut Vec<Edit>,
+    diagnostics: &mut Vec<Diagnostic>,
+    location: &str,
+    mode: &'static str,
+    stats: TabularChurnStats,
+    candidates: Vec<AutoKeyCandidate>,
+) {
+    let candidate_names = candidates
+        .iter()
+        .map(|candidate| candidate.column.as_str())
+        .collect::<Vec<_>>();
+    let candidate_text = if candidate_names.is_empty() {
+        "none".to_string()
+    } else {
+        candidate_names.join(", ")
+    };
+    diagnostics.push(
+        Diagnostic::suggestion(
+            "binoc.tabular_high_churn",
+            format!(
+                "these two tables don't appear to correspond row-for-row ({:.0}% changed cells; candidate key columns: {candidate_text})",
+                stats.fraction() * 100.0
+            ),
+        )
+        .with_location(location)
+        .with_extract_hint(ExtractHint::new("content")),
+    );
+    edits.push(
+        Edit::new(
+            "tabular.row_correspondence_uncertain",
+            json!({
+                "mode": mode,
+                "changed_cell_fraction": stats.fraction(),
+                "threshold": TABULAR_CHURN_GUARDRAIL_THRESHOLD,
+                "changed_cells": stats.changed_cells,
+                "total_cells": stats.total_cells,
+                "changed_rows": stats.changed_rows,
+                "total_rows": stats.total_rows,
+                "candidate_keys": candidates
+                    .into_iter()
+                    .map(|candidate| {
+                        json!({
+                            "columns": [candidate.column],
+                            "overlap": candidate.jaccard,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.row-correspondence-uncertain")
+        .with_summary(
+            Summary::new()
+                .text("row correspondence uncertain; ")
+                .float(stats.fraction())
+                .text(" changed-cell fraction"),
+        ),
+    );
+}
+
 #[derive(Debug, Clone)]
 struct AutoKeyCandidate {
     column: String,
@@ -845,12 +970,15 @@ fn infer_auto_key(left: &TabularData, right: &TabularData) -> Option<AutoKeyCand
     if left.rows.len() > AUTO_KEY_MAX_ROWS || right.rows.len() > AUTO_KEY_MAX_ROWS {
         return None;
     }
-    let right_headers = header_indices(right);
-    left.headers
-        .iter()
-        .filter(|header| right_headers.contains_key(header.as_str()))
-        .filter_map(|header| auto_key_candidate(header, left, right))
+    unique_column_candidates(left, right)
+        .into_iter()
         .filter(|candidate| candidate.jaccard >= AUTO_KEY_MIN_JACCARD)
+        .filter(|candidate| {
+            let keys = [candidate.column.clone()];
+            keyed_tables(&keys, left, right).is_some_and(|(left_keyed, right_keyed)| {
+                auto_key_would_change_alignment(&left_keyed.index, &right_keyed.index)
+            })
+        })
         .min_by(|a, b| {
             b.jaccard
                 .total_cmp(&a.jaccard)
@@ -859,7 +987,46 @@ fn infer_auto_key(left: &TabularData, right: &TabularData) -> Option<AutoKeyCand
         })
 }
 
-fn auto_key_candidate(
+fn candidate_key_columns(left: &TabularData, right: &TabularData) -> Vec<AutoKeyCandidate> {
+    let mut candidates = unique_column_candidates(left, right);
+    candidates.sort_by(|a, b| {
+        b.jaccard
+            .total_cmp(&a.jaccard)
+            .then_with(|| key_name_rank(&a.column).cmp(&key_name_rank(&b.column)))
+            .then_with(|| a.total_value_bytes.cmp(&b.total_value_bytes))
+            .then_with(|| a.column.cmp(&b.column))
+    });
+    candidates.truncate(8);
+    candidates
+}
+
+fn unique_column_candidates(left: &TabularData, right: &TabularData) -> Vec<AutoKeyCandidate> {
+    let right_headers = header_indices(right);
+    let mut candidates = left
+        .headers
+        .iter()
+        .filter(|header| right_headers.contains_key(header.as_str()))
+        .filter_map(|header| unique_column_candidate(header, left, right))
+        .collect::<Vec<_>>();
+    candidates.sort_by(|a, b| {
+        b.jaccard
+            .total_cmp(&a.jaccard)
+            .then_with(|| a.total_value_bytes.cmp(&b.total_value_bytes))
+            .then_with(|| a.column.cmp(&b.column))
+    });
+    candidates
+}
+
+fn key_name_rank(column: &str) -> usize {
+    let normalized = column.trim().to_ascii_lowercase();
+    if normalized == "id" || normalized.ends_with("_id") || normalized.ends_with(" id") {
+        0
+    } else {
+        1
+    }
+}
+
+fn unique_column_candidate(
     column: &str,
     left: &TabularData,
     right: &TabularData,
@@ -867,9 +1034,6 @@ fn auto_key_candidate(
     let keys = [column.to_string()];
     let (left_keyed, right_keyed) = keyed_tables(&keys, left, right)?;
     if !keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
-        return None;
-    }
-    if !auto_key_would_change_alignment(&left_keyed.index, &right_keyed.index) {
         return None;
     }
     let left_values = column_signatures(left, left_keyed.columns.indices[0]);
@@ -1088,6 +1252,249 @@ fn common_columns_by<'a>(
         }
     }
     columns
+}
+
+fn keyed_churn_stats(
+    keys: &[String],
+    left: &KeyedTable<'_>,
+    right: &KeyedTable<'_>,
+) -> TabularChurnStats {
+    let common = common_non_key_columns(left.table, right.table, keys);
+    let left_keys: BTreeSet<&RowSignature<'_>> = left.index.rows.keys().collect();
+    let right_keys: BTreeSet<&RowSignature<'_>> = right.index.rows.keys().collect();
+    let mut changed_cells = 0usize;
+    let mut changed_rows = 0usize;
+
+    for _ in left_keys.difference(&right_keys) {
+        changed_cells += common.len();
+        changed_rows += 1;
+    }
+    for _ in right_keys.difference(&left_keys) {
+        changed_cells += common.len();
+        changed_rows += 1;
+    }
+    for sig in left_keys.intersection(&right_keys) {
+        let left_row = left.index.rows.get(*sig).expect("known left key");
+        let right_row = right.index.rows.get(*sig).expect("known right key");
+        let row_changed_cells = common
+            .iter()
+            .filter(|column| {
+                left_row.row.get(column.left_index).unwrap_or(&Value::Null)
+                    != right_row
+                        .row
+                        .get(column.right_index)
+                        .unwrap_or(&Value::Null)
+            })
+            .count();
+        if row_changed_cells > 0 {
+            changed_cells += row_changed_cells;
+            changed_rows += 1;
+        }
+    }
+
+    TabularChurnStats {
+        mode: "keyed",
+        changed_cells,
+        total_cells: left.table.rows.len().max(right.table.rows.len()) * common.len(),
+        changed_rows,
+        total_rows: left.table.rows.len().max(right.table.rows.len()),
+    }
+}
+
+fn positional_row_edits(
+    left: &TabularData,
+    right: &TabularData,
+    common: &[CommonColumn<'_>],
+) -> RowEditPlan {
+    let mut edits = Vec::new();
+    let mut changed_cells = 0usize;
+    let mut changed_rows = 0usize;
+    let min_rows = left.rows.len().min(right.rows.len());
+    for index in 0..min_rows {
+        let mut row_changed = false;
+        for column in common {
+            let left_value = left.rows[index]
+                .get(column.left_index)
+                .unwrap_or(&Value::Null);
+            let right_value = right.rows[index]
+                .get(column.right_index)
+                .unwrap_or(&Value::Null);
+            if left_value != right_value {
+                changed_cells += 1;
+                row_changed = true;
+                edits.push(cell_edit(json!({
+                    "row": index,
+                    "column": column.name,
+                    "from": value_preview(left_value),
+                    "to": value_preview(right_value)
+                })));
+            }
+        }
+        if row_changed {
+            changed_rows += 1;
+        }
+    }
+    for (index, row) in right.rows.iter().enumerate().skip(min_rows) {
+        changed_cells += common.len();
+        changed_rows += 1;
+        edits.push(row_add_edit(
+            json!({ "index": index, "values": capture_row(row) }),
+        ));
+    }
+    for (index, row) in left.rows.iter().enumerate().skip(min_rows) {
+        changed_cells += common.len();
+        changed_rows += 1;
+        edits.push(row_remove_edit(
+            json!({ "index": index, "values": capture_row(row) }),
+        ));
+    }
+
+    RowEditPlan {
+        edits,
+        stats: TabularChurnStats {
+            mode: "positional",
+            changed_cells,
+            total_cells: left.rows.len().max(right.rows.len()) * common.len(),
+            changed_rows,
+            total_rows: left.rows.len().max(right.rows.len()),
+        },
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SortAlignedRow<'a> {
+    signature: RowSignature<'a>,
+    index: usize,
+    row: &'a Vec<Value>,
+}
+
+fn sorted_row_content_edits(
+    left: &TabularData,
+    right: &TabularData,
+    common: &[CommonColumn<'_>],
+    positional_stats: TabularChurnStats,
+) -> Option<(Vec<Edit>, TabularChurnStats)> {
+    if left.rows.len() != right.rows.len() || common.is_empty() {
+        return None;
+    }
+    let mut left_rows = sort_aligned_rows(left, common.iter().map(|column| column.left_index));
+    let mut right_rows = sort_aligned_rows(right, common.iter().map(|column| column.right_index));
+    left_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+    right_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+
+    let mut edits = Vec::new();
+    let mut changed_cells = 0usize;
+    let mut changed_rows = 0usize;
+    for (left_row, right_row) in left_rows.iter().zip(&right_rows) {
+        let mut row_changed = false;
+        for column in common {
+            let left_value = left_row.row.get(column.left_index).unwrap_or(&Value::Null);
+            let right_value = right_row
+                .row
+                .get(column.right_index)
+                .unwrap_or(&Value::Null);
+            if left_value != right_value {
+                changed_cells += 1;
+                row_changed = true;
+                edits.push(cell_edit(json!({
+                    "left_row": left_row.index,
+                    "right_row": right_row.index,
+                    "column": column.name,
+                    "from": value_preview(left_value),
+                    "to": value_preview(right_value),
+                    "alignment": "sorted_row_content",
+                })));
+            }
+        }
+        if row_changed {
+            changed_rows += 1;
+        }
+    }
+
+    let stats = TabularChurnStats {
+        mode: "sorted_row_content",
+        changed_cells,
+        total_cells: left.rows.len().max(right.rows.len()) * common.len(),
+        changed_rows,
+        total_rows: left.rows.len().max(right.rows.len()),
+    };
+    if stats.changed_cells >= positional_stats.changed_cells {
+        return None;
+    }
+    if edits.is_empty() {
+        edits.push(row_reorder_edit(
+            "sorted_row_content",
+            None,
+            right.rows.len(),
+        ));
+    } else {
+        edits.push(
+            Edit::new(
+                "tabular.sorted_row_alignment",
+                json!({
+                    "left_rows": left.rows.len(),
+                    "right_rows": right.rows.len(),
+                    "positional_changed_cell_fraction": positional_stats.fraction(),
+                    "sorted_changed_cell_fraction": stats.fraction(),
+                }),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-alignment-inferred")
+            .hidden(),
+        );
+    }
+    Some((edits, stats))
+}
+
+fn row_reorder_edit(mode: &str, keys: Option<&[String]>, rows: usize) -> Edit {
+    let mut params = json!({
+        "alignment": mode,
+        "rows": rows,
+    });
+    if let Some(keys) = keys {
+        params["keys"] = json!(keys);
+    }
+    Edit::new("tabular.reorder_rows", params)
+        .with_item_type("tabular")
+        .with_tag("binoc.row-reorder")
+        .with_summary("rows reordered; cell values unchanged under inferred row alignment")
+}
+
+fn sort_aligned_rows<'a>(
+    table: &'a TabularData,
+    indices: impl IntoIterator<Item = usize> + Clone,
+) -> Vec<SortAlignedRow<'a>> {
+    table
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| SortAlignedRow {
+            signature: row_content_signature(row, indices.clone()),
+            index,
+            row,
+        })
+        .collect()
+}
+
+fn row_content_signature<'a>(
+    row: &'a [Value],
+    indices: impl IntoIterator<Item = usize>,
+) -> RowSignature<'a> {
+    RowSignature(
+        indices
+            .into_iter()
+            .map(|index| row.get(index).unwrap_or(&Value::Null).as_text())
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
 }
 
 fn write_keyed_row_edits(
