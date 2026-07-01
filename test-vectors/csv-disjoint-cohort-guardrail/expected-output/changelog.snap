@@ -1,0 +1,15 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **data.csv**: row correspondence uncertain; 1 changed-cell fraction
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF
+
+## Suggestions
+
+- these two tables don't appear to correspond row-for-row (100% changed cells; candidate key columns: id, rate, county) (`data.csv`) [binoc.tabular_high_churn]
+  - use `binoc extract CHANGESET "data.csv" content`

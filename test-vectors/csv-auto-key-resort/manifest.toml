@@ -1,0 +1,9 @@
+[vector]
+name = "csv-auto-key-resort"
+description = "Auto-detected CSV row keys turn a high positional-churn re-sort into a keyed cell change"
+tags = ["csv", "auto-key", "row-reorder", "cell-change"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-identity-inferred", "binoc.cell-change"]
+
