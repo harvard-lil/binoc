@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
+
+- **data.csv**: Column renamed: 'status' -> 'state'; Columns reordered
+  - Dialect provenance: detected comma-delimited, no quoting, newline LF

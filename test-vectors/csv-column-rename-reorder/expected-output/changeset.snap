@@ -1,0 +1,77 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Column renamed: 'status' -> 'state'; Columns reordered"
+          }
+        ],
+        "tags": [
+          "binoc.column-rename",
+          "binoc.column-reorder",
+          "binoc.dialect-inferred",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "order": [
+                  "score",
+                  "id"
+                ]
+              },
+              "summary": [
+                {
+                  "text": "Columns reordered"
+                }
+              ],
+              "verb": "tabular.reorder_columns"
+            },
+            {
+              "params": {
+                "from": "status",
+                "to": "state"
+              },
+              "summary": [
+                {
+                  "text": "Column renamed: 'status' -> 'state'"
+                }
+              ],
+              "verb": "tabular.rename_column"
+            }
+          ]
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected comma-delimited, no quoting, newline LF"
+          }
+        ]
+      }
+    ]
+  }
+}

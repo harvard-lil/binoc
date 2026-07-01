@@ -507,6 +507,128 @@ fn lcs_row_alignment_compacts_mid_table_insertion_with_column_changes() {
 }
 
 #[test]
+fn correspondence_engine_reports_column_rename_with_reorder() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.csv"),
+        "id,status,score\n1,active,10\n2,pending,20\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.csv"),
+        "score,id,state\n10,1,active\n20,2,pending\n",
+    )
+    .unwrap();
+
+    let root = diff_with_correspondence(&left, &right);
+    let node = find(&root, "data.csv").expect("data.csv node");
+    assert!(node.tags.contains("binoc.column-rename"));
+    assert!(node.tags.contains("binoc.column-reorder"));
+
+    let edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .expect("edits");
+    let verbs: Vec<&str> = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(
+        verbs,
+        vec!["tabular.reorder_columns", "tabular.rename_column"]
+    );
+}
+
+#[test]
+fn keyed_payload_column_rename_uses_keyed_row_alignment() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("data.csv"),
+        "id,status\n1,active\n2,pending\n3,archived\n",
+    )
+    .unwrap();
+    fs::write(
+        right.join("data.csv"),
+        "id,state\n2,closed\n3,archived\n1,active\n",
+    )
+    .unwrap();
+
+    let root = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "defaults": {
+                "row_identity": { "columns": ["id"] }
+            }
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff")
+        .root
+        .expect("root");
+    let node = find(&root, "data.csv").expect("data.csv node");
+
+    let edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .expect("edits");
+    let verbs: Vec<&str> = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(verbs, vec!["tabular.rename_column", "tabular.edit_cell"]);
+    assert_eq!(edits[1]["params"]["row"], serde_json::json!(0));
+    assert_eq!(edits[1]["params"]["column"], serde_json::json!("state"));
+    assert_eq!(edits[1]["params"]["from"], serde_json::json!("pending"));
+    assert_eq!(edits[1]["params"]["to"], serde_json::json!("closed"));
+}
+
+#[test]
+fn renamed_row_identity_key_still_compacts_to_column_rename() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "id,status\n1,active\n2,pending\n").unwrap();
+    fs::write(right.join("data.csv"), "code,status\n1,active\n2,pending\n").unwrap();
+
+    let root = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "defaults": {
+                "row_identity": { "columns": ["id"] }
+            }
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff")
+        .root
+        .expect("root");
+    let node = find(&root, "data.csv").expect("data.csv node");
+
+    let edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .expect("edits");
+    let verbs: Vec<&str> = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+    assert_eq!(verbs, vec!["tabular.rename_column"]);
+    assert_eq!(
+        edits[0]["params"],
+        serde_json::json!({"from": "id", "to": "code"})
+    );
+}
+
+#[test]
 fn correspondence_engine_reports_copy_without_double_counting_container_edits() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");

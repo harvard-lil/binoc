@@ -841,7 +841,7 @@ fn column_rename_matches(
         .iter()
         .find(|edit| edit.verb == "tabular.row_alignment_basis")
         .and_then(RowAlignmentBasis::from_edit)
-        .map(|basis| lcs_pairs(&basis.left, &basis.right));
+        .map(|basis| basis.alignment_pairs());
 
     let mut candidates = Vec::new();
     for remove in &removes {
@@ -1103,7 +1103,17 @@ fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
         .iter()
         .position(|edit| edit.verb == "tabular.row_alignment_basis")?;
     let basis = RowAlignmentBasis::from_edit(&edits[basis_index])?;
-    let alignment = lcs_pairs(&basis.left, &basis.right);
+    if basis.columns.is_empty() {
+        return Some(
+            edits
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != basis_index)
+                .map(|(_, edit)| edit.clone())
+                .collect(),
+        );
+    }
+    let alignment = basis.alignment_pairs();
     let mut matched_left = vec![false; basis.left.len()];
     let mut matched_right = vec![false; basis.right.len()];
     for (left, right) in alignment {
@@ -1167,6 +1177,7 @@ struct RowAlignmentBasis {
     left: Vec<String>,
     right: Vec<String>,
     right_rows: Vec<serde_json::Value>,
+    pairs: Option<Vec<(usize, usize)>>,
 }
 
 impl RowAlignmentBasis {
@@ -1178,16 +1189,41 @@ impl RowAlignmentBasis {
             return None;
         }
         let right_rows = edit.params.get("right_rows")?.as_array()?.clone();
+        let pairs = match edit.params.get("pairs").and_then(|pairs| pairs.as_array()) {
+            Some(pairs) => Some(
+                pairs
+                    .iter()
+                    .map(|pair| {
+                        Some((
+                            pair.get("left")?.as_u64()? as usize,
+                            pair.get("right")?.as_u64()? as usize,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            None => None,
+        };
         Some(Self {
             columns,
             left,
             right,
             right_rows,
+            pairs,
         })
+    }
+
+    fn alignment_pairs(&self) -> Vec<(usize, usize)> {
+        self.pairs
+            .clone()
+            .unwrap_or_else(|| lcs_pairs(&self.left, &self.right))
     }
 
     fn owns_cell_edit(&self, edit: &Edit) -> bool {
         edit.verb == "tabular.edit_cell"
+            && edit.params.get("key").is_none()
+            && (edit.params.get("row").is_some()
+                || edit.params.get("left_row").is_some()
+                || edit.params.get("right_row").is_some())
             && edit
                 .params
                 .get("column")
@@ -1677,6 +1713,82 @@ mod tests {
             rewritten[1].params,
             json!({"row": 1, "column": "state", "from": "pending", "to": "paused"})
         );
+    }
+
+    #[test]
+    fn column_rename_uses_explicit_row_alignment_pairs() {
+        let edits = vec![
+            Edit::new(
+                "tabular.row_alignment_basis",
+                json!({
+                    "columns": [],
+                    "left": ["id=1", "id=2", "id=3"],
+                    "right": ["id=2", "id=3", "id=1"],
+                    "right_rows": [
+                        {"values": ["2", "closed"], "total_values": 2, "truncated": false},
+                        {"values": ["3", "archived"], "total_values": 2, "truncated": false},
+                        {"values": ["1", "active"], "total_values": 2, "truncated": false}
+                    ],
+                    "pairs": [
+                        {"left": 0, "right": 2},
+                        {"left": 1, "right": 0},
+                        {"left": 2, "right": 1}
+                    ]
+                }),
+            )
+            .hidden(),
+            Edit::new(
+                "tabular.set_headers",
+                json!({"from": ["id", "status"], "to": ["id", "state"]}),
+            )
+            .with_item_type("tabular"),
+            add_column("state", &["closed", "archived", "active"]),
+            remove_column("status", &["active", "pending", "archived"]),
+        ];
+
+        let left = table(
+            &["id", "status"],
+            &[&["1", "active"], &["2", "pending"], &["3", "archived"]],
+        );
+        let right = table(
+            &["id", "state"],
+            &[&["2", "closed"], &["3", "archived"], &["1", "active"]],
+        );
+
+        let rewritten = rewrite_column_renames(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten[0].verb, "tabular.row_alignment_basis");
+        assert_eq!(rewritten[1].verb, "tabular.rename_column");
+        assert_eq!(
+            rewritten[2].params,
+            json!({"row": 0, "column": "state", "from": "pending", "to": "closed"})
+        );
+    }
+
+    #[test]
+    fn column_rename_keeps_header_change_when_reorder_remains() {
+        let edits = vec![
+            Edit::new(
+                "tabular.set_headers",
+                json!({"from": ["id", "status", "score"], "to": ["score", "id", "state"]}),
+            )
+            .with_item_type("tabular"),
+            add_column("state", &["active", "pending"]),
+            remove_column("status", &["active", "pending"]),
+        ];
+
+        let left = table(
+            &["id", "status", "score"],
+            &[&["1", "active", "10"], &["2", "pending", "20"]],
+        );
+        let right = table(
+            &["score", "id", "state"],
+            &[&["10", "1", "active"], &["20", "2", "pending"]],
+        );
+
+        let renamed = rewrite_column_renames(&edits, &left, &right).expect("rename rewrite");
+        assert_eq!(renamed[0].verb, "tabular.set_headers");
+        assert_eq!(renamed[1].verb, "tabular.rename_column");
     }
 
     #[test]
