@@ -10,9 +10,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use binoc_sdk::{
-    tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
+    structured_document_v1, tabular_v1, BinocResult, CoreRule, CorrespondenceDatasetConfigurator,
     CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
-    FileSelector, ItemRef, ParseRule, PathConfigEntry, ProjectionAnnotationContext,
+    FileSelector, ItemRef, NodeIdentity, ParseRule, PathConfigEntry, ProjectionAnnotationContext,
     ProjectionAnnotator, ProjectionHint, RowIdentity, RowIdentityPolicies, Summary, TableConfig,
     TabularParseConfig,
 };
@@ -147,6 +147,7 @@ fn engine_config_with_options_and_reduced_precision(
         identity_extractors: vec![Arc::new(binoc_sdk::TabularIdentityExtractor)],
         row_keys: BTreeMap::new(),
         row_identity_policies: BTreeMap::new(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: Some(Arc::new(StdlibDatasetConfigurator)),
         dispatch_resolver: None,
@@ -216,6 +217,14 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 )
             })
             .collect();
+        config.node_identities = node_identity_for_paths(
+            &semantics,
+            &left_paths,
+            &right_paths,
+            left_root,
+            right_root,
+            data,
+        )?;
         if !semantics.files.correspondences.is_empty() {
             config.rules.insert(
                 0,
@@ -306,6 +315,12 @@ impl DispatchResolver for StdlibPathDispatchResolver {
             entry.and_then(|entry| entry.row_identity.as_ref()),
         );
         (!identity.columns.is_empty()).then_some(identity)
+    }
+
+    fn node_identity_for(&self, path: &str) -> Option<NodeIdentity> {
+        first_path_entry(&self.entries, path)
+            .and_then(|entry| entry.node_identity.clone())
+            .filter(node_identity_configured)
     }
 }
 
@@ -484,6 +499,7 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
     }
 
     parts.extend(text_fact_summaries(edits));
+    parts.extend(document_node_summaries(edits));
     parts.extend(metadata_summaries(edits));
 
     if parts.is_empty() {
@@ -565,6 +581,35 @@ fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
             }
             _ => {}
         }
+    }
+    parts
+}
+
+fn document_node_summaries(edits: &[Edit]) -> Vec<String> {
+    let mut parts = Vec::new();
+    let nodes_added = count_verb(edits, "document.add_node");
+    let nodes_removed = count_verb(edits, "document.remove_node");
+    let nodes_edited = count_verb(edits, "document.edit_node");
+    if nodes_added > 0 {
+        parts.push(count_phrase(
+            nodes_added,
+            "keyed node added",
+            "keyed nodes added",
+        ));
+    }
+    if nodes_removed > 0 {
+        parts.push(count_phrase(
+            nodes_removed,
+            "keyed node removed",
+            "keyed nodes removed",
+        ));
+    }
+    if nodes_edited > 0 {
+        parts.push(count_phrase(
+            nodes_edited,
+            "keyed node edited",
+            "keyed nodes edited",
+        ));
     }
     parts
 }
@@ -749,6 +794,52 @@ fn row_identity_configured(identity: &RowIdentity) -> bool {
     !identity.columns.is_empty() || !identity.by_position.is_empty()
 }
 
+fn node_identity_for_paths(
+    semantics: &DatasetSemanticsV1,
+    left_paths: &[String],
+    right_paths: &[String],
+    left_root: &ItemRef,
+    right_root: &ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<BTreeMap<String, NodeIdentity>> {
+    let left_root_physical = data.local_path(left_root)?;
+    let right_root_physical = data.local_path(right_root)?;
+    let mut paths = left_paths
+        .iter()
+        .chain(right_paths)
+        .cloned()
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+
+    let mut node_identities = BTreeMap::new();
+    for path in paths {
+        let path_entry = first_path_entry(&semantics.paths, &path);
+        let Some(identity) = path_entry
+            .and_then(|entry| entry.node_identity.clone())
+            .filter(node_identity_configured)
+        else {
+            continue;
+        };
+        if path_emits_structured_document_artifact(
+            &path,
+            left_root,
+            &left_root_physical,
+            right_root,
+            &right_root_physical,
+            path_entry,
+            data,
+        )? {
+            node_identities.insert(path, identity);
+        }
+    }
+    Ok(node_identities)
+}
+
+fn node_identity_configured(identity: &NodeIdentity) -> bool {
+    !identity.key_attribute.trim().is_empty()
+}
+
 fn positional_column_name(position: usize) -> String {
     format!("column_{position}")
 }
@@ -796,6 +887,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
             && entry.shape.is_none()
             && entry.records_path.is_none()
             && entry.row_identity.is_none()
+            && entry.node_identity.is_none()
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -836,6 +928,30 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 )
                 .with_location(location.clone()),
             );
+        }
+        if let Some(identity) = &entry.node_identity {
+            if identity.key_attribute.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.node_identity_key_empty",
+                        Summary::new()
+                            .text("node_identity.key_attribute must be a non-empty attribute name"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
+            if !entry_declares_structured_document(entry) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.facet_kind_mismatch",
+                        Summary::new()
+                            .text("node_identity is only meaningful for paths that can parse as ")
+                            .text("structured documents; use a structured-document-producing ")
+                            .text("match, content_type, or rule"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
         }
         if let Some(records_path) = &entry.records_path {
             if records_path.trim().is_empty() {
@@ -1007,6 +1123,18 @@ fn entry_declares_tabular(entry: &PathConfigEntry) -> bool {
             .is_some_and(rule_can_emit_tabular_artifact)
 }
 
+fn entry_declares_structured_document(entry: &PathConfigEntry) -> bool {
+    glob_can_match_structured_document_artifact(&entry.match_)
+        || entry
+            .content_type
+            .as_deref()
+            .is_some_and(content_type_can_emit_structured_document_artifact)
+        || entry
+            .rule
+            .as_deref()
+            .is_some_and(rule_can_emit_structured_document_artifact)
+}
+
 fn content_type_can_emit_tabular_artifact(content_type: &str) -> bool {
     matches!(
         content_type,
@@ -1015,6 +1143,23 @@ fn content_type_can_emit_tabular_artifact(content_type: &str) -> bool {
             | "application/json"
             | "application/ld+json"
             | "application/geo+json"
+    )
+}
+
+fn content_type_can_emit_structured_document_artifact(content_type: &str) -> bool {
+    matches!(
+        content_type,
+        "application/json"
+            | "application/ld+json"
+            | "application/geo+json"
+            | "text/yaml"
+            | "application/yaml"
+            | "application/x-yaml"
+            | "application/toml"
+            | "text/xml"
+            | "application/xml"
+            | "application/rdf+xml"
+            | "application/atom+xml"
     )
 }
 
@@ -1031,6 +1176,29 @@ fn projection_for_content_type(content_type: &str) -> ProjectionHint {
 fn glob_can_match_tabular_artifact(pattern: &str) -> bool {
     [
         ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".geojson", ".jsonld", ".json-ld",
+    ]
+    .iter()
+    .any(|extension| pattern.ends_with(extension))
+}
+
+fn glob_can_match_structured_document_artifact(pattern: &str) -> bool {
+    [
+        ".json",
+        ".jsonld",
+        ".json-ld",
+        ".geojson",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".properties",
+        ".xml",
+        ".rdf",
+        ".kml",
+        ".gml",
+        ".atom",
+        ".rss",
     ]
     .iter()
     .any(|extension| pattern.ends_with(extension))
@@ -1266,6 +1434,88 @@ fn parse_forced_tabular_rule(
     }
 }
 
+fn path_emits_structured_document_artifact(
+    path: &str,
+    left_root: &ItemRef,
+    left_root_physical: &Path,
+    right_root: &ItemRef,
+    right_root_physical: &Path,
+    path_entry: Option<&PathConfigEntry>,
+    data: &dyn DataAccess,
+) -> BinocResult<bool> {
+    if path_entry.is_some_and(entry_declares_structured_document)
+        || glob_can_match_structured_document_artifact(path)
+    {
+        return Ok(true);
+    }
+    for (root, physical) in [
+        (left_root, left_root_physical),
+        (right_root, right_root_physical),
+    ] {
+        let Some(item) = item_for_logical_path(root, physical, path, path_entry, data)? else {
+            continue;
+        };
+        if item_emits_structured_document_artifact(&item, path_entry, data) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn item_emits_structured_document_artifact(
+    item: &ItemRef,
+    path_entry: Option<&PathConfigEntry>,
+    data: &dyn DataAccess,
+) -> bool {
+    if let Some(forced) = path_entry
+        .and_then(|entry| entry.rule.as_deref())
+        .and_then(forced_structured_document_parse_rule)
+    {
+        if let Ok(output) = forced.parse(item, data) {
+            return !output.bytes.is_empty();
+        }
+    }
+    let json = parse::JsonParse;
+    let json_media = parse::JsonMediaParse;
+    let yaml = parse::YamlParse;
+    let yaml_media = parse::YamlMediaParse;
+    let toml = parse::TomlParse;
+    let ini = parse::IniParse;
+    let rules = [
+        &json as &dyn ParseRule,
+        &json_media as &dyn ParseRule,
+        &yaml as &dyn ParseRule,
+        &yaml_media as &dyn ParseRule,
+        &toml as &dyn ParseRule,
+        &ini as &dyn ParseRule,
+    ];
+    for rule in rules {
+        let descriptor = rule.descriptor();
+        if descriptor.output != structured_document_v1() || !descriptor.input.matches(item) {
+            continue;
+        }
+        let Ok(output) = rule.parse(item, data) else {
+            continue;
+        };
+        if !output.bytes.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
+fn forced_structured_document_parse_rule(rule_name: &str) -> Option<&'static dyn ParseRule> {
+    match rule_name {
+        "binoc.parse.json" => Some(&parse::JsonParse),
+        "binoc.parse.json_media" => Some(&parse::JsonMediaParse),
+        "binoc.parse.yaml" => Some(&parse::YamlParse),
+        "binoc.parse.yaml_media" => Some(&parse::YamlMediaParse),
+        "binoc.parse.toml" => Some(&parse::TomlParse),
+        "binoc.parse.ini" => Some(&parse::IniParse),
+        _ => None,
+    }
+}
+
 fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
     matches!(
         rule_name,
@@ -1274,6 +1524,10 @@ fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
             | "binoc.parse.json_records"
             | "binoc.parse.json_media_records"
     )
+}
+
+fn rule_can_emit_structured_document_artifact(rule_name: &str) -> bool {
+    forced_structured_document_parse_rule(rule_name).is_some()
 }
 
 #[cfg(test)]
@@ -1404,6 +1658,7 @@ mod tests {
 
         let row_identity = row_identity_for_paths(
             &semantics,
+            large_tabular_threshold_bytes(&semantics),
             &[String::from("records.json")],
             &[String::from("records.json")],
             &left_root,

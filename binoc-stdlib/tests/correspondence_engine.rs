@@ -817,6 +817,7 @@ fn fuzzy_candidate_limit_surfaces_diagnostic() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -850,6 +851,7 @@ fn unsafe_zip_entry_skip_surfaces_diagnostic() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -894,6 +896,7 @@ fn low_archive_cap_triggers_overflow_diagnostic() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -958,6 +961,7 @@ fn raised_archive_cap_allows_expansion() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -1007,6 +1011,7 @@ fn keyed_row_exclusion_degrades_with_diagnostic() {
         identity_extractors: vec![],
         row_keys,
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -1697,6 +1702,72 @@ fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
 }
 
 #[test]
+fn path_node_identity_matches_structured_document_nodes_by_attribute() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("doc.json"),
+        r#"{
+  "usc": {
+    "section": [
+      { "@identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "Old" },
+      { "@identifier": "/us/usc/t54/s100502", "num": "100502", "heading": "Removed" }
+    ]
+  }
+}"#,
+    )
+    .unwrap();
+    fs::write(
+        right.join("doc.json"),
+        r#"{
+  "usc": {
+    "section": [
+      { "@identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "New" },
+      { "@identifier": "/us/usc/t54/s100503", "num": "100503", "heading": "Added" }
+    ]
+  }
+}"#,
+    )
+    .unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "doc.json",
+                "node_identity": { "key_attribute": "identifier" }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "doc.json").expect("doc.json");
+    assert_eq!(node.action, "modify");
+    assert_eq!(
+        node.summary.as_ref().expect("summary").plain_text(),
+        "1 keyed node added; 1 keyed node removed; 1 keyed node edited"
+    );
+    let edits = node.details["edits"].as_array().expect("edits");
+    let verbs = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        verbs,
+        vec![
+            "document.remove_node",
+            "document.add_node",
+            "document.edit_node"
+        ]
+    );
+    assert_eq!(edits[0]["params"]["key"], "/us/usc/t54/s100502");
+    assert_eq!(edits[1]["params"]["key"], "/us/usc/t54/s100503");
+    assert_eq!(edits[2]["params"]["key"], "/us/usc/t54/s100501");
+}
+
+#[test]
 fn stacked_csv_decomposes_into_table_children() {
     let (_guard, left, right) = materialized_vector("csv-stacked-tables");
     let result = run_engine(&left, &right, &default_engine_config());
@@ -1800,6 +1871,7 @@ fn expand_rule_failure_degrades_one_node_and_continues() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,
@@ -1848,6 +1920,7 @@ fn parse_rule_failure_degrades_one_node_and_continues() {
         identity_extractors: vec![],
         row_keys: Default::default(),
         row_identity_policies: Default::default(),
+        node_identities: Default::default(),
         root_projection: ProjectionHint::default().item_type("directory"),
         dataset_configurator: None,
         dispatch_resolver: None,

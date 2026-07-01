@@ -31,7 +31,6 @@ expression: "&stable_changeset"
         "tags": [
           "binoc.column-addition",
           "binoc.column-removal",
-          "binoc.dialect-inferred",
           "binoc.schema-change"
         ],
         "details": {
@@ -82,14 +81,7 @@ expression: "&stable_changeset"
               "verb": "tabular.remove_column"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   }

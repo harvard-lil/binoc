@@ -453,6 +453,13 @@ pub struct DatasetDefaults {
     pub row_identity: RowIdentity,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct NodeIdentity {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_attribute: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct PathConfigEntry {
     #[serde(default, rename = "match")]
@@ -469,6 +476,8 @@ pub struct PathConfigEntry {
     pub records_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_identity: Option<RowIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_identity: Option<NodeIdentity>,
     #[serde(skip)]
     pub unknown_fields: Vec<String>,
 }
@@ -494,6 +503,8 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             records_path: Option<String>,
             #[serde(default)]
             row_identity: Option<RowIdentity>,
+            #[serde(default)]
+            node_identity: Option<NodeIdentity>,
             #[serde(default)]
             columns: Vec<String>,
             #[serde(default)]
@@ -528,6 +539,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             shape: raw.shape,
             records_path: raw.records_path,
             row_identity,
+            node_identity: raw.node_identity,
             unknown_fields: raw.extra.into_keys().collect(),
         })
     }

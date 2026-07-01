@@ -31,7 +31,6 @@ expression: "&stable_changeset"
         "tags": [
           "binoc.column-rename",
           "binoc.column-reorder",
-          "binoc.dialect-inferred",
           "binoc.schema-change"
         ],
         "details": {
@@ -63,14 +62,7 @@ expression: "&stable_changeset"
               "verb": "tabular.rename_column"
             }
           ]
-        },
-        "annotations": [
-          {
-            "package": "binoc",
-            "key": "dialect_provenance",
-            "value": "detected comma-delimited, no quoting, newline LF"
-          }
-        ]
+        }
       }
     ]
   }

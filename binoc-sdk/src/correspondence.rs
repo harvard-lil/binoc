@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Annotation, ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult,
-    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, RowIdentity,
-    Segment, Summary,
+    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, NodeIdentity,
+    RowIdentity, Segment, Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
@@ -332,6 +332,7 @@ pub struct CorrespondenceEngineConfig {
     pub identity_extractors: Vec<Arc<dyn IdentityExtractor>>,
     pub row_keys: BTreeMap<String, Vec<String>>,
     pub row_identity_policies: BTreeMap<String, RowIdentityPolicies>,
+    pub node_identities: BTreeMap<String, NodeIdentity>,
     pub root_projection: ProjectionHint,
     pub dataset_configurator: Option<Arc<dyn CorrespondenceDatasetConfigurator>>,
     /// Optional path-scoped dispatch resolver installed by a rule pack's dataset
@@ -360,6 +361,10 @@ pub trait DispatchResolver: Send + Sync {
     }
 
     fn row_identity_for(&self, _path: &str) -> Option<RowIdentity> {
+        None
+    }
+
+    fn node_identity_for(&self, _path: &str) -> Option<NodeIdentity> {
         None
     }
 }
@@ -888,6 +893,7 @@ pub struct LinkCtx<'a> {
     pub link: LinkRef,
     pub row_keys: Cow<'a, [String]>,
     pub row_identity_policies: RowIdentityPolicies,
+    pub node_identity: Option<Cow<'a, NodeIdentity>>,
     pub artifact_cache: &'a ArtifactDecodeCache,
 }
 
