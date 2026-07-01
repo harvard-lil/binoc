@@ -170,6 +170,11 @@ impl EditListWriter for TabularWriter {
                 keyed_tables(ctx.row_keys.as_ref(), &left, &right)
             {
                 if keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
+                    edits.push(keyed_row_alignment_basis(
+                        ctx.row_keys.as_ref(),
+                        &left_keyed,
+                        &right_keyed,
+                    ));
                     write_keyed_row_edits(
                         &mut edits,
                         ctx.row_keys.as_ref(),
@@ -1543,6 +1548,60 @@ fn write_keyed_row_edits(
             }
         }
     }
+}
+
+fn keyed_row_alignment_basis(
+    keys: &[String],
+    left: &KeyedTable<'_>,
+    right: &KeyedTable<'_>,
+) -> Edit {
+    let left_rows = left
+        .table
+        .rows
+        .iter()
+        .map(|row| key_signature_text(keys, &left.columns, row))
+        .collect::<Vec<_>>();
+    let right_rows = right
+        .table
+        .rows
+        .iter()
+        .map(|row| key_signature_text(keys, &right.columns, row))
+        .collect::<Vec<_>>();
+    let pairs = left
+        .index
+        .rows
+        .iter()
+        .filter_map(|(signature, left_row)| {
+            let right_row = right.index.rows.get(signature)?;
+            Some(json!({
+                "left": left_row.index,
+                "right": right_row.index,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    Edit::new(
+        "tabular.row_alignment_basis",
+        json!({
+            "columns": [],
+            "left": left_rows,
+            "right": right_rows,
+            "right_rows": right.table.rows.iter().map(|row| capture_row(row)).collect::<Vec<_>>(),
+            "pairs": pairs,
+        }),
+    )
+    .hidden()
+}
+
+fn key_signature_text(keys: &[String], columns: &KeyColumns, row: &[Value]) -> String {
+    keys.iter()
+        .zip(&columns.indices)
+        .map(|(key, index)| {
+            let value = row.get(*index).unwrap_or(&Value::Null);
+            format!("{key}={}", value.as_text())
+        })
+        .collect::<Vec<_>>()
+        .join("\u{001f}")
 }
 
 fn capture_row(row: &[Value]) -> serde_json::Value {

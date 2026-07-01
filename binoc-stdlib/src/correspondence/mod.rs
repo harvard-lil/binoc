@@ -113,8 +113,8 @@ pub fn engine_config_with_options(options: CorrespondenceOptions) -> Corresponde
             Arc::new(writers::FallbackWriter),
         ],
         compaction: vec![
-            Arc::new(compact::ColumnReorder),
             Arc::new(compact::ColumnRename),
+            Arc::new(compact::ColumnReorder),
             Arc::new(compact::TypeOnlyColumnChange),
             Arc::new(compact::RowAlignment),
             Arc::new(compact::ReducedPrecision),

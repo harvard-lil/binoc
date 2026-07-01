@@ -1,0 +1,9 @@
+[vector]
+name = "csv-column-rename-near-miss"
+description = "A weak content overlap should remain a column add plus remove"
+tags = ["csv", "column-addition", "column-removal"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.column-addition", "binoc.column-removal"]
