@@ -175,7 +175,7 @@ nav:
           - 'The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading': adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md
           - 'Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact': adr/2026-06-15-tiered_artifact_metadata.md
           - 'The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First': adr/2026-06-15-engine_overhaul_retrospective.md
-          - 'Partition Identities: a JIT, Format-Owned Capability for N↔M Correspondence (CFM-72)': adr/2026-06-15-partition_identities_jit_format_capability.md
+          - 'Partition Identities: a JIT, Format-Owned Capability for N<->M Correspondence (CFM-72)': adr/2026-06-15-partition_identities_jit_format_capability.md
           - 'Multi-Input Claims: Grouping Sibling Files into One Logical Dataset': adr/2026-06-15-multi_input_file_sets_and_shapefile_fusion.md
           - 'Composable Per-Artifact Writers: the Artifact Is the Rendering Unit': adr/2026-06-15-composable_per_artifact_writers.md
           - 'Typed Records: a Greenfield `tabular` Artifact and a Generic `structured_document`': adr/2026-06-14-typed_record_tabular_and_structured_document.md

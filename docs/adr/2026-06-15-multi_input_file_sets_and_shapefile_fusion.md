@@ -26,8 +26,8 @@ And the pattern recurs well beyond shapefiles: GeoTIFF + world file
 are all "one dataset, several sibling files."
 
 binoc already parses the `.dbf` attribute table on its own
-(`model-plugins/binoc-dbf` → `tabular_v1`), and as of 2026-06-15 it parses the
-`.shp` geometry on its own (`model-plugins/binoc-shapefile` → a
+(`model-plugins/binoc-dbf` -> `tabular_v1`), and as of 2026-06-15 it parses the
+`.shp` geometry on its own (`model-plugins/binoc-shapefile` -> a
 `structured_document_v1` summary tagged `format: "shapefile"`). Two gaps remain:
 
 - **(A) Geometry parsing** — *solved* by the new `.shp` parser.
@@ -43,7 +43,7 @@ This ADR records the design decision for gap B.
 binoc's tree-shaping rules each *claim* a unit of work:
 
 - `ExpandRule::expand(item: &ItemRef, …)` claims **one** node, unfolds it into
-  children (zip/tar/dir → members).
+  children (zip/tar/dir -> members).
 - `ParseRule::parse(item: &ItemRef, …)` claims **one** node, decodes it into an
   artifact (+ optional children).
 - Both descriptors carry a single `NodeMatch` (`is_dir`/`extensions`/
@@ -157,14 +157,14 @@ constraints:
   from projection as siblings, but survive as **provenance** the result node
   attributes to (member-level changelog attribution and CFM-71 reconciliation
   both want this).
-- **Two-phase claiming.** Match → `parse()` → mark subsumed only on success.
+- **Two-phase claiming.** Match -> `parse()` -> mark subsumed only on success.
   This is the shape single-node parse already has ("parse, then mark parsed if
   non-empty"), lifted from one node to a set. A claim must also be retried as the
   frontier grows across saturation rounds, since siblings can appear in different
   rounds (e.g. after a zip expands) — again the same retry parse already does.
 
-`subsume` is the dual of `add_child`: `add_child` is the 1→N unfold, `subsume`
-is the N→1 fold. The result node a fusing claim emits is the *same kind of node*
+`subsume` is the dual of `add_child`: `add_child` is the 1->N unfold, `subsume`
+is the N->1 fold. The result node a fusing claim emits is the *same kind of node*
 a parsed SQLite/Excel container emits — a node with a named `item_type`
 ("Shapefile layer"), `tabular_v1` children (the `.dbf` attribute table), and a
 `parser_metadata_v1` artifact (CRS/encoding). Fusion produces the CFM-69/80/81
@@ -182,7 +182,7 @@ fused.
   output node all already exist. The new surface is one widened descriptor, an
   arity-descending precedence pass, and `subsume`.
 - **It completes the arity matrix.** Within-snapshot the engine has had unfold
-  (expand, 1→N) and never had fold; `subsume` is fold (N→1). It is the
+  (expand, 1->N) and never had fold; `subsume` is fold (N->1). It is the
   structural dual of expand and the input-side counterpart to CFM-81's
   output-side move ("the artifact is the rendering unit"): here, *the claim is
   the parse unit, not the node*.
@@ -199,10 +199,10 @@ fused.
   third consumer of CFM-81 alongside metadata rendering (CFM-82) and a cleaner
   CFM-71.
 - **CFM-71 (reconciliation)** shares fusion's member-attribution provenance, and
-  "loose files → fused layer" or "shapefile → geopackage" is a container
+  "loose files -> fused layer" or "shapefile -> geopackage" is a container
   reshape it must project honestly.
-- **CFM-72 (split/merge)** is the *across-snapshot* N↔1 of links; fusion is the
-  *within-snapshot* N→1 of structure. Fusion makes a file set one node per side,
+- **CFM-72 (split/merge)** is the *across-snapshot* N<->1 of links; fusion is the
+  *within-snapshot* N->1 of structure. Fusion makes a file set one node per side,
   so "the layer changed" is ordinary 1:1 pairing — fusion *reduces* the pressure
   on split/merge rather than competing with it.
 

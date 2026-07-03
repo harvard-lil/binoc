@@ -1487,7 +1487,7 @@ impl EditListWriter for FallbackWriter {
         if left.is_dir || right.is_dir {
             return Ok(Some(Vec::new().into()));
         }
-        // The BLAKE3/byte hash is the SOLE equality oracle. Equal hash ⇒ no
+        // The BLAKE3/byte hash is the SOLE equality oracle. Equal hash => no
         // change, regardless of any extracted strings.
         if left.resolve_hash(data)? == right.resolve_hash(data)? {
             return Ok(Some(Vec::new().into()));

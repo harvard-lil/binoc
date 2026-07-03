@@ -43,8 +43,8 @@ table/sheet/section endpoints instead of a manifest.
   the immediate members of an archive expansion, and every parsed table / sheet /
   section. Read it as a URI-fragment-like "we cracked this open."
 
-So `dir1/data.zip/>reports/q1.csv/>table_2` reads as: real directory `dir1` →
-opened the zip → real internal directory `reports` → opened the CSV → its second
+So `dir1/data.zip/>reports/q1.csv/>table_2` reads as: real directory `dir1` ->
+opened the zip -> real internal directory `reports` -> opened the CSV -> its second
 table. A **directory is `/`, not `/>`**: its tree is already navigable, and (like
 paths inside a zip) it conceptually parses in one go. Only format-decoding
 (zip/tar/gzip, CSV-stack, SQLite, Excel) earns `/>`.
@@ -133,7 +133,7 @@ nodes. Added to `.agents/skills/lint-plugin/SKILL.md`.
 
 ### 8. Reconciliation pass — direction set, build deferred to CFM-71
 
-Container reshape (directory-of-CSVs ↔ SQLite) and the existing same-path
+Container reshape (directory-of-CSVs <-> SQLite) and the existing same-path
 "Merged from" collision are the same operation at different inputs: reconcile
 several linked endpoints into one coherent projected container and re-parent the
 linked children under it. We will **generalize `merge_projected_collision` into a

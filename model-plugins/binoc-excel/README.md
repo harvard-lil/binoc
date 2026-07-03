@@ -36,7 +36,7 @@ binoc diff snapshot-a snapshot-b
 Example output:
 
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.xlsx/>Scores**: 1 cell changed
   - Changed cells

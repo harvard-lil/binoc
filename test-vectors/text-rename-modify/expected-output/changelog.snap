@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **meeting-notes-v2.txt**:
   - Moved from notes.txt

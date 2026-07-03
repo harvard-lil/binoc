@@ -57,14 +57,14 @@ datasets-in-general rather than one dataset at a time.
 ## Part II — The strategy
 
 The strategy is the classic compiler move, stated in the docs as the
-**m × n × o → m + n + o** claim:
+**m × n × o -> m + n + o** claim:
 
-- A dataset world has *m* formats → write *m* **comparators** (front-ends:
+- A dataset world has *m* formats -> write *m* **comparators** (front-ends:
   parse bytes into a common representation).
-- There are *n* cross-cutting patterns worth detecting → write *n*
+- There are *n* cross-cutting patterns worth detecting -> write *n*
   **transformers** (optimization passes: rewrite the representation to a
   shorter equivalent).
-- There are *o* opinions about what matters → write *o* **renderer configs**
+- There are *o* opinions about what matters -> write *o* **renderer configs**
   (back-ends: map facts to judgments and prose).
 
 The load-bearing bet is the thing in the middle: a single **intermediate
@@ -92,18 +92,18 @@ architecture may simplify.
   - Benefits: Python's namespacing and auto-discovery along with uvx turns out very ergonomic for multiple namespace problems.
   - ADR: plugin_discovery
 - **C2. Rust has no stable ABI.** Separately compiled native plugins cannot
-  share Rust trait objects. → C ABI entry points + JSON wire types + SDK
+  share Rust trait objects. -> C ABI entry points + JSON wire types + SDK
   version checking. (ADR: plugin_sdk_and_abi)
 - **C3. Plugins are trusted code.** They run in-process with host privileges.
   Sandboxing untrusted plugins is explicitly out of scope; the threat model is
   pathological *inputs*, not malicious plugins.
   (ADR: security_posture_and_auditing)
 - **C4. Minimal default install.** Stdlib is bundled with every user; every
-  dependency is compile-time and supply-chain cost. → stdlib boundary policy
+  dependency is compile-time and supply-chain cost. -> stdlib boundary policy
   (containers, fallbacks, CSV in; SQLite, Stata out), optional first-party
   plugins, `binoc[all]`. (ADRs: stdlib_boundary, optional_first_party_plugins)
 - **C5. Forward compatibility for an ecosystem that doesn't exist yet.**
-  Third-party plugins must keep working as the SDK grows. →
+  Third-party plugins must keep working as the SDK grows. ->
   `#[non_exhaustive]` enums, versioned artifact formats, independent release
   tags, SDK-keyed compatibility. (ADRs: plugin_sdk_and_abi,
   independent_release_tags)
@@ -114,12 +114,12 @@ architecture may simplify.
   incremental, not n-way. Session-scoped state is acceptable; nothing persists
   between runs except the changeset JSON.
 - **C7. The changeset JSON is a stable contract.** Pipeline integrators
-  consume it programmatically. → Hard line between *durable* fields and
+  consume it programmatically. -> Hard line between *durable* fields and
   *transient* session fields stripped at the output boundary.
   (ADR: transient_fields_on_wire)
 - **C8. Extract must work from a saved changeset, without re-diffing.**
   "Give me the rows that were added" days later, from JSON + the two
-  snapshots. → provenance fields + the reopen chain.
+  snapshots. -> provenance fields + the reopen chain.
   (ADR: provenance_and_extract)
 - **C9. Output must be deterministic and snapshot-testable.** Gold-file
   testing (insta) of full changeset + changelog per test vector.
@@ -128,7 +128,7 @@ architecture may simplify.
 **Scale & safety**
 
 - **C10. Inputs can be large and hostile.** Decompression bombs, million-row
-  tables, pathological archives. → bounds everywhere: gzip decompression cap,
+  tables, pathological archives. -> bounds everywhere: gzip decompression cap,
   rename-detection cap (400), diagnostics cap (16), detail-byte render budget
   (200 KB), bounded examples with `truncated` flags.
 - **C11. Measured bottleneck is I/O + hashing + content comparison, not IR
@@ -151,7 +151,7 @@ architecture may simplify.
 
 ## Part IV — The story: each concept, in order of necessity
 
-The format of each move: **problem → invention → what's now possible → what it
+The format of each move: **problem -> invention -> what's now possible -> what it
 cost (the width it added).**
 
 ### Move 0: name the things being compared
@@ -190,8 +190,8 @@ uniformly. *Cost:* a three-field metadata-hint contract everyone must honor
   `detail_blocks`, `annotations`, provenance (`comparator`,
   `transformed_by`).
 
-The tree mirrors the recursive structure of the snapshots (dataset →
-directory → archive → file → table). Open strings everywhere are the C13
+The tree mirrors the recursive structure of the snapshots (dataset ->
+directory -> archive -> file -> table). Open strings everywhere are the C13
 choice: composition by convention, not by central enum.
 
 *Now possible:* one serializable answer format for every plugin and every
@@ -212,8 +212,8 @@ renderer. *Cost:* nothing is type-checked across plugins; "compose" means
     Exists so dispatch can be cheap-optimistic without a pre-check round-trip
     over an ABI (C2).
 - **Dispatch** (three stages, first claim wins, config order = priority):
-  item scope (file/container) → extension match → magic-byte/MIME
-  `media_type` match (because extensions lie — ADR: media_type_detection) →
+  item scope (file/container) -> extension match -> magic-byte/MIME
+  `media_type` match (because extensions lie — ADR: media_type_detection) ->
   call it, accept `Skip`.
 - **Hash short-circuit:** expanding comparators pre-hash children (BLAKE3);
   if a pair's hashes match and no matching comparator sets
@@ -228,7 +228,7 @@ name has the `.gz` stripped, and `.csv.gz` flows on to the CSV comparator
 demonstrably cashes out. *Cost:* archives are fully extracted to temp dirs;
 `Skip` makes dispatch ordering semantics part of the config surface.
 
-### Move 3: compaction needs cross-node patterns → Transformers
+### Move 3: compaction needs cross-node patterns -> Transformers
 
 A renamed file is an `add` + a `remove` in distant subtrees. No comparator can
 see both. So:
@@ -253,15 +253,15 @@ Stdlib examples: `CorrelationDetector` (exact-hash move/copy regrouping),
 `FuzzyCorrelationDetector` (Jaccard token similarity for rename+modify,
 threshold 0.5, cap 400), `FolderMoveDetector` (roll N file-moves up into one
 folder-move when ≥80% of a directory moved), `ColumnReorderDetector`
-(`modify` → `reorder`, "content unchanged"), `TableSplitter` (one CSV with
-stacked tables → children).
+(`modify` -> `reorder`, "content unchanged"), `TableSplitter` (one CSV with
+stacked tables -> children).
 
-*Now possible:* the actual *compaction*: N nodes → 1 node with a better
+*Now possible:* the actual *compaction*: N nodes -> 1 node with a better
 story. Each detector is one trick, and tricks stack. *Cost:* pass-ordering is
 now semantics (declared correspondence must run before heuristic correlation;
 fuzzy after exact); transformers run once each, no fixpoint.
 
-### Move 4: transformers need data without re-parsing → Artifacts
+### Move 4: transformers need data without re-parsing -> Artifacts
 
 A column-reorder detector must verify content equivalence — it needs the
 *parsed table*, not the node summary. Re-parsing means every analyzer embeds
@@ -308,7 +308,7 @@ transformer that automatically applies to formats invented after it shipped.
 *Cost:* a small declarative matching language that every contributor must
 learn, and tags-as-dispatch-keys means tags are now API.
 
-### Move 6: transformers find pairs but mustn't parse → recompare
+### Move 6: transformers find pairs but mustn't parse -> recompare
 
 Fuzzy rename detection pairs an added file with a removed file. Now what's
 *inside* the pair? The transformer must not parse formats (that's the
@@ -326,17 +326,17 @@ comparator layer). So:
 *Now possible:* "renamed *and* edited" — reported as one move node containing
 a real content diff; declared file correspondences from user config get full
 semantic diffs. The pipeline is now a (single-bounce) loop:
-comparators → transformers → comparators. *Cost:* re-parse of every
+comparators -> transformers -> comparators. *Cost:* re-parse of every
 recompared pair; bespoke merge semantics that exist only in controller code.
 
-### Move 7: humans need prose → Renderers, and the facts/judgments wall
+### Move 7: humans need prose -> Renderers, and the facts/judgments wall
 
 - **`Renderer`** — `render(&[Changeset], config) -> String`. Markdown in
   stdlib; HTML as a Python reference plugin; JSON is the changeset itself.
 - **Significance is renderer config, not IR** (C14): the IR says
   `tags: ["binoc.column-reorder"]`; the user's `output.markdown.groups` —
   an ordered list of `{ heading, tags }` — decides whether that lands under
-  "Housekeeping" or "Schema changes." First match wins; unmatched →
+  "Housekeeping" or "Schema changes." First match wins; unmatched ->
   "Other Changes." Zero code per new opinion: that's the *o* in m + n + o.
   (ADRs: renderer_config, renderer_groups)
 - Then three inventions to stop renderers from parsing prose, each closing a
@@ -355,12 +355,12 @@ recompared pair; bespoke merge semantics that exist only in controller code.
     progressively-typed renderer hints from transformers
     (ADR: progressive_renderer_annotations).
 
-*Now possible:* one IR → terse summary, examples-rich changelog, or full dump;
+*Now possible:* one IR -> terse summary, examples-rich changelog, or full dump;
 per-team significance with no code. *Cost:* a `DiffNode` now has **five**
 sibling channels for "saying something downstream" (summary, tags, details,
 detail_blocks, annotations) — see Part VI.
 
-### Move 8: "show me the actual data" → Extract and provenance
+### Move 8: "show me the actual data" -> Extract and provenance
 
 A changelog that says "1,204 rows added" must be able to produce the rows —
 from the saved JSON, days later, without re-diffing (C8).
@@ -369,15 +369,15 @@ from the saved JSON, days later, without re-diffing (C8).
   `transformed_by` (who touched it, in order).
 - **`reopen(pair, child_path, data)`** on comparators: reconstruct physical
   access one container level down without diffing. The controller walks the
-  saved node's ancestor chain — directory → zip → directory → csv — calling
+  saved node's ancestor chain — directory -> zip -> directory -> csv — calling
   `reopen` at each step, then asks the *last plugin that touched the node* to
   `extract(node, aspect, data)` (aspects like `rows_added`, `column_order`).
 
-*Now possible:* `binoc extract changeset.json path/to/node rows_added` →
+*Now possible:* `binoc extract changeset.json path/to/node rows_added` ->
 the data, pipeline-ready. *Cost:* `reopen` is a second, parallel contract
 comparators must implement correctly, exercised only on the extract path.
 
-### Move 9: things go wrong non-fatally → Diagnostics
+### Move 9: things go wrong non-fatally -> Diagnostics
 
 Missing keys, duplicate table names, binary fallbacks: users must see these,
 but a local identity problem must not hide every other change in the dataset.
@@ -503,7 +503,7 @@ documents, XML, nested Parquet)?
 
 **Claim 2: Artifacts decouple parsers from analyzers at acceptable cost.**
 Stress: `tabular_v1` is eager, whole-table, stringly
-(`Vec<Vec<String>>` → JSON bytes on disk per side). It is also the *only*
+(`Vec<Vec<String>>` -> JSON bytes on disk per side). It is also the *only*
 proven public artifact format (plus its collection manifest). The
 m + n machine has been demonstrated for exactly one value of the
 abstraction. Does the model survive a 10 GB table, or a format whose natural
@@ -560,7 +560,7 @@ deepest hole: the architecture has proven it can compose *parsers*; it has
 not yet proven it can compose *inferences*.
 
 **Claim 8: Pairwise is enough.**
-`diff a b c` runs pairwise A→B, B→C. Real provenance questions ("when did
+`diff a b c` runs pairwise A->B, B->C. Real provenance questions ("when did
 this column first appear?") are about lineages, and some compactions only
 exist across longer windows (a column removed then re-added). Session-scoped
 everything (C6) makes multi-snapshot reasoning a future architecture, not a

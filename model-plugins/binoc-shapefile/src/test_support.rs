@@ -8,9 +8,9 @@
 //! ```text
 //! roads.shp.d/
 //!   geometry.json     (required)
-//!   attributes.json   (optional → roads.dbf)
-//!   crs.wkt           (optional → roads.prj)
-//!   encoding.txt      (optional → roads.cpg)
+//!   attributes.json   (optional -> roads.dbf)
+//!   crs.wkt           (optional -> roads.prj)
+//!   encoding.txt      (optional -> roads.cpg)
 //! ```
 //!
 //! `geometry.json` has the shape:
@@ -44,7 +44,7 @@
 //! }
 //! ```
 //!
-//! `crs.wkt` (→ `.prj`) and `encoding.txt` (→ `.cpg`) are copied verbatim.
+//! `crs.wkt` (-> `.prj`) and `encoding.txt` (-> `.cpg`) are copied verbatim.
 //! Geometry-only vectors that omit the optional files materialize only a `.shp`
 //! and exercise the single-input geometry parser.
 

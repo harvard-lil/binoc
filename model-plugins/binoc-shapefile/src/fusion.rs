@@ -116,7 +116,7 @@ impl ParseRule for ShapefileFuseRule {
             ..Default::default()
         };
 
-        // Geometry summary → `structured_document_v1` child, identical in shape
+        // Geometry summary -> `structured_document_v1` child, identical in shape
         // to the single-input `.shp` parser's output so the structured-document
         // writer renders feature_count / geometry_type / bbox changes unchanged.
         let geometry_value = serde_json::to_value(&summary)
@@ -244,7 +244,7 @@ mod tests {
         let data = LocalDataAccess::new();
         let shp = data.provide("notes.shp", b"not a shapefile").unwrap();
         let dbf = data.provide("notes.dbf", b"also not a dbf").unwrap();
-        // Group of two, but the anchor is not valid shapefile geometry → decline,
+        // Group of two, but the anchor is not valid shapefile geometry -> decline,
         // so the .dbf is released to the single-input dbf parser.
         let group = ParseGroup {
             anchor: shp.clone(),

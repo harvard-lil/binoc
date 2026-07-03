@@ -49,8 +49,8 @@ contributions, not the output of a single owning writer. Concretely:
 
 1. **Two writer kinds, named explicitly.**
    - *Artifact writers* declare a non-empty `formats` and render one artifact
-     each (`TabularWriter` → `tabular_v1`, `StructuredDocumentWriter` →
-     `structured_document_v1`, a new `ParserMetadataWriter` → `parser_metadata_v1`).
+     each (`TabularWriter` -> `tabular_v1`, `StructuredDocumentWriter` ->
+     `structured_document_v1`, a new `ParserMetadataWriter` -> `parser_metadata_v1`).
    - *Structural writers* declare empty `formats` and describe the node/tree
      itself: `ContainerWriter` (child add/remove from structure), `TextWriter`
      (extension-gated leaf bytes), `FallbackWriter` (byte/hash diff of last

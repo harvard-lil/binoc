@@ -57,7 +57,7 @@ so the new `#[serde(default)]` fields are wire-visible with no request
 struct changes; `TransformRequest` carries nodes, not descriptors, and is
 untouched. Per the [SDK compatibility policy](2026-03-12-plugin_sdk_and_abi.md),
 additive `#[serde(default)]` fields do not bump the compatibility floor
-(`MIN_COMPATIBLE_MINOR` stays 1); the SDK minor version bumps 0.1 → 0.2
+(`MIN_COMPATIBLE_MINOR` stays 1); the SDK minor version bumps 0.1 -> 0.2
 so a plugin built against the write-set SDK is identifiable and is not
 loaded by older hosts that would silently ignore its declarations.
 
@@ -79,7 +79,7 @@ and flags any tag declared in exactly one `emits_tags` and matched by
 exactly one other transformer's `match_tags` — the "function call drawn
 slowly" shape that the pure-reorder collapse retired. Callers pass an
 allowlist for tags that are legitimately consumed outside transformer
-dispatch: `binoc.cell-change` → `binoc-row-reorder` is the documented
+dispatch: `binoc.cell-change` -> `binoc-row-reorder` is the documented
 example, allowlisted because renderer group configs also consume the tag
 and the consumer genuinely needs its own scan.
 

@@ -66,7 +66,7 @@ The bar was never "does it diff CSVs." It was:
 
 1. **The tricks compose.** A new format, a new pattern detector, or a new output
    opinion is *one* component that automatically works with all the others
-   (the `m * n * o → m + n + o` bet).
+   (the `m * n * o -> m + n + o` bet).
 2. **The core stays type-ignorant.** Zero format knowledge in `binoc-core`; the
    stdlib is a plugin pack with no special status.
 3. **Open vocabularies, judgments in config.** `action`, `item_type`, `tags`,
@@ -106,9 +106,9 @@ A worklist driver runs rules to quiescence, dispatching them **solely on their
 declared input/output types** — it contains no knowledge of any specific rule.
 Three rule families:
 
-- **expand**: a node → child nodes (zip, tar, gzip, directory).
-- **parse**: a node → artifacts (typed data); fires at most once per node.
-- **pair**: evidence → link.
+- **expand**: a node -> child nodes (zip, tar, gzip, directory).
+- **parse**: a node -> artifacts (typed data); fires at most once per node.
+- **pair**: evidence -> link.
 
 Two scheduling rules are part of the semantics. The **frontier rule**: pairing
 gets first claim on every new node, so a hash-link can settle a node before any
@@ -179,7 +179,7 @@ open-vocabulary verbs.
   with its producing format so compaction stays format-scoped. (ADR:
   [Composable Per-Artifact Writers](2026-06-15-composable_per_artifact_writers.md).)
 - **Compaction rules rewrite edit lists to shorter equivalents** — N consistent
-  cell edits → "columns reordered by σ"; per-link lists across the dataset →
+  cell edits -> "columns reordered by σ"; per-link lists across the dataset ->
   one find-replace claim. Acceptance requires **strictly decreasing description
   cost** (verbs + parameter sizes + residual edits), which is both the
   termination measure and the product's minimum-description-length objective made
@@ -195,11 +195,11 @@ instead of tree surgery:
   sibling nodes (a shapefile's `.shp`/`.shx`/`.dbf`/`.prj`). The rule's own
   parse-or-**decline** is the sole authority on validity; precedence is
   arity-descending. A new store primitive, **`subsume`** (a flag, not a
-  deletion — the N→1 dual of `add_child`), folds members in while retaining them
+  deletion — the N->1 dual of `add_child`), folds members in while retaining them
   as provenance. (ADR:
   [Multi-Input Claims](2026-06-15-multi_input_file_sets_and_shapefile_fusion.md).)
 - **Split / merge via partition identities.** Row-partition splits
-  (`observations.csv` → per-year files) are now representable. Partition identity
+  (`observations.csv` -> per-year files) are now representable. Partition identity
   is a **format-owned capability**, computed just-in-time and never stored: a
   registered `IdentityExtractor` yields opaque, globally-comparable
   `IdentityToken`s, and a generic `disjoint_cover` coverage query lets one
@@ -209,7 +209,7 @@ instead of tree surgery:
   slot, and it stops the fuzzy pairer from lying about a split as a "move + add."
   (ADR: [Partition Identities](2026-06-15-partition_identities_jit_format_capability.md).)
 - **Container reshape + reconciliation.** Linked containers of *differing kind*
-  (a directory of CSVs ↔ a SQLite file) render as one representation change, not
+  (a directory of CSVs <-> a SQLite file) render as one representation change, not
   move-plus-add/remove, via a single reconciliation pass and a
   `container_reshape_hint` annotator.
 
@@ -264,7 +264,7 @@ that the new structure dissolved:
   back to a single `Root` special case. The worklist driver makes the whole
   question moot — tree-wide work is just a rule that reads the relation.
 - **`pending_recompare` / the recompare bounce** (at layer 2). The
-  transformer→comparator→transformer loop-back, with hand-rolled merge
+  transformer->comparator->transformer loop-back, with hand-rolled merge
   semantics, was the single most complex piece of controller code. **Deleted
   outright** — late links replace it. (Supersedes
   [Transformer-Initiated Recompare](2026-06-03-transformer_initiated_recompare.md).)
@@ -341,9 +341,9 @@ the same surface as third-party packs.
 
   | | within-snapshot (structure) | across-snapshot (correspondence) |
   |---|---|---|
-  | **1 → N** | expand / parsed children | split |
-  | **N → 1** | file-set fusion / `subsume` | merge · reshape reconciliation |
-  | **1 → 1** | parse leaf | move / modify |
+  | **1 -> N** | expand / parsed children | split |
+  | **N -> 1** | file-set fusion / `subsume` | merge · reshape reconciliation |
+  | **1 -> 1** | parse leaf | move / modify |
 
 - The engine crates carry **zero** `TODO`/`FIXME`/`unimplemented!` markers, and
   the pre-merge gaps are closed.

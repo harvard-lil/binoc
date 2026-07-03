@@ -1,4 +1,4 @@
-# Partition Identities: a JIT, Format-Owned Capability for N↔M Correspondence (CFM-72)
+# Partition Identities: a JIT, Format-Owned Capability for N<->M Correspondence (CFM-72)
 
 **Date:** 2026-06-15
 **Status:** Implemented
@@ -6,7 +6,7 @@
 ## Context
 
 Some changes turn one artifact into several of the same shape, or several into
-one: a table split by year (`observations.csv` → `observations_2024.csv` +
+one: a table split by year (`observations.csv` -> `observations_2024.csv` +
 `observations_2025.csv`), or merged. Binoc must be able to *represent* that —
 "`X` split into `A`, `B`" should not be inexpressible — without diving into
 detection tuning that needs a corpus of test cases first.
@@ -17,7 +17,7 @@ Two prior results bound the problem:
   first-class nodes (CFM-69/70), `HashPair` links a verbatim whole table that
   moved, and `TabularPair` links a reformatted one by parsed content (CFM-62).
   These are correct and stay.
-- **The collection↔broken-out-tables case is reshape, not split.** A stacked CSV
+- **The collection<->broken-out-tables case is reshape, not split.** A stacked CSV
   or SQLite DB broken out into one file per table moves each table **whole, 1:1**;
   that is a container reshape (CFM-71) plus ordinary 1:1 child pairing, already
   handled. The discriminator is **whether rows are partitioned (split) or whole
@@ -63,7 +63,7 @@ hashmap, cached within a run.
 
 ### 2. An SDK disjoint-union / coverage query
 
-Given the unmatched partition-capable nodes, the SDK builds `token → owning node`
+Given the unmatched partition-capable nodes, the SDK builds `token -> owning node`
 once (O(total atoms)) and answers the set questions: is X's token multiset the
 **disjoint union** of some set of others (split), or the symmetric union (merge)?
 It flags **ambiguity** (a token owned by more than one candidate). The query is
@@ -87,22 +87,22 @@ the nodes to honest add/remove. There are **no similarity thresholds, no scoring
 no multi-candidate contest** — it is the exact-tier analog of `HashPair`/`CopyPair`:
 the tokens reconstruct exactly or they do not.
 
-Ordering: exact 1:1 settles first (`HashPair`) → the partition rule runs on the
-residue and claims clean partitions *before* the fuzzy rule can mis-link → fuzzy
+Ordering: exact 1:1 settles first (`HashPair`) -> the partition rule runs on the
+residue and claims clean partitions *before* the fuzzy rule can mis-link -> fuzzy
 1:1 (`TabularPair`/`FuzzyPair`) runs last on whatever remains.
 
 ### 4. Representation: a link set + a claim, projected through CFM-71
 
-A claimed split is a **1→N link fan-out** (merge: N→1; the general case is N→M)
+A claimed split is a **1->N link fan-out** (merge: N->1; the general case is N->M)
 plus a `Changeset.claims` entry — `binoc.tabular_split` / `binoc.tabular_merge`
 with `from`/`to` and `evidence` (covered tokens, residual = 0, and the partition
 column when one cleanly explains it, reported as evidence but never *required*).
-Rendering reuses the **CFM-71 reconciliation pass**: split (1→N) is the
-across-snapshot dual of the within-snapshot N→1 "Merged from" collision that pass
+Rendering reuses the **CFM-71 reconciliation pass**: split (1->N) is the
+across-snapshot dual of the within-snapshot N->1 "Merged from" collision that pass
 already handles. This makes split/merge the first concrete producer of the
 `Changeset.claims` slot reserved by CFM-60 (CFM-74 later generalizes the payload).
 
-### 5. The decompose↔partition unification (and the reserved delivery hook)
+### 5. The decompose<->partition unification (and the reserved delivery hook)
 
 On-demand sub-artifact delivery generalizes parsed children: a parsed child
 (CFM-69) is a *parser-chosen, pre-materialized identity subset surfaced as a
@@ -111,7 +111,7 @@ delivery is *materialize any subset on demand*. The future edited/keyed tier nee
 it — when tokens are stable **keys** rather than content hashes, "same key,
 different content" is a residual edit, and rendering it means fetching and diffing
 the actual sub-content. So a second format capability is **reserved but not
-implemented**: `format + identity-subset → sub-artifact`, keyed and JIT like the
+implemented**: `format + identity-subset -> sub-artifact`, keyed and JIT like the
 extractor. v1 uses content-hash tokens and needs no delivery.
 
 ## Alternatives Considered
@@ -132,7 +132,7 @@ extractor. v1 uses content-hash tokens and needs no delivery.
   bounding a *similarity* search. The exact rule is content-addressed, so it is
   naturally global; restricting to siblings would be extra code and would make
   cross-container splits inexpressible.
-- **Treat collection↔broken-out-tables as split.** Rejected: that is whole-table
+- **Treat collection<->broken-out-tables as split.** Rejected: that is whole-table
   rehoming (reshape, CFM-71), not row partitioning. The detector explicitly
   declines when an output equals a whole input.
 
@@ -144,7 +144,7 @@ extractor. v1 uses content-hash tokens and needs no delivery.
   payload for `binoc.tabular_split`/`_merge`; a reserved (unimplemented)
   sub-artifact-delivery capability.
 - **`binoc-core`:** JIT identity extraction over the unmatched residue (cached per
-  run); 1→N / N→1 links in the store/projection; split rendering folded into the
+  run); 1->N / N->1 links in the store/projection; split rendering folded into the
   CFM-71 reconciliation pass; the `possible_split` diagnostic.
 - **Behavior:** verbatim row-partition splits/merges render as a coherent claim
   ("`observations.csv` split by `year` into …"), cross-container included; the
@@ -165,9 +165,9 @@ What shipped matches the decision; a few realization choices are worth recording
   `binoc.tabular_split`/`_merge` `GlobalClaim` is produced from the settled fan
   rather than re-emitted every round. The domain verb/wording lives in stdlib;
   core only collects and hoists onto `Changeset.claims`.
-- **Rendering split vs. merge is asymmetric.** A merge (N→1) collides on the
+- **Rendering split vs. merge is asymmetric.** A merge (N->1) collides on the
   target path and reuses the CFM-71 "Merged from" reconciliation unchanged. A
-  split (1→N) lands its targets at *distinct* paths (no collision), so each target
+  split (1->N) lands its targets at *distinct* paths (no collision), so each target
   carries a `tabular_split` action + "Split from `X`" summary stamped on the link
   projection; the shared claim ties them together. Both clean-partition links are
   **settled**, so no spurious whole-vs-part content diff is written.
@@ -185,11 +185,11 @@ What shipped matches the decision; a few realization choices are worth recording
   suppressed for any node a later scan ultimately claims.
 - **Rider fix:** the Markdown `humanize_numbers` helper grouped thousands inside
   identifiers, mangling year-bearing filenames in diagnostics (`actions_2023.csv`
-  → `actions_2,023.csv`); it now groups only standalone quantities. Surfaced by
+  -> `actions_2,023.csv`); it now groups only standalone quantities. Surfaced by
   CFM-72's split-by-year diagnostics.
 - **Deferred / known limits:** identity tokens are recomputed over the residue
   each saturation round (bounded by a residue cap; per-run caching is the obvious
-  next optimization). The stacked-CSV→broken-out reshape baseline
+  next optimization). The stacked-CSV->broken-out reshape baseline
   (`stacked-csv-broken-out` vector) confirms partition correctly *declines*, but
   the underlying reshape pairs only one child cleanly and surfaces the other as a
   container-reshape plus an orphaned child-remove — a pre-existing CFM-71/child-
@@ -201,10 +201,10 @@ What shipped matches the decision; a few realization choices are worth recording
   SDK query (return type for candidates; how ambiguity is surfaced); perf cap on
   residue size.
 - **Key-based identities + on-demand delivery (deferred tier).** The contract for
-  stable-key tokens and `format + subset → sub-artifact`, which together unlock
+  stable-key tokens and `format + subset -> sub-artifact`, which together unlock
   edited/residual splits.
-- **N→M re-partitioning contests.** v1 claims clean 1↔N pivots; the general
-  many-to-many re-partition (quarterly → yearly with overlap) needs a contest
+- **N->M re-partitioning contests.** v1 claims clean 1<->N pivots; the general
+  many-to-many re-partition (quarterly -> yearly with overlap) needs a contest
   policy — deferred.
 - **Partition-column evidence.** Opportunistically detected and reported, not
   required; how prominently it renders is a renderer-config question.

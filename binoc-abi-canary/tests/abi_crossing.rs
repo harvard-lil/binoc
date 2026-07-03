@@ -24,7 +24,7 @@ type FreeFn = unsafe extern "C" fn(*mut c_char);
 /// `cargo test` links the crate's rlib but may not emit the `cdylib`); it is a
 /// no-op when the artifact is already current. The artifact lives in the
 /// profile directory two levels up from the test binary
-/// (`<target>/<profile>/deps/<test>` → `<target>/<profile>/`).
+/// (`<target>/<profile>/deps/<test>` -> `<target>/<profile>/`).
 fn build_and_locate_cdylib() -> PathBuf {
     let status = Command::new(env!("CARGO"))
         .args(["build", "-p", "binoc-abi-canary"])

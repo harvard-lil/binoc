@@ -50,8 +50,8 @@ pub trait ParseRule {
 }                                      //        ^^^^^^^^^^^^^ exactly one node
 ```
 
-- `ExpandRule` turns **one** node into children (`item: &ItemRef` → `Vec<ItemRef>`).
-- `ParseRule` turns **one** node into an artifact (`item: &ItemRef` → bytes).
+- `ExpandRule` turns **one** node into children (`item: &ItemRef` -> `Vec<ItemRef>`).
+- `ParseRule` turns **one** node into an artifact (`item: &ItemRef` -> bytes).
 - Dispatch is per-node: `ExpandDescriptor.input` / `ParseDescriptor.input` are a
   single `NodeMatch` (`is_dir`/`extensions`/`media_types`), matched against one
   `ItemRef` at a time. "First successful expand/parse claim wins for that node"

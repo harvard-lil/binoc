@@ -241,7 +241,7 @@ fn container_reshape_hint(ctx: &ProjectionAnnotationContext<'_>) -> Option<Proje
     let mut summary = binoc_sdk::Summary::new()
         .text("Reshaped from ")
         .path(source_path.to_string(), binoc_sdk::Side::From)
-        .text(format!(" ({from_kind} → {to_kind})"));
+        .text(format!(" ({from_kind} -> {to_kind})"));
     if let Some(detail) = summarize_known_edits(ctx.edits) {
         summary = summary.text(format!("; {detail}"));
     }

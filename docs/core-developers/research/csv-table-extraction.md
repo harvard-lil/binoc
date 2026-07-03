@@ -74,7 +74,7 @@ column's shapes agree:
   file-path component).
 - Pytheas abstracts a value into a **symbol sequence** ("train") of run-length
   pairs over the alphabet `D` (digit), `A` (letter), `S` (space), and literal
-  punctuation: `"-12.5"` → `[[D,2],[.,1],[D,1]]`, `"Jan 2020"` →
+  punctuation: `"-12.5"` -> `[[D,2],[.,1],[D,1]]`, `"Jan 2020"` ->
   `[[A,3],[S,1],[D,4]]`.
 
 A column of values is **consistent** when its abstractions agree. Both systems
@@ -95,7 +95,7 @@ delimited CSV), and **CSV dialects that deviate far from RFC 4180** (multi-char
 delimiters, unusual quote/escape). It is a six-stage streaming pipeline.
 
 ```
-Read file → Detect parsing instr. → Apply parsing instr. → Describe data types → Build table candidates → Select tables
+Read file -> Detect parsing instr. -> Apply parsing instr. -> Describe data types -> Build table candidates -> Select tables
 ```
 
 The governing idea: **don't commit to one interpretation of a line.** Each line
@@ -213,7 +213,7 @@ continue. If gutters were lost mid-table, a **clone** of the table can be
 spawned (same spacers minus the discontinued ones) starting at the prior line,
 so a layout that loses a column partway is still captured.
 
-**Spacers → column boundaries.** On close, union all significant spacer
+**Spacers -> column boundaries.** On close, union all significant spacer
 positions, subtract from `{0…width}`; the remaining positions form contiguous
 content blocks; each block's `[min, max]` is a **column boundary** `[start,
 end)`. (Insignificant spacers are dropped only if the table has fewer than
@@ -304,9 +304,9 @@ The pieces:
   column in a ten-column table isn't a table.
 - **Value uniformity `u(COL)`** — a three-level hierarchy used as the
   tie-breaking refinement among already-consistent tables:
-  - *per component*: `Number` → homogeneity over int-vs-float; `Other` →
-    homogeneity over the literal value; `Known` and `String` → `1.0` (assumed
-    uniform); `Empty` → undefined/ignored.
+  - *per component*: `Number` -> homogeneity over int-vs-float; `Other` ->
+    homogeneity over the literal value; `Known` and `String` -> `1.0` (assumed
+    uniform); `Empty` -> undefined/ignored.
   - *per pattern* (pattern uniformity): the **minimum** component uniformity
     across the pattern's components (the weakest link).
   - *per column*: group the column's fields by pattern, weight each pattern's
@@ -315,8 +315,8 @@ The pieces:
 
 Final score = (fraction of rich columns that are consistent) × (mean value
 uniformity over rich columns). Worked thesis example: a 3×4 table where one
-column is sparse → `rich` = 3 columns, all consistent, uniformities
-`0.5, 1.0, 1.0` → `score = (3/3) · (0.5+1.0+1.0)/3 = 0.83`.
+column is sparse -> `rich` = 3 columns, all consistent, uniformities
+`0.5, 1.0, 1.0` -> `score = (3/3) · (0.5+1.0+1.0)/3 = 0.83`.
 
 The two-row variant of this score also folds in a **dialect homogeneity** term
 (Herfindahl over the row interpretations' `type`/dialect), penalizing a table
@@ -448,7 +448,7 @@ probabilistically.
 ## B.2 Parsing and pre-processing
 
 - **Encoding** via `cchardet` on a 50 KB sample, with sensible remaps
-  (e.g. ascii→utf-8, iso-8859-1→cp1252).
+  (e.g. ascii->utf-8, iso-8859-1->cp1252).
 - **File rejection**: files whose first non-blank line looks like HTML/XML/JSON
   are discarded (not CSV).
 - **Delimiter discovery**: from the ranked candidate set `, ; \t | : # ^`, sample
@@ -468,7 +468,7 @@ probabilistically.
 
 ## B.3 The symbol-sequence abstraction and column "patterns"
 
-**Cell → train.** Scan the value left-to-right into run-length pairs over `D`
+**Cell -> train.** Scan the value left-to-right into run-length pairs over `D`
 (digit), `A` (letter), `S` (space), and literal punctuation. A reversed train
 (`bw_train`) supports right-anchored / suffix patterns. Derived per cell:
 symbol *chain* (the symbols without counts), symbol *set*, *case*
@@ -594,7 +594,7 @@ For each table, starting at a file offset:
    window of up to 100 lines.
 2. **First Data Line (FDL).** Find the first run of ≥2 lines labeled data. Then
    — and this is the elegant part — enumerate every possible position of the
-   *not-data → data* transition as a candidate boundary sequence, score each by
+   *not-data -> data* transition as a candidate boundary sequence, score each by
    summing signed per-line confidences (positive where the line's label matches
    the candidate's expectation, negative where it conflicts), **softmax** over
    candidates (optionally times a Markov prior), and take the highest-probability
@@ -659,8 +659,8 @@ classification around a boundary:
 - **Aggregation tokens**: `total subtotal totaux all less than / more than /
   over / under / higher than / lower than / older than / younger than` and
   French equivalents.
-- **Aggregation functions** (phrase → operation): `total → sum`, `average → mean`,
-  `change in → sum`, `variation → difference`, `cagr → CAGR`.
+- **Aggregation functions** (phrase -> operation): `total -> sum`, `average -> mean`,
+  `change in -> sum`, `variation -> difference`, `cagr -> CAGR`.
 - **Metadata-header keywords**: `field name, field, description, example, data
   type`. **Datatype keywords**: `integer, string, text, numeric, boolean`.
 

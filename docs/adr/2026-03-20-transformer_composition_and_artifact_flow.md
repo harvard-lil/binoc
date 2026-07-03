@@ -28,7 +28,7 @@ The design question was how multiple transformers compose on the same node — a
 
 Transformers independently read the original (immutable) artifacts and annotate the node with what they observe. The `TabularAnalyzer` says "column added: 'email'; 2 rows added; 3 cells changed." The `ColumnReorderDetector` says "this is a pure column reorder." Neither modifies the underlying data. The node accumulates tags, details, and summary text from successive transformers.
 
-This avoids data amplification (transformers read but don't write artifacts) and keeps a simple mental model: each transformer is a function from (node, artifacts) → tags/details/summary. Ordering between layers *is* load-bearing — refinement transformers dispatch on tags set by the baseline analyzer — but independent observations within a layer are order-insensitive.
+This avoids data amplification (transformers read but don't write artifacts) and keeps a simple mental model: each transformer is a function from (node, artifacts) -> tags/details/summary. Ordering between layers *is* load-bearing — refinement transformers dispatch on tags set by the baseline analyzer — but independent observations within a layer are order-insensitive.
 
 The one requirement is that each transformer must be robust to concurrent changes in the data. A row addition detector analyzing data where columns are also reordered must compare by column name, not position. The `tabular_v1` format has named columns, so this works but requires care in implementation.
 

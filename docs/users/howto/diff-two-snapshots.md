@@ -25,18 +25,18 @@ To diff a release sequence in one run, pass more snapshots:
 binoc diff release-q1/ release-q2/ release-q3/
 ```
 
-Binoc will emit two pairwise sections: `release-q1/ → release-q2/` and
-`release-q2/ → release-q3/`.
+Binoc will emit two pairwise sections: `release-q1/ -> release-q2/` and
+`release-q2/ -> release-q3/`.
 
 ## What the output looks like
 
 For a dataset that ships as a zip of CSVs alongside a SQLite database:
 
 ```text
-# Changelog: release-q3/ → release-q4/
+# Changelog: release-q3/ -> release-q4/
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-- **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
+- **summary.sqlite**: Content changed (12.0 KB -> 12.0 KB)
 ```
 
 Binoc looked inside the zip and compared the CSV column by column. The
@@ -82,7 +82,7 @@ For the full story on output routing, see
 
 ### "Content changed" with no detail
 
-If binoc reports only `Content changed (X bytes → Y bytes)` for a
+If binoc reports only `Content changed (X bytes -> Y bytes)` for a
 file, it means no semantic rule pack handled the format and it fell through to
 the byte-level fallback. That's the signal to install a plugin that understands
 the format. See

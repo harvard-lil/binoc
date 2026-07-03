@@ -66,7 +66,7 @@ just materialize
 | [`jsonl-row-addition`](#jsonl-row-addition) | JSONL stream of like-shaped objects parsed as a table; a record is appended | events.jsonl: 1 row added | Default pipeline |
 | [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: Document values changed | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/>inventory.csv: 1 row added | Default pipeline |
-| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: | Default pipeline |
+| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N->M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly b… | observations_2024.csv: | Default pipeline |
 | [`observations-split-by-year`](#observations-split-by-year) | One CSV split row-wise into per-year files; detected as a clean partition split (CFM-72) | observations.csv split into observations_2024.csv, observations_2025.csv | Default pipeline |
 | [`observations-split-residual`](#observations-split-residual) | A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest… | observations_2024.csv: | Default pipeline |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: Added | Default pipeline |
@@ -81,8 +81,8 @@ just materialize
 | [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: | Default pipeline |
 | [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: Document values changed | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
-| [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | # Changelog: snapshot-a → snapshot-b | Default pipeline |
-| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | # Changelog: snapshot-a → snapshot-b | Default pipeline |
+| [`trivial-identical`](#trivial-identical) | Two identical directories -> empty changeset | # Changelog: snapshot-a -> snapshot-b | Default pipeline |
+| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files -> no changes reported | # Changelog: snapshot-a -> snapshot-b | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: Document values changed | Default pipeline |
 | [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: | Custom config |
@@ -109,7 +109,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.parquet**: Binary content changed; 1 extracted string added, 1 extracted string removed
   - Extracted strings added
@@ -134,7 +134,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **firmware.bin**: Binary content changed; 2 extracted strings added, 2 extracted strings removed
   - Extracted strings added
@@ -161,7 +161,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 2 cells changed
   - Changed cells
@@ -185,7 +185,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Column added: 'email'
   - Set Headers: from: ["name","age"]; to: ["name","age","email"]
@@ -208,7 +208,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Column removed: 'city'
   - Set Headers: from: ["name","age","city"]; to: ["name","age"]
@@ -231,7 +231,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Columns reordered
 ```
@@ -265,7 +265,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 4 rows modified by key
   - Changed cells (showing 3 of 5)
@@ -307,7 +307,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 14 cells changed
   - Changed cells (showing 3 of 14)
@@ -348,7 +348,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 1 row added; 1 row removed; 1 row modified by key
   - Changed cells
@@ -375,7 +375,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
@@ -399,7 +399,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
@@ -423,7 +423,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data_v2.csv**:
   - Moved from data.csv
@@ -448,7 +448,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 2 rows added
   - Rows added
@@ -472,7 +472,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 2 rows removed
   - Rows removed
@@ -496,7 +496,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv/>table_2**: 1 row added
   - Rows added
@@ -519,7 +519,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.tsv**:
   - Moved from data.csv
@@ -556,7 +556,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 5 cells changed
   - Sources
@@ -643,7 +643,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 ## Schema & vocabulary changes
 
@@ -681,7 +681,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **duplicate.txt**: Copied from original.txt
 ```
@@ -702,7 +702,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data/records.csv**: 1 row added
   - Rows added
@@ -729,7 +729,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.tar.gz/>records.csv**: 1 cell changed
   - Changed cells
@@ -755,7 +755,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 Claims
 
@@ -796,7 +796,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.zip**: Moved from data.zip
 ```
@@ -836,7 +836,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **by-state**: Added
 - **by-state/AL**: Moved from data
@@ -882,7 +882,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **running_list_as_of_2023.csv**:
   - Moved from running_list_as_of_2022.csv
@@ -907,7 +907,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **documentation**: Moved from docs
 ```
@@ -928,7 +928,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **FoodData_Central_csv_2026-04-30**: Added
 - **FoodData_Central_csv_2026-04-30/README.txt**: Moved from FoodData_Central_csv_2025-12-18/README.txt
@@ -961,7 +961,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **places.geojson**: 1 cell changed
   - Changed cells
@@ -984,7 +984,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **census.txt.gz/>census.txt**: 1 line added; 1 line removed
   - Line changes
@@ -1012,7 +1012,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **config.ini**: Document values changed
   - Value Change: changes: [{"from":"\"3\"","kind":"replace","path":"$.replicas","to":"\"5\""}]; examples_truncated: false
@@ -1034,7 +1034,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **metadata.json**: Document values changed
   - Value Change: changes: [{"from":"2","kind":"replace","path":"$.ids[1]","to":"3"},{"from":"3","kind":"replace","path":"$.ids[2]","to":"2"}]; examples_truncated: false
@@ -1056,7 +1056,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **metadata.json**: Document serialization changed
 ```
@@ -1077,7 +1077,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.json**: 2 cells changed
   - Changed cells
@@ -1101,7 +1101,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **people.json**: 1 cell changed
   - Changed cells
@@ -1124,7 +1124,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **events.jsonl**: 1 row added
   - Rows added
@@ -1147,7 +1147,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **person.jsonld**: Document values changed
   - Value Change: changes: [{"from":"\"Mathematician\"","kind":"replace","path":"$.jobTitle","to":"\"Computer Scientist\""}]; examples_truncated: false
@@ -1169,7 +1169,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.tar.gz/>inventory.csv**: 1 row added
   - Rows added
@@ -1199,7 +1199,7 @@ Result:
 
 ## observations-repartition-equal-arity
 
-Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu…
+Equal-arity N->M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly b…
 
 - **Browse source:** [observations-repartition-equal-arity](https://github.com/harvard-lil/binoc/tree/main/test-vectors/observations-repartition-equal-arity)
 - **Tags:** `csv`, `partition`, `possible-split`, `equal-arity`
@@ -1213,7 +1213,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **observations_2024.csv**:
   - Moved from observations_north.csv
@@ -1251,7 +1251,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 Claims
 
@@ -1277,7 +1277,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **observations_2024.csv**:
   - Moved from observations.csv
@@ -1308,7 +1308,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **new_file.txt**: Added
 ```
@@ -1329,7 +1329,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.bin**: 1 edit
 ```
@@ -1350,7 +1350,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: 1 row added
   - Rows added
@@ -1373,7 +1373,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
@@ -1396,7 +1396,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
@@ -1419,7 +1419,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **removed_file.txt**: Removed
 ```
@@ -1440,10 +1440,10 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **changes.csv**: Moved from report.csv/>table_1
-- **products.csv**: Reshaped from report.csv (stacked tables → tabular)
+- **products.csv**: Reshaped from report.csv (stacked tables -> tabular)
 - **report.csv/>table_2**: Removed
 ```
 
@@ -1463,7 +1463,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **outer.tar.gz/>inner.tar.gz/>data.csv**: 1 row added
   - Rows added
@@ -1486,7 +1486,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.tar.gz/>data.csv**: 1 row added
   - Rows added
@@ -1510,7 +1510,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **meeting-notes-v2.txt**:
   - Moved from notes.txt
@@ -1537,7 +1537,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **config.toml**: Document values changed
   - Value Change: changes: [{"from":"3","kind":"replace","path":"$.replicas","to":"5"}]; examples_truncated: false
@@ -1559,7 +1559,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **gamma-renamed.txt**: Moved from outer.zip/>inner.zip/>gamma.txt
 - **kept-copy.txt**: Copied from kept.txt
@@ -1572,7 +1572,7 @@ Result:
 
 ## trivial-identical
 
-Two identical directories → empty changeset
+Two identical directories -> empty changeset
 
 - **Browse source:** [trivial-identical](https://github.com/harvard-lil/binoc/tree/main/test-vectors/trivial-identical)
 - **Tags:** `identical`, `baseline`
@@ -1586,12 +1586,12 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 ```
 
 ## trivial-identical-csv
 
-Two identical CSV files → no changes reported
+Two identical CSV files -> no changes reported
 
 - **Browse source:** [trivial-identical-csv](https://github.com/harvard-lil/binoc/tree/main/test-vectors/trivial-identical-csv)
 - **Tags:** `csv`, `identical`, `baseline`
@@ -1605,7 +1605,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 ```
 
 ## tsv-cell-changes
@@ -1624,7 +1624,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.tsv**: 2 cells changed
   - Changed cells
@@ -1648,7 +1648,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **config.yaml**: Document values changed
   - Value Change: changes: [{"from":"3","kind":"replace","path":"$.replicas","to":"5"}]; examples_truncated: false
@@ -1689,7 +1689,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **outer.zip/>records.zip**:
   - Moved from outer.zip/>records-old.zip
@@ -1712,7 +1712,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.zip/>metadata.json**: Document serialization changed
 ```
@@ -1733,7 +1733,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **outer.zip/>inner.zip/>data.csv**: 1 row added
   - Rows added
@@ -1756,7 +1756,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.zip**: Removed
 - **data.zip/>x.csv**: Removed
@@ -1784,7 +1784,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.zip**: Moved from data.zip
 ```
@@ -1805,7 +1805,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.zip**: Moved from data.zip
 - **archive.zip/>new.csv**:
@@ -1831,7 +1831,7 @@ binoc diff \
 ```
 Result:
 ```markdown
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **archive.zip/>data.txt**: 1 line added; 1 line removed
   - Line changes

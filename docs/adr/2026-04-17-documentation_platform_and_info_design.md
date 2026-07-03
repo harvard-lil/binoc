@@ -178,7 +178,7 @@ stable and exhaustive, which is exactly what generation gives.
 The 28 existing ADRs are already the most thorough explanation layer in
 the project. The previous design where they're an internal-only backlog
 underserves them. They become a top-level section of the site
-(**Explanation → Architectural Decisions**), with `docs/adr/README.md`
+(**Explanation -> Architectural Decisions**), with `docs/adr/README.md`
 auto-extended at build time by a small script that reads each ADR's
 front matter (Date, Status) and produces the index entry — the current
 hand-maintained `index.md` is a candidate for replacement here.
@@ -222,7 +222,7 @@ rebuild is free:
 Each upstream is a `just` recipe (`just docs-tutorial`, `just docs-cli`,
 `just docs-sdk`, `just docs-adr-index`, `just docs-vectors`) with
 explicit input dependencies, fronted by an aggregating `just docs` that
-runs only what's stale. The MkDocs build itself (`just docs-build` →
+runs only what's stale. The MkDocs build itself (`just docs-build` ->
 `mkdocs build --strict`) is a separate recipe that depends on `just docs`
 and never invokes a generator directly.
 
@@ -437,7 +437,7 @@ file; **new** = net-new authoring; **generated** = machine-emitted.
 | `docs/explanation/security-and-trust.md` | security_posture_and_auditing ADR | lift |
 
 `docs/adr/*` and `docs/adr/README.md` stay where they are; the site nav
-exposes them as **Explanation → Architectural decisions**. Compose
+exposes them as **Explanation -> Architectural decisions**. Compose
 pages link to ADR sources rather than restating rationale (ARID over
 DRY); the ADRs remain the canonical record.
 

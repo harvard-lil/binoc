@@ -13,8 +13,8 @@ Contributors shouldn't need to know which build system owns which crate.
 
 **`just build` and `just test` are the canonical commands.** Each recipe runs both the Rust and Python steps in sequence:
 
-- `just build` → `cargo build --release` + `cd binoc-python && uv sync --extra dev`
-- `just test` → `cargo test` + `cd binoc-python && uv run pytest`
+- `just build` -> `cargo build --release` + `cd binoc-python && uv sync --extra dev`
+- `just test` -> `cargo test` + `cd binoc-python && uv run pytest`
 
 `Cargo.toml` sets `default-members` to exclude `binoc-python`, so bare `cargo build` / `cargo test` still work for fast Rust-only iteration without hitting the PyO3 linker issue.
 

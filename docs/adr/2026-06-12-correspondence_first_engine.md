@@ -89,11 +89,11 @@ remains the migration guardrail.
 Rules with declared input/output types, run by a worklist driver to
 quiescence:
 
-- **expand**: side node → child side nodes (zip, tar, gzip, directory,
+- **expand**: side node -> child side nodes (zip, tar, gzip, directory,
   sqlite-to-tables). Needs no pairing; bounded by input depth.
-- **parse**: side node → artifacts (tabular_v1 etc.). Fires at most once per
+- **parse**: side node -> artifacts (tabular_v1 etc.). Fires at most once per
   node; memoized.
-- **pair**: evidence → link. Exact-hash pairing is the cheapest, strongest
+- **pair**: evidence -> link. Exact-hash pairing is the cheapest, strongest
   rule and **is** the generalized short-circuit: a hash-link formed early
   suppresses parse/expand work beneath it, unifying the controller's hash
   short-circuit, `CorrelationDetector`'s exact stage, and comparators'
@@ -217,8 +217,8 @@ that correspondence, in open-vocabulary verbs.
   parse, the naive writer states the obvious, and *all* compactness is
   earned by rewrite rules.
 - **Compaction rules rewrite edit lists to shorter equivalents**: N cell
-  edits in a consistent pattern → "columns reordered by σ"; M per-link edit
-  lists across the dataset → one "find-replace sneakers→shoes" claim (the
+  edits in a consistent pattern -> "columns reordered by σ"; M per-link edit
+  lists across the dataset -> one "find-replace sneakers->shoes" claim (the
   vision's flagship becomes an ordinary root-scope compaction rule reading
   residual edit lists). Acceptance requires strictly decreasing description
   cost (structure-counted: verbs + parameter sizes + residual edits, with

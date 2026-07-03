@@ -41,7 +41,7 @@ snapshot — there was no automatic parity check against direct dispatch.
 The confusion came from treating one serde attribute as answering two
 different questions. Separate them.
 
-### 1. `#[serde(skip)]` → `skip_serializing_if` on transient fields
+### 1. `#[serde(skip)]` -> `skip_serializing_if` on transient fields
 
 `DiffNode.source_items` and `DiffNode.artifacts` are serialized whenever they
 are populated. They use `skip_serializing_if = "Option::is_none"` /

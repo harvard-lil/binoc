@@ -27,7 +27,7 @@ types. But the formats we want to diff next are not stringly-typed:
   with declared schemas.
 
 Stringly-typed cells throw away the signal that makes record diffing worth doing:
-a number rounding (`1.23456` → `1.23`), a type change (`int` → `text`), a
+a number rounding (`1.23456` -> `1.23`), a type change (`int` -> `text`), a
 boolean flip. They also can't represent a nested object as a cell at all.
 
 Separately, JSON today parses to a `json_document` artifact
@@ -104,12 +104,12 @@ variants across rows (legal in JSON). `declared_type` is *optional column
 metadata* recorded when the source hands us one; the diff engine never needs it
 and works cell-by-cell off the variants. "Typed vs untyped" is therefore not a
 flag anyone sets — it is observable from which `Value` variants are present
-(all-`String` ⇒ effectively untyped, the CSV case).
+(all-`String` => effectively untyped, the CSV case).
 
 **Numbers** compare via `serde_json::Number` semantics: `1` (integer) ≠ `1.0`
 (float) — a meaningful type signal — while `1.0` and `1.00` collapse to the same
 float (we do not preserve trailing-zero precision in v1; rounding like
-`1.23456`→`1.23` is still caught because the values differ).
+`1.23456`->`1.23` is still caught because the values differ).
 
 #### Shape facts and rule preconditions
 
@@ -158,8 +158,8 @@ working: `tabular.set_headers`, `tabular.add_column`, `tabular.remove_column`,
 
 The only change is that captured cell values in params (`from`/`to`/`values`)
 become typed JSON instead of always-strings — `Value` serializes naturally to
-JSON, so `Value::String("85")` → `"85"`, `Value::Number(85)` → `85`,
-`Value::Bool(true)` → `true`. The renderer already renders `from`/`to` as
+JSON, so `Value::String("85")` -> `"85"`, `Value::Number(85)` -> `85`,
+`Value::Bool(true)` -> `true`. The renderer already renders `from`/`to` as
 `serde_json::Value` (strings quoted, others bare), so this is the intended
 behavior, not new rendering work. For all-string sources (CSV) the serialized
 params are byte-identical to today, which keeps the CSV snapshot churn near zero.
@@ -194,10 +194,10 @@ move under this generic vocabulary.
 Record-collection detection runs **at the parse root**:
 
 - A JSON document whose top level is an array of like-shaped objects (or an object
-  map of like-shaped objects with a detectable key) → `tabular`.
-- JSONL where lines share a shape → `tabular`; mixed-shape JSONL →
+  map of like-shaped objects with a detectable key) -> `tabular`.
+- JSONL where lines share a shape -> `tabular`; mixed-shape JSONL ->
   `structured_document`.
-- Otherwise → `structured_document`.
+- Otherwise -> `structured_document`.
 
 A record array *nested inside* a document is just an equality `Nested` cell in v1;
 it becomes node-level only via the future SQLite-table-style expand path (CFM-69),
@@ -209,9 +209,9 @@ forcing a ragged table.
 
 To prove the artifact works across formats (not just JSON), stdlib ships:
 
-- **→ `tabular`:** CSV/TSV (rewritten onto `Value`, all-`String` cells), JSON
+- **-> `tabular`:** CSV/TSV (rewritten onto `Value`, all-`String` cells), JSON
   array-of-objects, JSONL (like-shaped).
-- **→ `structured_document`:** JSON (existing, retargeted), YAML, TOML.
+- **-> `structured_document`:** JSON (existing, retargeted), YAML, TOML.
 
 Plugins continue to produce `tabular` from their formats unchanged in spirit
 (`binoc-sqlite` tables, `binoc-stat-binary` SAS/Stata/XPT) — they construct
