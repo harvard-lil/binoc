@@ -46,7 +46,7 @@ targets are all true revisions of a static-or-restated record:
 catalog re-released monthly / semi-annually with no notes). And the targets the
 team had to *rescope* are exactly the vintage traps: the HMDA target's first
 draft compared different reporting years (disjoint cohorts of loans) before
-being rescoped to the **same year restated** across snapshot → one-year →
+being rescoped to the **same year restated** across snapshot -> one-year ->
 three-year vintages; the NSCH target is parked because year-over-year is a fresh
 sample of children, so only the schema (questions appearing/disappearing) is
 diffable, not the rows.
@@ -57,10 +57,10 @@ character** — the vocabulary the rest of the document uses:
 | Tag | Meaning | Canonical example |
 |---|---|---|
 | **silent value edit** | a published number/string is overwritten in place | BEA restates a prior quarter's GDP |
-| **reclassification** | a record's category/status flips | ClinVar pathogenic → benign |
-| **reformat / rename** | the value is stable but its label/shape changes | `Gender` → `Sex`; HGNC `BAI1` → `ADGRB1` |
+| **reclassification** | a record's category/status flips | ClinVar pathogenic -> benign |
+| **reformat / rename** | the value is stable but its label/shape changes | `Gender` -> `Sex`; HGNC `BAI1` -> `ADGRB1` |
 | **restatement / backfill** | a whole historical span is re-stated at once | Our World in Data recomputes rolling metrics |
-| **retroactive methodology re-release** | a new method re-derives the entire back-series | IHME GBD re-models 1990→present each release |
+| **retroactive methodology re-release** | a new method re-derives the entire back-series | IHME GBD re-models 1990->present each release |
 | **accession merge / deprecation** | identifiers are merged, retired, or remapped | dbSNP `RsMergeArch`; GO term obsoletion |
 | **relabeling** | ground-truth labels are corrected on fixed inputs | ImageNet/MNIST label-error fixes |
 | **continuous editing** | the same entities mutate constantly | Wikidata, OSM, OFAC SDN |
@@ -78,19 +78,19 @@ yourself / Wayback) · 🔴 hard (gated, paywalled, deleted, or no snapshots).
 
 | Dataset (publisher) | Revises | Format · cadence | Acq. | Verdict |
 |---|---|---|---|---|
-| [CDC BRFSS historical files](https://www.cdc.gov/brfss/annual_data/annual_data.htm) | silent value edit / rename — named in the [Lancet 2025 analysis](https://doi.org/10.1016/S0140-6736(25)01249-8) of 114 federal datasets silently edited Jan–Mar 2025 (106 swapped "gender"→"sex"), with [DataRescue mirrors](https://www.datarescueproject.org/cdc-brfss/) | SAS/XPT, CSV · annual + silent re-release | 🟢 | ◑ |
-| [IHME Global Burden of Disease](https://www.healthdata.org/research-analysis/gbd) | retroactive methodology re-release — each edition re-models 1990→present; vitamin-A deaths went 233k→28k for the *same years* between GBD 2017 and 2019 ([PMC9991746](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9991746/)) | CSV, API · per-release | 🟢 | ✅ |
+| [CDC BRFSS historical files](https://www.cdc.gov/brfss/annual_data/annual_data.htm) | silent value edit / rename — named in the [Lancet 2025 analysis](https://doi.org/10.1016/S0140-6736(25)01249-8) of 114 federal datasets silently edited Jan–Mar 2025 (106 swapped "gender"->"sex"), with [DataRescue mirrors](https://www.datarescueproject.org/cdc-brfss/) | SAS/XPT, CSV · annual + silent re-release | 🟢 | ◑ |
+| [IHME Global Burden of Disease](https://www.healthdata.org/research-analysis/gbd) | retroactive methodology re-release — each edition re-models 1990->present; vitamin-A deaths went 233k->28k for the *same years* between GBD 2017 and 2019 ([PMC9991746](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9991746/)) | CSV, API · per-release | 🟢 | ✅ |
 | [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) | reclassification — ~6% of variants reclassified; 40% of common pathogenic variants downgraded ([Sci Rep](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6962394/)); stable variant IDs | VCF/XML · monthly archived | 🟢 | ✅ |
 | [FDA Purple Book](https://purplebooksearch.fda.gov/downloads) | continuous editing — monthly full-DB re-release tags rows U/N/R but ships no narrative changelog | CSV · monthly | 🟢 | ✅ |
 | [FDA Orange Book](https://www.fda.gov/drugs/drug-approvals-and-databases/approved-drug-products-therapeutic-equivalence-evaluations-orange-book) | reclassification — products silently moved to/from the Discontinued section; patent/exclusivity rows edited | `~`-delimited TXT · monthly | 🟢 | ✅ |
 | [DailyMed](https://dailymed.nlm.nih.gov/) | continuous editing — labels superseded daily under a stable SetID; "as-of-date" archive | HL7 SPL XML · daily delta | 🟢 | ✅ |
-| [RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/) | accession merge — RXCUIs go active→obsolete→remapped; a Terminology-Status API exists to chase them | RRF · monthly + weekly | 🟢 | ✅ |
+| [RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/) | accession merge — RXCUIs go active->obsolete->remapped; a Terminology-Status API exists to chase them | RRF · monthly + weekly | 🟢 | ✅ |
 | [ICD-10-CM](https://www.cms.gov/medicare/coding-billing/icd-10-codes) | reclassification / rename — FY2026 alone revised 38 existing codes; stable code keys | tabular · annual (Oct 1) | 🟢 | ✅ |
 | [WHO ICD-11 (MMS)](https://icd.who.int/) | reclassification — continuous-maintenance model with annual versioned releases; titles/hierarchy edited | API, spreadsheet · annual versioned | 🟢 | ✅ |
 | [NCI SEER](https://seer.cancer.gov/data/) | retroactive recoding — Apr 2021 dropped ~10k 1973–2000 cases from *all* DBs via a behavior recode ([change log](https://seer.cancer.gov/data/data-changes.html)) | SEER\*Stat, ASCII · annual | 🔴 | ◑ |
 | [Our World in Data COVID-19](https://github.com/owid/covid-19-data) | restatement/backfill — source corrections back-fill history; rolling metrics recomputed; every edit is a Git commit | CSV/JSON · daily (Git) | 🟢 | ✅ |
 | [JHU CSSE COVID-19](https://github.com/CSSEGISandData/COVID-19) | restatement/backfill — prior days revised continuously 2020–23; **frozen** since Mar 2023, full Git history preserved | CSV · frozen | 🟢 | ✅ (historical) |
-| [CDC WONDER mortality](https://wonder.cdc.gov/) | restatement — provisional counts "continually revised"; cells <10 suppressed (a count can vanish between pulls) | query/TXT export · weekly→annual | 🟡 | ✅ |
+| [CDC WONDER mortality](https://wonder.cdc.gov/) | restatement — provisional counts "continually revised"; cells <10 suppressed (a count can vanish between pulls) | query/TXT export · weekly->annual | 🟡 | ✅ |
 | [CMS Care Compare](https://data.cms.gov/provider-data/) | silent value edit — star ratings/thresholds recomputed each period with no per-provider note; stable CCN | CSV · quarterly | 🟢 | ✅ |
 | [NHANES](https://www.cdc.gov/nchs/nhanes/) | *(contrast)* — a new independent sample each 2-year cycle; positional diff is noise | XPT, CSV · biennial | — | 🚫 |
 
@@ -107,11 +107,11 @@ survive — which makes before/after snapshots unusually easy.
 | [BLS CES payrolls](https://www.bls.gov/ces/) | benchmark restatement — the [preliminary 2025 benchmark](https://www.bls.gov/sae/notices/2025/preliminary-benchmark-announcement-2025.htm) was −911,000 jobs, restated across months | CSV/XLS/API · monthly + annual | 🟢 | ✅ |
 | [BLS CPI (seasonally adjusted)](https://www.bls.gov/cpi/) | silent value edit — SA factors recomputed each January, restating ~5 years of SA history (NSA unchanged) | CSV/XLS/API · monthly | 🟢 | ✅ |
 | [Fed Financial Accounts (Z.1)](https://www.federalreserve.gov/releases/z1/) | continuous editing — ["all data subject to revision on an ongoing basis"](https://www.federalreserve.gov/releases/z1/z1_technical_qa.htm); major revisions flagged each release | CSV (DDP)/API · quarterly | 🟢 | ✅ |
-| [IMF World Economic Outlook DB](https://www.imf.org/en/publications/weo/weo-database/changes) | retroactive restatement — each Apr/Oct vintage rewrites 1980→ history; vintages archived to 2007 | XLS/SDMX/CSV · biannual | 🟢 | ✅ |
+| [IMF World Economic Outlook DB](https://www.imf.org/en/publications/weo/weo-database/changes) | retroactive restatement — each Apr/Oct vintage rewrites 1980-> history; vintages archived to 2007 | XLS/SDMX/CSV · biannual | 🟢 | ✅ |
 | [World Bank WDI](https://datahelpdesk.worldbank.org/knowledgebase/articles/906522) | restatement / rebasing — Nigeria's 2014 rebase made 2010–12 GDP 60–75% higher; PPP/ref-year rebased silently | CSV/XLS/API · quarterly + annual | 🟡 | ✅ |
 | [Penn World Table](https://www.rug.nl/ggdc/productivity/pwt/) | retroactive methodology — v10.01 changed the investment deflator, altering 1950–2019 capital/TFP series; v11.0 current | XLSX/Stata · numbered versions | 🟢 | ✅ |
 | [Maddison Project DB](https://www.rug.nl/ggdc/historicaldevelopment/maddison/) | retroactive methodology — the [2023 update](https://www.rug.nl/ggdc/blog/the-maddison-project-new-2023-update-illuminates-origins-of-modern-economic-growth) revised long-run GDP-pc for 169 countries | XLSX/Stata · versioned (2020, 2023) | 🟢 | ✅ |
-| [HMDA national loan-level](https://ffiec.cfpb.gov/data-publication/snapshot-national-loan-level-dataset/) | restatement — the same year published as Snapshot → 1-Year → 3-Year as late filings/resubmissions arrive | CSV (pipe)/API · staged | 🟢 | ✅ |
+| [HMDA national loan-level](https://ffiec.cfpb.gov/data-publication/snapshot-national-loan-level-dataset/) | restatement — the same year published as Snapshot -> 1-Year -> 3-Year as late filings/resubmissions arrive | CSV (pipe)/API · staged | 🟢 | ✅ |
 | [OECD Main Economic Indicators](https://www.oecd.org/) | continuous editing — OECD ships a dedicated "Original Release Data and Revisions" (MEI-ORDR) DB to track first-release vs current | CSV/SDMX/XLS · monthly | 🟢 | ✅ |
 | [USDA WASDE](https://www.usda.gov/oce/commodity-markets/wasde/historical-revisions) | continuous editing — prior-month balance-sheet estimates revised in place; USDA hosts a historical-revisions tool | PDF/XML/XLS · monthly | 🟢 | ✅ |
 | [EIA Petroleum Supply (PSM/PSA)](https://www.eia.gov/petroleum/) | restatement — the annual PSA [revises up to 10 years](https://www.eia.gov/tools/faqs/faq.php?id=1398&t=6) of production history (use PSM/PSA, **not** the un-revised weekly WPSR) | CSV/XLS/API · monthly + annual | 🟡 | ✅ |
@@ -132,12 +132,12 @@ silent geometry edits.
 | [HadCRUT5 / CRUTEM5 / HadSST4](https://www.metoffice.gov.uk/hadobs/hadcrut5/) | methodology re-release — SST bias corrections restate the whole record between versions | NetCDF/CSV ensembles · ~monthly | 🟢 | ✅ |
 | [Berkeley Earth](https://berkeleyearth.org/data/) | silent value edit — the entire record is re-estimated each monthly run | text/NetCDF · monthly | 🟢 | ✅ |
 | [ERA5 / ERA5.1](https://cds.climate.copernicus.eu/) | reprocessing — ERA5.1 replaced 2000–2006 to fix a stratospheric cold bias; served as an explicit paired dataset | NetCDF/GRIB · continuous + corrections | 🟡 | ✅ |
-| [MODIS Collections (C6→C6.1)](https://lpdaac.usgs.gov/) | collection re-release — recalibration re-derives values for already-observed tiles/dates | HDF-EOS/GeoTIFF · per-collection | 🟡 | ✅ |
-| [Landsat Collections (C1→C2)](https://earthexplorer.usgs.gov/) | collection re-release — geometry + radiometry re-derived under the same scene IDs | GeoTIFF · per-collection | 🟡 | ✅ |
+| [MODIS Collections (C6->C6.1)](https://lpdaac.usgs.gov/) | collection re-release — recalibration re-derives values for already-observed tiles/dates | HDF-EOS/GeoTIFF · per-collection | 🟡 | ✅ |
+| [Landsat Collections (C1->C2)](https://earthexplorer.usgs.gov/) | collection re-release — geometry + radiometry re-derived under the same scene IDs | GeoTIFF · per-collection | 🟡 | ✅ |
 | [Sentinel-2 Collection-1](https://dataspace.copernicus.eu/news/2024-10-10-sentinel-2-old-baselines-products-deletion) | reprocessing — same scene/date, new values; **old baselines were deleted Oct–Nov 2024**, so the acquire window is closing | JPEG2000 (SAFE) · campaign | 🔴 | ✅ |
-| [Satellite GMSL](https://sealevel.nasa.gov/) | reprocessing — altimeter retracking restates the 1993→ trend between versions | NetCDF/CSV · versioned | 🟡 | ✅ |
+| [Satellite GMSL](https://sealevel.nasa.gov/) | reprocessing — altimeter retracking restates the 1993-> trend between versions | NetCDF/CSV · versioned | 🟡 | ✅ |
 | [NOAA nClimGrid-Monthly](https://www.ncei.noaa.gov/products/land-based-station/nclimgrid-monthly) | restatement — preliminary replaced by final for the same period | NetCDF/text · monthly | 🟢 | ✅ |
-| [USGS ComCat earthquakes](https://earthquake.usgs.gov/data/comcat/) | silent value edit — a stable event ID's preferred magnitude/location is revised from auto → reviewed → ISC reconciliation | GeoJSON/QuakeML/CSV · continuous | 🟡 | ✅ |
+| [USGS ComCat earthquakes](https://earthquake.usgs.gov/data/comcat/) | silent value edit — a stable event ID's preferred magnitude/location is revised from auto -> reviewed -> ISC reconciliation | GeoJSON/QuakeML/CSV · continuous | 🟡 | ✅ |
 | [WDPA / Protected Planet](https://www.protectedplanet.net/) | continuous editing — the same WDPAID's boundary geometry is silently replaced; monthly snapshots back to 2017-07 | Shapefile/File GDB · monthly | 🟢 | ✅ |
 | [OpenStreetMap (full-history)](https://planet.openstreetmap.org/pbf/full-history/) | continuous editing — the full-history PBF already contains every version of every node/way/relation | `.osm.pbf`/XML · weekly + full-history | 🟢 | ✅ |
 | [GeoNames](https://download.geonames.org/export/dump/) | continuous editing — the same geonameId's coords/population change; daily `modifications-*` deltas shipped | TSV · daily | 🟢 | ✅ |
@@ -156,10 +156,10 @@ answer key). The differentiator is whether already-present entries change
 
 | Dataset (publisher) | Revises | Format · cadence | Acq. | Verdict |
 |---|---|---|---|---|
-| [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/docs/downloads/) | reclassification — clinical significance flips P↔VUS↔B on a stable variant ID; monthly VCFs archived by year | VCF/XML/TSV · monthly | 🟢 | ✅ (flagship) |
+| [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/docs/downloads/) | reclassification — clinical significance flips P<->VUS<->B on a stable variant ID; monthly VCFs archived by year | VCF/XML/TSV · monthly | 🟢 | ✅ (flagship) |
 | [dbSNP](https://www.ncbi.nlm.nih.gov/snp/) | accession merge — rsIDs merge/deprecate; the `RsMergeArch` table is the publisher's own map | VCF/JSON/flat · per-build | 🟡 | ✅ |
-| [GRCh38 + patches](https://www.ncbi.nlm.nih.gov/grc) | mixed — GRCh37→GRCh38 is a true coordinate revision; the p1–p14 patches mostly *add* fix-/alt-loci without changing main-chromosome bases | FASTA/AGP/BED · ~annual patch | 🟢 | ◑ |
-| [RefSeq](https://www.ncbi.nlm.nih.gov/refseq/) | silent value edit — NM\_/NP\_ sequences revised with a version-suffix bump (NM_005656.1→.6) | FASTA/GenBank/GFF · bi-monthly | 🟢 | ✅ |
+| [GRCh38 + patches](https://www.ncbi.nlm.nih.gov/grc) | mixed — GRCh37->GRCh38 is a true coordinate revision; the p1–p14 patches mostly *add* fix-/alt-loci without changing main-chromosome bases | FASTA/AGP/BED · ~annual patch | 🟢 | ◑ |
+| [RefSeq](https://www.ncbi.nlm.nih.gov/refseq/) | silent value edit — NM\_/NP\_ sequences revised with a version-suffix bump (NM_005656.1->.6) | FASTA/GenBank/GFF · bi-monthly | 🟢 | ✅ |
 | [Ensembl / GENCODE](https://www.ensembl.org/) | re-annotation — gene/transcript models revised, stable-ID versions bump, IDs retired/merged | GTF/GFF3/FASTA · ~quarterly | 🟢 | ✅ |
 | [UniProt / Swiss-Prot](https://www.uniprot.org/) | re-annotation + accession merge — sequences corrected; UniSave gives per-entry history | flat/FASTA/XML · 8-weekly | 🟢 | ✅ |
 | [Pfam](https://www.ebi.ac.uk/interpro/) | accession deprecation — families "killed"/merged into clans; `dead_families` list shipped | Stockholm HMM · numbered | 🟢 | ✅ |
@@ -168,8 +168,8 @@ answer key). The differentiator is whether already-present entries change
 | [NCBI Taxonomy](https://www.ncbi.nlm.nih.gov/taxonomy) | merge + rename — taxids merged to secondary; names/ranks change; the [taxid-changelog](https://github.com/shenwei356/taxid-changelog) tool is an oracle | taxdump (flat) · ~daily | 🟢 | ✅ |
 | [GTDB](https://gtdb.ecogenomic.org/) | reclassification — organisms renamed/moved across releases (e.g. *Shigella* folded into *E. coli*) | TSV/FASTA/trees · numbered | 🟢 | ✅ |
 | [Gene Ontology](http://geneontology.org/) | accession deprecation — ~4,173 terms obsoleted in 3 years; the `go-ontology-changes` file is a ready answer key | OBO/OWL/GAF · monthly | 🟢 | ✅ |
-| [HGNC](https://www.genenames.org/) | rename — official gene-symbol changes (`BAI1`→`ADGRB1`); a `prev_symbol` field is built in | TSV/JSON · continuous | 🟢 | ✅ |
-| [miRBase](https://www.mirbase.org/) | rename/renumber — miRNAs renamed (miR-422b→miR-378) and re-bounded; ships `miRNA.diff` + `miRNA.dead` | FASTA/EMBL/GFF · numbered | 🟢 | ✅ (notorious) |
+| [HGNC](https://www.genenames.org/) | rename — official gene-symbol changes (`BAI1`->`ADGRB1`); a `prev_symbol` field is built in | TSV/JSON · continuous | 🟢 | ✅ |
+| [miRBase](https://www.mirbase.org/) | rename/renumber — miRNAs renamed (miR-422b->miR-378) and re-bounded; ships `miRNA.diff` + `miRNA.dead` | FASTA/EMBL/GFF · numbered | 🟢 | ✅ (notorious) |
 | [gnomAD](https://gnomad.broadinstitute.org/) | *(mostly contrast)* — cross-version AF changes are driven by new samples, not reprocessing the same variants | VCF/Hail/TSV · major versions | 🟢 | ◑ |
 | [OMIM](https://www.omim.org/) | continuous editing — entries/allelic-variant classifications edited nightly under stable MIM numbers; registration-gated, no clean FTP archive | flat/API · continuous | 🔴 | ✅ |
 
@@ -179,11 +179,11 @@ answer key). The differentiator is whether already-present entries change
 |---|---|---|---|---|
 | [CODATA fundamental constants](https://physics.nist.gov/cuu/Constants/) | re-fit — the [2022 adjustment](https://physics.nist.gov/cuu/Reference/versioncon.shtml) moved α by 4.5× its 2018 uncertainty, shifting 15 dependent constants; archived ASCII per adjustment | ASCII/HTML · ~4-yearly | 🟢 | ✅ |
 | [IUPAC standard atomic weights](https://ciaaw.org/atomic-weights.htm) | value edit + reclassification — argon went from 39.948±0.001 to the interval [39.792, 39.963] in 2021 | HTML/PDF · biennial-ish | 🟢 | ✅ |
-| [Particle Data Group RPP](https://pdg.lbl.gov/) | re-fit — the neutron-lifetime world average drifted 885.7 s (≤2010) → 878.6 s (2026) on a stable node; machine-readable `mass_width` files per year | web/PDF/CSV · annual/biennial | 🟢 | ✅ |
+| [Particle Data Group RPP](https://pdg.lbl.gov/) | re-fit — the neutron-lifetime world average drifted 885.7 s (≤2010) -> 878.6 s (2026) on a stable node; machine-readable `mass_width` files per year | web/PDF/CSV · annual/biennial | 🟢 | ✅ |
 | [HITRAN](https://hitran.org/) | methodology re-release — HITRAN2020 completely replaced the CO₂ line list for all 12 isotopologues vs 2016 | `.par` fixed-width · major editions | 🟡 | ✅ |
 | [Materials Project](https://next-gen.materialsproject.org/) | recompute — [v2021.05.13](https://docs.materialsproject.org/changes/database-versions) silently changed formation energies for many existing `mp-id`s via a new correction scheme | JSON/API/dumps · dated versions | 🟡 | ✅ |
 | [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/) | reclassification — re-selecting a planet's "default parameter set" changes its headline mass/radius/period | CSV/VOTable/TAP · weekly | 🟡 | ◑ |
-| [Gaia data releases](https://www.cosmos.esa.int/web/gaia) | re-derivation — the same source_id's astrometry/photometry is re-derived (EDR3→DR3 photometry correction folded in) | VOTable/FITS/TAP · major DR + errata | 🟡 | ◑ |
+| [Gaia data releases](https://www.cosmos.esa.int/web/gaia) | re-derivation — the same source_id's astrometry/photometry is re-derived (EDR3->DR3 photometry correction folded in) | VOTable/FITS/TAP · major DR + errata | 🟡 | ◑ |
 | [ChEMBL](https://www.ebi.ac.uk/chembl/) | re-curation — ChEMBL_33 re-annotated ~250k existing activities; full dumps kept indefinitely | DB dumps/RDF/SDF · numbered | 🟢 | ✅ |
 | [DrugBank](https://go.drugbank.com/releases) | corrections — invalid structures/FASTA headers fixed under a stable DBID; academic license required | XML/CSV/SDF · semver | 🟡 | ✅ |
 | [Crystallography Open Database](http://www.crystallography.net/cod/) | continuous editing — every CIF is under SVN; each correction is a new revision (already version-controlled; binoc adds the human summary) | CIF/MySQL/SVN · continuous | 🟢 | ✅ |
@@ -203,13 +203,13 @@ ground truth.
 |---|---|---|---|---|
 | [IANA tz database](https://data.iana.org/time-zones/tzdb/NEWS) | retroactive correction — 2025a corrected Philippine offsets before 1900 & 1937–90; 2024b corrected Mexico 1921–1997. The `NEWS` file is a built-in answer key | text source · ~3–6/yr | 🟢 | ✅ (flagship) |
 | [OFAC SDN list](https://ofac.treasury.gov/sanctions-list-service) | value edit + delisting — entities added, removed, and silently edited (aliases, passport numbers) with no per-record changelog | XML/CSV/PIP · ~daily | 🟢 | ✅ (flagship) |
-| [GLEIF LEI](https://www.gleif.org/en/lei-data/gleif-concatenated-file/) | value edit + status — legal names/addresses revised; status ISSUED→LAPSED→RETIRED; **daily delta files** shipped | XML/CSV/JSON · daily ×3 | 🟢 | ✅ |
+| [GLEIF LEI](https://www.gleif.org/en/lei-data/gleif-concatenated-file/) | value edit + status — legal names/addresses revised; status ISSUED->LAPSED->RETIRED; **daily delta files** shipped | XML/CSV/JSON · daily ×3 | 🟢 | ✅ |
 | [CVE / NVD](https://nvd.nist.gov/vuln/data-feeds) | rescore + reclassification — CVSS scores revised, descriptions edited, records flipped to REJECT; per-CVE change history exposed | JSON (CVE 5.0) · hourly | 🟢 | ✅ |
 | [Unicode CLDR](https://github.com/unicode-org/cldr) | value edit — a locale's translations/number/date formats change between tagged releases | XML (LDML)/JSON · ~2/yr | 🟢 | ✅ |
-| [MITRE ATT&CK](https://github.com/mitre-attack/attack-stix-data) | reclassification + revoke — techniques revoked/merged/renamed (T1574.002 → renamed T1574.001); official detailed changelog | STIX 2.1 JSON · ~2/yr | 🟢 | ✅ |
-| [ISO 3166 country codes](https://www.iso.org/iso-3166-country-codes.html) | reassignment + rename — names change (Turkey→Türkiye, Macedonia→North Macedonia); official DB paywalled, GitHub mirrors carry history | DB/newsletters · ad hoc | 🟡 | ✅ |
+| [MITRE ATT&CK](https://github.com/mitre-attack/attack-stix-data) | reclassification + revoke — techniques revoked/merged/renamed (T1574.002 -> renamed T1574.001); official detailed changelog | STIX 2.1 JSON · ~2/yr | 🟢 | ✅ |
+| [ISO 3166 country codes](https://www.iso.org/iso-3166-country-codes.html) | reassignment + rename — names change (Turkey->Türkiye, Macedonia->North Macedonia); official DB paywalled, GitHub mirrors carry history | DB/newsletters · ad hoc | 🟡 | ✅ |
 | [ISO 4217 currency codes](https://www.six-group.com/en/products-services/financial-information/data-standards.html) | reassignment + delisting — numbered amendments retire/replace codes | XML/PDF · per amendment | 🟢 | ✅ |
-| [OurAirports](https://github.com/davidmegginson/ourairports-data) | reassignment — a persistent integer ID survives an airport code change or a status→closed; full Git history | CSV · nightly (Git) | 🟢 | ✅ |
+| [OurAirports](https://github.com/davidmegginson/ourairports-data) | reassignment — a persistent integer ID survives an airport code change or a status->closed; full Git history | CSV · nightly (Git) | 🟢 | ✅ |
 | [Wikidata](https://dumps.wikimedia.org/wikidatawiki/entities/) | continuous editing — the same entity's statements change (and get vandalized + reverted); weekly JSON dumps | JSON/RDF · weekly + live | 🟢 | ✅ |
 | [MusicBrainz](https://metabrainz.org/datasets) | continuous editing + merges — MBID redirects record merges; twice-weekly dumps | PostgreSQL/JSON · ~2×/wk | 🟢 | ✅ |
 | [Public Suffix List](https://github.com/publicsuffix/list) | edit + delisting — rules edited/removed under a single file; full Git history | `.dat` · a few/wk | 🟢 | ✅ |
@@ -225,15 +225,15 @@ ground truth.
 | [US Code (OLRC)](https://uscode.house.gov/download/download.shtml) | continuous editing + reclassification — sections renumbered in place; OLRC ships [editorial-reclassification tables](https://uscode.house.gov/editorialreclassification/t34/index.html) as an answer key | USLM XML · release points | 🟢 | ✅ (flagship) |
 | [SEC EDGAR Financial Statement Sets](https://www.sec.gov/data/financial-statements) | restatement — a fiscal period is refiled (10-K/A) with restated figures; EDGAR keeps the original and every amendment forever | TSV/ZIP (XBRL) · quarterly | 🟢 | ✅ (flagship) |
 | [labelerrors.com corrected sets](https://labelerrors.com/) | relabeling — given vs. corrected labels keyed to original indices across 10 benchmarks; ≥6% of the ImageNet val set, 2,916 val errors ([arXiv](https://arxiv.org/abs/2103.14749)). A pre-built gold diff | JSON/CSV overlay · one-shot | 🟢 | ✅ (ML flagship) |
-| [ImageNet + ReaL/ReLabel](https://github.com/naver-ai/relabel_imagenet) | relabeling — same images, single → corrected/multi-label; 30–34% of images have multiple valid labels | label files · multiple relabelings | 🟢 | ✅ |
+| [ImageNet + ReaL/ReLabel](https://github.com/naver-ai/relabel_imagenet) | relabeling — same images, single -> corrected/multi-label; 30–34% of images have multiple valid labels | label files · multiple relabelings | 🟢 | ✅ |
 | [MS COCO](https://cocodataset.org/) | relabeling — ~273k annotation errors found; [MJ-COCO-2025](https://medium.com/@jamie_34747/how-i-found-nearly-300-000-errors-in-ms-coco-79d382edf22b) is a corrected re-release sharing image IDs | JSON annotations · patched + forks | 🟢 | ✅ |
 | [Hugging Face Hub datasets](https://huggingface.co/datasets) | versioned silent update — a dataset is a Git repo; `main` advances and `load_dataset` pulls new content unless `revision=` is pinned | Parquet/Arrow/CSV · per-commit | 🟢 | ✅ |
 | [CourtListener / Free Law](https://www.courtlistener.com/help/api/bulk-data/) | silent value edit — opinions corrected/withdrawn/superseded; text re-OCR'd over time, under a stable cluster/opinion ID | JSON bulk/API · rolling | 🟢 | ✅ |
 | [FEC filings](https://www.fec.gov/data/filings/) | restatement — amendments (F3 amend-1, -2…) supersede the original for the same committee/period | `.FEC`/CSV/JSON · nightly | 🟢 | ✅ |
 | [MIT Election Lab returns](https://electionlab.mit.edu/data) | silent value edit — parallel "unofficial" and "official/certified" repos hold the same contest's revised totals | CSV · per cycle (Git) | 🟢 | ✅ |
 | [USPTO Patent Assignment](https://data.uspto.gov/bulkdata/datasets) | reclassification — assignee/role disambiguation re-resolved across annual editions for the same patents | CSV bulk · annual | 🟡 | ✅ |
-| [Congressional bill text](https://www.govinfo.gov/help/bills) | reformat/version progression — Introduced→Engrossed→Enrolled under one bill ID (but versions are *labeled*, so partly already changelogged) | USLM XML · per stage | 🟢 | ◑ |
-| [LAION-5B → Re-LAION-5B](https://laion.ai/blog/relaion-5b/) | re-release with deletions — [Re-LAION](https://www.404media.co/massive-ai-dataset-back-online-after-being-cleaned-of-child-sexual-abuse-material/) removed 2,236 links (a safety scrub) under a refreshed identity | Parquet index · re-release | 🟡 | ✅ (deletion-only) |
+| [Congressional bill text](https://www.govinfo.gov/help/bills) | reformat/version progression — Introduced->Engrossed->Enrolled under one bill ID (but versions are *labeled*, so partly already changelogged) | USLM XML · per stage | 🟢 | ◑ |
+| [LAION-5B -> Re-LAION-5B](https://laion.ai/blog/relaion-5b/) | re-release with deletions — [Re-LAION](https://www.404media.co/massive-ai-dataset-back-online-after-being-cleaned-of-child-sexual-abuse-material/) removed 2,236 links (a safety scrub) under a refreshed identity | Parquet index · re-release | 🟡 | ✅ (deletion-only) |
 | [Kaggle datasets](https://www.kaggle.com/datasets) | versioned silent update — immutable numbered versions under one slug; consumers pull "latest"; API resists fetching prior versions | any · per-version | 🟡 | ✅ |
 | [USAspending.gov](https://www.usaspending.gov/data/) | *(mostly contrast)* — mods are reported as *new records* by design; only the "Correction Delete Indicator = D" path is true revision | CSV/ZIP/API · quarterly | 🟢 | 🚫 |
 | [Common Crawl / C4](https://commoncrawl.org/) | *(mostly contrast)* — each monthly crawl is a fresh web cohort; only C4's changing cleaning heuristics are a minor revision angle | WARC/WET · monthly | 🟢 | 🚫 |

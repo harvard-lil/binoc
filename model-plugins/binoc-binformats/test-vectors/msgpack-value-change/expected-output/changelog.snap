@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.msgpack**: Document values changed
   - Value Change: changes: [{"from":"30","kind":"replace","path":"$.settings.timeout","to":"45"}]; examples_truncated: false

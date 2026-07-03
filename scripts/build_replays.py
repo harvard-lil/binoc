@@ -111,7 +111,7 @@ def build_replay(binoc: Path, vector: str) -> bool:
             check=True,
         )
         # Relabel the absolute materialized temp paths with stable, readable
-        # snapshot names so the replay header reads `<vector>/snapshot-a → …`.
+        # snapshot names so the replay header reads `<vector>/snapshot-a -> …`.
         trace = json.loads(trace_json.read_text())
         trace["from_snapshot"] = f"{vector}/snapshot-a"
         trace["to_snapshot"] = f"{vector}/snapshot-b"
@@ -152,7 +152,7 @@ def render_index(built: list[dict[str, str]]) -> str:
         lines.append(entry["note"])
         lines.append("")
         lines.append(
-            f"[Open the replay →](replays/{vector}.html){{target=_blank}} · "
+            f"[Open the replay ->](replays/{vector}.html){{target=_blank}} · "
             f"[vector source]({REPO_BASE_URL}/{vector})"
         )
         lines.append("")

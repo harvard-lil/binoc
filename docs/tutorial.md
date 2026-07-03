@@ -51,7 +51,7 @@ binoc diff ./test-vectors-materialized/trivial-identical/snapshot-a ./test-vecto
 ```
 
 ```output
-# Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a → ./test-vectors-materialized/trivial-identical/snapshot-b
+# Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a -> ./test-vectors-materialized/trivial-identical/snapshot-b
 
 
 ```
@@ -87,7 +87,7 @@ binoc diff ./test-vectors-materialized/single-file-modify-text/snapshot-a ./test
 ```
 
 ```output
-# Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a → ./test-vectors-materialized/single-file-modify-text/snapshot-b
+# Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a -> ./test-vectors-materialized/single-file-modify-text/snapshot-b
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
@@ -126,7 +126,7 @@ binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vect
 ```
 
 ```output
-# Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
+# Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a -> ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
 - **data.csv**: Columns reordered
 
@@ -144,7 +144,7 @@ binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vecto
 ```
 
 ```output
-# Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a → ./test-vectors-materialized/csv-mixed-changes/snapshot-b
+# Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a -> ./test-vectors-materialized/csv-mixed-changes/snapshot-b
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
@@ -165,7 +165,7 @@ binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-mate
 ```
 
 ```output
-# Changelog: ./test-vectors-materialized/zip-simple/snapshot-a → ./test-vectors-materialized/zip-simple/snapshot-b
+# Changelog: ./test-vectors-materialized/zip-simple/snapshot-a -> ./test-vectors-materialized/zip-simple/snapshot-b
 
 - **archive.zip/>data.txt**: 1 line added; 1 line removed
   - Line changes
@@ -188,7 +188,7 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 ```
 
 ```output
-# Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
+# Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta -> ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
 
 - **sequences.fasta**: Binary content changed; 1 extracted string added, 1 extracted string removed
   - Extracted strings added

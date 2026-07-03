@@ -74,7 +74,7 @@ Instruct each generator to:
 
 - **Imagine its assigned dataset world** and the realistic ways such a dataset
   changes between two releases. Cover happy paths *and* awkward-but-reasonable
-  cases: re-encoding (UTF-8 → UTF-16, BOM added), line-ending flips, a file
+  cases: re-encoding (UTF-8 -> UTF-16, BOM added), line-ending flips, a file
   split into many or many merged into one, a column's units or meaning changing,
   precision/rounding shifts, near-duplicate records, reordered keys, an entire
   release re-exported with cosmetic-only differences, nested or unusual

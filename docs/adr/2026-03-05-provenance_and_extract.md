@@ -24,7 +24,7 @@ Concretely:
 3. Comparators and transformers implement `extract(node, aspect, data)` to format cached data for the end user. The comparator populates the cache during `compare()` (e.g., CSV comparator calls `data.store("tabular:path", ...)`) and reads it back during `extract()` via `data.load()`. Transformers do the same if they have custom extraction logic.
 
 4. `Controller::extract()` reconstructs the scratchpad by walking the ancestor chain from root to the target node:
-   - For each ancestor: call `reopen()` on its comparator to reconstruct physical access to the next level (directory → zip → directory → csv)
+   - For each ancestor: call `reopen()` on its comparator to reconstruct physical access to the next level (directory -> zip -> directory -> csv)
    - At the leaf: call `compare()` on the node's comparator to re-derive and cache the data
    - Finally: call `extract()` on the last transformer (or the comparator itself if no transformer modified the node)
 
@@ -50,7 +50,7 @@ This does mean extract requires the same plugin set that produced the changeset.
 
 Container comparators (directory, zip, tar) implement `reopen` to reconstruct physical access. This is distinct from `compare` — `reopen` doesn't diff anything, it just resolves a child's physical path within the container. For directories, this is trivial (join the path). For zips and tars, it re-extracts to a workspace directory via `data.workspace()`.
 
-The chain is walked from root to target: directory → zip → directory → csv. Each `reopen` call produces an `ItemPair` pointing at the next level's physical files. At the leaf, `compare()` is called to re-derive the data. The controller then sets `source_items` on the target node with the reconstructed `ItemPair`, so `extract()` can re-parse source files directly.
+The chain is walked from root to target: directory -> zip -> directory -> csv. Each `reopen` call produces an `ItemPair` pointing at the next level's physical files. At the leaf, `compare()` is called to re-derive the data. The controller then sets `source_items` on the target node with the reconstructed `ItemPair`, so `extract()` can re-parse source files directly.
 
 ## Cross-phase data sharing
 

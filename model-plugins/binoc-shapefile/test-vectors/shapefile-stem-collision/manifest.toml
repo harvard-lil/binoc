@@ -7,7 +7,7 @@ key must keep them apart. `stem_key` strips only the *final* extension, giving \
 distinct basenames `roads` and `roads.v2`, so each .shp anchor fuses with its own \
 sidecars and nothing else: roads.shp binds roads.dbf/roads.shx, roads.v2.shp binds \
 roads.v2.dbf/roads.v2.shx. Each layer's attribute table reflects its own data \
-(roads → lanes, roads.v2 → surface) with no cross-contamination, and no sidecar \
+(roads -> lanes, roads.v2 -> surface) with no cross-contamination, and no sidecar \
 orphans as a loose node. Pins the fix for CFM-83(e): a first-dot stem key would \
 collapse both sets onto stem 'roads' and let the two anchors fight over roads.dbf, \
 silently misattributing one layer's attributes and orphaning the other's sidecars.

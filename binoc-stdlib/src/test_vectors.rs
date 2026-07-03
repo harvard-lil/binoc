@@ -153,7 +153,7 @@ pub fn stdlib_materializers() -> Vec<Box<dyn VectorMaterializer>> {
     ]
 }
 
-/// Materializer for `.zip.d/` → `.zip`. Stored (uncompressed) zip so snapshots
+/// Materializer for `.zip.d/` -> `.zip`. Stored (uncompressed) zip so snapshots
 /// are deterministic.
 pub struct ZipMaterializer;
 
@@ -166,7 +166,7 @@ impl VectorMaterializer for ZipMaterializer {
     }
 }
 
-/// Materializer for `.tar.d/`, `.tar.gz.d/`, `.tgz.d/` → `.tar` / `.tar.gz` /
+/// Materializer for `.tar.d/`, `.tar.gz.d/`, `.tgz.d/` -> `.tar` / `.tar.gz` /
 /// `.tgz`. Uses deterministic tar header mode and zero mtimes.
 pub struct TarMaterializer;
 

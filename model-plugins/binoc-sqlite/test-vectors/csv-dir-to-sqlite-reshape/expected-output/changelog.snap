@@ -2,9 +2,9 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
-- **data.sqlite**: Reshaped from data (directory → SQLite database)
+- **data.sqlite**: Reshaped from data (directory -> SQLite database)
 - **data.sqlite/>customers**:
   - Moved from data/customers.csv
   - 1 row added; 2 cells changed

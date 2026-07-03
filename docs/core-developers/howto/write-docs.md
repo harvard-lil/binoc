@@ -144,7 +144,7 @@ audience: core contributor
 - When an ADR supersedes an earlier one, update the older ADR's
   `Status` line to `Superseded by [new-adr](new-adr.md)`.
 - Add the new file to the `nav` in `mkdocs.yml` under
-  **For Core Developers → Architectural decisions**.
+  **For Core Developers -> Architectural decisions**.
 
 ## Build and preview
 

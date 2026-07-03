@@ -91,14 +91,14 @@ pub fn read_dbf_tabular(bytes: &[u8]) -> BinocResult<TabularData> {
 
 /// Map a dBASE [`FieldValue`] to a Binoc cell [`Value`].
 ///
-/// - Character / Memo → [`Value::String`]. dBASE pads Character fields with
+/// - Character / Memo -> [`Value::String`]. dBASE pads Character fields with
 ///   trailing spaces to the declared field width; we trim trailing whitespace
 ///   so the logical value round-trips. An all-pad Character field reads back as
 ///   `None` and maps to [`Value::Null`].
-/// - Numeric / Float / Double / Integer / Currency → [`Value::Number`]
-///   (an empty/absent Numeric or Float reads as `None` → [`Value::Null`]).
-/// - Logical → [`Value::Bool`] (`None` → [`Value::Null`]).
-/// - Date / DateTime → [`Value::String`] in ISO-8601 form.
+/// - Numeric / Float / Double / Integer / Currency -> [`Value::Number`]
+///   (an empty/absent Numeric or Float reads as `None` -> [`Value::Null`]).
+/// - Logical -> [`Value::Bool`] (`None` -> [`Value::Null`]).
+/// - Date / DateTime -> [`Value::String`] in ISO-8601 form.
 fn field_value_to_cell(value: &FieldValue) -> Value {
     match value {
         FieldValue::Character(s) => match s {

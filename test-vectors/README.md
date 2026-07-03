@@ -78,15 +78,15 @@ Snapshots are plain directory trees. The test harness compares `snapshot-a` to `
 
 For zip-based vectors, use `.zip.d` directories. The test harness builds these into `.zip` files before comparison:
 
-- `archive.zip.d/data.txt` → `archive.zip` containing `data.txt`
-- `outer.zip.d/inner.zip.d/data.csv` → nested zips
+- `archive.zip.d/data.txt` -> `archive.zip` containing `data.txt`
+- `outer.zip.d/inner.zip.d/data.csv` -> nested zips
 
 ## Tar Vectors
 
 For tar-based vectors, use `.tar.d`, `.tar.gz.d`, or `.tgz.d` directories. The test harness builds these into tar archives before comparison:
 
-- `archive.tar.gz.d/data.txt` → `archive.tar.gz` containing `data.txt`
-- `outer.tar.gz.d/inner.tar.gz.d/data.csv` → nested tar.gz archives
+- `archive.tar.gz.d/data.txt` -> `archive.tar.gz` containing `data.txt`
+- `outer.tar.gz.d/inner.tar.gz.d/data.csv` -> nested tar.gz archives
 
 ## Gzip Vectors
 
@@ -94,12 +94,12 @@ For single-stream gzip vectors, use `.gz.d` directories with the uncompressed
 inner file inside. The test harness builds the compressed file before
 comparison:
 
-- `data.csv.gz.d/data.csv` → `data.csv.gz` containing `data.csv` bytes
-- `census.txt.gz.d/census.txt` → `census.txt.gz` containing `census.txt` bytes
+- `data.csv.gz.d/data.csv` -> `data.csv.gz` containing `data.csv` bytes
+- `census.txt.gz.d/census.txt` -> `census.txt.gz` containing `census.txt` bytes
 
 ## SQLite Vectors (plugin)
 
-In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `.db.d` directories. Building the `.sqlite`/`.db` file from those sources is the **plugin’s** responsibility (via the harness’s optional `prepare` callback), not the shared harness; see `binoc-sqlite/tests/test_vectors.rs`. Example layout: `data.sqlite.d/01_schema.sql` and `data.sqlite.d/02_data.sql` → `data.sqlite`.
+In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `.db.d` directories. Building the `.sqlite`/`.db` file from those sources is the **plugin’s** responsibility (via the harness’s optional `prepare` callback), not the shared harness; see `binoc-sqlite/tests/test_vectors.rs`. Example layout: `data.sqlite.d/01_schema.sql` and `data.sqlite.d/02_data.sql` -> `data.sqlite`.
 
 ## Naming Conventions
 
@@ -119,7 +119,7 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 
 | Vector | Description |
 |--------|-------------|
-| trivial-identical | Two identical directories → empty changeset |
+| trivial-identical | Two identical directories -> empty changeset |
 | single-file-add | File present in B but not A |
 | single-file-remove | File present in A but not B |
 | single-file-modify-text | Text file with line-level changes |

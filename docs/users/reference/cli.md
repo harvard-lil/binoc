@@ -58,7 +58,7 @@ Runs pairwise comparisons over each consecutive snapshot pair and emits the resu
 
 ###### **Arguments:**
 
-* `<SNAPSHOTS>` — Ordered snapshot paths. For N inputs, binoc emits N-1 pairwise diffs (A→B, B→C, ...). Must provide at least two snapshots
+* `<SNAPSHOTS>` — Ordered snapshot paths. For N inputs, binoc emits N-1 pairwise diffs (A->B, B->C, ...). Must provide at least two snapshots
 
 ###### **Options:**
 

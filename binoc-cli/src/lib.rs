@@ -34,7 +34,7 @@ enum Commands {
     /// rendering.
     Diff {
         /// Ordered snapshot paths. For N inputs, binoc emits N-1 pairwise
-        /// diffs (A→B, B→C, ...). Must provide at least two snapshots.
+        /// diffs (A->B, B->C, ...). Must provide at least two snapshots.
         #[arg(required = true, num_args = 2..)]
         snapshots: Vec<PathBuf>,
         /// Path to a dataset config YAML file. If omitted, the registry's

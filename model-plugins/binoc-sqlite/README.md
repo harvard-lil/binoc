@@ -36,7 +36,7 @@ binoc diff /tmp/demo/snapshot-a /tmp/demo/snapshot-b
 Example output:
 
 ```markdown
-# Changelog: /tmp/demo/snapshot-a → /tmp/demo/snapshot-b
+# Changelog: /tmp/demo/snapshot-a -> /tmp/demo/snapshot-b
 
 - **data.sqlite/>t**: 1 row added
   - Rows added

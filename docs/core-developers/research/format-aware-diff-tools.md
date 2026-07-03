@@ -82,7 +82,7 @@ one types at a shell.
 
 ## Tabular leaves — CSV, dataframes, spreadsheets
 
-- **[daff](https://github.com/paulfitz/daff)** (MIT, Haxe→JS/Python/Java/…;
+- **[daff](https://github.com/paulfitz/daff)** (MIT, Haxe->JS/Python/Java/…;
   v1.4.2 May 2025, slow-burn but alive). Keyed row matching and
   inserted/deleted/**reordered/renamed columns**; produces an *aligned* diff
   that is itself a table, round-trippable as a patch (CSV/JSON/HTML). Its
@@ -254,7 +254,7 @@ serializes a binary OTF/TTF into a canonical XML representation and diffs *that*
   (**[Atlas](https://github.com/ariga/atlas)** — Apache-2.0, Go, v0.37 Apr 2026,
   very active, 15+ engines, JSON/HCL/ERD output; **skeema** for MySQL/MariaDB)
   vs *diff-two-live-DBs* tools (**Liquibase** — enterprise incumbent,
-  diff→changelog; **Redgate SQL Compare** / **dbForge** — commercial). Atlas
+  diff->changelog; **Redgate SQL Compare** / **dbForge** — commercial). Atlas
   straddles both and is the momentum leader. **migra is deprecated** (last
   release 2022); **apgdiff** is unmaintained; **alembic autogenerate** operates
   *within* the SQLAlchemy ecosystem (and candidly documents that its output is a
@@ -311,12 +311,12 @@ Four observations that hold across the field and inform binoc's design:
 
 - **The canonical-form technique is widespread.** The "meaningful" binary
   differs work by normalizing opaque bytes into a canonical, semantically
-  aligned representation first — Courgette (executables → normalized pointers),
-  fontTools (OTF → TTX/XML), qpdf (PDF → QDF text), gron (JSON → flat lines) —
+  aligned representation first — Courgette (executables -> normalized pointers),
+  fontTools (OTF -> TTX/XML), qpdf (PDF -> QDF text), gron (JSON -> flat lines) —
   *then* diffing that. It is the same move binoc makes when an expand/parse rule
   turns raw data into side-tree items.
 - **Machine-readable vs display is a real fork.** Some tools emit an applicable
-  patch (jd → RFC 6902, daff's round-trippable table, deepdiff's `Delta`,
+  patch (jd -> RFC 6902, daff's round-trippable table, deepdiff's `Delta`,
   jsondiffpatch's delta, geodiff's changeset, sqldiff's SQL); others only render
   for humans (dyff, difftastic, diffoscope, VisiData). For a changelog
   generator, the patch-emitting tools are the closer prior art.

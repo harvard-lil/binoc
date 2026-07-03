@@ -146,7 +146,7 @@ Cross-referencing the corpus against current binoc coverage (Excel incl. `.xls`,
 JSON/JSON-LD, CSV/TSV, SQLite, DBF, Avro, Parquet/Arrow, Stata/SAS, and the tree
 formats YAML/TOML/INI/CBOR/MsgPack/BSON/Plist/Ion):
 
-1. **XML → `structured_document` (highest leverage).** Largest single format,
+1. **XML -> `structured_document` (highest leverage).** Largest single format,
    currently unsupported. One parser also covers RDF/KML/GML/Atom structurally.
    Mostly ISO/FGDC metadata, which is still valuable to diff. *In progress:
    `model-plugins/binoc-xml`, tagged `format: "xml"` for later XML-specific

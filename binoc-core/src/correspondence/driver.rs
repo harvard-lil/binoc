@@ -359,7 +359,7 @@ fn run_inner(
     // successful claim subsumes its members before any smaller claim's dispatch
     // scan runs in the same round, and a decline releases them to the next.
     // Registration order is the stable tiebreak within an arity. Expand and Pair
-    // rules keep their original positions — subsumption only orders parse↔parse.
+    // rules keep their original positions — subsumption only orders parse<->parse.
     let rule_order: Vec<usize> = {
         let mut parse_indices: Vec<usize> = config
             .rules
@@ -910,7 +910,7 @@ fn build_edit_lists(
             continue;
         }
         // A subsumed member is folded into a fusing result node; its own link
-        // (e.g. a `roads.dbf` ↔ `roads.dbf` name pairing that formed before
+        // (e.g. a `roads.dbf` <-> `roads.dbf` name pairing that formed before
         // the shapefile claim subsumed it) contributes no edits and is not
         // dispatched to per-artifact writers (CFM-81 + CFM-83).
         if store.is_subsumed(left_id) || store.is_subsumed(right_id) {
@@ -1245,7 +1245,7 @@ fn stem_key(logical_path: &str) -> String {
     let name = binoc_sdk::file_name(logical_path);
     // Correlate by basename with only the *final* extension removed. A sidecar set
     // shares its full base name and differs only in the last extension
-    // (`roads.v2.shp` ↔ `roads.v2.dbf`), so each member binds to its most-specific
+    // (`roads.v2.shp` <-> `roads.v2.dbf`), so each member binds to its most-specific
     // anchor. Stripping at the *first* dot instead would collapse versioned
     // siblings (`roads.*` and `roads.v2.*`) onto one stem and let two `.shp`
     // anchors fight over the same `.dbf` — silent cross-contamination (CFM-83(e)).
@@ -2226,7 +2226,7 @@ mod tests {
             .left
             .add_child(0, leaf_item("roads.shp"), ProjectionHint::default());
 
-        // A required .dbf with no matching sibling → no group forms.
+        // A required .dbf with no matching sibling -> no group forms.
         let extras = vec![MemberMatch::required(ext_match(".dbf"))];
         assert!(assemble_group(&store, TreeSide::Left, shp, &extras).is_none());
     }

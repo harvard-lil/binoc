@@ -43,9 +43,9 @@ An artifact format is a structured tuple `(package, name, version)` rather than 
 
 The **package** field is a package name resolvable through the language's normal package system (`import binoc`, `cargo add binoc-csv`, etc.). This is not just a naming convention — it is a dependency coordinate.
 
-- `("binoc", "tabular", 1)` → the `binoc` package (the SDK) defines and owns this format.
-- `("binoc-csv", "table", 1)` → the `binoc-csv` package defines and owns this format.
-- `("acme-parquet", "columnar", 1)` → the `acme-parquet` package defines and owns this format.
+- `("binoc", "tabular", 1)` -> the `binoc` package (the SDK) defines and owns this format.
+- `("binoc-csv", "table", 1)` -> the `binoc-csv` package defines and owns this format.
+- `("acme-parquet", "columnar", 1)` -> the `acme-parquet` package defines and owns this format.
 
 Package resolution provides namespacing. Two unrelated packages cannot collide on format names unless they collide on package names, which the package manager already prevents. Given a format, a developer can mechanically determine which package to depend on to get the codec.
 
