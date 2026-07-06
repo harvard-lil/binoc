@@ -289,6 +289,7 @@ fn render(
     format: &ResolvedFormat,
     changesets: &[Changeset],
     config: &DatasetConfig,
+    changeset_path: Option<&str>,
 ) -> Result<String, BinocError> {
     match format {
         ResolvedFormat::Json => {
@@ -307,6 +308,9 @@ fn render(
                     changeset.push_diagnostic(diagnostic);
                 }
                 changeset.dedupe_and_cap_diagnostics(16);
+                if let Some(path) = changeset_path {
+                    changeset.fill_missing_extract_hint_paths(path);
+                }
             }
             o.render(&augmented, &renderer_config)
         }
@@ -333,16 +337,18 @@ fn write_outputs(
     config: &DatasetConfig,
     resolved: &ResolvedPlugins,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let inferred_changeset_path =
+        infer_single_changeset_output_path(output_specs, changesets.len());
     if !quiet {
         let fmt = resolve_format_name(stdout_format, resolved)?;
-        let text = render(&fmt, changesets, config)?;
+        let text = render(&fmt, changesets, config, inferred_changeset_path.as_deref())?;
         write_stdout_text(&text)?;
     }
 
     for raw in output_specs {
         let spec = OutputSpec::parse(raw);
         let fmt = resolve_format(&spec, resolved)?;
-        let text = render(&fmt, changesets, config)?;
+        let text = render(&fmt, changesets, config, inferred_changeset_path.as_deref())?;
         if let Some(parent) = spec.path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)?;
@@ -352,6 +358,31 @@ fn write_outputs(
     }
 
     Ok(())
+}
+
+fn infer_single_changeset_output_path(
+    output_specs: &[String],
+    changeset_count: usize,
+) -> Option<String> {
+    if changeset_count != 1 {
+        return None;
+    }
+
+    let mut json_paths = output_specs.iter().filter_map(|raw| {
+        let spec = OutputSpec::parse(raw);
+        let is_json = match spec.format.as_deref() {
+            Some("json") => true,
+            Some(_) => false,
+            None => spec.path.extension().and_then(|ext| ext.to_str()) == Some("json"),
+        };
+        is_json.then(|| spec.path.display().to_string())
+    });
+
+    let path = json_paths.next()?;
+    if json_paths.next().is_some() {
+        return None;
+    }
+    Some(path)
 }
 
 fn write_stdout_text(text: &str) -> std::io::Result<()> {
@@ -693,7 +724,13 @@ pub fn run(
                     let md = resolve_format_name("markdown", &resolved)
                         .ok()
                         .and_then(|fmt| {
-                            render(&fmt, std::slice::from_ref(&changeset), &dataset_config).ok()
+                            render(
+                                &fmt,
+                                std::slice::from_ref(&changeset),
+                                &dataset_config,
+                                None,
+                            )
+                            .ok()
                         });
                     run_trace.output = md;
                     write_file(
@@ -751,6 +788,7 @@ pub fn run(
                 &resolve_format_name("markdown", &resolved)?,
                 std::slice::from_ref(&changeset),
                 &dataset_config,
+                Some("changeset.json"),
             )?;
             run_trace.output = Some(markdown.clone());
 
@@ -784,7 +822,12 @@ pub fn run(
             let mut changesets: Vec<Changeset> = Vec::new();
             for path in &changeset_paths {
                 let data = std::fs::read_to_string(path)?;
-                changesets.extend(parse_changesets_json(&data)?);
+                let mut parsed = parse_changesets_json(&data)?;
+                let changeset_path = path.display().to_string();
+                for changeset in &mut parsed {
+                    changeset.fill_missing_extract_hint_paths(&changeset_path);
+                }
+                changesets.extend(parsed);
             }
 
             write_outputs(
@@ -852,4 +895,28 @@ pub fn run(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::infer_single_changeset_output_path;
+
+    #[test]
+    fn infer_single_changeset_output_path_accepts_one_json_output() {
+        let outputs = vec!["markdown:changelog.md".into(), "out/changeset.json".into()];
+        assert_eq!(
+            infer_single_changeset_output_path(&outputs, 1).as_deref(),
+            Some("out/changeset.json")
+        );
+    }
+
+    #[test]
+    fn infer_single_changeset_output_path_rejects_ambiguous_or_multi_changeset_cases() {
+        let outputs = vec!["a.json".into(), "b.json".into()];
+        assert_eq!(infer_single_changeset_output_path(&outputs, 1), None);
+        assert_eq!(
+            infer_single_changeset_output_path(&["one.json".into()], 2),
+            None
+        );
+    }
 }
