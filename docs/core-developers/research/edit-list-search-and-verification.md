@@ -134,7 +134,7 @@ algebras — a VSA is a compact representation of *all hypotheses consistent wit
 examples*, the inductive twin of an e-graph's "all terms equivalent to this one."
 
 That inductive lineage is absent from the first survey and is the directly relevant
-prior art for the flagship claim:
+prior art for the named-inference claim:
 
 - **[FlashMeta](https://doi.org/10.1145/2814270.2814310)** (Polozov & Gulwani,
   OOPSLA 2015) is the framework for programming-by-example synthesis, built on VSAs.
@@ -171,7 +171,7 @@ anti-unification: it compresses a corpus of programs by discovering shared
 abstractions, using e-graph saturation to see past syntactic accidents and
 anti-unification to generalize. That is structurally the cross-artifact problem —
 compress a corpus by finding one abstraction that many members instantiate — and it
-is the single closest published neighbor to what binoc's flagship inference would
+is the single closest published neighbor to what binoc's named inference would
 be.
 
 **Negative result worth recording.** A targeted search found **no published work
@@ -279,7 +279,8 @@ documents relative to its evidence base. Two things are worth separating.
 **Is it wanted?** Unclear. The vision documents treat "someone ran a find-replace
 from sneakers to shoes" as a flagship, but no user research establishes that
 archivists and stewards need cross-artifact process inference more than they need
-a bulletproof per-artifact changelog. The [vintage-audience
+a bulletproof per-artifact changelog. Treat it as a stretch goal, not a
+scheduled feature. The [vintage-audience
 ADR](../../adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md) is
 instructive here: its three gaps are all *within-artifact*, and it concludes the
 whole audience is reachable with one renderer filter plus one plugin pack. Nothing
@@ -300,7 +301,9 @@ So cross-artifact compaction is not merely unimplemented — the phase structure
 forbids expressing it. That the partition-identity split/merge claim works is not
 counter-evidence: split/merge is a fact about *links and node identities*, which
 `final_claims` can see. It does not generalize to inferences over edits, and its
-success may have obscured the gap.
+success may have obscured the gap. If this ever becomes worth pursuing, it needs
+a new dataset-scope phase after `build_edit_lists`, not an ordinary compaction
+rule.
 
 The unlock, if it is ever wanted, is a **phase, not an algorithm**: a dataset-scope
 stage after `build_edit_lists` that reads every link's edit list, may emit

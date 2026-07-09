@@ -320,9 +320,11 @@ verb composed ahead of it?" an explicit, tested property of the vocabulary.
 
 ## Inferring named operations — and verifying them by replay
 
-binoc's flagship compaction ("these 10,000 cell edits *are* one find-replace
-sneakers→shoes") is operation inference: recovering the high-level process
-behind low-level edits. The software-engineering field has done this for a
+binoc's dataset-wide find-replace idea ("these 10,000 cell edits *are* one
+find-replace sneakers→shoes") is a stretch goal, not a committed feature. The
+user need is still unestablished, and the current engine shape cannot express
+it without a new dataset-scope phase after edit lists are built. The
+software-engineering field has done nearby forms of operation inference for a
 decade, and its single most useful contribution is the honesty about how often
 it is wrong.
 

@@ -583,7 +583,7 @@ impl DiffNode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct GlobalClaim {
-    /// Open claim verb such as a future global find/replace action.
+    /// Open claim verb for a renderer- or plugin-defined run-scoped claim.
     pub verb: String,
     /// Claim-specific structured parameters.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
