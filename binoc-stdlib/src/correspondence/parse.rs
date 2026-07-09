@@ -890,6 +890,7 @@ fn parse_csv_records(bytes: &[u8], dialect: &ResolvedCsvDialect) -> BinocResult<
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedCsvDialect {
     delimiter: u8,
+    default_delimiter: u8,
     quote: Option<u8>,
     escape: Option<u8>,
     double_quote: bool,
@@ -903,6 +904,7 @@ impl ResolvedCsvDialect {
     fn for_tests(delimiter: u8) -> Self {
         Self {
             delimiter,
+            default_delimiter: delimiter,
             quote: Some(b'"'),
             escape: None,
             double_quote: true,
@@ -926,7 +928,8 @@ impl ResolvedCsvDialect {
     }
 
     fn matches_boring_default(&self) -> bool {
-        self.delimiter == b','
+        self.delimiter == self.default_delimiter
+            && self.default_delimiter == b','
             && matches!(self.quote, None | Some(b'"'))
             && self.escape.is_none()
             && !self.bom
@@ -1006,13 +1009,14 @@ fn sniff_csv_dialect(bytes: &[u8], fallback_delimiter: u8) -> ResolvedCsvDialect
     } else {
         sample
     };
-    let delimiter = sniff_delimiter(sample).unwrap_or(fallback_delimiter);
+    let delimiter = sniff_delimiter(sample, fallback_delimiter).unwrap_or(fallback_delimiter);
     let quote = sniff_quote(sample, delimiter);
     let escape = quote.and_then(|quote| sniff_escape(sample, quote));
     let double_quote = escape.is_none();
     let newline = sniff_newline(sample);
     ResolvedCsvDialect {
         delimiter,
+        default_delimiter: fallback_delimiter,
         quote,
         escape,
         double_quote,
@@ -1022,41 +1026,164 @@ fn sniff_csv_dialect(bytes: &[u8], fallback_delimiter: u8) -> ResolvedCsvDialect
     }
 }
 
-fn sniff_delimiter(sample: &[u8]) -> Option<u8> {
-    let mut best: Option<(u8, usize, usize, usize)> = None;
-    for &candidate in CSV_DELIMITER_CANDIDATES {
-        let widths = sample_widths(sample, candidate);
-        if widths.len() < 2 {
-            continue;
-        }
-        let width = widths.iter().copied().max().unwrap_or(1);
-        if width < 2 {
-            continue;
-        }
-        let consistency = widths.windows(2).filter(|pair| pair[0] == pair[1]).count();
-        let score = (consistency, widths.len(), width);
-        if best
-            .as_ref()
-            .is_none_or(|(_, best_consistency, best_rows, best_width)| {
-                score > (*best_consistency, *best_rows, *best_width)
-            })
-        {
-            best = Some((candidate, consistency, widths.len(), width));
-        }
-    }
-    best.map(|(candidate, _, _, _)| candidate)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DelimiterScore {
+    candidate: u8,
+    mode_rows: usize,
+    row_count: usize,
+    non_numeric_occurrences: usize,
+    is_default: bool,
 }
 
+fn sniff_delimiter(sample: &[u8], default_delimiter: u8) -> Option<u8> {
+    let mut best: Option<DelimiterScore> = None;
+    for &candidate in CSV_DELIMITER_CANDIDATES {
+        let Some(score) = delimiter_score(sample, candidate, default_delimiter) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|best| score.beats(*best)) {
+            best = Some(score);
+        }
+    }
+    best.map(|score| score.candidate)
+}
+
+impl DelimiterScore {
+    fn beats(self, other: Self) -> bool {
+        (
+            self.mode_rows,
+            self.row_count,
+            self.non_numeric_occurrences,
+            self.is_default,
+        ) > (
+            other.mode_rows,
+            other.row_count,
+            other.non_numeric_occurrences,
+            other.is_default,
+        )
+    }
+}
+
+fn delimiter_score(sample: &[u8], candidate: u8, default_delimiter: u8) -> Option<DelimiterScore> {
+    let mut widths = Vec::new();
+    let mut occurrences = 0;
+    let mut numeric_occurrences = 0;
+    for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
+        if line.is_empty() {
+            continue;
+        }
+        let stats = line_delimiter_stats(line, candidate);
+        widths.push(stats.width);
+        occurrences += stats.occurrences;
+        numeric_occurrences += stats.numeric_occurrences;
+    }
+    if widths.len() < 2 {
+        return None;
+    }
+    let (mode_width, mode_rows) = mode_width(&widths);
+    if mode_width < 2 {
+        return None;
+    }
+    Some(DelimiterScore {
+        candidate,
+        mode_rows,
+        row_count: widths.len(),
+        non_numeric_occurrences: occurrences.saturating_sub(numeric_occurrences),
+        is_default: candidate == default_delimiter,
+    })
+}
+
+fn mode_width(widths: &[usize]) -> (usize, usize) {
+    let mut sorted = widths.to_vec();
+    sorted.sort_unstable();
+    let mut best_width = sorted[0];
+    let mut best_count = 1;
+    let mut current_width = sorted[0];
+    let mut current_count = 1;
+    for width in sorted.into_iter().skip(1) {
+        if width == current_width {
+            current_count += 1;
+            continue;
+        }
+        if current_count > best_count {
+            best_width = current_width;
+            best_count = current_count;
+        }
+        current_width = width;
+        current_count = 1;
+    }
+    if current_count > best_count {
+        best_width = current_width;
+        best_count = current_count;
+    }
+    (best_width, best_count)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LineDelimiterStats {
+    width: usize,
+    occurrences: usize,
+    numeric_occurrences: usize,
+}
+
+#[cfg(test)]
 fn sample_widths(sample: &[u8], delimiter: u8) -> Vec<usize> {
     let mut widths = Vec::new();
     for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
         if line.is_empty() {
             continue;
         }
-        let width = line.iter().filter(|byte| **byte == delimiter).count() + 1;
-        widths.push(width);
+        widths.push(line_delimiter_stats(line, delimiter).width);
     }
     widths
+}
+
+fn line_delimiter_stats(line: &[u8], delimiter: u8) -> LineDelimiterStats {
+    let mut stats = LineDelimiterStats {
+        width: 1,
+        occurrences: 0,
+        numeric_occurrences: 0,
+    };
+    let mut active_quote = None;
+    let mut at_field_start = true;
+    let mut index = 0;
+    while index < line.len() {
+        let byte = line[index];
+        if let Some(quote) = active_quote {
+            if byte == quote {
+                if index + 1 < line.len() && line[index + 1] == quote {
+                    index += 2;
+                    continue;
+                }
+                active_quote = None;
+            }
+            index += 1;
+            continue;
+        }
+        if at_field_start && matches!(byte, b'"' | b'\'') {
+            active_quote = Some(byte);
+            at_field_start = false;
+            index += 1;
+            continue;
+        }
+        if byte == delimiter {
+            stats.width += 1;
+            stats.occurrences += 1;
+            if index > 0
+                && index + 1 < line.len()
+                && line[index - 1].is_ascii_digit()
+                && line[index + 1].is_ascii_digit()
+            {
+                stats.numeric_occurrences += 1;
+            }
+            at_field_start = true;
+            index += 1;
+            continue;
+        }
+        at_field_start = false;
+        index += 1;
+    }
+    stats
 }
 
 fn sniff_quote(sample: &[u8], delimiter: u8) -> Option<u8> {
@@ -1088,12 +1215,37 @@ fn line_contains_quoted_field(line: &[u8], delimiter: u8, quote: u8) -> bool {
 }
 
 fn sniff_escape(sample: &[u8], quote: u8) -> Option<u8> {
-    let escaped = [b'\\', quote];
-    if sample.windows(2).any(|pair| pair == escaped) {
+    if plausible_backslash_escaped_quotes(sample, quote) >= 2 {
         Some(b'\\')
     } else {
         None
     }
+}
+
+fn plausible_backslash_escaped_quotes(sample: &[u8], quote: u8) -> usize {
+    let mut count = 0;
+    for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
+        let mut in_quotes = false;
+        let mut index = 0;
+        while index < line.len() {
+            let byte = line[index];
+            if byte == quote {
+                in_quotes = !in_quotes;
+                index += 1;
+                continue;
+            }
+            if in_quotes && byte == b'\\' && index + 1 < line.len() && line[index + 1] == quote {
+                let after_quote = line.get(index + 2).copied();
+                if !matches!(after_quote, None | Some(b',' | b'\t' | b'|' | b';' | b':')) {
+                    count += 1;
+                }
+                index += 2;
+                continue;
+            }
+            index += 1;
+        }
+    }
+    count
 }
 
 fn sniff_newline(sample: &[u8]) -> Option<String> {
@@ -1420,9 +1572,65 @@ mod tests {
     }
 
     #[test]
+    fn inferred_comma_delimiter_for_tsv_keeps_provenance() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,old\n2,same\n", b'\t');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert_eq!(dialect.delimiter, b',');
+        assert!(!dialect.matches_boring_default());
+        assert!(dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn sniff_csv_dialect_uses_extension_prior_for_headerless_time_csv() {
+        let dialect = sniff_csv_dialect(b"12:30:00,5\n13:45:00,6\n", b',');
+        assert_eq!(dialect.delimiter, b',');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_uses_extension_prior_for_headerless_decimal_comma_tsv() {
+        let dialect = sniff_csv_dialect(b"foo\t1,5\nbar\t2,5\n", b'\t');
+        assert_eq!(dialect.delimiter, b'\t');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_detects_headerless_semicolon_decimal_comma_csv() {
+        let dialect = sniff_csv_dialect(b"foo;1,5\nbar;2,5\n", b',');
+        assert_eq!(dialect.delimiter, b';');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_ignores_quoted_commas_for_pipe_file() {
+        let dialect = sniff_csv_dialect(b"\"1,5\"|x\n\"2,5\"|y\n", b',');
+        assert_eq!(dialect.delimiter, b'|');
+    }
+
+    #[test]
+    fn sample_widths_ignores_quoted_delimiters() {
+        assert_eq!(sample_widths(b"\"1,5\"|x\n\"2,5\"|y\n", b','), vec![1, 1]);
+        assert_eq!(sample_widths(b"\"1,5\"|x\n\"2,5\"|y\n", b'|'), vec![2, 2]);
+    }
+
+    #[test]
+    fn sniff_escape_ignores_single_backslash_before_closing_quote() {
+        let dialect = sniff_csv_dialect(
+            br#"id,path
+1,"C:\temp\"
+2,"C:\logs\"
+"#,
+            b',',
+        );
+        assert_eq!(dialect.escape, None);
+        assert!(dialect.double_quote);
+    }
+
+    #[test]
     fn parse_csv_records_respects_backslash_escape() {
         let dialect = ResolvedCsvDialect {
             delimiter: b'|',
+            default_delimiter: b'|',
             quote: Some(b'"'),
             escape: Some(b'\\'),
             double_quote: false,
