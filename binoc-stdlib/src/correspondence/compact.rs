@@ -1148,6 +1148,7 @@ fn rewrite_sorted_row_alignment(
 ) -> Option<Vec<Edit>> {
     if left.rows.len() != right.rows.len()
         || left.rows.is_empty()
+        || edits.iter().any(is_high_churn_guardrail)
         || !edits.iter().any(sorted_row_alignment_trigger)
     {
         return None;
@@ -1226,16 +1227,12 @@ fn rewrite_sorted_row_alignment(
 }
 
 fn sorted_row_alignment_trigger(edit: &Edit) -> bool {
-    edit.verb == "tabular.row_correspondence_uncertain"
-        || (edit.verb == "tabular.edit_cell"
-            && edit.params.get("key").is_none()
-            && edit.params.get("row").is_some())
+    edit.verb == "tabular.edit_cell"
+        && edit.params.get("key").is_none()
+        && edit.params.get("row").is_some()
 }
 
 fn sorted_row_alignment_owned_edit(edit: &Edit, common: &[CommonColumn]) -> bool {
-    if edit.verb == "tabular.row_correspondence_uncertain" {
-        return true;
-    }
     edit.verb == "tabular.edit_cell"
         && edit.params.get("key").is_none()
         && edit.params.get("row").is_some()
@@ -1244,6 +1241,10 @@ fn sorted_row_alignment_owned_edit(edit: &Edit, common: &[CommonColumn]) -> bool
             .get("column")
             .and_then(|value| value.as_str())
             .is_some_and(|column| common.iter().any(|common| common.name == column))
+}
+
+fn is_high_churn_guardrail(edit: &Edit) -> bool {
+    edit.verb == "tabular.row_correspondence_uncertain"
 }
 
 #[derive(Debug, Clone)]
@@ -1784,12 +1785,6 @@ mod tests {
             ],
         );
         let edits = vec![
-            Edit::new(
-                "tabular.row_correspondence_uncertain",
-                json!({"mode": "positional"}),
-            )
-            .with_item_type("tabular")
-            .with_tag("binoc.row-correspondence-uncertain"),
             cell(0, "group", json!("A"), json!("B")).hidden(),
             cell(0, "label", json!("x"), json!("y")).hidden(),
             cell(0, "value", json!("10"), json!("20")).hidden(),
@@ -1803,6 +1798,75 @@ mod tests {
             rewritten[0].params,
             json!({"alignment": "sorted_row_content", "rows": 4})
         );
+    }
+
+    #[test]
+    fn sorted_row_alignment_does_not_rewrite_high_churn_guardrail() {
+        let left = table(
+            &["id", "status", "color"],
+            &[
+                &["A", "old", "red"],
+                &["B", "old", "red"],
+                &["C", "old", "red"],
+                &["D", "old", "red"],
+            ],
+        );
+        let right = table(
+            &["id", "status", "color"],
+            &[
+                &["D", "new", "blue"],
+                &["C", "new", "blue"],
+                &["B", "new", "blue"],
+                &["A", "new", "blue"],
+            ],
+        );
+        let positional_basis = vec![
+            cell(0, "id", json!("A"), json!("D")).hidden(),
+            cell(0, "status", json!("old"), json!("new")).hidden(),
+            cell(0, "color", json!("red"), json!("blue")).hidden(),
+            cell(1, "id", json!("B"), json!("C")).hidden(),
+            cell(1, "status", json!("old"), json!("new")).hidden(),
+            cell(1, "color", json!("red"), json!("blue")).hidden(),
+            cell(2, "id", json!("C"), json!("B")).hidden(),
+            cell(2, "status", json!("old"), json!("new")).hidden(),
+            cell(2, "color", json!("red"), json!("blue")).hidden(),
+            cell(3, "id", json!("D"), json!("A")).hidden(),
+            cell(3, "status", json!("old"), json!("new")).hidden(),
+            cell(3, "color", json!("red"), json!("blue")).hidden(),
+        ];
+        let sorted = rewrite_sorted_row_alignment(&positional_basis, &left, &right)
+            .expect("unguarded sorted rewrite");
+        let sorted_alignment = sorted
+            .iter()
+            .find(|edit| edit.verb == "tabular.sorted_row_alignment")
+            .expect("sorted alignment marker");
+        assert_eq!(sorted_alignment.params["changed_cells"], json!(8));
+        assert!(
+            sorted_alignment.params["sorted_changed_cell_fraction"]
+                .as_f64()
+                .expect("fraction")
+                > 0.5
+        );
+        assert!(sorted.len() < positional_basis.len());
+
+        let mut guarded = vec![Edit::new(
+            "tabular.row_correspondence_uncertain",
+            json!({
+                "mode": "positional",
+                "changed_cell_fraction": 1.0,
+                "threshold": 0.5,
+                "changed_cells": 12,
+                "total_cells": 12,
+                "changed_rows": 4,
+                "total_rows": 4,
+                "candidate_keys": [],
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.row-correspondence-uncertain")];
+        guarded.extend(positional_basis);
+
+        assert!(rewrite_sorted_row_alignment(&guarded, &left, &right).is_none());
     }
 
     #[test]

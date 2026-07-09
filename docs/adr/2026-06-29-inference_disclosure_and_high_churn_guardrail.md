@@ -104,6 +104,8 @@ it stays a renderer/config decision.
   positional basis when the guardrail suppresses visible cell churn); the
   `binoc.compact.sorted_row_alignment` rule reconstructs the sorted-content plan
   from the tabular artifacts. The existing engine gate accepts it only when the
-  rewritten edit list has strictly lower structural cost. Changed-cell fraction
+  rewritten edit list has strictly lower structural cost. A high-churn guardrail
+  edit remains a backstop and is not rewritten by the sorted-row compaction rule,
+  even if a sorted plan would reduce structural cost. Changed-cell fraction
   remains the guardrail signal, but it is not a competing edit-plan cost
   function.
