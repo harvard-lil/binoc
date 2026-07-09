@@ -1031,6 +1031,8 @@ struct DelimiterScore {
     candidate: u8,
     mode_rows: usize,
     row_count: usize,
+    occurrences: usize,
+    numeric_occurrences: usize,
     non_numeric_occurrences: usize,
     is_default: bool,
 }
@@ -1050,6 +1052,12 @@ fn sniff_delimiter(sample: &[u8], default_delimiter: u8) -> Option<u8> {
 
 impl DelimiterScore {
     fn beats(self, other: Self) -> bool {
+        if self.beats_decimal_comma_default(other) {
+            return true;
+        }
+        if other.beats_decimal_comma_default(self) {
+            return false;
+        }
         (
             self.mode_rows,
             self.row_count,
@@ -1061,6 +1069,16 @@ impl DelimiterScore {
             other.non_numeric_occurrences,
             other.is_default,
         )
+    }
+
+    fn beats_decimal_comma_default(self, other: Self) -> bool {
+        matches!(self.candidate, b'\t' | b'|' | b';')
+            && other.candidate == b','
+            && other.is_default
+            && other.occurrences > 0
+            && other.occurrences == other.numeric_occurrences
+            && self.mode_rows == other.mode_rows
+            && self.row_count == other.row_count
     }
 }
 
@@ -1088,6 +1106,8 @@ fn delimiter_score(sample: &[u8], candidate: u8, default_delimiter: u8) -> Optio
         candidate,
         mode_rows,
         row_count: widths.len(),
+        occurrences,
+        numeric_occurrences,
         non_numeric_occurrences: occurrences.saturating_sub(numeric_occurrences),
         is_default: candidate == default_delimiter,
     })
@@ -1598,6 +1618,12 @@ mod tests {
     #[test]
     fn sniff_csv_dialect_detects_headerless_semicolon_decimal_comma_csv() {
         let dialect = sniff_csv_dialect(b"foo;1,5\nbar;2,5\n", b',');
+        assert_eq!(dialect.delimiter, b';');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_detects_all_numeric_headerless_semicolon_decimal_comma_csv() {
+        let dialect = sniff_csv_dialect(b"1,5;2,5\n3,5;4,5\n", b',');
         assert_eq!(dialect.delimiter, b';');
     }
 
