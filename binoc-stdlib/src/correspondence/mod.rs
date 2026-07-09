@@ -10,11 +10,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use binoc_sdk::{
-    structured_document_v1, tabular_v1, BinocResult, Cardinality, CoreRule,
-    CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1,
-    Diagnostic, DispatchResolver, Edit, FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity,
-    ParseRule, PathConfigEntry, ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint,
-    RowIdentity, RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
+    structured_document_v1, BinocResult, Cardinality, CoreRule, CorrespondenceDatasetConfigurator,
+    CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
+    FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity, ParseRule, PathConfigEntry,
+    ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
+    RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -185,22 +185,17 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
         let diagnostics = validate_path_entries(&semantics);
-        if !semantics.paths.is_empty() || table_config_has_parse_overrides(&semantics.tables) {
+        if !semantics.paths.is_empty()
+            || table_config_has_parse_overrides(&semantics.tables)
+            || dataset_has_row_identity_config(&semantics)
+        {
             config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
                 entries: semantics.paths.clone(),
                 default_row_identity: dataset_default_row_identity(&semantics).clone(),
                 tables: semantics.tables.clone(),
             }));
         }
-        let row_identity = row_identity_for_paths(
-            &semantics,
-            large_tabular_threshold_bytes(&semantics),
-            &left_paths,
-            &right_paths,
-            left_root,
-            right_root,
-            data,
-        )?;
+        let row_identity = row_identity_for_paths(&semantics, &left_paths, &right_paths);
         config.row_keys = row_identity
             .iter()
             .map(|(path, identity)| (path.clone(), identity.columns.clone()))
@@ -659,19 +654,13 @@ fn count_phrase(count: usize, singular: &str, plural: &str) -> String {
 
 fn row_identity_for_paths(
     semantics: &DatasetSemanticsV1,
-    large_tabular_threshold_bytes: u64,
     left_paths: &[String],
     right_paths: &[String],
-    left_root: &ItemRef,
-    right_root: &ItemRef,
-    data: &dyn DataAccess,
-) -> BinocResult<BTreeMap<String, RowIdentity>> {
+) -> BTreeMap<String, RowIdentity> {
     if !dataset_has_row_identity_config(semantics) {
-        return Ok(BTreeMap::new());
+        return BTreeMap::new();
     }
 
-    let left_root_physical = data.local_path(left_root)?;
-    let right_root_physical = data.local_path(right_root)?;
     let mut paths = left_paths
         .iter()
         .chain(right_paths)
@@ -684,16 +673,7 @@ fn row_identity_for_paths(
     let mut row_identity = BTreeMap::new();
     for path in paths {
         let path_entry = first_path_entry(&semantics.paths, &path);
-        let path_is_tabular = path_emits_tabular_artifact(
-            &path,
-            large_tabular_threshold_bytes,
-            [
-                (left_root, left_root_physical.as_path()),
-                (right_root, right_root_physical.as_path()),
-            ],
-            path_entry,
-            data,
-        )?;
+        let path_is_tabular = path_can_emit_tabular_artifact(&path, path_entry);
         if !semantics.paths.is_empty() {
             let has_path_row_identity = path_entry
                 .and_then(|entry| entry.row_identity.as_ref())
@@ -726,7 +706,7 @@ fn row_identity_for_paths(
             row_identity.insert(path, identity);
         }
     }
-    Ok(row_identity)
+    row_identity
 }
 
 fn dataset_has_row_identity_config(semantics: &DatasetSemanticsV1) -> bool {
@@ -1214,6 +1194,10 @@ fn is_tabular_path(path: &str) -> bool {
     glob_can_match_tabular_artifact(path)
 }
 
+fn path_can_emit_tabular_artifact(path: &str, path_entry: Option<&PathConfigEntry>) -> bool {
+    path_entry.is_some_and(entry_declares_tabular) || glob_can_match_tabular_artifact(path)
+}
+
 fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Vec<String>> {
     let physical = data.local_path(item)?;
     let mut paths = Vec::new();
@@ -1321,24 +1305,6 @@ fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn path_emits_tabular_artifact(
-    path: &str,
-    large_tabular_threshold_bytes: u64,
-    roots: [(&ItemRef, &Path); 2],
-    path_entry: Option<&PathConfigEntry>,
-    data: &dyn DataAccess,
-) -> BinocResult<bool> {
-    for (root, physical) in roots {
-        let Some(item) = item_for_logical_path(root, physical, path, path_entry, data)? else {
-            continue;
-        };
-        if item_emits_tabular_artifact(&item, path_entry, data, large_tabular_threshold_bytes) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
 fn item_for_logical_path(
     root: &ItemRef,
     root_physical: &Path,
@@ -1371,72 +1337,6 @@ fn apply_path_dispatch_overrides(item: &mut ItemRef, path_entry: Option<&PathCon
     }
     if let Some(parse) = parse_config_for_entry(path_entry) {
         item.tabular_parse = Some(parse);
-    }
-}
-
-fn item_emits_tabular_artifact(
-    item: &ItemRef,
-    path_entry: Option<&PathConfigEntry>,
-    data: &dyn DataAccess,
-    large_tabular_threshold_bytes: u64,
-) -> bool {
-    let csv = parse::CsvParse {
-        large_tabular_threshold_bytes,
-    };
-    let csv_media = parse::CsvMediaParse {
-        large_tabular_threshold_bytes,
-    };
-    let json_records = parse::JsonRecordsParse;
-    let json_media_records = parse::JsonMediaRecordsParse;
-    if let Some(rule_name) = path_entry
-        .and_then(|entry| entry.rule.as_deref())
-        .filter(|rule_name| rule_can_emit_tabular_artifact(rule_name))
-    {
-        if let Ok(output) =
-            parse_forced_tabular_rule(rule_name, item, data, large_tabular_threshold_bytes)
-        {
-            return !output.bytes.is_empty();
-        }
-    }
-    let rules = [
-        &csv as &dyn ParseRule,
-        &csv_media as &dyn ParseRule,
-        &json_records as &dyn ParseRule,
-        &json_media_records as &dyn ParseRule,
-    ];
-    for rule in rules {
-        let descriptor = rule.descriptor();
-        if descriptor.output != tabular_v1() || !descriptor.input.matches(item) {
-            continue;
-        }
-        let Ok(output) = rule.parse(item, data) else {
-            continue;
-        };
-        if !output.bytes.is_empty() {
-            return true;
-        }
-    }
-    false
-}
-
-fn parse_forced_tabular_rule(
-    rule_name: &str,
-    item: &ItemRef,
-    data: &dyn DataAccess,
-    large_tabular_threshold_bytes: u64,
-) -> BinocResult<binoc_sdk::ParseOutput> {
-    match rule_name {
-        "binoc.parse.csv" => parse::CsvParse {
-            large_tabular_threshold_bytes,
-        }
-        .parse(item, data),
-        "binoc.parse.csv_media" => parse::CsvMediaParse {
-            large_tabular_threshold_bytes,
-        }
-        .parse(item, data),
-        "binoc.parse.json_records" => parse::JsonRecordsParse.parse(item, data),
-        "binoc.parse.json_media_records" => parse::JsonMediaRecordsParse.parse(item, data),
-        _ => unreachable!("rule_can_emit_tabular_artifact filters unknown rules"),
     }
 }
 
@@ -1539,8 +1439,6 @@ fn rule_can_emit_structured_document_artifact(rule_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use binoc_sdk::test_support::RecordingDataAccess;
-    use binoc_sdk::LocalDataAccess;
 
     fn ctx<'a>(
         container: bool,
@@ -1639,20 +1537,6 @@ mod tests {
 
     #[test]
     fn row_identity_probe_skips_trial_parse_when_no_key_is_configured_anywhere() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let left = temp.path().join("left");
-        let right = temp.path().join("right");
-        std::fs::create_dir_all(&left).expect("create left");
-        std::fs::create_dir_all(&right).expect("create right");
-        std::fs::write(left.join("records.json"), "{not valid json]\n").expect("write left");
-        std::fs::write(right.join("records.json"), "{still not valid json]\n")
-            .expect("write right");
-
-        let data = RecordingDataAccess::new(LocalDataAccess::new());
-        let left_root = data.register_local(&left, "").expect("left root");
-        let right_root = data.register_local(&right, "").expect("right root");
-        data.take_log();
-
         let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
             "paths": [{
                 "match": "**/*.json",
@@ -1664,17 +1548,11 @@ mod tests {
 
         let row_identity = row_identity_for_paths(
             &semantics,
-            large_tabular_threshold_bytes(&semantics),
             &[String::from("records.json")],
             &[String::from("records.json")],
-            &left_root,
-            &right_root,
-            &data,
-        )
-        .expect("row identity");
+        );
 
         assert!(row_identity.is_empty());
-        assert!(data.take_log().is_empty());
     }
 
     #[test]
@@ -1705,19 +1583,6 @@ mod tests {
 
     #[test]
     fn table_row_identity_entry_columns_inherit_default_policy() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let left = temp.path().join("left");
-        let right = temp.path().join("right");
-        std::fs::create_dir_all(&left).expect("create left");
-        std::fs::create_dir_all(&right).expect("create right");
-        std::fs::write(left.join("data.csv"), "id,email\n1,a@example.test\n").expect("write left");
-        std::fs::write(right.join("data.csv"), "id,email\n1,b@example.test\n")
-            .expect("write right");
-
-        let data = LocalDataAccess::new();
-        let left_root = data.register_local(&left, "").expect("left root");
-        let right_root = data.register_local(&right, "").expect("right root");
-
         let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
             "tables": {
                 "defaults": {
@@ -1736,14 +1601,9 @@ mod tests {
 
         let identities = row_identity_for_paths(
             &semantics,
-            large_tabular_threshold_bytes(&semantics),
             &[String::from("data.csv")],
             &[String::from("data.csv")],
-            &left_root,
-            &right_root,
-            &data,
-        )
-        .expect("row identity");
+        );
 
         let identity = identities.get("data.csv").expect("data.csv identity");
         assert_eq!(identity.columns, vec!["email"]);

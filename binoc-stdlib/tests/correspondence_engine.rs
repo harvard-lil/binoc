@@ -1446,6 +1446,104 @@ fn lowered_large_tabular_threshold_forces_streaming_for_small_tsv() {
 }
 
 #[test]
+fn legacy_tables_row_identity_streams_over_lowered_threshold() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    write_large_tsv(&left.join("data.tsv"), 0, 100, Some((50, "before")));
+    write_large_tsv(&right.join("data.tsv"), 1, 101, Some((50, "after")));
+
+    let dataset = serde_json::json!({
+        "correspondence": {
+            "large_tabular_threshold_bytes": 1024
+        },
+        "tables": {
+            "defaults": {
+                "row_identity": { "columns": ["id"] }
+            }
+        }
+    });
+    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
+    let left_root = data.register_local(&left, "").expect("left root");
+    let right_root = data.register_local(&right, "").expect("right root");
+    let mut config = engine_config_for_dataset_config(&dataset);
+    let configurator = config.dataset_configurator.clone().expect("configurator");
+    configurator
+        .configure(&mut config, &dataset, &left_root, &right_root, &data)
+        .expect("configure dataset");
+
+    let run =
+        correspondence::driver::run(&config, left_root, right_root, &data).expect("engine run");
+    assert_eq!(run.stats.fires_of("binoc.parse.csv"), 0);
+    assert_eq!(run.stats.fires_of("binoc.parse.csv_media"), 0);
+
+    let changeset = run.project().to_changeset("snapshot-a", "snapshot-b");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.tsv").expect("data.tsv");
+    let edits = node.details["edits"].as_array().expect("edits");
+    let stream = edits
+        .iter()
+        .find(|edit| edit["verb"] == "tabular.keyed_stream_summary")
+        .expect("stream summary edit");
+    assert_eq!(stream["params"]["row_additions"], 1);
+    assert_eq!(stream["params"]["row_removals"], 1);
+    assert_eq!(stream["params"]["modified_rows"], 1);
+}
+
+#[test]
+fn legacy_tables_row_identity_stays_keyed_under_threshold() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.tsv"), "id\tvalue\n1\tbefore\n2\tsame\n").unwrap();
+    fs::write(right.join("data.tsv"), "id\tvalue\n2\tsame\n1\tafter\n").unwrap();
+
+    let dataset = serde_json::json!({
+        "correspondence": {
+            "large_tabular_threshold_bytes": 64 * 1024
+        },
+        "tables": {
+            "defaults": {
+                "row_identity": { "columns": ["id"] }
+            }
+        }
+    });
+    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
+    let left_root = data.register_local(&left, "").expect("left root");
+    let right_root = data.register_local(&right, "").expect("right root");
+    let mut config = engine_config_for_dataset_config(&dataset);
+    let configurator = config.dataset_configurator.clone().expect("configurator");
+    configurator
+        .configure(&mut config, &dataset, &left_root, &right_root, &data)
+        .expect("configure dataset");
+
+    let run =
+        correspondence::driver::run(&config, left_root, right_root, &data).expect("engine run");
+    assert!(run.stats.fires_of("binoc.parse.csv") > 0);
+
+    let changeset = run.project().to_changeset("snapshot-a", "snapshot-b");
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.tsv").expect("data.tsv");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert!(
+        !edits
+            .iter()
+            .any(|edit| edit["verb"] == "tabular.keyed_stream_summary"),
+        "{edits:?}"
+    );
+    assert!(
+        edits
+            .iter()
+            .any(|edit| edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"),
+        "{edits:?}"
+    );
+}
+
+#[test]
 fn raised_large_tabular_threshold_allows_forced_csv_row_identity_probe() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
