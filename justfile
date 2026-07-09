@@ -173,8 +173,8 @@ docs-browser-demo:
     fi
     ls -lh "${OUTPUT}"
 
-# Regenerate the plugin registry and third-party plugin catalog from their
-# root-level JSON sources.
+# Regenerate the plugin registry and user-facing plugin catalog from the
+# root-level registry JSON source.
 docs-plugin-catalog:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -244,7 +244,7 @@ docs-serve:
         -w model-plugins/binoc-sqlite \
         -w model-plugins/binoc-stat-binary \
         -w mkdocs.yml \
-        -w third_party_plugins.json \
+        -w plugin_registry.json \
         -w justfile \
         -w Cargo.toml \
         -i docs/tutorial.md \

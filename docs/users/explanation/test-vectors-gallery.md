@@ -57,7 +57,7 @@ just materialize
 | [`csv-stacked-tables`](#csv-stacked-tables) | Detects two logical tables stacked in one messy CSV | data.csv/>table_2: 1 row added | Default pipeline |
 | [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: Moved from data.csv | Default pipeline |
 | [`csv-value-suppression`](#csv-value-suppression) | CSV cells replaced with disclosure suppression sentinels | data.csv: Suppressed 3 cells in 'count' | Default pipeline |
-| [`csv-value-suppression-custom-sentinel`](#csv-value-suppression-custom-sentinel) | CSV cells replaced with a dataset-configured disclosure suppression sentinel | data.csv: 1 cell changed | Custom config |
+| [`csv-value-suppression-custom-sentinel`](#csv-value-suppression-custom-sentinel) | CSV cells replaced with a dataset-configured disclosure suppression sentinel | data.csv: 1 cell changed; Suppressed 2 cells in 'count' | Custom config |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`csv-vintage-benchmark`](#csv-vintage-benchmark) | A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore. | facilities.csv: Column added: 'region'; 1 cell changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
@@ -71,8 +71,8 @@ just materialize
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Added | Default pipeline |
 | [`geojson-feature-cell-change`](#geojson-feature-cell-change) | A GeoJSON FeatureCollection where one feature's property changes; transcoded to a tabular artifact with the geometry as… | places.geojson: 1 cell changed | Default pipeline |
 | [`gzip-inner-dispatch`](#gzip-inner-dispatch) | Gzipped CSV and text are decompressed and redispatched under their inner names | census.txt.gz/>census.txt: 1 line added; 1 line removed | Default pipeline |
-| [`ini-value-change`](#ini-value-change) | An INI value changes; transcoded to a structured_document and reported as a value change | config.ini: Document values changed | Default pipeline |
-| [`json-array-order-significant`](#json-array-order-significant) | JSON array order changes are semantic content changes in stage 1 | metadata.json: Document values changed | Default pipeline |
+| [`ini-value-change`](#ini-value-change) | An INI value changes; transcoded to a structured_document and reported as a value change | config.ini: $.replicas: "3" -> "5" | Default pipeline |
+| [`json-array-order-significant`](#json-array-order-significant) | JSON array order changes are semantic content changes in stage 1 | metadata.json: $.ids[1]: 2 -> 3; $.ids[2]: 3 -> 2 | Default pipeline |
 | [`json-key-order-reexport`](#json-key-order-reexport) | JSON object key order and pretty-printing changed without semantic value changes | metadata.json: Document serialization changed | Default pipeline |
 | [`json-keyed-row-diff`](#json-keyed-row-diff) | Configured JSON record keys match reordered rows and report keyed row/cell changes | data.json: 1 row added; 1 row removed; 1 row modified by key | Custom config |
 | [`json-records-cell-change`](#json-records-cell-change) | JSON array of like-shaped objects parsed as a typed table; numeric cell values change | data.json: 2 cells changed | Default pipeline |
@@ -80,7 +80,7 @@ just materialize
 | [`json-records-path-stix-objects`](#json-records-path-stix-objects) | STIX-shaped JSON bundle records under $.objects are parsed as a keyed table | enterprise.stix.json: 1 row modified by key | Custom config |
 | [`json-records-type-only-column`](#json-records-type-only-column) | Typed JSON records re-serialized with one numeric column as strings; canonical values match | data.json: Column type changed: 'year' number -> string | Default pipeline |
 | [`jsonl-row-addition`](#jsonl-row-addition) | JSONL stream of like-shaped objects parsed as a table; a record is appended | events.jsonl: 1 row added | Default pipeline |
-| [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: Document values changed | Default pipeline |
+| [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: $.jobTitle: "Mathematician" -> "Computer Scientist" | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/>inventory.csv: 1 row added | Default pipeline |
 | [`nasa-gistemp-header-line`](#nasa-gistemp-header-line) | NASA GISTEMP-style table with a title line before the real header | GLB.Ts+dSST.csv: 1 row modified by key | Custom config |
 | [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: Moved from observations_north.csv | Default pipeline |
@@ -98,12 +98,12 @@ just materialize
 | [`tar-nested`](#tar-nested) | Nested tar.gz containing CSV | outer.tar.gz/>inner.tar.gz/>data.csv: 1 row added | Default pipeline |
 | [`tar-simple`](#tar-simple) | Tar.gz archive with changes inside | archive.tar.gz/>data.csv: 1 row added | Default pipeline |
 | [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt | Default pipeline |
-| [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: Document values changed | Default pipeline |
+| [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: $.replicas: 3 -> 5 | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
 | [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | # Changelog: snapshot-a → snapshot-b | Default pipeline |
 | [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files → no changes reported | # Changelog: snapshot-a → snapshot-b | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
-| [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: Document values changed | Default pipeline |
+| [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: $.replicas: 3 -> 5 | Default pipeline |
 | [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: Moved from outer.zip/>records-old.zip | Custom config |
 | [`zip-json-key-order-reexport`](#zip-json-key-order-reexport) | JSON files inside zip expansion get parsed and rendered as serialization-only changes | archive.zip/>metadata.json: Document serialization changed | Default pipeline |
 | [`zip-nested`](#zip-nested) | Nested zip containing CSV | outer.zip/>inner.zip/>data.csv: 1 row added | Default pipeline |
@@ -897,7 +897,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data.csv**: 1 cell changed
+- **data.csv**: 1 cell changed; Suppressed 2 cells in 'count'
   - Changed cells
     - row 3, column 'rate': '8.9' -> '9.1'
 ```
@@ -1382,7 +1382,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **config.ini**: Document values changed
+- **config.ini**: $.replicas: "3" -> "5"
 ```
 
 ## json-array-order-significant
@@ -1403,7 +1403,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **metadata.json**: Document values changed
+- **metadata.json**: $.ids[1]: 2 -> 3; $.ids[2]: 3 -> 2
 ```
 
 ## json-key-order-reexport
@@ -1612,7 +1612,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **person.jsonld**: Document values changed
+- **person.jsonld**: $.jobTitle: "Mathematician" -> "Computer Scientist"
 ```
 
 ## kitchen-sink
@@ -2117,7 +2117,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **config.toml**: Document values changed
+- **config.toml**: $.replicas: 3 -> 5
 ```
 
 ## tree-wide-correlation
@@ -2228,7 +2228,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **config.yaml**: Document values changed
+- **config.yaml**: $.replicas: 3 -> 5
 ```
 
 ## zip-declared-container

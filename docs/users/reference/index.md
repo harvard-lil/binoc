@@ -19,7 +19,7 @@ formats. If you need a concrete walkthrough, see the
 - **Rust plugin author** — start with [Rust SDK](../../plugin-developers/reference/sdk.md) and
   [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md).
 - **Plugin consumer reading changelog output** — start with [Plugin registry](plugin-registry.md).
-- **Plugin consumer** — start with [Third-party plugins](third-party-plugins.md).
+- **Plugin consumer** — start with [Plugin catalog](third-party-plugins.md).
 
 ## CLI and APIs
 
@@ -39,5 +39,5 @@ formats. If you need a concrete walkthrough, see the
   Rust plugins.
 - [Plugin registry](plugin-registry.md) — built-in and in-tree plugins readers
   will meet in rendered changelogs.
-- [Third-party plugins](third-party-plugins.md) — add-on plugins by file
-  format; generated from `third_party_plugins.json`.
+- [Plugin catalog](third-party-plugins.md) — format packs by file selector;
+  generated from `plugin_registry.json`.

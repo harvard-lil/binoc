@@ -3,6 +3,7 @@
     {
       "id": "binoc-stdlib",
       "title": "binoc-stdlib",
+      "tier": "built-in",
       "summary": "Binoc's built-in rule pack. It handles the baseline formats and structural cases most readers encounter first: directories, archives, compressed streams, CSV/TSV, common text formats, JSON/YAML/TOML/INI, generic binary fallback, move/copy detection, and output renderers.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/binoc-stdlib",
@@ -33,6 +34,7 @@
     {
       "id": "binoc-avro",
       "title": "binoc-avro",
+      "tier": "first-party-bundled",
       "summary": "Parses Avro snapshots as structured data so changes in records and fields surface as normal Binoc diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-avro",
@@ -58,6 +60,7 @@
     {
       "id": "binoc-binformats",
       "title": "binoc-binformats",
+      "tier": "first-party-bundled",
       "summary": "Parses common binary interchange formats into JSON-like values so content changes become visible as structured diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-binformats",
@@ -82,6 +85,7 @@
     {
       "id": "binoc-dbf",
       "title": "binoc-dbf",
+      "tier": "first-party-bundled",
       "summary": "Parses DBF snapshots so table and row changes in legacy dBase-style datasets show up as structured tabular diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-dbf",
@@ -107,6 +111,7 @@
     {
       "id": "binoc-excel",
       "title": "binoc-excel",
+      "tier": "first-party-bundled",
       "summary": "Parses Excel workbooks so sheet, row, column, and cell changes can be compared as Binoc tabular changes.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-excel",
@@ -133,6 +138,7 @@
     {
       "id": "binoc-html",
       "title": "binoc-html",
+      "tier": "first-party-add-on",
       "summary": "Supports HTML-related parsing and rewriting for datasets that publish or embed structured content in HTML snapshots.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html",
@@ -158,6 +164,7 @@
     {
       "id": "binoc-parquet",
       "title": "binoc-parquet",
+      "tier": "first-party-bundled",
       "summary": "Parses Parquet snapshots so column, row, and cell changes appear as ordinary tabular diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-parquet",
@@ -183,6 +190,7 @@
     {
       "id": "binoc-row-reorder",
       "title": "binoc-row-reorder",
+      "tier": "first-party-bundled",
       "summary": "Detects row reordering in tabular data so shuffles are represented as ordering changes rather than as noisy row removals and additions.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder",
@@ -209,6 +217,7 @@
     {
       "id": "binoc-shapefile",
       "title": "binoc-shapefile",
+      "tier": "first-party-bundled",
       "summary": "Handles shapefile bundles and their sidecar files so feature, geometry, and attribute changes stay aligned across the dataset package.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-shapefile",
@@ -235,12 +244,12 @@
     {
       "id": "binoc-sqlite",
       "title": "binoc-sqlite",
+      "tier": "first-party-opt-in",
       "summary": "Compares SQLite databases: schema, columns, keys, and row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite",
       "source_path": "model-plugins/binoc-sqlite",
       "packages": {
-        "pypi": "binoc-sqlite",
         "crate": "binoc-sqlite"
       },
       "handles": "SQLite database files.",
@@ -267,12 +276,12 @@
     {
       "id": "binoc-stat-binary",
       "title": "binoc-stat-binary",
+      "tier": "first-party-bundled",
       "summary": "Reads Stata, SAS, and SAS transport files as standard Binoc tabular data so normal column, row, and cell diffing applies.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary",
       "source_path": "model-plugins/binoc-stat-binary",
       "packages": {
-        "pypi": "binoc-stat-binary",
         "crate": "binoc-stat-binary"
       },
       "handles": "Stata `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt` files.",
@@ -313,6 +322,7 @@
     {
       "id": "binoc-xml",
       "title": "binoc-xml",
+      "tier": "first-party-bundled",
       "summary": "Parses XML snapshots into structured data so hierarchical document and metadata changes can be tracked as Binoc diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-xml",

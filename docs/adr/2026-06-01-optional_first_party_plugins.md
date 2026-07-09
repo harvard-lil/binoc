@@ -156,7 +156,7 @@ host-side loader/runtime features it needs. It should not cap `binoc` merely to
 mirror the SDK minor version.
 
 The plugin should be added to the plugin catalog currently stored in
-`third_party_plugins.json`. The filename is historical; the catalog records
+`plugin_registry.json`. The catalog records
 separately installable plugin packages, including first-party optional plugins.
 
 ## Consequences
