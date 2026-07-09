@@ -193,7 +193,7 @@ impl EditListWriter for TabularWriter {
                     edits.push(edit);
                 }
             }
-        } else if ctx.row_keys.is_empty() {
+        } else {
             if let Some(auto_key) = infer_auto_key(&left, &right) {
                 let keys = vec![auto_key.column.clone()];
                 if let Some((left_keyed, right_keyed)) = keyed_tables(&keys, &left, &right) {
@@ -257,18 +257,18 @@ impl EditListWriter for TabularWriter {
                 && !common.is_empty())
             .then(|| row_alignment_basis(&left, &right, &common));
             let positional = positional_row_edits(&left, &right, &common);
-            let (row_edits, stats) =
-                match sorted_row_content_edits(&left, &right, &common, positional.stats) {
-                    Some(sorted) => sorted,
-                    None => (positional.edits, positional.stats),
-                };
+            let stats = positional.stats;
             let candidate_keys = candidate_key_columns(&left, &right);
             let has_high_overlap_candidate = candidate_keys
                 .iter()
                 .any(|candidate| candidate.jaccard >= AUTO_KEY_MIN_JACCARD);
+            let sorted_content_has_acceptable_churn =
+                sorted_row_content_stats(&left, &right, &common)
+                    .is_some_and(|stats| !stats.exceeds_guardrail());
             if left.rows.len() == right.rows.len()
                 && stats.exceeds_guardrail()
                 && !has_high_overlap_candidate
+                && !sorted_content_has_acceptable_churn
             {
                 push_high_churn_guardrail(
                     &mut edits,
@@ -278,11 +278,12 @@ impl EditListWriter for TabularWriter {
                     stats,
                     candidate_keys,
                 );
+                edits.extend(positional.edits.into_iter().map(hidden_compaction_basis));
             } else {
                 if let Some(edit) = row_alignment_basis {
                     edits.push(edit);
                 }
-                edits.extend(row_edits);
+                edits.extend(positional.edits);
             }
         } else {
             let common = common_columns(&left, &right);
@@ -1373,12 +1374,11 @@ struct SortAlignedRow<'a> {
     row: &'a Vec<Value>,
 }
 
-fn sorted_row_content_edits(
+fn sorted_row_content_stats(
     left: &TabularData,
     right: &TabularData,
     common: &[CommonColumn<'_>],
-    positional_stats: TabularChurnStats,
-) -> Option<(Vec<Edit>, TabularChurnStats)> {
+) -> Option<TabularChurnStats> {
     if left.rows.len() != right.rows.len() || common.is_empty() {
         return None;
     }
@@ -1395,7 +1395,6 @@ fn sorted_row_content_edits(
             .then_with(|| a.index.cmp(&b.index))
     });
 
-    let mut edits = Vec::new();
     let mut changed_cells = 0usize;
     let mut changed_rows = 0usize;
     for (left_row, right_row) in left_rows.iter().zip(&right_rows) {
@@ -1409,14 +1408,6 @@ fn sorted_row_content_edits(
             if left_value != right_value {
                 changed_cells += 1;
                 row_changed = true;
-                edits.push(cell_edit(json!({
-                    "left_row": left_row.index,
-                    "right_row": right_row.index,
-                    "column": column.name,
-                    "from": value_preview(left_value),
-                    "to": value_preview(right_value),
-                    "alignment": "sorted_row_content",
-                })));
             }
         }
         if row_changed {
@@ -1424,39 +1415,13 @@ fn sorted_row_content_edits(
         }
     }
 
-    let stats = TabularChurnStats {
+    Some(TabularChurnStats {
         mode: "sorted_row_content",
         changed_cells,
         total_cells: left.rows.len().max(right.rows.len()) * common.len(),
         changed_rows,
         total_rows: left.rows.len().max(right.rows.len()),
-    };
-    if stats.changed_cells >= positional_stats.changed_cells {
-        return None;
-    }
-    if edits.is_empty() {
-        edits.push(row_reorder_edit(
-            "sorted_row_content",
-            None,
-            right.rows.len(),
-        ));
-    } else {
-        edits.push(
-            Edit::new(
-                "tabular.sorted_row_alignment",
-                json!({
-                    "left_rows": left.rows.len(),
-                    "right_rows": right.rows.len(),
-                    "positional_changed_cell_fraction": positional_stats.fraction(),
-                    "sorted_changed_cell_fraction": stats.fraction(),
-                }),
-            )
-            .with_item_type("tabular")
-            .with_tag("binoc.row-alignment-inferred")
-            .hidden(),
-        );
-    }
-    Some((edits, stats))
+    })
 }
 
 fn row_reorder_edit(mode: &str, keys: Option<&[String]>, rows: usize) -> Edit {
@@ -1740,6 +1705,12 @@ fn cell_edit_is_value_suppressed(params: &serde_json::Value) -> bool {
         return false;
     };
     value_is_present(from) && value_is_suppression_sentinel(from, to)
+}
+
+fn hidden_compaction_basis(mut edit: Edit) -> Edit {
+    edit.projection.visible = false;
+    edit.projection.hint = Default::default();
+    edit
 }
 
 fn value_is_present(value: &serde_json::Value) -> bool {

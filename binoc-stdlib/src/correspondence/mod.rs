@@ -137,6 +137,7 @@ fn engine_config_with_options_and_reduced_precision(
             Arc::new(compact::ColumnRename),
             Arc::new(compact::ColumnReorder),
             Arc::new(compact::TypeOnlyColumnChange),
+            Arc::new(compact::SortedRowAlignment),
             Arc::new(compact::RowAlignment),
             Arc::new(reduced_precision),
             Arc::new(compact::RowAdditionConsolidation),
