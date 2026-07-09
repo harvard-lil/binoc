@@ -110,7 +110,7 @@ To prevent collisions across plugin packs:
 
 | Thing | Convention | Examples |
 |---|---|---|
-| PyPI package name | `binoc-*` is the shared ecosystem namespace | `binoc-sqlite`, `binoc-html` |
+| PyPI package name | `binoc-*` is the shared ecosystem namespace | `binoc-html`, `binoc-your-format` |
 | Plugin names | `package.name` | `biobinoc.fasta`, `binoc-sqlite.sqlite` |
 | Tags | `package.tag-name` | `biobinoc.sequence-changed`, `binoc.column-reorder` |
 | Item types | `package.type-name` | `biobinoc.fasta-alignment`, `binoc.tabular` |

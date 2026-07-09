@@ -1,7 +1,16 @@
 # Optional First-Party Plugins and `binoc[all]`
 
 **Date:** 2026-06-01
-**Status:** Accepted
+**Status:** Superseded for packaging and catalog details by 2026-06-30 fat-binoc ADR
+
+**Supersession note:** This ADR records the 2026-06-01 rationale for keeping
+specialized first-party readers out of `binoc-stdlib`. Its separate PyPI
+package, `binoc[all]`, and old plugin-catalog mechanics were superseded by the
+fat `binoc` 0.2.0 wheel decision. As of that decision, separate publishing for
+`binoc-sqlite` and `binoc-stat-binary` is paused; `binoc-stat-binary` ships in
+the default fat wheel, and `binoc-sqlite` remains an in-tree opt-in rule pack
+excluded from the default `bundled` feature set. Current plugin metadata lives
+in `plugin_registry.json`.
 
 ## Context
 
@@ -9,9 +18,10 @@ The [standard library boundary ADR](2026-03-09-stdlib_boundary.md) keeps
 `binoc-stdlib` small: structural containers, universal fallbacks, and common
 lightweight formats belong there; heavier or more domain-specific readers belong
 in plugins. `binoc-sqlite` is the existing precedent. It is maintained by the
-Binoc project, published as a separate Python package, discovered through the
-normal `binoc.plugins` entry point, and kept out of the base `binoc` install
-because it brings a bundled SQLite dependency through `rusqlite`.
+Binoc project, and at the time of this ADR was treated as a separately
+published Python package discovered through the normal `binoc.plugins` entry
+point. That packaging detail is no longer current; see the supersession note
+above.
 
 The next format request is a reader for statistical binary datasets: Stata
 `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt`. These formats are important
@@ -101,7 +111,11 @@ Binoc's MSRV is a separate design decision. The follow-on reader work may
 proceed without additional sign-off only if it stays inside the optional plugin
 package and preserves the current Rust 1.88 MSRV.
 
-### 3. `binoc[all]` is a Python extra for first-party optional plugins
+### 3. Historical: `binoc[all]` as a Python extra for first-party optional plugins
+
+This install policy has been superseded by the fat `binoc` 0.2.0 wheel
+decision. The text below is retained only as historical context for the
+alternative that was accepted on 2026-06-01 and later replaced.
 
 The primary install remains:
 
@@ -141,7 +155,11 @@ still governed by the SDK version check described in the
 needs a release when the membership of `all` changes or when the minimum
 compatible version floor for an included plugin changes.
 
-### 4. Release and catalog policy
+### 4. Historical: Release and catalog policy
+
+This catalog policy has been superseded by the unified `plugin_registry.json`
+source of truth and the paused separate publishing policy for first-party
+format packs.
 
 Each first-party optional plugin has an independent version and package-specific
 release tag, following the
@@ -155,9 +173,8 @@ The plugin's `pyproject.toml` should declare a minimum `binoc` version for the
 host-side loader/runtime features it needs. It should not cap `binoc` merely to
 mirror the SDK minor version.
 
-The plugin should be added to the plugin catalog currently stored in
-`third_party_plugins.json`. The filename is historical; the catalog records
-separately installable plugin packages, including first-party optional plugins.
+The plugin was originally expected to be added to the separate plugin catalog.
+That catalog has since been collapsed into `plugin_registry.json`.
 
 ## Consequences
 

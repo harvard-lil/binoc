@@ -7,7 +7,8 @@ It provides:
 - the `binoc` CLI
 - Python bindings over the core diff engine
 - native plugin discovery and loading
-- the standard correspondence rule pack and Markdown renderer
+- the standard correspondence rule pack, Markdown renderer, and bundled
+  first-party format packs
 
 Install it with:
 
@@ -15,4 +16,6 @@ Install it with:
 pip install binoc
 ```
 
-Optional format-specific plugins, such as `binoc-sqlite`, install separately and are discovered automatically through Python entry points.
+Separate PyPI publishing for `binoc-sqlite` and `binoc-stat-binary` is paused.
+`binoc-stat-binary` ships in the default fat wheel; SQLite remains an in-tree
+opt-in rule pack excluded from the default bundled feature set.

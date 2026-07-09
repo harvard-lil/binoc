@@ -10,13 +10,17 @@ identity.
 
 ## Install
 
-From PyPI (requires Binoc and Python 3.10+):
-
-```bash
-pip install binoc binoc-sqlite
-```
+The standalone `binoc-sqlite` PyPI package is paused. SQLite remains an
+in-tree first-party opt-in rule pack and is intentionally excluded from the
+default `binoc` 0.2.0 bundled feature set.
 
 From the repo (when developing Binoc or this plugin):
+
+```bash
+cargo run -p binoc-cli --features sqlite -- diff snapshot-a snapshot-b
+```
+
+Or use the local Python package plus the in-tree plugin while developing:
 
 ```bash
 uv run --with ./binoc-python --with ./binoc-sqlite binoc diff snapshot-a snapshot-b
