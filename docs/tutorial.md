@@ -53,8 +53,6 @@ binoc diff ./test-vectors-materialized/trivial-identical/snapshot-a ./test-vecto
 ```output
 # Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a → ./test-vectors-materialized/trivial-identical/snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 
 ```
 
@@ -90,8 +88,6 @@ binoc diff ./test-vectors-materialized/single-file-modify-text/snapshot-a ./test
 
 ```output
 # Changelog: ./test-vectors-materialized/single-file-modify-text/snapshot-a → ./test-vectors-materialized/single-file-modify-text/snapshot-b
-
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes
@@ -132,8 +128,6 @@ binoc diff ./test-vectors-materialized/csv-column-reorder/snapshot-a ./test-vect
 ```output
 # Changelog: ./test-vectors-materialized/csv-column-reorder/snapshot-a → ./test-vectors-materialized/csv-column-reorder/snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **data.csv**: Columns reordered
 
 ```
@@ -151,8 +145,6 @@ binoc diff ./test-vectors-materialized/csv-mixed-changes/snapshot-a ./test-vecto
 
 ```output
 # Changelog: ./test-vectors-materialized/csv-mixed-changes/snapshot-a → ./test-vectors-materialized/csv-mixed-changes/snapshot-b
-
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **data.csv**: Column added: 'email'; Columns reordered; 1 row added
   - Rows added
@@ -174,8 +166,6 @@ binoc diff ./test-vectors-materialized/zip-simple/snapshot-a ./test-vectors-mate
 
 ```output
 # Changelog: ./test-vectors-materialized/zip-simple/snapshot-a → ./test-vectors-materialized/zip-simple/snapshot-b
-
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **archive.zip/>data.txt**: 1 line added; 1 line removed
   - Line changes
@@ -199,8 +189,6 @@ binoc diff ./docs/examples/fasta-demo/snapshot-a/sequences.fasta ./docs/examples
 
 ```output
 # Changelog: ./docs/examples/fasta-demo/snapshot-a/sequences.fasta → ./docs/examples/fasta-demo/snapshot-b/sequences.fasta
-
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
 
 - **sequences.fasta**: Binary content changed; 1 extracted string added, 1 extracted string removed
   - Extracted strings added

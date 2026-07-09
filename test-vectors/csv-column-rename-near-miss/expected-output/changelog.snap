@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **data.csv**: Column added: 'status'; Column removed: 'legacy'
   - Set Headers: from: ["id","legacy"]; to: ["id","status"]
   - Add Column: name: 'status'; values: {"total_values":4,"truncated":false,"values":["alpha","draft","hold","closed"]}
