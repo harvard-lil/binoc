@@ -218,10 +218,14 @@ that correspondence, in open-vocabulary verbs.
   earned by rewrite rules.
 - **Compaction rules rewrite edit lists to shorter equivalents**: N cell
   edits in a consistent pattern → "columns reordered by σ"; M per-link edit
-  lists across the dataset → one "find-replace sneakers→shoes" claim (the
-  vision's flagship becomes an ordinary root-scope compaction rule reading
-  residual edit lists). Acceptance requires strictly decreasing description
-  cost (structure-counted: verbs + parameter sizes + residual edits, with
+  lists across the dataset → one "find-replace sneakers→shoes" claim
+  [stretch goal; not scheduled; user need unestablished; see
+  [edit-list-search-and-verification](../core-developers/research/edit-list-search-and-verification.md)
+  §6]. That corpus-level case is not an ordinary root-scope compaction rule
+  today: `GlobalClaim` is collected before `build_edit_lists`, so expressing
+  it requires a new dataset-scope phase after edit lists exist. Acceptance
+  still requires strictly decreasing description cost
+  (structure-counted: verbs + parameter sizes + residual edits, with
   parameters charged so a fat permutation can't "explain" anything), which
   is both the termination measure and the product's own MDL objective made
   operational. Compaction runs as an explicit ordered pipeline (the

@@ -56,9 +56,12 @@ edit script derived from the mapping rather than stored as it.*
 
 A second, deeper problem sat underneath (the historical story's "Claim 7"): the
 architecture had proven it could compose *parsers* (open a zip, parse a CSV) but
-not *inferences*. The vision's flagship — "someone ran a find-replace from
-sneakers to shoes" — is cross-dataset process inference, and nothing in the old
-model could express or compose that.
+not *inferences*. The vision's flagship example — "someone ran a find-replace
+from sneakers to shoes" — is a stretch goal, not a scheduled deliverable: the
+user need is unestablished, and nothing in the old model could express or
+compose the needed dataset-wide inference. See
+[Searching and verifying edit-list rewrites](../core-developers/research/edit-list-search-and-verification.md)
+§6 for the structural reason.
 
 ## Success criteria
 
@@ -180,11 +183,12 @@ open-vocabulary verbs.
   [Composable Per-Artifact Writers](2026-06-15-composable_per_artifact_writers.md).)
 - **Compaction rules rewrite edit lists to shorter equivalents** — N consistent
   cell edits → "columns reordered by σ"; per-link lists across the dataset →
-  one find-replace claim. Acceptance requires **strictly decreasing description
-  cost** (verbs + parameter sizes + residual edits), which is both the
-  termination measure and the product's minimum-description-length objective made
-  operational. Pass 2 runs as an explicit ordered pipeline, not a fixpoint (the
-  LLVM lesson: keep judgment ordering curated).
+  one find-replace claim [stretch goal; not scheduled; user need unestablished;
+  see the research note above]. Acceptance requires **strictly decreasing
+  description cost** (verbs + parameter sizes + residual edits), which is both
+  the termination measure and the product's minimum-description-length objective
+  made operational. Pass 2 runs as an explicit ordered pipeline, not a fixpoint
+  (the LLVM lesson: keep judgment ordering curated).
 
 ### 5. Correspondence semantics on top of links
 
@@ -356,8 +360,9 @@ the same surface as third-party packs.
   double-counting, and composable refinements are all **resolved**. The deepest
   one — composing *inferences* — is **partially** resolved: the
   split/merge claim is the first real inference producer and the cost-ratchet
-  gives later ones a principled home, but dataset-wide find/replace is still
-  ahead.
+  gives later ones a principled home, but dataset-wide find/replace remains a
+  stretch goal with an unestablished user need and a missing dataset-scope
+  phase.
 
 ## Future work and open questions
 
