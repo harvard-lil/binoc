@@ -2089,21 +2089,12 @@ impl EditListWriter for StructuredDocumentWriter {
             }
         }
 
-        let changes = json_value_changes(&left.value, &right.value);
         Ok(Some(
-            vec![
-                Edit::new(
-                    "document.value_change",
-                    json!({
-                        "changes": changes,
-                        "examples_truncated": json_change_count(&left.value, &right.value) > MAX_JSON_CHANGE_EXAMPLES,
-                    }),
-                )
-                .with_item_type(item_type)
-                .with_tag("binoc.content-changed")
-                .with_tag("binoc.document-value-change")
-                .with_summary("Document values changed"),
-            ]
+            vec![document_value_change_edit(
+                &left.value,
+                &right.value,
+                &item_type,
+            )]
             .into(),
         ))
     }
@@ -2120,9 +2111,10 @@ fn keyed_tree_edits(
     right: &StructuredDocument,
     item_type: &str,
 ) -> Option<Vec<Edit>> {
-    let key_field = node_identity_attribute_key(&identity.key_attribute)?;
-    let left_nodes = collect_keyed_document_nodes(&left.value, &key_field)?;
-    let right_nodes = collect_keyed_document_nodes(&right.value, &key_field)?;
+    let left_key_fields = node_identity_key_fields(&identity.key_attribute, &left.format)?;
+    let right_key_fields = node_identity_key_fields(&identity.key_attribute, &right.format)?;
+    let left_nodes = collect_keyed_document_nodes(&left.value, &left_key_fields)?;
+    let right_nodes = collect_keyed_document_nodes(&right.value, &right_key_fields)?;
     if left_nodes.is_empty() && right_nodes.is_empty() {
         return None;
     }
@@ -2161,45 +2153,49 @@ fn keyed_tree_edits(
             ));
         }
     }
+    let left_residual = prune_keyed_document_nodes(&left.value, &left_key_fields);
+    let right_residual = prune_keyed_document_nodes(&right.value, &right_key_fields);
+    if left_residual != right_residual {
+        edits.push(document_value_change_edit(
+            &left_residual.unwrap_or(serde_json::Value::Null),
+            &right_residual.unwrap_or(serde_json::Value::Null),
+            item_type,
+        ));
+    }
     (!edits.is_empty()).then_some(edits)
 }
 
-fn node_identity_attribute_key(key_attribute: &str) -> Option<String> {
+fn node_identity_key_fields(key_attribute: &str, format: &str) -> Option<Vec<String>> {
     let trimmed = key_attribute.trim();
     if trimmed.is_empty() {
         return None;
     }
-    Some(if trimmed.starts_with('@') {
-        trimmed.to_string()
-    } else {
-        format!("@{trimmed}")
-    })
+    if format == "xml" && !trimmed.starts_with('@') {
+        return Some(vec![format!("@{trimmed}")]);
+    }
+    Some(vec![trimmed.to_string()])
 }
 
 fn collect_keyed_document_nodes<'a>(
     value: &'a serde_json::Value,
-    key_field: &str,
+    key_fields: &[String],
 ) -> Option<BTreeMap<String, KeyedDocumentNode<'a>>> {
     let mut nodes = BTreeMap::new();
     let mut duplicate = false;
-    collect_keyed_document_nodes_at("$", value, key_field, &mut nodes, &mut duplicate);
+    collect_keyed_document_nodes_at("$", value, key_fields, &mut nodes, &mut duplicate);
     (!duplicate).then_some(nodes)
 }
 
 fn collect_keyed_document_nodes_at<'a>(
     path: &str,
     value: &'a serde_json::Value,
-    key_field: &str,
+    key_fields: &[String],
     nodes: &mut BTreeMap<String, KeyedDocumentNode<'a>>,
     duplicate: &mut bool,
 ) {
     match value {
         serde_json::Value::Object(map) => {
-            if let Some(key) = map
-                .get(key_field)
-                .and_then(serde_json::Value::as_str)
-                .filter(|key| !key.is_empty())
-            {
+            if let Some(key) = keyed_document_node_key(map, key_fields) {
                 if nodes
                     .insert(
                         key.to_string(),
@@ -2217,7 +2213,7 @@ fn collect_keyed_document_nodes_at<'a>(
                 collect_keyed_document_nodes_at(
                     &json_child_path(path, child_key),
                     child,
-                    key_field,
+                    key_fields,
                     nodes,
                     duplicate,
                 );
@@ -2228,7 +2224,7 @@ fn collect_keyed_document_nodes_at<'a>(
                 collect_keyed_document_nodes_at(
                     &format!("{path}[{index}]"),
                     child,
-                    key_field,
+                    key_fields,
                     nodes,
                     duplicate,
                 );
@@ -2236,6 +2232,63 @@ fn collect_keyed_document_nodes_at<'a>(
         }
         _ => {}
     }
+}
+
+fn keyed_document_node_key<'a>(
+    map: &'a serde_json::Map<String, serde_json::Value>,
+    key_fields: &[String],
+) -> Option<&'a str> {
+    key_fields.iter().find_map(|key_field| {
+        map.get(key_field)
+            .and_then(serde_json::Value::as_str)
+            .filter(|key| !key.is_empty())
+    })
+}
+
+fn prune_keyed_document_nodes(
+    value: &serde_json::Value,
+    key_fields: &[String],
+) -> Option<serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => {
+            if keyed_document_node_key(map, key_fields).is_some() {
+                return None;
+            }
+            Some(serde_json::Value::Object(
+                map.iter()
+                    .filter_map(|(key, child)| {
+                        prune_keyed_document_nodes(child, key_fields)
+                            .map(|child| (key.clone(), child))
+                    })
+                    .collect(),
+            ))
+        }
+        serde_json::Value::Array(items) => Some(serde_json::Value::Array(
+            items
+                .iter()
+                .filter_map(|child| prune_keyed_document_nodes(child, key_fields))
+                .collect(),
+        )),
+        _ => Some(value.clone()),
+    }
+}
+
+fn document_value_change_edit(
+    left: &serde_json::Value,
+    right: &serde_json::Value,
+    item_type: &str,
+) -> Edit {
+    Edit::new(
+        "document.value_change",
+        json!({
+            "changes": json_value_changes(left, right),
+            "examples_truncated": json_change_count(left, right) > MAX_JSON_CHANGE_EXAMPLES,
+        }),
+    )
+    .with_item_type(item_type)
+    .with_tag("binoc.content-changed")
+    .with_tag("binoc.document-value-change")
+    .with_summary("Document values changed")
 }
 
 fn keyed_document_remove_edit(
@@ -2490,6 +2543,82 @@ fn json_child_path(parent: &str, key: &str) -> String {
         format!("{parent}.{key}")
     } else {
         format!("{parent}[{}]", serde_json::to_string(key).expect("string"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use binoc_sdk::{NodeIdentity, StructuredDocument};
+    use serde_json::json;
+
+    use super::{keyed_tree_edits, node_identity_key_fields};
+
+    fn structured(value: serde_json::Value) -> StructuredDocument {
+        StructuredDocument {
+            value,
+            format: "json".into(),
+            source: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn keyed_tree_edits_include_unkeyed_residual() {
+        let identity = NodeIdentity {
+            key_attribute: "id".into(),
+        };
+        let left = structured(json!({
+            "version": 1,
+            "sections": [
+                { "id": "s1", "title": "Old title" },
+                { "id": "s2", "title": "Removed title" }
+            ]
+        }));
+        let right = structured(json!({
+            "version": 2,
+            "sections": [
+                { "id": "s1", "title": "New title" },
+                { "id": "s3", "title": "Added title" }
+            ]
+        }));
+
+        let edits = keyed_tree_edits(&identity, &left, &right, "json").expect("keyed edits");
+        let verbs: Vec<&str> = edits.iter().map(|edit| edit.verb.as_str()).collect();
+        assert_eq!(
+            verbs,
+            vec![
+                "document.remove_node",
+                "document.add_node",
+                "document.edit_node",
+                "document.value_change"
+            ]
+        );
+        assert_eq!(
+            edits[3].params["changes"],
+            json!([
+                {
+                    "kind": "replace",
+                    "path": "$.version",
+                    "from": "1",
+                    "to": "2"
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn node_identity_matches_plain_and_xml_attribute_keys() {
+        assert_eq!(
+            node_identity_key_fields("id", "json").expect("key fields"),
+            vec!["id".to_string()]
+        );
+        assert_eq!(
+            node_identity_key_fields("id", "xml").expect("key fields"),
+            vec!["@id".to_string()]
+        );
+        assert_eq!(
+            node_identity_key_fields("@id", "xml").expect("key fields"),
+            vec!["@id".to_string()]
+        );
     }
 }
 

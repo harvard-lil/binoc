@@ -32,7 +32,8 @@ expression: "&stable_changeset"
           "binoc.content-changed",
           "binoc.document-node-addition",
           "binoc.document-node-edit",
-          "binoc.document-node-removal"
+          "binoc.document-node-removal",
+          "binoc.document-value-change"
         ],
         "details": {
           "edits": [
@@ -71,6 +72,25 @@ expression: "&stable_changeset"
                 "right_path": "$.uscDoc.title.section[0]"
               },
               "verb": "document.edit_node"
+            },
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "\"1\"",
+                    "kind": "replace",
+                    "path": "$.uscDoc.version",
+                    "to": "\"2\""
+                  }
+                ],
+                "examples_truncated": false
+              },
+              "summary": [
+                {
+                  "text": "Document values changed"
+                }
+              ],
+              "verb": "document.value_change"
             }
           ]
         }

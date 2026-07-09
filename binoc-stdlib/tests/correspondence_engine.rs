@@ -1702,7 +1702,7 @@ fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
 }
 
 #[test]
-fn path_node_identity_matches_structured_document_nodes_by_attribute() {
+fn path_node_identity_matches_structured_document_nodes_by_plain_key() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
     let right = temp.path().join("right");
@@ -1713,8 +1713,8 @@ fn path_node_identity_matches_structured_document_nodes_by_attribute() {
         r#"{
   "usc": {
     "section": [
-      { "@identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "Old" },
-      { "@identifier": "/us/usc/t54/s100502", "num": "100502", "heading": "Removed" }
+      { "identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "Old" },
+      { "identifier": "/us/usc/t54/s100502", "num": "100502", "heading": "Removed" }
     ]
   }
 }"#,
@@ -1725,8 +1725,8 @@ fn path_node_identity_matches_structured_document_nodes_by_attribute() {
         r#"{
   "usc": {
     "section": [
-      { "@identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "New" },
-      { "@identifier": "/us/usc/t54/s100503", "num": "100503", "heading": "Added" }
+      { "identifier": "/us/usc/t54/s100501", "num": "100501", "heading": "New" },
+      { "identifier": "/us/usc/t54/s100503", "num": "100503", "heading": "Added" }
     ]
   }
 }"#,
