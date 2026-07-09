@@ -1,0 +1,89 @@
+{
+  "plugins": [
+    {
+      "id": "binoc-sqlite",
+      "title": "binoc-sqlite",
+      "summary": "Compares two SQLite database files: table/column layout, column types, primary keys, and per-table row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.",
+      "repository": "https://github.com/harvard-lil/binoc",
+      "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite",
+      "source_path": "model-plugins/binoc-sqlite",
+      "packages": {
+        "pypi": "binoc-sqlite",
+        "crate": "binoc-sqlite"
+      },
+      "entry_point": {
+        "group": "binoc.plugins",
+        "name": "binoc-sqlite",
+        "target": "binoc_sqlite",
+        "loader": "native_rust_module"
+      },
+      "rule_packs": [
+        {
+          "name": "binoc-sqlite.sqlite",
+          "dispatch": {
+            "extensions": [".sqlite", ".sqlite3", ".db"],
+            "media_types": [
+              "application/vnd.sqlite3",
+              "application/x-sqlite3"
+            ],
+            "scope": "files"
+          },
+          "rules": ["parse", "writer", "materializer"],
+          "item_types": ["tabular_collection", "tabular"]
+        }
+      ],
+      "renderers": []
+    },
+    {
+      "id": "binoc-stat-binary",
+      "title": "binoc-stat-binary",
+      "summary": "Reads Stata `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt` files as standard Binoc tabular data so normal column, row, and cell diffing applies.",
+      "repository": "https://github.com/harvard-lil/binoc",
+      "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary",
+      "source_path": "model-plugins/binoc-stat-binary",
+      "packages": {
+        "pypi": "binoc-stat-binary",
+        "crate": "binoc-stat-binary"
+      },
+      "entry_point": {
+        "group": "binoc.plugins",
+        "name": "binoc-stat-binary",
+        "target": "binoc_stat_binary",
+        "loader": "native_rust_module"
+      },
+      "rule_packs": [
+        {
+          "name": "binoc-stat-binary.stata",
+          "dispatch": {
+            "extensions": [".dta"],
+            "media_types": [],
+            "scope": "files"
+          },
+          "rules": ["parse"],
+          "item_types": ["tabular"]
+        },
+        {
+          "name": "binoc-stat-binary.sas7bdat",
+          "dispatch": {
+            "extensions": [".sas7bdat"],
+            "media_types": [],
+            "scope": "files"
+          },
+          "rules": ["parse"],
+          "item_types": ["tabular"]
+        },
+        {
+          "name": "binoc-stat-binary.xpt",
+          "dispatch": {
+            "extensions": [".xpt"],
+            "media_types": [],
+            "scope": "files"
+          },
+          "rules": ["parse"],
+          "item_types": ["tabular"]
+        }
+      ],
+      "renderers": []
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Emit docs/users/reference/third-party-plugins.md from plugin_registry.json.
+"""Emit docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
 
 Catalog entries include advertised file selectors (`extensions`, `media_types`,
 and related fields) so tooling can match files to plugins without scraping
@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = ROOT / "plugin_registry.json"
+DATA_PATH = ROOT / "third_party_plugins.json"
 OUT_PATH = ROOT / "docs" / "users" / "reference" / "third-party-plugins.md"
 
-PACKAGE_LABELS = {"pypi": "PyPI", "crate": "Rust crate"}
+PACKAGE_LABELS = {"pypi": "PyPI", "crate": "crates.io"}
 
 
 def _die(msg: str) -> None:
@@ -80,12 +80,6 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
 
     lines: list[str] = [f"## {title}", "", summary, ""]
 
-    distribution = p.get("distribution")
-    if distribution is not None:
-        if not isinstance(distribution, str):
-            _die(f"{base}.distribution: expected string")
-        lines.extend([f"**Distribution:** {distribution}", ""])
-
     repo = p.get("repository")
     if repo is not None:
         if not isinstance(repo, str):
@@ -124,8 +118,8 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         lines.append("### Install")
         lines.append("")
         lines.append(
-            "After you install the package, binoc picks it up via the standard "
-            "entry-point group — see [Install and use plugins]"
+            "After you install the package (for example from PyPI), binoc picks it up "
+            "via the standard entry-point group — see [Install and use plugins]"
             "(../howto/install-and-use-plugins.md) and [Plugin discovery]"
             "(../../plugin-developers/reference/plugin-discovery.md)."
         )
@@ -220,14 +214,10 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
     allowed_top = {
         "id",
         "title",
-        "tier",
         "summary",
-        "distribution",
         "repository",
         "documentation",
         "source_path",
-        "handles",
-        "produces",
         "packages",
         "entry_point",
         "rule_packs",
@@ -250,15 +240,6 @@ def main() -> int:
     for key in raw:
         if key != "plugins":
             _die(f"unknown root key {key!r}")
-    third_party_plugins: list[dict[str, Any]] = []
-    for i, p in enumerate(plugins):
-        if not isinstance(p, dict):
-            _die(f"plugins[{i}]: expected object")
-        tier = p.get("tier")
-        if tier == "third-party":
-            third_party_plugins.append(p)
-        elif not isinstance(tier, str):
-            _die(f"plugins[{i}].tier: expected string")
 
     rel_data = DATA_PATH.relative_to(ROOT)
     rel_script = Path(__file__).resolve().relative_to(ROOT)
@@ -271,16 +252,16 @@ def main() -> int:
         "# Third-party plugins",
         "",
         "Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) "
-        "(`binoc-stdlib`) and first-party format packs in the `binoc` wheel. "
-        "Community plugins listed below extend binoc for formats outside that "
-        "first-party bundle.",
+        "(`binoc-stdlib`), but some datasets use formats that need a dedicated "
+        "rule pack. Install one of the **add-on plugins** below when your "
+        "snapshots include those kinds of files.",
         "",
         "To find a match, compare your filenames (suffixes) and, when available, "
         "detected media types to the tables under each plugin. Once you find one, "
         "install the package and configure any dataset semantics it documents.",
         "",
         "For built-in and in-tree plugins that may also appear in changelog output, "
-        "including the first-party bundled packs, see the [plugin registry](plugin-registry.md).",
+        "see the [plugin registry](plugin-registry.md).",
         "",
         "!!! tip \"Publishing or listing a plugin\"",
         "",
@@ -289,29 +270,32 @@ def main() -> int:
         "",
         "!!! note \"Generated page\"",
         "",
-        f"    Entries are filtered from third-party entries in `{rel_data}` at the repository root. "
-        f"Maintainers regenerate this Markdown with `{rel_script}` (`just docs-plugin-catalog`).",
+        f"    Entries are maintained in `{rel_data}` at the repository root. "
+        f"Maintainers regenerate this Markdown with `{rel_script}` "
+        f"(`just docs-plugin-catalog`).",
         "",
     ]
 
-    if not third_party_plugins:
-        lines.append("_No third-party plugins are listed in the catalog yet._")
+    if not plugins:
+        lines.append("_No plugins are listed in the catalog yet._")
         lines.append("")
     else:
-        for i, p in enumerate(third_party_plugins):
+        for i, p in enumerate(plugins):
+            if not isinstance(p, dict):
+                _die(f"plugins[{i}]: expected object")
             lines.extend(_plugin_section(p, i))
 
     lines.append("## Catalog file for tools")
     lines.append("")
     lines.append(
         f"The canonical data lives in `{rel_data}` (JSON). Hosts that suggest plugins "
-        "for unrecognized formats should read entries with `tier: third-party`; "
-        "dispatch fields describe each rule pack's advertised file selectors."
+        "for unrecognized formats should read that file; dispatch fields describe "
+        "the rule pack's advertised file selectors."
     )
     lines.append("")
 
     OUT_PATH.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {OUT_PATH.relative_to(ROOT)} ({len(third_party_plugins)} plugin(s)).")
+    print(f"Wrote {OUT_PATH.relative_to(ROOT)} ({len(plugins)} plugin(s)).")
     return 0
 
 

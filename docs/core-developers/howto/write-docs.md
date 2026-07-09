@@ -48,8 +48,8 @@ These are regenerated from authoritative sources; edits will be overwritten:
 |---|---|---|
 | `docs/tutorial.md` | Showboat (re-runs embedded shell) | `just docs-tutorial` |
 | `docs/users/reference/cli.md` | `clap_markdown` from `binoc-cli` | `just docs-cli` |
-| `docs/users/reference/plugin-registry.md` | `scripts/build_plugin_registry_page.py` from `plugin_registry.json` | `just docs-plugin-catalog` |
-| `docs/users/reference/third-party-plugins.md` | `scripts/build_third_party_plugins_page.py` from `plugin_registry.json` | `just docs-plugin-catalog` |
+| `docs/users/reference/plugin-registry.md` | `scripts/build_plugin_registry_page.py` | `just docs-plugin-catalog` |
+| `docs/users/reference/third-party-plugins.md` | `scripts/build_third_party_plugins_page.py` | `just docs-plugin-catalog` |
 | `docs/plugin-developers/reference/python.md` | `mkdocstrings` from `binoc-python` docstrings | built at site-build time |
 | `docs/users/reference/changeset-schema.md` | `schemars` from Rust IR types | `just docs-schema` |
 | `docs/users/explanation/test-vectors-gallery.md` | `scripts/build_test_vector_gallery.py` | `just docs-vectors` |

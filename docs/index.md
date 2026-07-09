@@ -19,8 +19,8 @@ their definition) it matters.
 
 ## Example
 
-A dataset ships as a zip of CSVs alongside a statistical data file. Between
-quarterly releases, the CSV columns were reordered and the data file grew:
+A dataset ships as a zip of CSVs alongside a SQLite database. Between quarterly
+releases, the CSV columns were reordered and the database grew:
 
 ```bash
 binoc diff release-q3/ release-q4/
@@ -30,12 +30,28 @@ binoc diff release-q3/ release-q4/
 # Changelog: release-q3/ → release-q4/
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-- **summary.dta**: 3 rows added (84 → 87 rows)
+- **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip, compared the CSV column-by-column, and used the
-first-party statistical binary pack bundled in the `binoc` 0.2.0 wheel to
-parse the `.dta` file into normal tabular data.
+Binoc looked inside the zip and compared the CSV column-by-column. But
+`.sqlite` is opaque to the standard library, so you only learn that the bytes
+differ.
+
+```bash
+pip install binoc-sqlite
+binoc diff release-q3/ release-q4/
+```
+
+```
+# Changelog: release-q3/ → release-q4/
+
+- **data.zip/agencies.csv**: Columns reordered (content unchanged)
+- **summary.sqlite/allocations**: 3 rows added (84 → 87 rows)
+```
+
+Same command, richer output. The plugin parsed the database and found the
+actual change: three new rows in the `allocations` table. Plugins install via
+pip and work immediately — no configuration required.
 
 ## Getting started
 
@@ -59,17 +75,17 @@ walkthrough.
 
 ## Plugins
 
-The `binoc` 0.2.0 wheel bundles the first-party format packs for Excel,
-Parquet, Avro, DBF, XML, shapefiles, statistical binary files, binary
-interchange formats, and row reorder detection. Third-party renderer plugins
-can still be installed separately and are discovered automatically through
-Python entry points.
+Third-party plugins extend binoc with domain-specific rule packs and renderers.
+Install a plugin and its formats are available automatically:
 
-SQLite support remains a first-party opt-in pack but is not included in the
-default fat wheel while separate PyPI publishing is paused. See the
-[plugin registry](users/reference/plugin-registry.md) for the current
-distribution status of each pack and [Plugin model](plugin-developers/explanation/plugin-model.md)
-to understand the current extension surfaces.
+```bash
+pip install binoc-sqlite
+binoc diff snapshots/v1 snapshots/v2    # .sqlite/.db files now get semantic diffs
+```
+
+See [install and use plugins](users/howto/install-and-use-plugins.md) to manage
+plugins and [Plugin model](plugin-developers/explanation/plugin-model.md) to
+understand the current extension surfaces.
 
 ## Project status
 

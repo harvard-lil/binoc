@@ -1,7 +1,7 @@
 # Tiered Plugin Surface During Pre-1.0: In-Process Proposed Tier, ABI Stable Tier
 
 **Date:** 2026-06-12
-**Status:** Accepted; catalog reference updated by unified registry consolidation
+**Status:** Accepted
 
 ## Context
 
@@ -31,8 +31,8 @@ Three facts bear on the answer:
   `ProjectionAnnotator` is days old. Transit machinery built before those
   land is built twice.
 - **Every known plugin is regenerable.** All real plugins are in-tree
-  (`model-plugins/`), enumerated in the unified `plugin_registry.json`, and
-  covered by the shared vector harness. The
+  (`model-plugins/`), enumerated (`third_party_plugins.json`), and covered
+  by the shared vector harness. The
   [plugin ecosystem precedents research note](../core-developers/research/plugin-ecosystem-precedents.md)
   surveys how platforms with unstable APIs allocate breaking-change costs:
   the relevant patterns are author-pays co-evolution (Linux in-tree

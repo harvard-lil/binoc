@@ -175,11 +175,9 @@ nav:
           # BEGIN-ADR-NAV
           - adr/README.md
           - 'Fat-binoc Distribution and the ABI Canary': adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md
-          - 'SDK Annotation Package Identity Stays Explicit': adr/2026-06-29-sdk_annotation_package_id.md
           - 'Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug': adr/2026-06-29-renderer_ecosystem_ignorance.md
           - 'Memory and Wall-Clock Contract for Large Dataset Diffs': adr/2026-06-29-memory_and_wall_clock_contract_for_large_dataset_diffs.md
           - 'Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop': adr/2026-06-29-inference_disclosure_and_high_churn_guardrail.md
-          - 'Feedback Report Bundles for Imperfect Results': adr/2026-06-29-feedback_report_bundles.md
           - 'Binary Byte-Range Edit Kind': adr/2026-06-29-binary_byte_range_edit_kind.md
           - 'A Unified Per-Path Dataset Config Model': adr/2026-06-29-per_path_dataset_config_model.md
           - 'The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading': adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md

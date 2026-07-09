@@ -4,34 +4,31 @@ audience: data steward, plugin consumer
 
 # Install and use plugins
 
-**Goal.** Understand which format support ships in `binoc` and how separate
-plugin packages are discovered.
+**Goal.** Extend binoc with domain-specific format support by
+installing a plugin package.
 
 **Prerequisites.** `binoc` working at the command line (see
 [Diff two snapshots](diff-two-snapshots.md)).
 
 ## The one-liner
 
-The first-party format packs are bundled in the `binoc` 0.2.0 wheel. Install
-`binoc`, then run the same command against snapshots containing supported files:
+Plugins are regular Python packages distributed on PyPI. Install one
+and it becomes available automatically — no configuration required:
 
 ```bash
-pip install binoc
+pip install binoc-sqlite
 binoc diff snapshots/v1 snapshots/v2
 ```
 
-With `uvx` you can run binoc without installing anything permanently:
+With `uvx` you can run binoc plus a plugin without installing
+anything permanently:
 
 ```bash
-uvx binoc diff snapshots/v1 snapshots/v2
+uvx --with binoc-sqlite binoc diff snapshots/v1 snapshots/v2
 ```
 
-Excel, Parquet, Avro, DBF, XML, shapefiles, statistical binary files, binary
-interchange formats, and row reorder detection are included by default. SQLite
-is the current exception: `binoc-sqlite` remains in-tree as a first-party
-opt-in rule pack, but separate PyPI publishing is paused and it is intentionally
-excluded from the default `bundled` feature set. Build from source with the
-`sqlite` cargo feature when SQLite support is needed.
+Either way, `.sqlite` / `.db` files in the snapshots now get semantic
+schema and row-count diffs instead of "content changed".
 
 ## How it works
 
@@ -42,9 +39,9 @@ either a `register(registry)` function (for Python plugins) or a native module
 (for Rust plugins built with maturin). Either way, the host learns about the
 plugin's available surfaces at startup.
 
-For separately distributed renderer plugins, installing the package is enough
-to make its stable plugin surfaces available. Dataset-specific semantics still
-belong in dataset config when a plugin documents them.
+You don't need to "enable" the plugin to load it; installing the package is
+enough. Dataset-specific semantics still belong in dataset config when a plugin
+documents them.
 
 See [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md) for the
 exact strings involved, and
@@ -54,10 +51,11 @@ overview.
 ## Where do plugins come from?
 
 The `binoc-*` namespace on PyPI is the shared ecosystem namespace
-(similar to `pytest-*` or `llm-*`). First-party rule packs currently ship in
-the `binoc` wheel when they are ready for default use; check the
-[plugin registry](../reference/plugin-registry.md) for each pack's current
-distribution tier.
+(similar to `pytest-*` or `llm-*`). Published reference plugins today
+include:
+
+- `binoc-sqlite` — SQLite schema and row-count diffing.
+- (More plugins will land here as the ecosystem grows.)
 
 For in-tree reference implementations see the `model-plugins/`
 directory in the repository. They double as worked examples for the current
