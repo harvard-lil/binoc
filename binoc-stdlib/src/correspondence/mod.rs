@@ -2,7 +2,7 @@ pub mod compact;
 pub mod expand;
 pub mod pair;
 pub mod parse;
-mod tabular;
+pub(crate) mod tabular;
 pub mod writers;
 
 use std::collections::{BTreeMap, BTreeSet};

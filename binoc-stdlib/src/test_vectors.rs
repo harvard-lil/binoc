@@ -24,6 +24,7 @@ use binoc_sdk::ir::DiffNode;
 use binoc_sdk::Changeset;
 use serde::{Deserialize, Serialize};
 
+use crate::correspondence::tabular::ROW_ALIGNMENT_BASIS_VERB;
 use crate::renderers::markdown;
 
 // ── Manifest schema ───────────────────────────────────────────────────────
@@ -830,6 +831,7 @@ pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
     }
 
     check_no_parent_child_edit_duplication(name, root);
+    check_no_row_alignment_basis_leaked(name, root);
     check_empty_tag_map_markdown_legibility(name, changeset);
 }
 
@@ -875,6 +877,19 @@ fn collect_descendant_edits(node: &DiffNode, out: &mut HashSet<String>) {
     }
     for child in &node.children {
         collect_descendant_edits(child, out);
+    }
+}
+
+fn check_no_row_alignment_basis_leaked(name: &str, node: &DiffNode) {
+    for edit in node_edits(node) {
+        assert!(
+            edit.get("verb").and_then(|verb| verb.as_str()) != Some(ROW_ALIGNMENT_BASIS_VERB),
+            "[{name}] Internal row-alignment basis leaked into changeset at '{}'",
+            node.path
+        );
+    }
+    for child in &node.children {
+        check_no_row_alignment_basis_leaked(name, child);
     }
 }
 

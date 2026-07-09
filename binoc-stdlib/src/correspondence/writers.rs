@@ -15,12 +15,11 @@ use serde_json::json;
 use similar::{ChangeTag, TextDiff};
 
 use super::parse::JsonSourceFacts;
-use super::tabular::load_tabular;
+use super::tabular::{load_tabular, MAX_ROW_ALIGNMENT_ROWS, ROW_ALIGNMENT_BASIS_VERB};
 
 const MAX_CAPTURED_VALUES: usize = 16;
 const MAX_VALUE_PREVIEW_BYTES: usize = 120;
 const MAX_TEXT_LINE_EXAMPLES: usize = 8;
-const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
 const AUTO_KEY_MIN_JACCARD: f64 = 0.80;
 const AUTO_KEY_MAX_ROWS: usize = 10_000;
 const TABULAR_CHURN_GUARDRAIL_THRESHOLD: f64 = 0.50;
@@ -169,11 +168,11 @@ impl EditListWriter for TabularWriter {
                 keyed_tables(ctx.row_keys.as_ref(), &left, &right)
             {
                 if keyed_rows_complete(&left_keyed.index, &right_keyed.index) {
-                    edits.push(keyed_row_alignment_basis(
-                        ctx.row_keys.as_ref(),
-                        &left_keyed,
-                        &right_keyed,
-                    ));
+                    if let Some(edit) =
+                        keyed_row_alignment_basis(ctx.row_keys.as_ref(), &left_keyed, &right_keyed)
+                    {
+                        edits.push(edit);
+                    }
                     write_keyed_row_edits(
                         &mut edits,
                         ctx.row_keys.as_ref(),
@@ -1555,7 +1554,13 @@ fn keyed_row_alignment_basis(
     keys: &[String],
     left: &KeyedTable<'_>,
     right: &KeyedTable<'_>,
-) -> Edit {
+) -> Option<Edit> {
+    if left.table.rows.len() > MAX_ROW_ALIGNMENT_ROWS
+        || right.table.rows.len() > MAX_ROW_ALIGNMENT_ROWS
+        || !has_column_rename_candidate(left.table, right.table)
+    {
+        return None;
+    }
     let left_rows = left
         .table
         .rows
@@ -1581,17 +1586,29 @@ fn keyed_row_alignment_basis(
         })
         .collect::<Vec<_>>();
 
-    Edit::new(
-        "tabular.row_alignment_basis",
-        json!({
-            "columns": [],
-            "left": left_rows,
-            "right": right_rows,
-            "right_rows": right.table.rows.iter().map(|row| capture_row(row)).collect::<Vec<_>>(),
-            "pairs": pairs,
-        }),
+    Some(
+        Edit::new(
+            ROW_ALIGNMENT_BASIS_VERB,
+            json!({
+                "columns": [],
+                "left": left_rows,
+                "right": right_rows,
+                "right_rows": right.table.rows.iter().map(|row| capture_row(row)).collect::<Vec<_>>(),
+                "pairs": pairs,
+            }),
+        )
+        .hidden(),
     )
-    .hidden()
+}
+
+fn has_column_rename_candidate(left: &TabularData, right: &TabularData) -> bool {
+    left.headers
+        .iter()
+        .any(|header| !right.headers.contains(header))
+        && right
+            .headers
+            .iter()
+            .any(|header| !left.headers.contains(header))
 }
 
 fn key_signature_text(keys: &[String], columns: &KeyColumns, row: &[Value]) -> String {
@@ -1637,7 +1654,7 @@ fn row_alignment_basis(
         right.rows.iter().map(|row| capture_row(row)).collect();
 
     Edit::new(
-        "tabular.row_alignment_basis",
+        ROW_ALIGNMENT_BASIS_VERB,
         json!({
             "columns": common.iter().map(|column| column.name.as_str()).collect::<Vec<_>>(),
             "left": left_rows,
@@ -2548,10 +2565,14 @@ fn json_child_path(parent: &str, key: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use binoc_sdk::{NodeIdentity, StructuredDocument};
+    use binoc_sdk::{NodeIdentity, StructuredDocument, TabularData};
     use serde_json::json;
 
-    use super::{keyed_tree_edits, node_identity_key_fields};
+    use crate::correspondence::tabular::MAX_ROW_ALIGNMENT_ROWS;
+
+    use super::{
+        keyed_row_alignment_basis, keyed_tables, keyed_tree_edits, node_identity_key_fields,
+    };
 
     fn structured(value: serde_json::Value) -> StructuredDocument {
         StructuredDocument {
@@ -2619,6 +2640,69 @@ mod tests {
             node_identity_key_fields("@id", "xml").expect("key fields"),
             vec!["@id".to_string()]
         );
+    }
+
+    #[test]
+    fn keyed_row_alignment_basis_is_not_emitted_without_column_rename_candidate() {
+        let left = table(&["id", "status"], 3);
+        let right = table(&["id", "status"], 3);
+        let keys = vec!["id".to_string()];
+        let (left_keyed, right_keyed) = keyed_tables(&keys, &left, &right).expect("keyed tables");
+
+        assert!(keyed_row_alignment_basis(&keys, &left_keyed, &right_keyed).is_none());
+    }
+
+    #[test]
+    fn keyed_row_alignment_basis_is_capped_at_compactor_bound() {
+        let left = table(&["id", "old_status"], MAX_ROW_ALIGNMENT_ROWS + 1);
+        let right = table(&["id", "new_status"], MAX_ROW_ALIGNMENT_ROWS + 1);
+        let keys = vec!["id".to_string()];
+        let (left_keyed, right_keyed) = keyed_tables(&keys, &left, &right).expect("keyed tables");
+
+        assert!(keyed_row_alignment_basis(&keys, &left_keyed, &right_keyed).is_none());
+    }
+
+    #[test]
+    fn keyed_row_alignment_basis_is_emitted_for_capped_rename_candidate() {
+        let left = table(&["id", "old_status"], MAX_ROW_ALIGNMENT_ROWS);
+        let right = table(&["id", "new_status"], MAX_ROW_ALIGNMENT_ROWS);
+        let keys = vec!["id".to_string()];
+        let (left_keyed, right_keyed) = keyed_tables(&keys, &left, &right).expect("keyed tables");
+
+        let edit = keyed_row_alignment_basis(&keys, &left_keyed, &right_keyed).expect("basis edit");
+
+        assert_eq!(edit.verb, "tabular.row_alignment_basis");
+        assert_eq!(
+            edit.params["right"].as_array().expect("right rows").len(),
+            MAX_ROW_ALIGNMENT_ROWS
+        );
+        assert_eq!(
+            edit.params["right_rows"]
+                .as_array()
+                .expect("captured rows")
+                .len(),
+            MAX_ROW_ALIGNMENT_ROWS
+        );
+    }
+
+    fn table(headers: &[&str], rows: usize) -> TabularData {
+        TabularData::from_string_rows(
+            headers.iter().map(|header| (*header).to_string()).collect(),
+            (0..rows)
+                .map(|index| {
+                    headers
+                        .iter()
+                        .map(|header| {
+                            if *header == "id" {
+                                index.to_string()
+                            } else {
+                                format!("{header}-{index}")
+                            }
+                        })
+                        .collect()
+                })
+                .collect(),
+        )
     }
 }
 
