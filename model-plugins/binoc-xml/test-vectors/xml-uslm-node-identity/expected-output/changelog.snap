@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **usc.xml**: 1 keyed node added; 1 keyed node removed; 1 keyed node edited
   - Remove Node: key: '/us/usc/t54/s100502'; key_attribute: 'identifier'; path: '$.uscDoc.title.section[1]'
   - Add Node: key: '/us/usc/t54/s100503'; key_attribute: 'identifier'; path: '$.uscDoc.title.section[1]'

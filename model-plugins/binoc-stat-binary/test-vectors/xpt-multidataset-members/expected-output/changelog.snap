@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **data.xpt**: File metadata changed
   - Metadata changed
     - file datasets changed from [{"logical_name":"AE","node_name":"AE"},{"logical_name":"DM","node_name":"DM"}] to [{"logical_name":"AE","node_name":"AE"},{"logical_name":"DM","node_name":"DM"},{"logical_name":"LB","node_name":"LB"}]

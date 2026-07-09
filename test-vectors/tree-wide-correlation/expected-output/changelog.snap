@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **gamma-renamed.txt**: Moved from outer.zip/>inner.zip/>gamma.txt
 - **kept-copy.txt**: Copied from kept.txt
 - **merged.bin**: Moved from dup.bin

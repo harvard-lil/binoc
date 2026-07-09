@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **census.txt.gz/>census.txt**: 1 line added; 1 line removed
   - Line changes
     - line 2: '1|Aroostook|120' -> '1|Aroostook|121'

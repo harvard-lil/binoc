@@ -24,6 +24,8 @@ pub struct MarkdownRendererConfig {
     #[serde(default)]
     pub groups: Vec<MarkdownGroup>,
     #[serde(default)]
+    pub preamble_markdown: Option<String>,
+    #[serde(default)]
     pub verbosity: Verbosity,
     #[serde(default = "default_max_examples_per_block")]
     pub max_examples_per_block: usize,
@@ -41,6 +43,7 @@ impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
             groups: Vec::new(),
+            preamble_markdown: None,
             verbosity: Verbosity::Examples,
             max_examples_per_block: default_max_examples_per_block(),
             max_detail_blocks_per_node: default_max_detail_blocks_per_node(),
@@ -94,9 +97,14 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
             "# Changelog: {} → {}\n\n",
             changeset.from_snapshot, changeset.to_snapshot
         ));
-        out.push_str(
-            "Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).\n\n",
-        );
+        if let Some(preamble_markdown) = config
+            .preamble_markdown
+            .as_deref()
+            .filter(|markdown| !markdown.trim().is_empty())
+        {
+            out.push_str(preamble_markdown.trim_end());
+            out.push_str("\n\n");
+        }
 
         format_claims_section(&mut out, changeset);
 
@@ -1667,6 +1675,34 @@ mod tests {
         assert!(!md.contains("## "));
         assert!(md.contains("**data.csv**"));
         assert!(md.contains("Column added: 'email'"));
+        assert!(!md.contains("plugin registry"));
+    }
+
+    #[test]
+    fn to_markdown_renders_opt_in_preamble_markdown() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "text", "notes.txt").with_summary("Text changed")),
+        );
+        let config = MarkdownRendererConfig {
+            preamble_markdown: Some(
+                "Need background? See [docs](https://example.com/docs).".into(),
+            ),
+            ..Default::default()
+        };
+
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("Need background? See [docs](https://example.com/docs)."));
+    }
+
+    #[test]
+    fn to_markdown_identical_changeset_has_no_preamble_by_default() {
+        let changeset = Changeset::new("v1", "v2", None);
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("No changes detected."));
+        assert!(!md.contains("Need plugin background?"));
     }
 
     #[test]

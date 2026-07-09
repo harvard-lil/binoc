@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-Need plugin background? See the [plugin registry](https://harvard-lil.github.io/binoc/users/reference/plugin-registry/).
-
 - **data.sas7bdat**: Column added: 'score'
   - Set Headers: from: ["id","name"]; to: ["id","name","score"]
   - Add Column: name: 'score'; values: {"total_values":2,"truncated":false,"values":["10","20"]}
