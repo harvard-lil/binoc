@@ -11,13 +11,12 @@ PyPI or crates.io.
 - Write access to the `harvard-lil/binoc` repository.
 - The one-time setup below is complete.
 
-Binoc publishes three public artifacts today. Each has its own
+Binoc publishes two public artifacts today. Each has its own
 version, its own tag namespace, and is released independently:
 
 | Package | Registry | Tag format |
 |---|---|---|
 | `binoc` | PyPI | `binoc-vX.Y.Z` |
-| `binoc-sqlite` | PyPI | `binoc-sqlite-vX.Y.Z` |
 | `binoc-sdk` | crates.io | `binoc-sdk-vX.Y.Z` |
 
 See
@@ -35,7 +34,6 @@ Configure a trusted publisher on PyPI for each project:
    - Repository: `harvard-lil/binoc`
    - Workflow: `publish.yml`
    - Environment: `pypi-binoc`
-2. Repeat for `binoc-sqlite` with environment `pypi-binoc-sqlite`.
 
 If the projects do not exist on PyPI yet, create the trusted-publisher
 setup there before the first automated release.
@@ -60,27 +58,21 @@ GitHub OIDC credentials for a short-lived crates.io token.
 Create these GitHub environments in the repository settings:
 
 - `pypi-binoc`
-- `pypi-binoc-sqlite`
 - `crates-io-binoc-sdk`
 
 If you restrict deployment refs, allow these tag patterns:
 
 - `binoc-v*`
-- `binoc-sqlite-v*`
 - `binoc-sdk-v*`
 
 ## Versioning rules
 
 - Bump **`binoc`** when the user-facing Python package changes.
-- Bump **`binoc-sqlite`** when the SQLite plugin package changes.
 - Bump **`binoc-sdk`** when the Rust plugin SDK or compatibility
   floor changes.
 - A `binoc-sdk` release often implies a follow-on `binoc` release,
-  because `binoc` is the host package that embeds the runtime loader
-  and compatibility checks for native plugins.
-- A `binoc-sdk` release only implies a `binoc-sqlite` release when
-  the plugin itself changed or needs rebuilding against the new SDK
-  for a fresh published wheel.
+  because `binoc` is the host package and fat wheel that embeds the
+  first-party format packs.
 
 Per-package versions do not need to stay in lockstep.
 
@@ -97,7 +89,6 @@ any tracked lockfiles the test suite would otherwise rewrite.
 Examples:
 
 ```bash
-just set-version binoc-sqlite 0.1.1
 just set-version binoc-sdk 0.2.0
 just set-version all 0.3.0
 ```
@@ -115,7 +106,6 @@ just release binoc
 Examples:
 
 ```bash
-just release binoc-sqlite
 just release binoc-sdk
 just release all
 ```
@@ -141,7 +131,6 @@ uploads from a maintainer machine.
 
 ```bash
 cd binoc-python && uv build
-cd model-plugins/binoc-sqlite && uv build
 # upload with an explicit token via twine / uv publish
 ```
 

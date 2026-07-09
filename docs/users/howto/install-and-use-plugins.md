@@ -4,36 +4,41 @@ audience: data steward, plugin consumer
 
 # Install and use plugins
 
-**Goal.** Extend binoc with domain-specific format support by
-installing a plugin package.
+**Goal.** Understand which format packs ship with binoc and when a separately
+published plugin package is needed.
 
 **Prerequisites.** `binoc` working at the command line (see
 [Diff two snapshots](diff-two-snapshots.md)).
 
-## The one-liner
+## The current distribution model
 
-Plugins are regular Python packages distributed on PyPI. Install one
-and it becomes available automatically — no configuration required:
+The published `binoc` wheel is a fat wheel: most first-party format packs are
+compiled in and available without installing another package. The
+[plugin catalog](../reference/third-party-plugins.md) records each pack's
+distribution tier.
+
+`binoc-sqlite` and `binoc-stat-binary` are not published as separate PyPI wheels
+today. `binoc-stat-binary` ships in the fat wheel. SQLite remains an explicit
+source-build opt-in and is excluded from the default `bundled` feature set.
+
+Separately published plugins still use normal Python packaging. When a plugin is
+published independently, install it in the same environment as `binoc`:
 
 ```bash
-pip install binoc-sqlite
+pip install some-binoc-plugin
 binoc diff snapshots/v1 snapshots/v2
 ```
 
-With `uvx` you can run binoc plus a plugin without installing
-anything permanently:
+With `uvx`, include the plugin package in the temporary environment:
 
 ```bash
-uvx --with binoc-sqlite binoc diff snapshots/v1 snapshots/v2
+uvx --with some-binoc-plugin binoc diff snapshots/v1 snapshots/v2
 ```
-
-Either way, `.sqlite` / `.db` files in the snapshots now get semantic
-schema and row-count diffs instead of "content changed".
 
 ## How it works
 
-At startup, binoc scans Python entry points in the group
-`binoc.plugins` and loads everything it finds. An installed plugin
+For separately published plugins, binoc scans Python entry points in the group
+`binoc.plugins` at startup and loads everything it finds. An installed plugin
 package declares an entry point in its `pyproject.toml` and exposes
 either a `register(registry)` function (for Python plugins) or a native module
 (for Rust plugins built with maturin). Either way, the host learns about the
@@ -51,11 +56,9 @@ overview.
 ## Where do plugins come from?
 
 The `binoc-*` namespace on PyPI is the shared ecosystem namespace
-(similar to `pytest-*` or `llm-*`). Published reference plugins today
-include:
-
-- `binoc-sqlite` — SQLite schema and row-count diffing.
-- (More plugins will land here as the ecosystem grows.)
+(similar to `pytest-*` or `llm-*`). The in-tree format packs are reference
+implementations, but separate PyPI publishing for native rule packs is paused
+until those rule-family plugin surfaces graduate.
 
 For in-tree reference implementations see the `model-plugins/`
 directory in the repository. They double as worked examples for the current

@@ -22,12 +22,9 @@ Or run without installing:
 uvx binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-Plugins extend binoc with domain-specific format support and install
-the same way:
-
-```bash
-pip install binoc-sqlite          # semantic SQLite schema + row-count diffing
-```
+The `binoc` wheel bundles the first-party format packs that can ship as
+in-process rules today. SQLite support remains an explicit source-build opt-in;
+the project does not currently publish a separate `binoc-sqlite` wheel.
 
 The [documentation site](https://harvard-lil.github.io/binoc/) has
 tutorials, how-to recipes, reference for the CLI / Python API /

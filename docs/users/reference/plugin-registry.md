@@ -18,13 +18,15 @@ Binoc's built-in rule pack. It handles the baseline formats and structural cases
 
 | Field | Value |
 |---|---|
+| Tier | Built in |
+| Distribution | Included with every binoc build. |
 | Handles | Directory and archive structure, tabular data, text and structured documents, compressed snapshots, binary fallback, move/copy correspondence, and Markdown output. |
 | Produces | Container expansions, tabular and text edits, move/copy and reshape claims, binary fallback diagnostics, and Markdown changelogs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/binoc-stdlib](https://github.com/harvard-lil/binoc/tree/main/binoc-stdlib)
 - **Source path:** `binoc-stdlib`
-- **crates.io:** `binoc-stdlib`
+- **Rust crate:** `binoc-stdlib`
 
 ### Rule packs
 
@@ -44,13 +46,15 @@ Parses Avro snapshots as structured data so changes in records and fields surfac
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Avro files. |
 | Produces | Parsed Avro records and field-level changes. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-avro](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-avro)
 - **Source path:** `model-plugins/binoc-avro`
-- **crates.io:** `binoc-avro`
+- **Rust crate:** `binoc-avro`
 
 ### Rule packs
 
@@ -70,13 +74,15 @@ Parses common binary interchange formats into JSON-like values so content change
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | CBOR, BSON, Ion, MessagePack, and plist snapshots. |
 | Produces | Parsed structured values and value-level changes. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-binformats](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-binformats)
 - **Source path:** `model-plugins/binoc-binformats`
-- **crates.io:** `binoc-binformats`
+- **Rust crate:** `binoc-binformats`
 
 ### Rule packs
 
@@ -96,13 +102,15 @@ Parses DBF snapshots so table and row changes in legacy dBase-style datasets sho
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | DBF files. |
 | Produces | Tabular records and table/row edits. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-dbf](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-dbf)
 - **Source path:** `model-plugins/binoc-dbf`
-- **crates.io:** `binoc-dbf`
+- **Rust crate:** `binoc-dbf`
 
 ### Rule packs
 
@@ -122,13 +130,15 @@ Parses Excel workbooks so sheet, row, column, and cell changes can be compared a
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Excel workbook snapshots. |
 | Produces | Workbook structure and sheet/table content changes. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-excel](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-excel)
 - **Source path:** `model-plugins/binoc-excel`
-- **crates.io:** `binoc-excel`
+- **Rust crate:** `binoc-excel`
 
 ### Rule packs
 
@@ -148,6 +158,8 @@ Supports HTML-related parsing and rewriting for datasets that publish or embed s
 
 | Field | Value |
 |---|---|
+| Tier | First-party add-on |
+| Distribution | Maintained in this repository but distributed outside the default fat `binoc` wheel. |
 | Handles | HTML files and HTML-embedded structured data. |
 | Produces | Parsed HTML-derived artifacts and content changes. |
 
@@ -174,13 +186,15 @@ Parses Parquet snapshots so column, row, and cell changes appear as ordinary tab
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Parquet files. |
 | Produces | Tabular records and tabular diffs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-parquet](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-parquet)
 - **Source path:** `model-plugins/binoc-parquet`
-- **crates.io:** `binoc-parquet`
+- **Rust crate:** `binoc-parquet`
 
 ### Rule packs
 
@@ -200,13 +214,15 @@ Detects row reordering in tabular data so shuffles are represented as ordering c
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Tabular collections with reordered rows. |
 | Produces | Row-reorder correspondence and compact move-like row changes. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder)
 - **Source path:** `model-plugins/binoc-row-reorder`
-- **crates.io:** `binoc-row-reorder`
+- **Rust crate:** `binoc-row-reorder`
 
 ### Rule packs
 
@@ -226,13 +242,15 @@ Handles shapefile bundles and their sidecar files so feature, geometry, and attr
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Shapefile bundles and related sidecars. |
 | Produces | Feature-level and geometry-level diffs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-shapefile](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-shapefile)
 - **Source path:** `model-plugins/binoc-shapefile`
-- **crates.io:** `binoc-shapefile`
+- **Rust crate:** `binoc-shapefile`
 
 ### Rule packs
 
@@ -252,13 +270,15 @@ Compares SQLite databases: schema, columns, keys, and row counts. Useful when a 
 
 | Field | Value |
 |---|---|
+| Tier | First-party opt-in |
+| Distribution | Not published as a separate PyPI wheel. The pack remains in-tree and can be enabled explicitly; SQLite is excluded from the default `bundled` feature set. |
 | Handles | SQLite database files. |
 | Produces | Table/column layout changes, type changes, key changes, and row-count diffs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite)
 - **Source path:** `model-plugins/binoc-sqlite`
-- **PyPI:** `binoc-sqlite` · **crates.io:** `binoc-sqlite`
+- **Rust crate:** `binoc-sqlite`
 
 ### Rule packs
 
@@ -278,13 +298,15 @@ Reads Stata, SAS, and SAS transport files as standard Binoc tabular data so norm
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | Stata `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt` files. |
 | Produces | Tabular records and tabular diffs for statistical binary formats. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary)
 - **Source path:** `model-plugins/binoc-stat-binary`
-- **PyPI:** `binoc-stat-binary` · **crates.io:** `binoc-stat-binary`
+- **Rust crate:** `binoc-stat-binary`
 
 ### Rule packs
 
@@ -324,13 +346,15 @@ Parses XML snapshots into structured data so hierarchical document and metadata 
 
 | Field | Value |
 |---|---|
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | XML files and XML-based metadata documents. |
 | Produces | Structured XML artifacts and element/attribute-level changes. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-xml](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-xml)
 - **Source path:** `model-plugins/binoc-xml`
-- **crates.io:** `binoc-xml`
+- **Rust crate:** `binoc-xml`
 
 ### Rule packs
 
