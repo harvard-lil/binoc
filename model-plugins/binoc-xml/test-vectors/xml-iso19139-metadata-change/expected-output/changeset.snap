@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "path": {
+              "value": "$[\"gmd:MD_Metadata\"][\"gmd:identificationInfo\"][\"gmd:MD_DataIdentification\"][\"gmd:citation\"][\"gmd:CI_Citation\"][\"gmd:date\"][\"gmd:CI_Date\"][\"gmd:date\"][\"gco:Date\"]",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": \"2024-03-01\" -> \"2024-09-15\""
           }
         ],
         "tags": [
@@ -48,7 +54,13 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$[\"gmd:MD_Metadata\"][\"gmd:identificationInfo\"][\"gmd:MD_DataIdentification\"][\"gmd:citation\"][\"gmd:CI_Citation\"][\"gmd:date\"][\"gmd:CI_Date\"][\"gmd:date\"][\"gco:Date\"]"
+                  }
+                },
+                {
+                  "text": ": \"2024-03-01\" -> \"2024-09-15\""
                 }
               ],
               "verb": "document.value_change"

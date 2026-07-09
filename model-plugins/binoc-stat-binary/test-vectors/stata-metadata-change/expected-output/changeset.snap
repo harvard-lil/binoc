@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 column metadata change; Table metadata changed"
+            "text": "1 column metadata change; "
+          },
+          {
+            "text": "Table metadata changed"
           }
         ],
         "tags": [

@@ -30,7 +30,10 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "1 row added; 1 cell changed"
+                "text": "1 row added; "
+              },
+              {
+                "text": "1 cell changed"
               }
             ],
             "tags": [
@@ -79,7 +82,10 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "Document values changed"
+                "uint": 3
+              },
+              {
+                "text": " values changed"
               }
             ],
             "tags": [
@@ -114,7 +120,10 @@ expression: "&stable_changeset"
                   },
                   "summary": [
                     {
-                      "text": "Document values changed"
+                      "uint": 3
+                    },
+                    {
+                      "text": " values changed"
                     }
                   ],
                   "verb": "document.value_change"

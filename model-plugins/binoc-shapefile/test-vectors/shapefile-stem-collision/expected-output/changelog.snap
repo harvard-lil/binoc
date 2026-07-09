@@ -7,8 +7,8 @@ expression: "&md"
 - **roads.shp/>attributes**: 1 cell changed
   - Changed cells
     - row 2, column 'lanes': 2.0 -> 4.0
-- **roads.shp/>geometry**: Document values changed
+- **roads.shp/>geometry**: 3 values changed
 - **roads.v2.shp/>attributes**: 1 cell changed
   - Changed cells
     - row 2, column 'surface': 'gravel' -> 'paved'
-- **roads.v2.shp/>geometry**: Document values changed
+- **roads.v2.shp/>geometry**: 3 values changed

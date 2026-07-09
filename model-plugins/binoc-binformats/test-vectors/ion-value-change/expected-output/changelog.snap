@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.ion**: Document values changed
+- **data.ion**: $.settings.retries: 2 -> 7

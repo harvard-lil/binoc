@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **metadata.json**: Document values changed
+- **metadata.json**: $.ids[1]: 2 -> 3; $.ids[2]: 3 -> 2

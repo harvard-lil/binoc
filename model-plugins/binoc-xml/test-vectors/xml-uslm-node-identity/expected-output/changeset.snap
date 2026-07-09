@@ -25,7 +25,22 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 keyed node added; 1 keyed node removed; 1 keyed node edited"
+            "text": "1 keyed node added; "
+          },
+          {
+            "text": "1 keyed node removed; "
+          },
+          {
+            "text": "1 keyed node edited; "
+          },
+          {
+            "path": {
+              "value": "$.uscDoc.version",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": \"1\" -> \"2\""
           }
         ],
         "tags": [
@@ -87,7 +102,13 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.uscDoc.version"
+                  }
+                },
+                {
+                  "text": ": \"1\" -> \"2\""
                 }
               ],
               "verb": "document.value_change"

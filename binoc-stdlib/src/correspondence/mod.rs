@@ -391,7 +391,8 @@ fn container_reshape_hint(ctx: &ProjectionAnnotationContext<'_>) -> Option<Proje
         .path(source_path.to_string(), binoc_sdk::Side::From)
         .text(format!(" ({from_kind} → {to_kind})"));
     if let Some(detail) = summarize_known_edits(ctx.edits) {
-        summary = summary.text(format!("; {detail}"));
+        summary = summary.text("; ");
+        summary.extend(detail);
     }
     let mut hint = ProjectionHint::default()
         .action("container_representation_change")
@@ -417,7 +418,7 @@ fn is_generic_kind(kind: &str) -> bool {
     matches!(kind, "container" | "directory" | "tree" | "item" | "")
 }
 
-fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
+fn summarize_known_edits(edits: &[Edit]) -> Option<Summary> {
     let mut parts = Vec::new();
 
     let added_columns = column_names(edits, "tabular.add_column");
@@ -427,22 +428,28 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
         .filter(|edit| edit.verb == "tabular.rename_column")
         .collect::<Vec<_>>();
     if added_columns.len() == 1 {
-        parts.push(format!("Column added: '{}'", added_columns[0]));
+        parts.push(Summary::from(format!(
+            "Column added: '{}'",
+            added_columns[0]
+        )));
     } else if !added_columns.is_empty() {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             added_columns.len(),
             "column added",
             "columns added",
-        ));
+        )));
     }
     if removed_columns.len() == 1 {
-        parts.push(format!("Column removed: '{}'", removed_columns[0]));
+        parts.push(Summary::from(format!(
+            "Column removed: '{}'",
+            removed_columns[0]
+        )));
     } else if !removed_columns.is_empty() {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             removed_columns.len(),
             "column removed",
             "columns removed",
-        ));
+        )));
     }
     if renamed_columns.len() == 1 {
         let params = &renamed_columns[0].params;
@@ -450,29 +457,37 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
             params.get("from").and_then(|value| value.as_str()),
             params.get("to").and_then(|value| value.as_str()),
         ) {
-            parts.push(format!("Column renamed: '{from}' -> '{to}'"));
+            parts.push(Summary::from(format!("Column renamed: '{from}' -> '{to}'")));
         }
     } else if !renamed_columns.is_empty() {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             renamed_columns.len(),
             "column renamed",
             "columns renamed",
-        ));
+        )));
     }
     if edits
         .iter()
         .any(|edit| edit.verb == "tabular.reorder_columns")
     {
-        parts.push("Columns reordered".into());
+        parts.push(Summary::from("Columns reordered"));
     }
 
     let rows_added = count_verb(edits, "tabular.add_row") + count_appended_rows(edits);
     let rows_removed = count_verb(edits, "tabular.remove_row");
     if rows_added > 0 {
-        parts.push(count_phrase(rows_added, "row added", "rows added"));
+        parts.push(Summary::from(count_phrase(
+            rows_added,
+            "row added",
+            "rows added",
+        )));
     }
     if rows_removed > 0 {
-        parts.push(count_phrase(rows_removed, "row removed", "rows removed"));
+        parts.push(Summary::from(count_phrase(
+            rows_removed,
+            "row removed",
+            "rows removed",
+        )));
     }
 
     let cell_edits = edits
@@ -481,27 +496,24 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
         .collect::<Vec<_>>();
     let keyed_rows = unique_keyed_rows(&cell_edits);
     if !keyed_rows.is_empty() {
-        parts.push(format!(
+        parts.push(Summary::from(format!(
             "{} modified by key",
             count_phrase(keyed_rows.len(), "row", "rows")
-        ));
+        )));
     } else if !cell_edits.is_empty() {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             cell_edits.len(),
             "cell changed",
             "cells changed",
-        ));
+        )));
     }
 
     parts.extend(text_fact_summaries(edits));
     parts.extend(document_node_summaries(edits));
     parts.extend(metadata_summaries(edits));
+    parts.extend(edit_summary_facts(edits, &parts));
 
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts.join("; "))
-    }
+    join_summary_parts(parts)
 }
 
 fn column_names(edits: &[Edit], verb: &str) -> Vec<String> {
@@ -538,14 +550,16 @@ fn unique_keyed_rows(edits: &[&Edit]) -> BTreeSet<String> {
         .collect()
 }
 
-fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
+fn text_fact_summaries(edits: &[Edit]) -> Vec<Summary> {
     let mut parts = Vec::new();
     for edit in edits {
         match edit.verb.as_str() {
-            "text.line_endings_changed" => parts.push("Line endings changed".into()),
-            "text.bom_changed" => parts.push("UTF-8 BOM changed".into()),
-            "text.encoding_changed" => parts.push("Encoding changed".into()),
-            "text.whitespace_only_changed" => parts.push("Whitespace-only text change".into()),
+            "text.line_endings_changed" => parts.push(Summary::from("Line endings changed")),
+            "text.bom_changed" => parts.push(Summary::from("UTF-8 BOM changed")),
+            "text.encoding_changed" => parts.push(Summary::from("Encoding changed")),
+            "text.whitespace_only_changed" => {
+                parts.push(Summary::from("Whitespace-only text change"))
+            }
             "text.replace_lines" => {
                 let added = edit
                     .params
@@ -558,20 +572,22 @@ fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
                     .and_then(|value| value.as_u64())
                     .unwrap_or(0);
                 match (added, removed) {
-                    (0, 0) => parts.push("Text changed".into()),
-                    (added, 0) => {
-                        parts.push(count_phrase(added as usize, "line added", "lines added"))
-                    }
-                    (0, removed) => parts.push(count_phrase(
+                    (0, 0) => parts.push(Summary::from("Text changed")),
+                    (added, 0) => parts.push(Summary::from(count_phrase(
+                        added as usize,
+                        "line added",
+                        "lines added",
+                    ))),
+                    (0, removed) => parts.push(Summary::from(count_phrase(
                         removed as usize,
                         "line removed",
                         "lines removed",
-                    )),
-                    (added, removed) => parts.push(format!(
+                    ))),
+                    (added, removed) => parts.push(Summary::from(format!(
                         "{}; {}",
                         count_phrase(added as usize, "line added", "lines added"),
                         count_phrase(removed as usize, "line removed", "lines removed")
-                    )),
+                    ))),
                 }
             }
             _ => {}
@@ -580,31 +596,31 @@ fn text_fact_summaries(edits: &[Edit]) -> Vec<String> {
     parts
 }
 
-fn document_node_summaries(edits: &[Edit]) -> Vec<String> {
+fn document_node_summaries(edits: &[Edit]) -> Vec<Summary> {
     let mut parts = Vec::new();
     let nodes_added = count_verb(edits, "document.add_node");
     let nodes_removed = count_verb(edits, "document.remove_node");
     let nodes_edited = count_verb(edits, "document.edit_node");
     if nodes_added > 0 {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             nodes_added,
             "keyed node added",
             "keyed nodes added",
-        ));
+        )));
     }
     if nodes_removed > 0 {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             nodes_removed,
             "keyed node removed",
             "keyed nodes removed",
-        ));
+        )));
     }
     if nodes_edited > 0 {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             nodes_edited,
             "keyed node edited",
             "keyed nodes edited",
-        ));
+        )));
     }
     parts
 }
@@ -612,7 +628,7 @@ fn document_node_summaries(edits: &[Edit]) -> Vec<String> {
 /// Summarize `metadata.value_change` edits into prose, grouped by scope so a
 /// column-label change, a table-label change, and a file-level provenance change
 /// each read distinctly.
-fn metadata_summaries(edits: &[Edit]) -> Vec<String> {
+fn metadata_summaries(edits: &[Edit]) -> Vec<Summary> {
     let mut column = 0usize;
     let mut table = 0usize;
     let mut file = 0usize;
@@ -629,19 +645,54 @@ fn metadata_summaries(edits: &[Edit]) -> Vec<String> {
     }
     let mut parts = Vec::new();
     if column > 0 {
-        parts.push(count_phrase(
+        parts.push(Summary::from(count_phrase(
             column,
             "column metadata change",
             "column metadata changes",
-        ));
+        )));
     }
     if table > 0 {
-        parts.push("Table metadata changed".into());
+        parts.push(Summary::from("Table metadata changed"));
     }
     if file > 0 {
-        parts.push("File metadata changed".into());
+        parts.push(Summary::from("File metadata changed"));
     }
     parts
+}
+
+fn edit_summary_facts(edits: &[Edit], existing: &[Summary]) -> Vec<Summary> {
+    let mut parts = Vec::new();
+    for edit in edits {
+        let Some(summary) = edit.projection.hint.summary.as_ref() else {
+            continue;
+        };
+        if summary.is_empty()
+            || existing
+                .iter()
+                .any(|part| part.plain_text() == summary.plain_text())
+            || parts
+                .iter()
+                .any(|part: &Summary| part.plain_text() == summary.plain_text())
+        {
+            continue;
+        }
+        parts.push(summary.clone());
+    }
+    parts
+}
+
+fn join_summary_parts(parts: Vec<Summary>) -> Option<Summary> {
+    if parts.is_empty() {
+        return None;
+    }
+    let mut summary = Summary::new();
+    for (index, part) in parts.into_iter().enumerate() {
+        if index > 0 {
+            summary = summary.text("; ");
+        }
+        summary.extend(part);
+    }
+    Some(summary)
 }
 
 fn count_phrase(count: usize, singular: &str, plural: &str) -> String {
@@ -1524,6 +1575,72 @@ mod tests {
     fn reshape_requires_a_known_source_kind() {
         // An unlinked add/remove carries no source kind, so it never reshapes.
         assert!(container_reshape_hint(&ctx(true, None, "SQLite database", None)).is_none());
+    }
+
+    #[test]
+    fn summarize_known_edits_keeps_summary_bearing_edits_visible_with_cell_edits() {
+        let edits = vec![
+            Edit::new(
+                "tabular.edit_cell",
+                serde_json::json!({
+                    "row": 0,
+                    "column": "score",
+                    "from": "1",
+                    "to": "2"
+                }),
+            ),
+            Edit::new(
+                "tabular.column_type_changed",
+                serde_json::json!({
+                    "column": "score",
+                    "from_type": "number",
+                    "to_type": "string",
+                    "cells": 1
+                }),
+            )
+            .with_summary("Column type changed: 'score' number -> string"),
+        ];
+
+        assert_eq!(
+            summarize_known_edits(&edits).map(|summary| summary.plain_text()),
+            Some("1 cell changed; Column type changed: 'score' number -> string".into())
+        );
+    }
+
+    #[test]
+    fn summarize_known_edits_preserves_structured_edit_summary_segments() {
+        let typed_summary = Summary::new()
+            .text("Byte range changed at ")
+            .uint(1234)
+            .text(" (")
+            .float(66.66666666666666)
+            .text("%)");
+        let edits = vec![
+            Edit::new(
+                "tabular.edit_cell",
+                serde_json::json!({
+                    "row": 0,
+                    "column": "score",
+                    "from": "1",
+                    "to": "2"
+                }),
+            ),
+            Edit::new("binary.byte_range_changed", serde_json::json!({}))
+                .with_summary(typed_summary),
+        ];
+
+        let summary = summarize_known_edits(&edits).expect("summary");
+        assert_eq!(
+            summary.plain_text(),
+            "1 cell changed; Byte range changed at 1234 (66.66666666666666%)"
+        );
+        assert!(summary
+            .segments()
+            .iter()
+            .any(|segment| matches!(segment, binoc_sdk::Segment::Uint(1234))));
+        assert!(summary.segments().iter().any(
+            |segment| matches!(segment, binoc_sdk::Segment::Float(value) if *value == 66.66666666666666)
+        ));
     }
 
     #[test]

@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **person.jsonld**: Document values changed
+- **person.jsonld**: $.jobTitle: "Mathematician" -> "Computer Scientist"

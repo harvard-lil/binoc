@@ -4,7 +4,7 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **usc.xml**: 1 keyed node added; 1 keyed node removed; 1 keyed node edited
+- **usc.xml**: 1 keyed node added; 1 keyed node removed; 1 keyed node edited; $.uscDoc.version: "1" -> "2"
   - Remove Node: key: '/us/usc/t54/s100502'; key_attribute: 'identifier'; path: '$.uscDoc.title.section[1]'
   - Add Node: key: '/us/usc/t54/s100503'; key_attribute: 'identifier'; path: '$.uscDoc.title.section[1]'
   - Edit Node: changes: [{"from":"\"Old definition text.\"","kind":"replace","path":"$.content","to":"\"Updated definition text.\""}]; examples_truncated: false; key: '/us/usc/t54/s100501'

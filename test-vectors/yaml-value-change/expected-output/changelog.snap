@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **config.yaml**: Document values changed
+- **config.yaml**: $.replicas: 3 -> 5

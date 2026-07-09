@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.cbor**: Document values changed
+- **data.cbor**: $.replicas: 3 -> 5

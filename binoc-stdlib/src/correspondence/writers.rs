@@ -6,8 +6,8 @@ use binoc_sdk::{
     file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
     BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractHint,
     ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment,
-    ShapeFilter, StructuredDocument, Summary, TabularData, TabularDataPair, Value, WriteOutput,
-    WriterDescriptor,
+    ShapeFilter, Side, StructuredDocument, Summary, TabularData, TabularDataPair, Value,
+    WriteOutput, WriterDescriptor,
 };
 use fastcdc::v2020::StreamCDC;
 use rust_strings::{strings, BytesConfig, Encoding};
@@ -2295,17 +2295,19 @@ fn document_value_change_edit(
     right: &serde_json::Value,
     item_type: &str,
 ) -> Edit {
+    let changes = json_value_changes(left, right);
+    let changes_truncated = json_change_count(left, right) > MAX_JSON_CHANGE_EXAMPLES;
     Edit::new(
         "document.value_change",
         json!({
-            "changes": json_value_changes(left, right),
-            "examples_truncated": json_change_count(left, right) > MAX_JSON_CHANGE_EXAMPLES,
+            "changes": changes,
+            "examples_truncated": changes_truncated,
         }),
     )
     .with_item_type(item_type)
     .with_tag("binoc.content-changed")
     .with_tag("binoc.document-value-change")
-    .with_summary("Document values changed")
+    .with_summary(document_value_change_summary(left, right))
 }
 
 fn keyed_document_remove_edit(
@@ -2433,6 +2435,67 @@ fn json_change_count(left: &serde_json::Value, right: &serde_json::Value) -> usi
     let mut changes = Vec::new();
     collect_json_value_changes("$", left, right, &mut changes, usize::MAX);
     changes.len()
+}
+
+fn document_value_change_summary(left: &serde_json::Value, right: &serde_json::Value) -> Summary {
+    let changes = json_value_changes(left, right);
+    let total = json_change_count(left, right);
+    if total == 0 {
+        return "Document values changed".into();
+    }
+    if total > 2 {
+        return Summary::new().count(total as u64, "value").text(" changed");
+    }
+    let mut summary = Summary::new();
+    for (index, change) in changes.iter().enumerate() {
+        if index > 0 {
+            summary = summary.text("; ");
+        }
+        summary.extend(document_value_change_fact(change));
+    }
+    summary
+}
+
+fn document_value_change_fact(change: &serde_json::Value) -> Summary {
+    let kind = change
+        .get("kind")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let path = change
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or("$");
+    let from = change
+        .get("from")
+        .and_then(|value| value.as_str())
+        .unwrap_or("null");
+    let to = change
+        .get("to")
+        .and_then(|value| value.as_str())
+        .unwrap_or("null");
+
+    match kind {
+        "add" => Summary::new()
+            .path(path.to_string(), Side::To)
+            .text(": added ")
+            .text(to.to_string()),
+        "remove" => Summary::new()
+            .path(path.to_string(), Side::To)
+            .text(": removed ")
+            .text(from.to_string()),
+        "array_length" => Summary::new()
+            .path(path.to_string(), Side::To)
+            .text(" length: ")
+            .text(from.to_string())
+            .text(" -> ")
+            .text(to.to_string()),
+        _ => Summary::new()
+            .path(path.to_string(), Side::To)
+            .text(": ")
+            .text(from.to_string())
+            .text(" -> ")
+            .text(to.to_string()),
+    }
 }
 
 fn collect_json_value_changes(
@@ -2571,7 +2634,8 @@ mod tests {
     use crate::correspondence::tabular::MAX_ROW_ALIGNMENT_ROWS;
 
     use super::{
-        keyed_row_alignment_basis, keyed_tables, keyed_tree_edits, node_identity_key_fields,
+        document_value_change_summary, keyed_row_alignment_basis, keyed_tables, keyed_tree_edits,
+        node_identity_key_fields,
     };
 
     fn structured(value: serde_json::Value) -> StructuredDocument {
@@ -2623,6 +2687,35 @@ mod tests {
                     "to": "2"
                 }
             ])
+        );
+        assert_eq!(
+            edits[3]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "$.version: 1 -> 2"
+        );
+    }
+
+    #[test]
+    fn document_value_change_summary_counts_many_changes() {
+        let left = json!({
+            "a": 1,
+            "b": 2,
+            "c": 3
+        });
+        let right = json!({
+            "a": 10,
+            "b": 20,
+            "c": 30
+        });
+
+        assert_eq!(
+            document_value_change_summary(&left, &right).plain_text(),
+            "3 values changed"
         );
     }
 
