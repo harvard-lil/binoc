@@ -379,9 +379,14 @@ the same surface as third-party packs.
 
 **Feature arcs (the rewrite-rule iteration phase):**
 
-- **New claim producers** — find/replace, numeric unit conversion,
-  precision-rounding, near-duplicate row hints — built on the strict-cost ratchet,
-  generalizing the `binoc.tabular_split`/`_merge` claim shape.
+- **New claim producers** — numeric unit conversion, precision-rounding,
+  near-duplicate row hints — remain plausible extensions of the strict-cost
+  ratchet, generalizing the `binoc.tabular_split`/`_merge` claim shape.
+  Dataset-wide find/replace is a separate stretch goal, not scheduled work:
+  user need is unestablished, and the current phase order cannot express it
+  because `GlobalClaim` is collected before edit lists exist. See
+  [edit-list-search-and-verification](../core-developers/research/edit-list-search-and-verification.md)
+  §6.
 - **More formats** — FASTQ, VCF, TIFF/image equality, text-section split. The
   partition machinery is format-generic: a new format registers an
   `IdentityExtractor` and gets split/merge for free.
