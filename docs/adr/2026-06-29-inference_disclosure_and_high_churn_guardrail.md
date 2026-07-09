@@ -92,8 +92,18 @@ it stays a renderer/config decision.
 
 - The churn **threshold** and whether it is per-table, per-bundle, or both (#93
   names both re-sort *and* disjoint-cohort cases, which may want different cuts).
-- Whether order-independent fallback matching (#92's second idea) ships this round
-  or only auto-key-detection does, with sorted-fallback deferred.
 - Exact provenance vocabulary (the tag/segment names for "inferred key",
   "content-sniffed type") — coordinate with the cell/tag work so the namespace is
   consistent.
+
+## Resolved sub-decisions
+
+- **2026-07-09:** Order-independent sorted-row fallback ships as a Pass 2
+  compaction proposal, not as writer-level correspondence selection. The tabular
+  writer emits the positional basis (or the high-churn guardrail plus hidden
+  positional basis when the guardrail suppresses visible cell churn); the
+  `binoc.compact.sorted_row_alignment` rule reconstructs the sorted-content plan
+  from the tabular artifacts. The existing engine gate accepts it only when the
+  rewritten edit list has strictly lower structural cost. Changed-cell fraction
+  remains the guardrail signal, but it is not a competing edit-plan cost
+  function.

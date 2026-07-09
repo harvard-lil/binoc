@@ -2,18 +2,22 @@ use binoc_sdk::{
     tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, Summary, TabularData, Value,
 };
 use serde_json::json;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::tabular::{is_row_alignment_basis_edit, load_tabular, MAX_ROW_ALIGNMENT_ROWS};
 
 const COLUMN_RENAME_MIN_MATCHES: usize = 2;
 const COLUMN_RENAME_MIN_MATCH_RATIO: f64 = 0.10;
+const MAX_VALUE_PREVIEW_BYTES: usize = 120;
 
 pub struct ColumnReorder;
 
 pub struct ColumnRename;
 
 pub struct TypeOnlyColumnChange;
+
+pub struct SortedRowAlignment;
 
 #[derive(Debug, Clone)]
 pub struct ReducedPrecision {
@@ -132,6 +136,34 @@ impl CompactionRule for TypeOnlyColumnChange {
         _data: &dyn DataAccess,
     ) -> BinocResult<Option<Vec<Edit>>> {
         Ok(rewrite_type_only_column_changes(edits))
+    }
+}
+
+impl CompactionRule for SortedRowAlignment {
+    fn name(&self) -> &str {
+        "binoc.compact.sorted_row_alignment"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        if !ctx.row_keys.is_empty() {
+            return Ok(None);
+        }
+        let (Some(left), Some(right)) = (
+            load_tabular(ctx, ctx.link.left, data)?,
+            load_tabular(ctx, ctx.link.right, data)?,
+        ) else {
+            return Ok(None);
+        };
+        Ok(rewrite_sorted_row_alignment(edits, &left, &right))
     }
 }
 
@@ -1109,6 +1141,263 @@ fn column_value_edit(row: usize, column: &str, from: &Value, to: &Value) -> Edit
     .with_tag("binoc.cell-change")
 }
 
+fn rewrite_sorted_row_alignment(
+    edits: &[Edit],
+    left: &TabularData,
+    right: &TabularData,
+) -> Option<Vec<Edit>> {
+    if left.rows.len() != right.rows.len()
+        || left.rows.is_empty()
+        || !edits.iter().any(sorted_row_alignment_trigger)
+    {
+        return None;
+    }
+
+    let common = common_columns(left, right);
+    if common.is_empty() {
+        return None;
+    }
+
+    let mut left_rows = sort_aligned_rows(left, common.iter().map(|column| column.left_index));
+    let mut right_rows = sort_aligned_rows(right, common.iter().map(|column| column.right_index));
+    left_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+    right_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+
+    let mut aligned_edits = Vec::new();
+    let mut changed_cells = 0usize;
+    let mut changed_rows = 0usize;
+    let mut reordered = false;
+    for (left_row, right_row) in left_rows.iter().zip(&right_rows) {
+        reordered |= left_row.index != right_row.index;
+        let mut row_changed = false;
+        for column in &common {
+            let left_value = left_row.row.get(column.left_index).unwrap_or(&Value::Null);
+            let right_value = right_row
+                .row
+                .get(column.right_index)
+                .unwrap_or(&Value::Null);
+            if left_value != right_value {
+                changed_cells += 1;
+                row_changed = true;
+                aligned_edits.push(sorted_cell_edit(
+                    left_row.index,
+                    right_row.index,
+                    &column.name,
+                    left_value,
+                    right_value,
+                ));
+            }
+        }
+        if row_changed {
+            changed_rows += 1;
+        }
+    }
+
+    if aligned_edits.is_empty() {
+        if !reordered {
+            return None;
+        }
+        aligned_edits.push(row_reorder_edit("sorted_row_content", right.rows.len()));
+    } else {
+        aligned_edits.push(sorted_row_alignment_edit(
+            left.rows.len(),
+            right.rows.len(),
+            changed_cells,
+            changed_rows,
+            common.len(),
+        ));
+    }
+
+    let mut out: Vec<Edit> = edits
+        .iter()
+        .filter(|edit| !sorted_row_alignment_owned_edit(edit, &common))
+        .cloned()
+        .collect();
+    out.extend(aligned_edits);
+    Some(out)
+}
+
+fn sorted_row_alignment_trigger(edit: &Edit) -> bool {
+    edit.verb == "tabular.row_correspondence_uncertain"
+        || (edit.verb == "tabular.edit_cell"
+            && edit.params.get("key").is_none()
+            && edit.params.get("row").is_some())
+}
+
+fn sorted_row_alignment_owned_edit(edit: &Edit, common: &[CommonColumn]) -> bool {
+    if edit.verb == "tabular.row_correspondence_uncertain" {
+        return true;
+    }
+    edit.verb == "tabular.edit_cell"
+        && edit.params.get("key").is_none()
+        && edit.params.get("row").is_some()
+        && edit
+            .params
+            .get("column")
+            .and_then(|value| value.as_str())
+            .is_some_and(|column| common.iter().any(|common| common.name == column))
+}
+
+#[derive(Debug, Clone)]
+struct CommonColumn {
+    name: String,
+    left_index: usize,
+    right_index: usize,
+}
+
+fn common_columns(left: &TabularData, right: &TabularData) -> Vec<CommonColumn> {
+    let right_headers: BTreeMap<&str, usize> = right
+        .headers
+        .iter()
+        .enumerate()
+        .map(|(index, header)| (header.as_str(), index))
+        .collect();
+    left.headers
+        .iter()
+        .enumerate()
+        .filter_map(|(left_index, header)| {
+            right_headers
+                .get(header.as_str())
+                .copied()
+                .map(|right_index| CommonColumn {
+                    name: header.clone(),
+                    left_index,
+                    right_index,
+                })
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RowSignature<'a>(Box<[Cow<'a, str>]>);
+
+#[derive(Debug, Clone)]
+struct SortAlignedRow<'a> {
+    signature: RowSignature<'a>,
+    index: usize,
+    row: &'a Vec<Value>,
+}
+
+fn sort_aligned_rows<'a>(
+    table: &'a TabularData,
+    indices: impl IntoIterator<Item = usize> + Clone,
+) -> Vec<SortAlignedRow<'a>> {
+    table
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| SortAlignedRow {
+            signature: row_content_signature(row, indices.clone()),
+            index,
+            row,
+        })
+        .collect()
+}
+
+fn row_content_signature<'a>(
+    row: &'a [Value],
+    indices: impl IntoIterator<Item = usize>,
+) -> RowSignature<'a> {
+    RowSignature(
+        indices
+            .into_iter()
+            .map(|index| row.get(index).unwrap_or(&Value::Null).as_text())
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
+fn sorted_cell_edit(
+    left_row: usize,
+    right_row: usize,
+    column: &str,
+    from: &Value,
+    to: &Value,
+) -> Edit {
+    Edit::new(
+        "tabular.edit_cell",
+        json!({
+            "left_row": left_row,
+            "right_row": right_row,
+            "column": column,
+            "from": value_preview(from),
+            "to": value_preview(to),
+            "alignment": "sorted_row_content",
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.cell-change")
+}
+
+fn sorted_row_alignment_edit(
+    left_rows: usize,
+    right_rows: usize,
+    changed_cells: usize,
+    changed_rows: usize,
+    common_columns: usize,
+) -> Edit {
+    let total_cells = left_rows.max(right_rows) * common_columns;
+    let sorted_changed_cell_fraction = if total_cells == 0 {
+        0.0
+    } else {
+        (changed_cells as f64 / total_cells as f64).min(1.0)
+    };
+    Edit::new(
+        "tabular.sorted_row_alignment",
+        json!({
+            "left_rows": left_rows,
+            "right_rows": right_rows,
+            "sorted_changed_cell_fraction": sorted_changed_cell_fraction,
+            "changed_cells": changed_cells,
+            "changed_rows": changed_rows,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.row-alignment-inferred")
+    .hidden()
+}
+
+fn row_reorder_edit(mode: &str, rows: usize) -> Edit {
+    Edit::new(
+        "tabular.reorder_rows",
+        json!({
+            "alignment": mode,
+            "rows": rows,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.row-reorder")
+    .with_summary("rows reordered; cell values unchanged under inferred row alignment")
+}
+
+/// A previewed cell value as JSON. String cells are truncated and stay JSON
+/// strings; all other variants pass through as their natural JSON.
+fn value_preview(value: &Value) -> serde_json::Value {
+    match value {
+        Value::String(s) => serde_json::Value::String(truncate_preview(s)),
+        other => other.to_json(),
+    }
+}
+
+fn truncate_preview(value: &str) -> String {
+    if value.len() <= MAX_VALUE_PREVIEW_BYTES {
+        return value.to_string();
+    }
+    let mut end = MAX_VALUE_PREVIEW_BYTES;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &value[..end])
+}
+
 pub struct RowAdditionConsolidation;
 
 pub struct RowAlignment;
@@ -1472,6 +1761,79 @@ mod tests {
                 .map(|row| row.iter().map(|value| (*value).to_string()).collect())
                 .collect(),
         )
+    }
+
+    #[test]
+    fn sorted_row_alignment_collapses_pure_reorder() {
+        let left = table(
+            &["group", "label", "value"],
+            &[
+                &["A", "x", "10"],
+                &["B", "x", "20"],
+                &["A", "y", "10"],
+                &["B", "y", "20"],
+            ],
+        );
+        let right = table(
+            &["group", "label", "value"],
+            &[
+                &["B", "y", "20"],
+                &["A", "y", "10"],
+                &["B", "x", "20"],
+                &["A", "x", "10"],
+            ],
+        );
+        let edits = vec![
+            Edit::new(
+                "tabular.row_correspondence_uncertain",
+                json!({"mode": "positional"}),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-correspondence-uncertain"),
+            cell(0, "group", json!("A"), json!("B")).hidden(),
+            cell(0, "label", json!("x"), json!("y")).hidden(),
+            cell(0, "value", json!("10"), json!("20")).hidden(),
+        ];
+
+        let rewritten = rewrite_sorted_row_alignment(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.reorder_rows");
+        assert_eq!(
+            rewritten[0].params,
+            json!({"alignment": "sorted_row_content", "rows": 4})
+        );
+    }
+
+    #[test]
+    fn sorted_row_alignment_preserves_non_row_edits() {
+        let left = table(&["id", "status"], &[&["1", "active"], &["2", "pending"]]);
+        let right = table(&["id", "status"], &[&["2", "closed"], &["1", "active"]]);
+        let metadata = Edit::new(
+            "metadata.value_change",
+            json!({"path": "label", "from": "old", "to": "new"}),
+        )
+        .with_item_type("tabular");
+        let edits = vec![
+            metadata.clone(),
+            cell(0, "id", json!("1"), json!("2")),
+            cell(0, "status", json!("active"), json!("closed")),
+            cell(1, "id", json!("2"), json!("1")),
+            cell(1, "status", json!("pending"), json!("active")),
+        ];
+
+        let rewritten = rewrite_sorted_row_alignment(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten[0], metadata);
+        assert!(rewritten
+            .iter()
+            .any(|edit| edit.verb == "tabular.sorted_row_alignment"));
+        assert!(rewritten.iter().any(|edit| {
+            edit.verb == "tabular.edit_cell"
+                && edit.params["alignment"] == json!("sorted_row_content")
+                && edit.params["left_row"] == json!(1)
+                && edit.params["right_row"] == json!(0)
+        }));
     }
 
     #[test]
