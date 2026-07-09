@@ -140,11 +140,10 @@ same harness the stdlib uses.
 
 ## Publish alongside the `binoc` project
 
-The in-tree reference plugins (`model-plugins/binoc-sqlite`,
-`model-plugins/binoc-row-reorder`, `model-plugins/binoc-html`) are
-published independently of the host `binoc` package; your plugin
-should be too. Independent releases mean a bugfix to your plugin
-doesn't require a new binoc host release, and vice versa.
+The in-tree reference plugins under `model-plugins/` are first-party examples;
+some are bundled into the host `binoc` package, some are opt-in, and some may
+publish separately. Third-party plugins should still publish independently of
+the host `binoc` package so a plugin bugfix does not require a new host release.
 
 ## Where to go next
 

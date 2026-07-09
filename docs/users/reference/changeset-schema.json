@@ -120,6 +120,41 @@
         "pair"
       ]
     },
+    "CsvDialectConfig": {
+      "type": "object",
+      "properties": {
+        "bom": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "escape": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "newline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "DetailBlock": {
       "description": "Renderer-visible, bounded evidence attached to a diff node.",
       "type": "object",
@@ -215,6 +250,16 @@
       "properties": {
         "code": {
           "type": "string"
+        },
+        "extract": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtractHint"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "location": {
           "type": [
@@ -351,6 +396,12 @@
           "description": "Aspect name accepted by `binoc extract`.",
           "type": "string"
         },
+        "changeset_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "label": {
           "type": [
             "string",
@@ -456,6 +507,17 @@
           ],
           "format": "uint64",
           "minimum": 0
+        },
+        "tabular_parse": {
+          "description": "Optional stdlib-resolved tabular parse hints carried from dataset config\nto whichever tabular parser eventually claims this item.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TabularParseConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -472,6 +534,12 @@
             "string",
             "null"
           ]
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Annotation"
+          }
         },
         "item_type": {
           "type": [
@@ -628,6 +696,54 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/Segment"
+      }
+    },
+    "TabularParseConfig": {
+      "type": "object",
+      "properties": {
+        "delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dialect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CsvDialectConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "header": {
+          "type": "boolean",
+          "default": true
+        },
+        "header_line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "records_path": {
+          "description": "JSON record collection path for document formats that need to expose a\nnested array as the tabular record stream.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skip_lines": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        }
       }
     },
     "ValuePreview": {

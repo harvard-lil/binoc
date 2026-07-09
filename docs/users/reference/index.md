@@ -40,4 +40,4 @@ formats. If you need a concrete walkthrough, see the
 - [Plugin registry](plugin-registry.md) — built-in and in-tree plugins readers
   will meet in rendered changelogs.
 - [Third-party plugins](third-party-plugins.md) — add-on plugins by file
-  format; generated from `third_party_plugins.json`.
+  format; generated from third-party entries in `plugin_registry.json`.

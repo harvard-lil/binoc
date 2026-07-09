@@ -4,11 +4,11 @@ audience: data steward, plugin consumer
 
 # Third-party plugins
 
-Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) (`binoc-stdlib`), but some datasets use formats that need a dedicated rule pack. Install one of the **add-on plugins** below when your snapshots include those kinds of files.
+Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) (`binoc-stdlib`) and first-party format packs in the `binoc` wheel. Community plugins listed below extend binoc for formats outside that first-party bundle.
 
 To find a match, compare your filenames (suffixes) and, when available, detected media types to the tables under each plugin. Once you find one, install the package and configure any dataset semantics it documents.
 
-For built-in and in-tree plugins that may also appear in changelog output, see the [plugin registry](plugin-registry.md).
+For built-in and in-tree plugins that may also appear in changelog output, including the first-party bundled packs, see the [plugin registry](plugin-registry.md).
 
 !!! tip "Publishing or listing a plugin"
 
@@ -16,112 +16,10 @@ For built-in and in-tree plugins that may also appear in changelog output, see t
 
 !!! note "Generated page"
 
-    Entries are maintained in `third_party_plugins.json` at the repository root. Maintainers regenerate this Markdown with `scripts/build_third_party_plugins_page.py` (`just docs-plugin-catalog`).
+    Entries are filtered from third-party entries in `plugin_registry.json` at the repository root. Maintainers regenerate this Markdown with `scripts/build_third_party_plugins_page.py` (`just docs-plugin-catalog`).
 
-## binoc-sqlite
-
-Compares two SQLite database files: table/column layout, column types, primary keys, and per-table row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.
-
-- **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
-
-- **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite)
-
-- **PyPI:** `binoc-sqlite` · **crates.io:** `binoc-sqlite`
-
-### Install
-
-After you install the package (for example from PyPI), binoc picks it up via the standard entry-point group — see [Install and use plugins](../howto/install-and-use-plugins.md) and [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md).
-
-Published packages declare discovery metadata like this:
-
-```toml
-[project.entry-points."binoc.plugins"]
-binoc-sqlite = "binoc_sqlite"
-```
-
-This distribution is a **native Rust** plugin (`native_rust_module`): the target is a module name, not `module:function`.
-
-### When it handles your files
-
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches. These selectors are advertised for discovery and documentation; current diff behavior is driven by the correspondence engine's rule configuration.
-
-| Field | Value |
-|---|---|
-| `extensions` | `.sqlite`, `.sqlite3`, `.db` |
-| `media_types` | `application/vnd.sqlite3`, `application/x-sqlite3` |
-| `scope` | `files` |
-
-*Labels you may see in a changeset (not used for routing):* `tabular_collection`, `tabular`
-
-*Rule families supplied:* `parse`, `writer`, `materializer`
-
-## binoc-stat-binary
-
-Reads Stata `.dta`, SAS `.sas7bdat`, and SAS transport `.xpt` files as standard Binoc tabular data so normal column, row, and cell diffing applies.
-
-- **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
-
-- **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-stat-binary)
-
-- **PyPI:** `binoc-stat-binary` · **crates.io:** `binoc-stat-binary`
-
-### Install
-
-After you install the package (for example from PyPI), binoc picks it up via the standard entry-point group — see [Install and use plugins](../howto/install-and-use-plugins.md) and [Plugin discovery](../../plugin-developers/reference/plugin-discovery.md).
-
-Published packages declare discovery metadata like this:
-
-```toml
-[project.entry-points."binoc.plugins"]
-binoc-stat-binary = "binoc_stat_binary"
-```
-
-This distribution is a **native Rust** plugin (`native_rust_module`): the target is a module name, not `module:function`.
-
-### When it handles your files
-
-#### `binoc-stat-binary.stata`
-
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches. These selectors are advertised for discovery and documentation; current diff behavior is driven by the correspondence engine's rule configuration.
-
-| Field | Value |
-|---|---|
-| `extensions` | `.dta` |
-| `media_types` | — |
-| `scope` | `files` |
-
-*Labels you may see in a changeset (not used for routing):* `tabular`
-
-*Rule families supplied:* `parse`
-
-#### `binoc-stat-binary.sas7bdat`
-
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches. These selectors are advertised for discovery and documentation; current diff behavior is driven by the correspondence engine's rule configuration.
-
-| Field | Value |
-|---|---|
-| `extensions` | `.sas7bdat` |
-| `media_types` | — |
-| `scope` | `files` |
-
-*Labels you may see in a changeset (not used for routing):* `tabular`
-
-*Rule families supplied:* `parse`
-
-#### `binoc-stat-binary.xpt`
-
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches. These selectors are advertised for discovery and documentation; current diff behavior is driven by the correspondence engine's rule configuration.
-
-| Field | Value |
-|---|---|
-| `extensions` | `.xpt` |
-| `media_types` | — |
-| `scope` | `files` |
-
-*Labels you may see in a changeset (not used for routing):* `tabular`
-
-*Rule families supplied:* `parse`
+_No third-party plugins are listed in the catalog yet._
 
 ## Catalog file for tools
 
-The canonical data lives in `third_party_plugins.json` (JSON). Hosts that suggest plugins for unrecognized formats should read that file; dispatch fields describe the rule pack's advertised file selectors.
+The canonical data lives in `plugin_registry.json` (JSON). Hosts that suggest plugins for unrecognized formats should read entries with `tier: third-party`; dispatch fields describe each rule pack's advertised file selectors.

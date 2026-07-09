@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "plugin_registry.json"
 OUT_PATH = ROOT / "docs" / "users" / "reference" / "plugin-registry.md"
-PACKAGE_LABELS = {"pypi": "PyPI", "crate": "crates.io"}
+PACKAGE_LABELS = {"pypi": "PyPI", "crate": "Rust crate"}
 
 
 def _die(msg: str) -> None:
@@ -51,11 +51,20 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
     base = f"plugins[{idx}]"
     pid = _as_str(p.get("id"), f"{base}.id")
     title = _as_str(p.get("title"), f"{base}.title")
+    tier = _as_str(p.get("tier"), f"{base}.tier")
     summary = _as_str(p.get("summary"), f"{base}.summary")
+    distribution = _as_str(p.get("distribution"), f"{base}.distribution")
     handles = _as_str(p.get("handles"), f"{base}.handles")
     produces = _as_str(p.get("produces"), f"{base}.produces")
 
-    lines = [f"## {title}", "", summary, "", _md_table([("Handles", handles), ("Produces", produces)]), ""]
+    lines = [
+        f"## {title}",
+        "",
+        summary,
+        "",
+        _md_table([("Tier", f"`{tier}`"), ("Distribution", distribution), ("Handles", handles), ("Produces", produces)]),
+        "",
+    ]
 
     for key in ("repository", "documentation"):
         value = p.get(key)
@@ -88,6 +97,7 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         if not isinstance(dispatch, dict):
             _die(f"{rp}.dispatch: expected object")
         rules = _as_str_list(rule_pack.get("rules"), f"{rp}.rules")
+        item_types = rule_pack.get("item_types")
         lines.append(f"#### `{name}`")
         lines.append("")
         rows: list[tuple[str, str]] = []
@@ -100,6 +110,10 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         lines.append("")
         lines.append("*Rule families supplied:* " + ", ".join(f"`{r}`" for r in rules))
         lines.append("")
+        if item_types is not None:
+            labels = _as_str_list(item_types, f"{rp}.item_types")
+            lines.append("*Labels you may see in a changeset (not used for routing):* " + ", ".join(f"`{t}`" for t in labels))
+            lines.append("")
     return lines
 
 
