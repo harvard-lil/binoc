@@ -15,4 +15,5 @@ has_tags = [
   "binoc.document-node-addition",
   "binoc.document-node-removal",
   "binoc.document-node-edit",
+  "binoc.document-value-change",
 ]
