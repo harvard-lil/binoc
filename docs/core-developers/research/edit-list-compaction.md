@@ -17,7 +17,10 @@ audience: core developers surveying prior art for the edit-list-compaction engin
     e-graphs, the MLIR phase-ordering arc), this one looks through the
     edit-list/edit-distance lens specifically. Facts were web-verified against
     primary sources in June 2026; load-bearing uncertainties are flagged
-    inline. Poke holes in it.
+    inline. Poke holes in it. A sequel, [Searching and verifying edit-list
+    rewrites](edit-list-search-and-verification.md), takes up three questions
+    this survey leaves open: rule ordering, a cost function that is the sole
+    acceptance test, and verification by replay.
 
 *The ADR's Pass 2 is a wager that the field has tested many times under many
 names. Every correspondence link gets an **edit list** in open-vocabulary

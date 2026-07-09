@@ -162,6 +162,7 @@ nav:
           - Prior art and architecture precedents: core-developers/research/precedents.md
           - Format-aware diff tools, a field survey: core-developers/research/format-aware-diff-tools.md
           - Edit lists, edit distance, and compaction: core-developers/research/edit-list-compaction.md
+          - Searching and verifying edit-list rewrites: core-developers/research/edit-list-search-and-verification.md
           - Nurturing a plugin ecosystem under an unstable SDK: core-developers/research/plugin-ecosystem-precedents.md
           - The data.gov format landscape: core-developers/research/data-gov-inventory-analysis.md
           - Revision-prone datasets, a cross-field catalog: core-developers/research/revision-prone-datasets.md
