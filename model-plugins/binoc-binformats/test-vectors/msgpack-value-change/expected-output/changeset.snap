@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.settings.timeout: 30 -> 45"
           }
         ],
         "tags": [
@@ -48,7 +48,13 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.settings.timeout"
+                  }
+                },
+                {
+                  "text": ": 30 -> 45"
                 }
               ],
               "verb": "document.value_change"

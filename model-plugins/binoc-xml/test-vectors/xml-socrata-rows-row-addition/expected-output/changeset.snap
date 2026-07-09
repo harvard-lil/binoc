@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.response.row.row length: 2 -> 3; $.response.row.row[2]: added {\"@_id\":\"row-3\",\"@_uuid\":\"00000000-0000-0000-0000-000000000003\",\"gauge_height\":\"5.6\",\"station_id\":\"0791\",\"station_name\":..."
           }
         ],
         "tags": [
@@ -54,7 +54,22 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.response.row.row"
+                  }
+                },
+                {
+                  "text": " length: 2 -> 3; "
+                },
+                {
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.response.row.row[2]"
+                  }
+                },
+                {
+                  "text": ": added {\"@_id\":\"row-3\",\"@_uuid\":\"00000000-0000-0000-0000-000000000003\",\"gauge_height\":\"5.6\",\"station_id\":\"0791\",\"station_name\":..."
                 }
               ],
               "verb": "document.value_change"

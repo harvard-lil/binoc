@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.bbox.max_x: 5.0 -> 9.0; $.bbox.max_y: 5.0 -> 9.0"
           }
         ],
         "tags": [
@@ -54,7 +54,22 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.bbox.max_x"
+                  }
+                },
+                {
+                  "text": ": 5.0 -> 9.0; "
+                },
+                {
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.bbox.max_y"
+                  }
+                },
+                {
+                  "text": ": 5.0 -> 9.0"
                 }
               ],
               "verb": "document.value_change"

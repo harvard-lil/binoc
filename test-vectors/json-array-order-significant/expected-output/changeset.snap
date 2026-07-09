@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.ids[1]: 2 -> 3; $.ids[2]: 3 -> 2"
           }
         ],
         "tags": [
@@ -54,7 +54,22 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.ids[1]"
+                  }
+                },
+                {
+                  "text": ": 2 -> 3; "
+                },
+                {
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.ids[2]"
+                  }
+                },
+                {
+                  "text": ": 3 -> 2"
                 }
               ],
               "verb": "document.value_change"

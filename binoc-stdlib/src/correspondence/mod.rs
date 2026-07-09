@@ -496,6 +496,7 @@ fn summarize_known_edits(edits: &[Edit]) -> Option<String> {
     parts.extend(text_fact_summaries(edits));
     parts.extend(document_node_summaries(edits));
     parts.extend(metadata_summaries(edits));
+    parts.extend(edit_summary_facts(edits, &parts));
 
     if parts.is_empty() {
         None
@@ -640,6 +641,29 @@ fn metadata_summaries(edits: &[Edit]) -> Vec<String> {
     }
     if file > 0 {
         parts.push("File metadata changed".into());
+    }
+    parts
+}
+
+fn edit_summary_facts(edits: &[Edit], existing: &[String]) -> Vec<String> {
+    let mut parts = Vec::new();
+    for edit in edits {
+        let Some(summary) = edit
+            .projection
+            .hint
+            .summary
+            .as_ref()
+            .map(|summary| summary.plain_text())
+        else {
+            continue;
+        };
+        if summary.is_empty()
+            || existing.iter().any(|part| part == &summary)
+            || parts.iter().any(|part| part == &summary)
+        {
+            continue;
+        }
+        parts.push(summary);
     }
     parts
 }
@@ -1524,6 +1548,36 @@ mod tests {
     fn reshape_requires_a_known_source_kind() {
         // An unlinked add/remove carries no source kind, so it never reshapes.
         assert!(container_reshape_hint(&ctx(true, None, "SQLite database", None)).is_none());
+    }
+
+    #[test]
+    fn summarize_known_edits_keeps_summary_bearing_edits_visible_with_cell_edits() {
+        let edits = vec![
+            Edit::new(
+                "tabular.edit_cell",
+                serde_json::json!({
+                    "row": 0,
+                    "column": "score",
+                    "from": "1",
+                    "to": "2"
+                }),
+            ),
+            Edit::new(
+                "tabular.column_type_changed",
+                serde_json::json!({
+                    "column": "score",
+                    "from_type": "number",
+                    "to_type": "string",
+                    "cells": 1
+                }),
+            )
+            .with_summary("Column type changed: 'score' number -> string"),
+        ];
+
+        assert_eq!(
+            summarize_known_edits(&edits),
+            Some("1 cell changed; Column type changed: 'score' number -> string".into())
+        );
     }
 
     #[test]

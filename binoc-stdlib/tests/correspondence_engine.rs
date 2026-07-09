@@ -422,7 +422,7 @@ fn json_writer_keeps_array_order_significant() {
     assert!(node.tags.contains("binoc.document-value-change"));
     assert_eq!(
         node.summary.as_ref().map(|summary| summary.plain_text()),
-        Some("Document values changed".into())
+        Some("$[1]: 2 -> 3; $[2]: 3 -> 2".into())
     );
     let edit = &node.details["edits"].as_array().expect("edits")[0];
     assert_eq!(edit["verb"], serde_json::json!("document.value_change"));

@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **config.toml**: Document values changed
+- **config.toml**: $.replicas: 3 -> 5

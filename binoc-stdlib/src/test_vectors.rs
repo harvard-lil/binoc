@@ -897,24 +897,164 @@ fn check_no_row_alignment_basis_leaked(name: &str, node: &DiffNode) {
 /// tags may drive grouping, but rule-specific phrasing has to arrive as
 /// summaries/details from the producing rules.
 fn check_empty_tag_map_markdown_legibility(name: &str, changeset: &Changeset) {
-    let mut changeset = changeset.clone();
-    changeset.diagnostics.clear();
     let md = markdown::render_markdown(
-        &[changeset],
+        std::slice::from_ref(changeset),
         &markdown::MarkdownRendererConfig {
             groups: Vec::new(),
             ..Default::default()
         },
     );
+    let claims_only = split_claims_from_diagnostics(&md);
 
     assert!(
-        !md.contains("binoc."),
-        "[{name}] Markdown rendered with an empty tag_map leaked raw binoc vocabulary:\n{md}"
+        !claims_only.contains("binoc."),
+        "[{name}] Markdown rendered with an empty tag_map leaked raw binoc vocabulary into claims:\n{md}"
     );
     assert!(
         !md.contains("linked endpoints have different content hashes, but no visible edit explained the difference"),
         "[{name}] Markdown rendered with an empty tag_map exposed the opaque content-hash fallback:\n{md}"
     );
+    if let Some(root) = &changeset.root {
+        check_modify_node_edit_legibility(name, root);
+    }
+}
+
+fn split_claims_from_diagnostics(md: &str) -> &str {
+    ["\n## Errors\n", "\n## Warnings\n", "\n## Suggestions\n"]
+        .iter()
+        .filter_map(|marker| md.find(marker))
+        .min()
+        .map(|index| &md[..index])
+        .unwrap_or(md)
+}
+
+fn check_modify_node_edit_legibility(name: &str, node: &DiffNode) {
+    if node.action == "modify" && node_requires_concrete_fact_check(node) {
+        let rendered = markdown::render_markdown(
+            &[Changeset::new(
+                "left",
+                "right",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node.clone()])),
+            )],
+            &markdown::MarkdownRendererConfig {
+                groups: Vec::new(),
+                ..Default::default()
+            },
+        );
+        let facts = legibility_fact_candidates(node);
+        let has_fact = facts.iter().any(|fact| rendered.contains(fact))
+            || (facts.is_empty()
+                && node
+                    .summary
+                    .as_ref()
+                    .is_some_and(|summary| !generic_summary_phrase(&summary.plain_text())));
+        assert!(
+            has_fact,
+            "[{name}] Modify node with edits rendered without a concrete fact under empty tag_map for path '{}':\n{rendered}",
+            node.path
+        );
+    }
+
+    for child in &node.children {
+        check_modify_node_edit_legibility(name, child);
+    }
+}
+
+fn node_requires_concrete_fact_check(node: &DiffNode) -> bool {
+    node.details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .is_some_and(|edits| {
+            !edits.is_empty()
+                && edits.iter().any(|edit| {
+                    edit.get("verb").and_then(|value| value.as_str())
+                        == Some("document.value_change")
+                        || edit
+                            .get("summary")
+                            .and_then(|summary| {
+                                serde_json::from_value::<binoc_sdk::Summary>(summary.clone()).ok()
+                            })
+                            .is_some_and(|summary| summary_has_concrete_fact(&summary.plain_text()))
+                })
+        })
+}
+
+fn legibility_fact_candidates(node: &DiffNode) -> Vec<String> {
+    let Some(edits) = node.details.get("edits").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+    let mut facts = Vec::new();
+    for edit in edits {
+        collect_legibility_fact_candidates(
+            edit.get("params").unwrap_or(&serde_json::Value::Null),
+            &mut facts,
+        );
+        if let Some(summary) = edit
+            .get("summary")
+            .and_then(|summary| serde_json::from_value::<binoc_sdk::Summary>(summary.clone()).ok())
+            .map(|summary| summary.plain_text())
+            .filter(|summary| summary_has_concrete_fact(summary))
+        {
+            push_legibility_fact(&mut facts, summary);
+        }
+    }
+    facts
+}
+
+fn collect_legibility_fact_candidates(value: &serde_json::Value, facts: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                match key.as_str() {
+                    "path" | "left_path" | "right_path" | "column" | "key" | "name"
+                    | "from_type" | "to_type" => {
+                        if let Some(text) = value.as_str() {
+                            push_legibility_fact(facts, text.to_string());
+                        }
+                    }
+                    "from" | "to" | "value" => {
+                        if let Some(text) = value.as_str() {
+                            push_legibility_fact(facts, text.to_string());
+                        } else if value.is_number() || value.is_boolean() || value.is_null() {
+                            push_legibility_fact(facts, value.to_string());
+                        }
+                    }
+                    _ => collect_legibility_fact_candidates(value, facts),
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_legibility_fact_candidates(value, facts);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_legibility_fact(facts: &mut Vec<String>, fact: String) {
+    if fact.len() < 2 || facts.iter().any(|existing| existing == &fact) {
+        return;
+    }
+    facts.push(fact);
+}
+
+fn summary_has_concrete_fact(summary: &str) -> bool {
+    summary.contains('$')
+        || summary.contains("->")
+        || summary.contains('\'')
+        || summary.chars().any(|ch| ch.is_ascii_digit())
+}
+
+fn generic_summary_phrase(summary: &str) -> bool {
+    let summary = summary.trim();
+    summary == "Document values changed"
+        || summary == "Metadata changed"
+        || summary == "Content changed"
+        || summary == "Text changed"
+        || summary == "Document changed"
+        || summary.ends_with(" edit")
+        || summary.ends_with(" edits")
 }
 
 fn collect_invariant_violations<'a>(node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {

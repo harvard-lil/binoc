@@ -25,13 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "row correspondence uncertain; "
-          },
-          {
-            "float": 1.0
-          },
-          {
-            "text": " changed-cell fraction"
+            "text": "row correspondence uncertain; 1 changed-cell fraction"
           }
         ],
         "tags": [

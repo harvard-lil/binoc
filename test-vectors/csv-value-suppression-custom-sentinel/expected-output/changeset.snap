@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 cell changed"
+            "text": "1 cell changed; Suppressed 2 cells in 'count'"
           }
         ],
         "tags": [

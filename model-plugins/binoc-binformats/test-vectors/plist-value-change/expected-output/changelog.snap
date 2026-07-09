@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.plist**: Document values changed
+- **data.plist**: $.replicas: 3 -> 6

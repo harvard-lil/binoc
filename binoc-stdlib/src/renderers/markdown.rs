@@ -1782,6 +1782,48 @@ mod tests {
     }
 
     #[test]
+    fn to_markdown_keeps_summary_bearing_edit_visible_with_cell_edits() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv")
+            .with_summary("1 cell changed; Column type changed: 'score' number -> string");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.edit_cell",
+                    "params": { "row": 0, "column": "score", "from": "1", "to": "2" }
+                },
+                {
+                    "verb": "tabular.column_type_changed",
+                    "params": {
+                        "column": "score",
+                        "from_type": "number",
+                        "to_type": "string",
+                        "cells": 1
+                    },
+                    "summary": [
+                        { "text": "Column type changed: 'score' number -> string" }
+                    ]
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("Column type changed: 'score' number -> string"),
+            "got:\n{md}"
+        );
+        assert!(
+            md.contains("row 1, column 'score': '1' -> '2'"),
+            "got:\n{md}"
+        );
+    }
+
+    #[test]
     fn to_markdown_respects_explicit_group_sections() {
         let changeset = Changeset::new(
             "v1",

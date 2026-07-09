@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.replicas: 3 -> 5"
           }
         ],
         "tags": [
@@ -48,7 +48,13 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.replicas"
+                  }
+                },
+                {
+                  "text": ": 3 -> 5"
                 }
               ],
               "verb": "document.value_change"

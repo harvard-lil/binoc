@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "$.settings.retries: 2 -> 7"
           }
         ],
         "tags": [
@@ -48,7 +48,13 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.settings.retries"
+                  }
+                },
+                {
+                  "text": ": 2 -> 7"
                 }
               ],
               "verb": "document.value_change"

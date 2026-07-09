@@ -9,4 +9,4 @@ expression: "&md"
     - row 2, column 'lanes': 2.0 -> 4.0
   - Rows added
     - row 3: 'Pine Rd', 1.0
-- **roads.shp/>geometry**: Document values changed
+- **roads.shp/>geometry**: 3 values changed

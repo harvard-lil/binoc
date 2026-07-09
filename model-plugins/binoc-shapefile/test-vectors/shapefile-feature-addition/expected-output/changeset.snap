@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "text": "3 values changed"
           }
         ],
         "tags": [
@@ -60,7 +60,10 @@ expression: "&stable_changeset"
               },
               "summary": [
                 {
-                  "text": "Document values changed"
+                  "uint": 3
+                },
+                {
+                  "text": " values changed"
                 }
               ],
               "verb": "document.value_change"

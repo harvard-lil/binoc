@@ -4,4 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **config.ini**: Document values changed
+- **config.ini**: $.replicas: "3" -> "5"
