@@ -4,9 +4,8 @@ use binoc_sdk::{
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::tabular::load_tabular;
+use super::tabular::{is_row_alignment_basis_edit, load_tabular, MAX_ROW_ALIGNMENT_ROWS};
 
-const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
 const COLUMN_RENAME_MIN_MATCHES: usize = 2;
 const COLUMN_RENAME_MIN_MATCH_RATIO: f64 = 0.10;
 
@@ -874,7 +873,7 @@ fn column_rename_matches(
     }
     let row_alignment = edits
         .iter()
-        .find(|edit| edit.verb == "tabular.row_alignment_basis")
+        .find(|edit| is_row_alignment_basis_edit(edit))
         .and_then(RowAlignmentBasis::from_edit)
         .map(|basis| basis.alignment_pairs());
 
@@ -1134,19 +1133,12 @@ impl CompactionRule for RowAlignment {
 }
 
 fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
-    let basis_index = edits
-        .iter()
-        .position(|edit| edit.verb == "tabular.row_alignment_basis")?;
-    let basis = RowAlignmentBasis::from_edit(&edits[basis_index])?;
+    let basis_index = edits.iter().position(is_row_alignment_basis_edit)?;
+    let Some(basis) = RowAlignmentBasis::from_edit(&edits[basis_index]) else {
+        return Some(strip_row_alignment_bases(edits));
+    };
     if basis.columns.is_empty() {
-        return Some(
-            edits
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| *index != basis_index)
-                .map(|(_, edit)| edit.clone())
-                .collect(),
-        );
+        return Some(strip_row_alignment_bases(edits));
     }
     let alignment = basis.alignment_pairs();
     let mut matched_left = vec![false; basis.left.len()];
@@ -1165,14 +1157,13 @@ fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
 
     let mut out: Vec<Edit> = edits
         .iter()
-        .enumerate()
-        .filter(|(index, edit)| {
-            *index != basis_index
+        .filter(|edit| {
+            !is_row_alignment_basis_edit(edit)
                 && !basis.owns_cell_edit(edit)
                 && edit.verb != "tabular.add_row"
                 && edit.verb != "tabular.remove_row"
         })
-        .map(|(_, edit)| edit.clone())
+        .cloned()
         .collect();
 
     if unmatched_left == 0 && !unmatched_right.is_empty() {
@@ -1193,18 +1184,25 @@ fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
         out.extend(
             edits
                 .iter()
-                .enumerate()
-                .filter(|(index, edit)| {
-                    *index != basis_index
+                .filter(|edit| {
+                    !is_row_alignment_basis_edit(edit)
                         && (basis.owns_cell_edit(edit)
                             || edit.verb == "tabular.add_row"
                             || edit.verb == "tabular.remove_row")
                 })
-                .map(|(_, edit)| edit.clone()),
+                .cloned(),
         );
     }
 
     Some(out)
+}
+
+fn strip_row_alignment_bases(edits: &[Edit]) -> Vec<Edit> {
+    edits
+        .iter()
+        .filter(|edit| !is_row_alignment_basis_edit(edit))
+        .cloned()
+        .collect()
 }
 
 struct RowAlignmentBasis {
@@ -1224,6 +1222,9 @@ impl RowAlignmentBasis {
             return None;
         }
         let right_rows = edit.params.get("right_rows")?.as_array()?.clone();
+        if right_rows.len() > MAX_ROW_ALIGNMENT_ROWS {
+            return None;
+        }
         let pairs = match edit.params.get("pairs").and_then(|pairs| pairs.as_array()) {
             Some(pairs) => Some(
                 pairs
@@ -1238,6 +1239,13 @@ impl RowAlignmentBasis {
             ),
             None => None,
         };
+        if let Some(pairs) = &pairs {
+            if pairs.iter().any(|(left_index, right_index)| {
+                *left_index >= left.len() || *right_index >= right.len()
+            }) {
+                return None;
+            }
+        }
         Some(Self {
             columns,
             left,
@@ -1998,6 +2006,34 @@ mod tests {
         let rewritten = rewrite_row_alignment(&edits).expect("basis cleanup");
 
         assert_eq!(rewritten, vec![cell]);
+    }
+
+    #[test]
+    fn row_alignment_strips_oversized_basis_it_cannot_parse() {
+        let left = (0..=MAX_ROW_ALIGNMENT_ROWS)
+            .map(|index| format!("left-{index}"))
+            .collect::<Vec<_>>();
+        let right = (0..=MAX_ROW_ALIGNMENT_ROWS)
+            .map(|index| format!("right-{index}"))
+            .collect::<Vec<_>>();
+        let visible = Edit::new("tabular.visible", json!({"kept": true}));
+        let edits = vec![
+            Edit::new(
+                "tabular.row_alignment_basis",
+                json!({
+                    "columns": ["name"],
+                    "left": left,
+                    "right": right,
+                    "right_rows": [],
+                }),
+            )
+            .hidden(),
+            visible.clone(),
+        ];
+
+        let rewritten = rewrite_row_alignment(&edits).expect("basis cleanup");
+
+        assert_eq!(rewritten, vec![visible]);
     }
 
     fn default_suppression_sentinels() -> BTreeSet<String> {
