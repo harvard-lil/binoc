@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.settings.timeout: 30 -> 45"
+            "path": {
+              "value": "$.settings.timeout",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 30 -> 45"
           }
         ],
         "tags": [

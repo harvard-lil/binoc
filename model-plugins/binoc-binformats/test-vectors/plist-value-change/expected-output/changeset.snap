@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.replicas: 3 -> 6"
+            "path": {
+              "value": "$.replicas",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 3 -> 6"
           }
         ],
         "tags": [

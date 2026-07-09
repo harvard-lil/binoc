@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Column renamed: 'status' -> 'state'; Columns reordered"
+            "text": "Column renamed: 'status' -> 'state'; "
+          },
+          {
+            "text": "Columns reordered"
           }
         ],
         "tags": [

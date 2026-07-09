@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Suppressed 3 cells in 'count'"
+            "text": "Suppressed "
+          },
+          {
+            "uint": 3
+          },
+          {
+            "text": " cells in 'count'"
           }
         ],
         "tags": [

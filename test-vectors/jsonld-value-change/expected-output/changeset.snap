@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.jobTitle: \"Mathematician\" -> \"Computer Scientist\""
+            "path": {
+              "value": "$.jobTitle",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": \"Mathematician\" -> \"Computer Scientist\""
           }
         ],
         "tags": [

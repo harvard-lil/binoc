@@ -25,7 +25,22 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.bbox.max_x: 5.0 -> 9.0; $.bbox.max_y: 5.0 -> 9.0"
+            "path": {
+              "value": "$.bbox.max_x",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 5.0 -> 9.0; "
+          },
+          {
+            "path": {
+              "value": "$.bbox.max_y",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 5.0 -> 9.0"
           }
         ],
         "tags": [

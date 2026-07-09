@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row modified by key; 1 line added; 1 line removed"
+            "text": "1 row modified by key; "
+          },
+          {
+            "text": "1 line added; 1 line removed"
           }
         ],
         "tags": [

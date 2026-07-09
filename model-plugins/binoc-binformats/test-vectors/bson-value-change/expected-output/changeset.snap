@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.settings.retries: 2 -> 4"
+            "path": {
+              "value": "$.settings.retries",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 2 -> 4"
           }
         ],
         "tags": [

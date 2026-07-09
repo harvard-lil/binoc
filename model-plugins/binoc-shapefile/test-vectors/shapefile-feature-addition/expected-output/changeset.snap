@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "3 values changed"
+            "uint": 3
+          },
+          {
+            "text": " values changed"
           }
         ],
         "tags": [

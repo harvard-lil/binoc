@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Column added: 'region'; 1 cell changed"
+            "text": "Column added: 'region'; "
+          },
+          {
+            "text": "1 cell changed"
           }
         ],
         "tags": [
@@ -93,7 +96,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "2 rows added; 3 cells changed"
+            "text": "2 rows added; "
+          },
+          {
+            "text": "3 cells changed"
           }
         ],
         "tags": [

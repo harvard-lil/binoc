@@ -591,7 +591,7 @@ fn node_summary(node: &DiffNode) -> Summary {
 /// richer renderer could hyperlink it, using `Segment::Path`'s snapshot side to
 /// resolve against the correct tree). See ADR
 /// 2026-06-03-structured-summary-segments.
-fn render_summary(summary: &Summary) -> String {
+pub(crate) fn render_summary(summary: &Summary) -> String {
     let mut out = String::new();
     for segment in summary.segments() {
         match segment {

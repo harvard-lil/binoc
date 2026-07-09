@@ -25,7 +25,22 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "$.ids[1]: 2 -> 3; $.ids[2]: 3 -> 2"
+            "path": {
+              "value": "$.ids[1]",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 2 -> 3; "
+          },
+          {
+            "path": {
+              "value": "$.ids[2]",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": 3 -> 2"
           }
         ],
         "tags": [

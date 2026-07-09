@@ -992,8 +992,8 @@ fn legibility_fact_candidates(node: &DiffNode) -> Vec<String> {
         if let Some(summary) = edit
             .get("summary")
             .and_then(|summary| serde_json::from_value::<binoc_sdk::Summary>(summary.clone()).ok())
-            .map(|summary| summary.plain_text())
-            .filter(|summary| summary_has_concrete_fact(summary))
+            .filter(|summary| summary_has_concrete_fact(&summary.plain_text()))
+            .map(|summary| markdown::render_summary(&summary))
         {
             push_legibility_fact(&mut facts, summary);
         }

@@ -25,7 +25,40 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 changed byte range; 66.66666666666666% unchanged; first range left [65536, 131072) to right [65536, 131072)"
+            "uint": 1
+          },
+          {
+            "text": " changed byte range; "
+          },
+          {
+            "float": 66.66666666666666
+          },
+          {
+            "text": "% unchanged; first range left ["
+          },
+          {
+            "uint": 65536
+          },
+          {
+            "text": ", "
+          },
+          {
+            "uint": 131072
+          },
+          {
+            "text": ") to right ["
+          },
+          {
+            "uint": 65536
+          },
+          {
+            "text": ", "
+          },
+          {
+            "uint": 131072
+          },
+          {
+            "text": ")"
           }
         ],
         "tags": [

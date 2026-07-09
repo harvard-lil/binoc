@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Rounded 3 cells in 'population' to nearest 1000"
+            "text": "Rounded "
+          },
+          {
+            "uint": 3
+          },
+          {
+            "text": " cells in 'population' to nearest 1000"
           }
         ],
         "tags": [

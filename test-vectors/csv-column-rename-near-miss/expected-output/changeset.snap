@@ -25,7 +25,10 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Column added: 'status'; Column removed: 'legacy'"
+            "text": "Column added: 'status'; "
+          },
+          {
+            "text": "Column removed: 'legacy'"
           }
         ],
         "tags": [
