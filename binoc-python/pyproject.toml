@@ -33,7 +33,6 @@ binoc = "binoc.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-datadir>=1.5", "maturin>=1.7,<2.0", "tomli>=2.0; python_version < '3.11'"]
-all = ["binoc-sqlite>=0.1.1", "binoc-stat-binary>=0.1.1"]
 
 [build-system]
 requires = ["maturin>=1.7,<2.0"]
@@ -42,7 +41,3 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "python"
 module-name = "binoc._binoc"
-
-[tool.uv.sources]
-binoc-sqlite = { path = "../model-plugins/binoc-sqlite", editable = true }
-binoc-stat-binary = { path = "../model-plugins/binoc-stat-binary", editable = true }

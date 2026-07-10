@@ -1142,7 +1142,10 @@ fn keyed_row_degradation_tags_only_observed_failures() {
 
     let controller =
         Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
-            "tables": [{ "path_regex": "^data\\.csv$", "columns": ["id"] }]
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": { "columns": ["id"] }
+            }]
         }));
     let root = controller
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -1166,10 +1169,12 @@ fn keyed_row_degradation_honors_failure_policies() {
 
     let ignored = Controller::new(default_engine_config())
         .with_dataset_config(serde_json::json!({
-            "tables": [{
-                "path_regex": "^data\\.csv$",
-                "columns": ["id"],
-                "on_null_key": "ignore"
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "ignore"
+                }
             }]
         }))
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -1184,10 +1189,12 @@ fn keyed_row_degradation_honors_failure_policies() {
 
     let errored = Controller::new(default_engine_config())
         .with_dataset_config(serde_json::json!({
-            "tables": [{
-                "path_regex": "^data\\.csv$",
-                "columns": ["id"],
-                "on_null_key": "error"
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "error"
+                }
             }]
         }))
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -1819,104 +1826,6 @@ fn lowered_large_tabular_threshold_forces_streaming_for_small_tsv() {
 }
 
 #[test]
-fn legacy_tables_row_identity_streams_over_lowered_threshold() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let left = temp.path().join("left");
-    let right = temp.path().join("right");
-    fs::create_dir_all(&left).unwrap();
-    fs::create_dir_all(&right).unwrap();
-    write_large_tsv(&left.join("data.tsv"), 0, 100, Some((50, "before")));
-    write_large_tsv(&right.join("data.tsv"), 1, 101, Some((50, "after")));
-
-    let dataset = serde_json::json!({
-        "correspondence": {
-            "large_tabular_threshold_bytes": 1024
-        },
-        "tables": {
-            "defaults": {
-                "row_identity": { "columns": ["id"] }
-            }
-        }
-    });
-    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
-    let left_root = data.register_local(&left, "").expect("left root");
-    let right_root = data.register_local(&right, "").expect("right root");
-    let mut config = engine_config_for_dataset_config(&dataset);
-    let configurator = config.dataset_configurator.clone().expect("configurator");
-    configurator
-        .configure(&mut config, &dataset, &left_root, &right_root, &data)
-        .expect("configure dataset");
-
-    let run =
-        correspondence::driver::run(&config, left_root, right_root, &data).expect("engine run");
-    assert_eq!(run.stats.fires_of("binoc.parse.csv"), 0);
-    assert_eq!(run.stats.fires_of("binoc.parse.csv_media"), 0);
-
-    let changeset = run.project().to_changeset("snapshot-a", "snapshot-b");
-    let root = changeset.root.expect("root");
-    let node = find(&root, "data.tsv").expect("data.tsv");
-    let edits = node.details["edits"].as_array().expect("edits");
-    let stream = edits
-        .iter()
-        .find(|edit| edit["verb"] == "tabular.keyed_stream_summary")
-        .expect("stream summary edit");
-    assert_eq!(stream["params"]["row_additions"], 1);
-    assert_eq!(stream["params"]["row_removals"], 1);
-    assert_eq!(stream["params"]["modified_rows"], 1);
-}
-
-#[test]
-fn legacy_tables_row_identity_stays_keyed_under_threshold() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let left = temp.path().join("left");
-    let right = temp.path().join("right");
-    fs::create_dir_all(&left).unwrap();
-    fs::create_dir_all(&right).unwrap();
-    fs::write(left.join("data.tsv"), "id\tvalue\n1\tbefore\n2\tsame\n").unwrap();
-    fs::write(right.join("data.tsv"), "id\tvalue\n2\tsame\n1\tafter\n").unwrap();
-
-    let dataset = serde_json::json!({
-        "correspondence": {
-            "large_tabular_threshold_bytes": 64 * 1024
-        },
-        "tables": {
-            "defaults": {
-                "row_identity": { "columns": ["id"] }
-            }
-        }
-    });
-    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
-    let left_root = data.register_local(&left, "").expect("left root");
-    let right_root = data.register_local(&right, "").expect("right root");
-    let mut config = engine_config_for_dataset_config(&dataset);
-    let configurator = config.dataset_configurator.clone().expect("configurator");
-    configurator
-        .configure(&mut config, &dataset, &left_root, &right_root, &data)
-        .expect("configure dataset");
-
-    let run =
-        correspondence::driver::run(&config, left_root, right_root, &data).expect("engine run");
-    assert!(run.stats.fires_of("binoc.parse.csv") > 0);
-
-    let changeset = run.project().to_changeset("snapshot-a", "snapshot-b");
-    let root = changeset.root.expect("root");
-    let node = find(&root, "data.tsv").expect("data.tsv");
-    let edits = node.details["edits"].as_array().expect("edits");
-    assert!(
-        !edits
-            .iter()
-            .any(|edit| edit["verb"] == "tabular.keyed_stream_summary"),
-        "{edits:?}"
-    );
-    assert!(
-        edits
-            .iter()
-            .any(|edit| edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1"),
-        "{edits:?}"
-    );
-}
-
-#[test]
 fn raised_large_tabular_threshold_allows_forced_csv_row_identity_probe() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
@@ -2151,7 +2060,10 @@ fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
             "paths": [
                 { "match": "notes.txt", "row_identity": { "columns": ["id"] } },
                 { "match": "empty" },
-                { "match": "notes.txt", "unknown_facet": true }
+                { "match": "notes.txt", "unknown_facet": true },
+                { "match": "columns.csv", "columns": ["id"] },
+                { "match": "null-policy.csv", "on_null_key": "error" },
+                { "match": "duplicate-policy.csv", "on_duplicate_key": "ignore" }
             ]
         }))
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -2169,6 +2081,12 @@ fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
             "missing diagnostic {code}: {:?}",
             changeset.diagnostics
         );
+    }
+    for field in ["columns", "on_null_key", "on_duplicate_key"] {
+        assert!(changeset.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "binoc.dataset_config.unknown_facet"
+                && diagnostic.message.plain_text().contains(field)
+        }));
     }
 }
 
@@ -2451,7 +2369,10 @@ fn correspondence_engine_uses_dataset_row_keys_on_production_path() {
 
     let controller =
         Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
-            "tables": [{ "path_regex": "^data\\.csv$", "columns": ["id"] }]
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": { "columns": ["id"] }
+            }]
         }));
     let root = controller
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -2459,35 +2380,6 @@ fn correspondence_engine_uses_dataset_row_keys_on_production_path() {
         .root
         .expect("root");
     let node = find(&root, "data.csv").expect("data.csv");
-    assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
-}
-
-#[test]
-fn unrelated_path_config_does_not_disable_legacy_table_row_identity() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let left = temp.path().join("left");
-    let right = temp.path().join("right");
-    fs::create_dir_all(&left).unwrap();
-    fs::create_dir_all(&right).unwrap();
-    fs::write(left.join("data.csv"), "id,value\n1,a\n2,b\n").unwrap();
-    fs::write(right.join("data.csv"), "id,value\n2,b\n1,c\n").unwrap();
-    fs::write(left.join("metadata.json"), r#"{"version":1}"#).unwrap();
-    fs::write(right.join("metadata.json"), r#"{"version":2}"#).unwrap();
-
-    let changeset = Controller::new(default_engine_config())
-        .with_dataset_config(serde_json::json!({
-            "paths": [{
-                "match": "metadata.json",
-                "content_type": "application/json"
-            }],
-            "tables": [{ "path_regex": "^data\\.csv$", "columns": ["id"] }]
-        }))
-        .diff(left.to_str().unwrap(), right.to_str().unwrap())
-        .expect("correspondence diff");
-
-    let root = changeset.root.expect("root");
-    let node = find(&root, "data.csv").expect("data.csv");
-    assert_eq!(node.details["edits"][0]["verb"], "tabular.edit_cell");
     assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
 }
 
@@ -2511,7 +2403,10 @@ fn correspondence_engine_uses_dataset_row_keys_on_json_records_production_path()
 
     let controller =
         Controller::new(default_engine_config()).with_dataset_config(serde_json::json!({
-            "tables": [{ "path_regex": "^data\\.json$", "columns": ["id"] }]
+            "paths": [{
+                "match": "data.json",
+                "row_identity": { "columns": ["id"] }
+            }]
         }));
     let changeset = controller
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
@@ -2689,7 +2584,7 @@ fn correspondence_engine_resolves_declared_pairs_against_live_archive_view() {
 }
 
 #[test]
-fn correspondence_engine_reports_malformed_dataset_config() {
+fn correspondence_engine_rejects_removed_tables_config() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
     let right = temp.path().join("right");
@@ -2697,13 +2592,14 @@ fn correspondence_engine_reports_malformed_dataset_config() {
     fs::create_dir_all(&right).unwrap();
 
     let changeset = Controller::new(default_engine_config())
-        .with_dataset_config(serde_json::json!({ "tables": "not a table config" }))
+        .with_dataset_config(serde_json::json!({ "tables": [] }))
         .diff(left.to_str().unwrap(), right.to_str().unwrap())
         .expect("correspondence diff");
-    assert!(changeset
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.code == "binoc.dataset_config.invalid"));
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.dataset_config.unknown_field"
+            && diagnostic.severity == DiagnosticSeverity::Error
+            && diagnostic.location.as_deref() == Some("dataset.tables")
+    }));
 }
 
 fn write_zip_with_entries(path: &std::path::Path, entries: &[(&str, &[u8])]) {

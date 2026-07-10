@@ -3,9 +3,9 @@ name = "json-keyed-row-diff"
 description = "Configured JSON record keys match reordered rows and report keyed row/cell changes"
 tags = ["json", "keyed", "row-addition", "row-removal", "cell-change"]
 
-[[config.dataset.tables]]
-path_regex = '^data\.json$'
-columns = ["id"]
+[[config.dataset.paths]]
+match = "data.json"
+row_identity = { columns = ["id"] }
 
 [expected]
 root_action = "modify"

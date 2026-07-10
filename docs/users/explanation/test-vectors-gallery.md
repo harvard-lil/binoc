@@ -496,11 +496,10 @@ Save this dataset config as `/tmp/csv-distribution-shift.yaml`:
 
 ```yaml
 dataset:
-  tables:
-    defaults:
-      row_identity:
-        columns:
-          - id
+  defaults:
+    row_identity:
+      columns:
+        - id
 ```
 
 
@@ -535,13 +534,13 @@ Save this dataset config as `/tmp/csv-keyed-null-duplicate.yaml`:
 
 ```yaml
 dataset:
-  tables:
-    defaults:
+  defaults:
+    row_identity:
+      on_null_key: diagnostic
+      on_duplicate_key: diagnostic
+  paths:
+    - match: data.csv
       row_identity:
-        on_null_key: diagnostic
-        on_duplicate_key: diagnostic
-    entries:
-      - path_regex: ^data\.csv$
         columns:
           - id
 ```
@@ -583,10 +582,11 @@ Save this dataset config as `/tmp/csv-keyed-row-diff.yaml`:
 
 ```yaml
 dataset:
-  tables:
-    - path_regex: ^data\.csv$
-      columns:
-        - id
+  paths:
+    - match: data.csv
+      row_identity:
+        columns:
+          - id
 ```
 
 
@@ -1445,10 +1445,11 @@ Save this dataset config as `/tmp/json-keyed-row-diff.yaml`:
 
 ```yaml
 dataset:
-  tables:
-    - path_regex: ^data\.json$
-      columns:
-        - id
+  paths:
+    - match: data.json
+      row_identity:
+        columns:
+          - id
 ```
 
 

@@ -40,7 +40,7 @@ tags = ["tag1", "tag2"]
 
 [config]
 # Optional: override default dataset/rendering config
-# dataset = { tables = [{ path = "**/*.csv", row_identity = { columns = ["id"] } }] }
+# dataset = { paths = [{ match = "**/*.csv", row_identity = { columns = ["id"] } }] }
 # output = { markdown = { verbosity = "summary" } }
 
 [expected]

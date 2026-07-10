@@ -419,8 +419,6 @@ pub struct DatasetSemanticsV1 {
     #[serde(default)]
     pub files: FileIdentityConfig,
     #[serde(default)]
-    pub tables: TableConfig,
-    #[serde(default)]
     pub correspondence: CorrespondenceConfig,
     #[serde(default)]
     pub reduced_precision: ReducedPrecisionConfig,
@@ -505,32 +503,11 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             row_identity: Option<RowIdentityPatch>,
             #[serde(default)]
             node_identity: Option<NodeIdentity>,
-            #[serde(default)]
-            columns: Vec<String>,
-            #[serde(default)]
-            on_null_key: Option<IdentityFailurePolicy>,
-            #[serde(default)]
-            on_duplicate_key: Option<IdentityFailurePolicy>,
             #[serde(flatten)]
             extra: BTreeMap<String, serde_json::Value>,
         }
 
         let raw = RawPathConfigEntry::deserialize(deserializer)?;
-        let mut row_identity = raw.row_identity;
-        if !raw.columns.is_empty() || raw.on_null_key.is_some() || raw.on_duplicate_key.is_some() {
-            let mut identity = row_identity.unwrap_or_default();
-            if !raw.columns.is_empty() && identity.columns.is_none() {
-                identity.columns = Some(raw.columns);
-            }
-            if let Some(policy) = raw.on_null_key {
-                identity.on_null_key.get_or_insert(policy);
-            }
-            if let Some(policy) = raw.on_duplicate_key {
-                identity.on_duplicate_key.get_or_insert(policy);
-            }
-            row_identity = Some(identity);
-        }
-
         Ok(Self {
             match_: raw.match_,
             content_type: raw.content_type,
@@ -538,7 +515,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             dialect: raw.dialect,
             shape: raw.shape,
             records_path: raw.records_path,
-            row_identity,
+            row_identity: raw.row_identity,
             node_identity: raw.node_identity,
             unknown_fields: raw.extra.into_keys().collect(),
         })
@@ -619,126 +596,6 @@ pub enum IdentityFailurePolicy {
     Diagnostic,
     Error,
     Ignore,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct TableConfig {
-    #[serde(default)]
-    pub defaults: TableDefaults,
-    #[serde(default)]
-    pub entries: Vec<TableEntry>,
-}
-
-impl<'de> Deserialize<'de> for TableConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[allow(clippy::large_enum_variant)]
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Repr {
-            Entries(Vec<TableEntry>),
-            Full {
-                #[serde(default)]
-                defaults: TableDefaults,
-                #[serde(default)]
-                entries: Vec<TableEntry>,
-            },
-        }
-
-        match Repr::deserialize(deserializer)? {
-            Repr::Entries(entries) => Ok(Self {
-                defaults: TableDefaults::default(),
-                entries,
-            }),
-            Repr::Full { defaults, entries } => Ok(Self { defaults, entries }),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TableDefaults {
-    #[serde(default)]
-    pub parse: TabularParseConfig,
-    #[serde(default)]
-    pub row_identity: RowIdentity,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct TableEntry {
-    #[serde(default, rename = "match")]
-    pub match_: TableSelector,
-    #[serde(default)]
-    pub parse: TabularParseConfig,
-    #[serde(default)]
-    pub row_identity: RowIdentityPatch,
-}
-
-impl<'de> Deserialize<'de> for TableEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Default, Deserialize)]
-        struct RawTableEntry {
-            #[serde(default, rename = "match")]
-            match_: TableSelector,
-            #[serde(default)]
-            parse: TabularParseConfig,
-            #[serde(default)]
-            row_identity: RowIdentityPatch,
-            #[serde(default)]
-            logical_name: Option<String>,
-            #[serde(default)]
-            path: Option<String>,
-            #[serde(default)]
-            path_regex: Option<String>,
-            #[serde(default)]
-            columns: Vec<String>,
-            #[serde(default)]
-            on_null_key: Option<IdentityFailurePolicy>,
-            #[serde(default)]
-            on_duplicate_key: Option<IdentityFailurePolicy>,
-        }
-
-        let raw = RawTableEntry::deserialize(deserializer)?;
-        let mut match_ = raw.match_;
-        if match_.logical_name.is_none() {
-            match_.logical_name = raw.logical_name;
-        }
-        if match_.source.is_none() && (raw.path.is_some() || raw.path_regex.is_some()) {
-            match_.source = Some(FileSelector {
-                path: raw.path,
-                path_regex: raw.path_regex,
-            });
-        }
-
-        let mut row_identity = raw.row_identity;
-        if row_identity.columns.is_none() && !raw.columns.is_empty() {
-            row_identity.columns = Some(raw.columns);
-        }
-        if let Some(policy) = raw.on_null_key {
-            row_identity.on_null_key.get_or_insert(policy);
-        }
-        if let Some(policy) = raw.on_duplicate_key {
-            row_identity.on_duplicate_key.get_or_insert(policy);
-        }
-
-        Ok(Self {
-            match_,
-            parse: raw.parse,
-            row_identity,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TableSelector {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub logical_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<FileSelector>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -831,7 +688,7 @@ pub struct RowIdentity {
     pub on_duplicate_key: IdentityFailurePolicy,
 }
 
-/// Presence-preserving row-identity overrides for a selected path or table.
+/// Presence-preserving row-identity overrides for a selected path.
 ///
 /// Runtime identities and dataset defaults use [`RowIdentity`]. Entry-level
 /// configuration uses this patch type so an explicitly configured default

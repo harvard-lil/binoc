@@ -1,7 +1,7 @@
 # Optional First-Party Plugins and `binoc[all]`
 
 **Date:** 2026-06-01
-**Status:** Accepted
+**Status:** Superseded by [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md)
 
 ## Context
 

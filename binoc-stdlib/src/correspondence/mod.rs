@@ -11,9 +11,9 @@ use std::sync::Arc;
 use binoc_sdk::{
     structured_document_v1, tabular_v1, ArtifactFormat, BinocError, BinocResult, CoreRule,
     CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1,
-    Diagnostic, DispatchResolver, Edit, FileSelector, ItemRef, NodeIdentity, PathConfigEntry,
+    Diagnostic, DispatchResolver, Edit, ItemRef, NodeIdentity, PathConfigEntry,
     ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPatch, RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
+    RowIdentityPatch, RowIdentityPolicies, Summary, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -190,15 +190,12 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         let parse_capabilities = ParseCapabilities::from_rules(&config.rules);
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
-        let diagnostics = validate_path_entries(&semantics, &parse_capabilities);
-        if !semantics.paths.is_empty()
-            || table_config_has_parse_overrides(&semantics.tables)
-            || dataset_has_row_identity_config(&semantics)
-        {
+        let mut diagnostics = validate_path_entries(&semantics, &parse_capabilities);
+        diagnostics.extend(validate_removed_dataset_fields(dataset));
+        if !semantics.paths.is_empty() || dataset_has_row_identity_config(&semantics) {
             config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
                 entries: semantics.paths.clone(),
-                default_row_identity: dataset_default_row_identity(&semantics).clone(),
-                tables: semantics.tables.clone(),
+                default_row_identity: semantics.defaults.row_identity.clone(),
                 parse_capabilities: parse_capabilities.clone(),
             }));
         }
@@ -293,9 +290,12 @@ impl ParseCapabilities {
         self.extensions_by_output
             .get(output)
             .is_some_and(|extensions| {
-                extensions
-                    .iter()
-                    .any(|extension| pattern.ends_with(extension))
+                extensions.iter().any(|extension| {
+                    pattern.ends_with(extension)
+                        || pattern
+                            .rsplit_once("/>")
+                            .is_some_and(|(parent, _)| parent.ends_with(extension))
+                })
             })
     }
 
@@ -342,20 +342,12 @@ fn configure_reduced_precision(
 struct StdlibPathDispatchResolver {
     entries: Vec<PathConfigEntry>,
     default_row_identity: RowIdentity,
-    tables: TableConfig,
     parse_capabilities: ParseCapabilities,
 }
 
 impl DispatchResolver for StdlibPathDispatchResolver {
     fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>> {
         let Some(entry) = first_path_entry(&self.entries, &item.logical_path) else {
-            if let Some(parse) = legacy_tabular_parse_for_path(
-                &self.tables,
-                &item.logical_path,
-                &self.parse_capabilities,
-            ) {
-                item.tabular_parse = Some(parse);
-            }
             return Ok(Vec::new());
         };
         if let Some(content_type) = &entry.content_type {
@@ -373,12 +365,7 @@ impl DispatchResolver for StdlibPathDispatchResolver {
             item.media_type = None;
             item.projection_hint = ProjectionHint::default().item_type("tabular");
         }
-        if let Some(parse) = path_tabular_parse_for_path(
-            &self.tables,
-            entry,
-            &item.logical_path,
-            &self.parse_capabilities,
-        ) {
+        if let Some(parse) = path_tabular_parse_for_path(entry) {
             item.tabular_parse = Some(parse);
             if !item.is_dir {
                 item.projection_hint = ProjectionHint::default().item_type("tabular");
@@ -394,7 +381,6 @@ impl DispatchResolver for StdlibPathDispatchResolver {
     fn row_identity_for(&self, path: &str) -> Option<RowIdentity> {
         resolve_row_identity_for_path(
             &self.default_row_identity,
-            &self.tables,
             first_path_entry(&self.entries, path),
             path,
             &self.parse_capabilities,
@@ -817,17 +803,13 @@ fn row_identity_for_paths(
     paths.sort();
     paths.dedup();
 
-    let defaults = dataset_default_row_identity(semantics);
+    let defaults = &semantics.defaults.row_identity;
     let mut row_identity = BTreeMap::new();
     for path in paths {
         let path_entry = first_path_entry(&semantics.paths, &path);
-        if let Some(identity) = resolve_row_identity_for_path(
-            defaults,
-            &semantics.tables,
-            path_entry,
-            &path,
-            parse_capabilities,
-        ) {
+        if let Some(identity) =
+            resolve_row_identity_for_path(defaults, path_entry, &path, parse_capabilities)
+        {
             row_identity.insert(path, identity);
         }
     }
@@ -836,7 +818,6 @@ fn row_identity_for_paths(
 
 fn resolve_row_identity_for_path(
     defaults: &RowIdentity,
-    tables: &TableConfig,
     path_entry: Option<&PathConfigEntry>,
     path: &str,
     parse_capabilities: &ParseCapabilities,
@@ -845,44 +826,20 @@ fn resolve_row_identity_for_path(
         return None;
     }
 
-    let identity =
-        if let Some(path_identity) = path_entry.and_then(|entry| entry.row_identity.as_ref()) {
-            merge_row_identity(defaults, Some(path_identity))
-        } else {
-            let mut identity = defaults.clone();
-            if let Some(entry) = tables
-                .entries
-                .iter()
-                .find(|entry| table_entry_matches_path(entry, path))
-            {
-                identity = merge_row_identity(&identity, Some(&entry.row_identity));
-            }
-            canonicalize_row_identity(identity)
-        };
+    let identity = merge_row_identity(
+        defaults,
+        path_entry.and_then(|entry| entry.row_identity.as_ref()),
+    );
     row_identity_configured(&identity).then_some(identity)
 }
 
 fn dataset_has_row_identity_config(semantics: &DatasetSemanticsV1) -> bool {
     row_identity_configured(&semantics.defaults.row_identity)
-        || row_identity_configured(&semantics.tables.defaults.row_identity)
         || semantics
             .paths
             .iter()
             .filter_map(|entry| entry.row_identity.as_ref())
             .any(row_identity_patch_configured)
-        || semantics
-            .tables
-            .entries
-            .iter()
-            .any(|entry| row_identity_patch_configured(&entry.row_identity))
-}
-
-fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
-    if row_identity_configured(&semantics.defaults.row_identity) {
-        &semantics.defaults.row_identity
-    } else {
-        &semantics.tables.defaults.row_identity
-    }
 }
 
 fn large_tabular_threshold_bytes(semantics: &DatasetSemanticsV1) -> u64 {
@@ -1154,14 +1111,22 @@ fn validate_path_entries(
     diagnostics
 }
 
-fn path_tabular_parse_for_path(
-    tables: &TableConfig,
-    entry: &PathConfigEntry,
-    path: &str,
-    parse_capabilities: &ParseCapabilities,
-) -> Option<TabularParseConfig> {
-    let mut parse =
-        legacy_tabular_parse_for_path(tables, path, parse_capabilities).unwrap_or_default();
+fn validate_removed_dataset_fields(dataset: &serde_json::Value) -> Vec<Diagnostic> {
+    let Some(fields) = dataset.as_object() else {
+        return Vec::new();
+    };
+    if !fields.contains_key("tables") {
+        return Vec::new();
+    }
+    vec![Diagnostic::error(
+        "binoc.dataset_config.unknown_field",
+        Summary::new().text("Unknown dataset configuration field: tables; use dataset.paths"),
+    )
+    .with_location("dataset.tables")]
+}
+
+fn path_tabular_parse_for_path(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
+    let mut parse = TabularParseConfig::default();
     if let Some(shape) = &entry.shape {
         shape.apply_to_parse_config(&mut parse);
     }
@@ -1170,35 +1135,6 @@ fn path_tabular_parse_for_path(
     }
     if entry.records_path.is_some() {
         parse.records_path = entry.records_path.clone();
-    }
-    normalize_tabular_parse(parse)
-}
-
-fn legacy_tabular_parse_for_path(
-    tables: &TableConfig,
-    path: &str,
-    parse_capabilities: &ParseCapabilities,
-) -> Option<TabularParseConfig> {
-    if !parse_capabilities.pattern_can_emit(path, &tabular_v1()) {
-        return None;
-    }
-    let mut parse = tables.defaults.parse.clone();
-    for entry in &tables.entries {
-        if table_entry_matches_path(entry, path) {
-            if !entry.parse.header {
-                parse.header = false;
-            }
-            if entry.parse.delimiter.is_some() {
-                parse.delimiter = entry.parse.delimiter.clone();
-            }
-            if let Some(dialect) = &entry.parse.dialect {
-                merge_csv_dialect(&mut parse, dialect);
-            }
-            if entry.parse.records_path.is_some() {
-                parse.records_path = entry.parse.records_path.clone();
-            }
-            break;
-        }
     }
     normalize_tabular_parse(parse)
 }
@@ -1240,14 +1176,6 @@ fn normalize_tabular_parse(mut parse: TabularParseConfig) -> Option<TabularParse
     } else {
         None
     }
-}
-
-fn table_config_has_parse_overrides(tables: &TableConfig) -> bool {
-    normalize_tabular_parse(tables.defaults.parse.clone()).is_some()
-        || tables
-            .entries
-            .iter()
-            .any(|entry| normalize_tabular_parse(entry.parse.clone()).is_some())
 }
 
 fn projection_for_content_type(
@@ -1304,42 +1232,6 @@ fn walk_path_entry(
     entry: Result<walkdir::DirEntry, walkdir::Error>,
 ) -> BinocResult<walkdir::DirEntry> {
     entry.map_err(|err| BinocError::Other(format!("walk dataset paths: {err}")))
-}
-
-fn table_entry_matches_path(entry: &binoc_sdk::TableEntry, path: &str) -> bool {
-    entry
-        .match_
-        .source
-        .as_ref()
-        .is_some_and(|selector| selector_matches_path(selector, path))
-}
-
-fn selector_matches_path(selector: &FileSelector, path: &str) -> bool {
-    selector_captures(selector, path).is_some()
-}
-
-fn selector_captures(selector: &FileSelector, path: &str) -> Option<BTreeMap<String, String>> {
-    if selector
-        .path
-        .as_deref()
-        .is_some_and(|expected| expected != path)
-    {
-        return None;
-    }
-    let mut captures_by_name = BTreeMap::new();
-    if let Some(pattern) = selector.path_regex.as_deref() {
-        let regex = Regex::new(pattern).ok()?;
-        let captures = regex.captures(path)?;
-        for name in regex.capture_names().flatten() {
-            if let Some(value) = captures.name(name) {
-                captures_by_name.insert(name.to_string(), value.as_str().to_string());
-            }
-        }
-    }
-    if selector.path.is_none() && selector.path_regex.is_none() {
-        return None;
-    }
-    Some(captures_by_name)
 }
 
 fn glob_matches_path(pattern: &str, path: &str) -> bool {
@@ -1695,61 +1587,23 @@ mod tests {
     }
 
     #[test]
-    fn table_row_identity_entry_columns_inherit_default_policy() {
+    fn full_decomposed_path_selects_parsed_table_child() {
         let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
-            "tables": {
-                "defaults": {
-                    "row_identity": {
-                        "on_null_key": "error",
-                        "on_duplicate_key": "ignore"
-                    }
-                },
-                "entries": [{
-                    "path_regex": "^data\\.csv$",
-                    "columns": ["email"]
-                }]
-            }
-        }))
-        .expect("dataset semantics");
-
-        let identities = row_identity_for_paths(
-            &semantics,
-            &[String::from("data.csv")],
-            &[String::from("data.csv")],
-            &parse_capabilities(),
-        );
-
-        let identity = identities.get("data.csv").expect("data.csv identity");
-        assert_eq!(identity.columns, vec!["email"]);
-        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Error);
-        assert_eq!(identity.on_duplicate_key, IdentityFailurePolicy::Ignore);
-    }
-
-    #[test]
-    fn flat_path_policy_override_keeps_inherited_key_columns() {
-        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
-            "defaults": {
-                "row_identity": {
-                    "columns": ["id"],
-                    "on_null_key": "error"
-                }
-            },
             "paths": [{
-                "match": "data.csv",
-                "on_null_key": "diagnostic"
+                "match": "data.csv/>table_2",
+                "row_identity": { "columns": ["id"] }
             }]
         }))
         .expect("dataset semantics");
 
-        let identities = row_identity_for_paths(
-            &semantics,
-            &[String::from("data.csv")],
-            &[String::from("data.csv")],
+        let entry = first_path_entry(&semantics.paths, "data.csv/>table_2");
+        let identity = resolve_row_identity_for_path(
+            &semantics.defaults.row_identity,
+            entry,
+            "data.csv/>table_2",
             &parse_capabilities(),
-        );
-
-        let identity = identities.get("data.csv").expect("data.csv identity");
+        )
+        .expect("parsed table child identity");
         assert_eq!(identity.columns, vec!["id"]);
-        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Diagnostic);
     }
 }

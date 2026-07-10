@@ -323,11 +323,10 @@ fn diff_with_config_file() {
         &config_path,
         r#"
 dataset:
-  tables:
-    defaults:
-      row_identity:
-        columns:
-          - id
+  defaults:
+    row_identity:
+      columns:
+        - id
 "#,
     )
     .unwrap();

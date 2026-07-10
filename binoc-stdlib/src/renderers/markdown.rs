@@ -414,9 +414,6 @@ fn should_group_move_children(node: &DiffNode) -> bool {
 fn move_content(node: &DiffNode) -> Option<Summary> {
     // The annotation trailers are carried as plain strings and render
     // verbatim as a single text segment.
-    if let Some(s) = annotation_str(node, "tabular_summary") {
-        return Some(s.into());
-    }
     if let Some(s) = annotation_str(node, "content_summary") {
         return Some(s.into());
     }
@@ -461,11 +458,7 @@ fn render_annotations(
         return;
     }
     for annotation in node.annotations.iter().filter(|annotation| {
-        !(annotation.package == "binoc"
-            && matches!(
-                annotation.key.as_str(),
-                "content_summary" | "tabular_summary"
-            ))
+        !(annotation.package == "binoc" && annotation.key == "content_summary")
     }) {
         if !render_annotation(out, annotation, config, detail_budget) {
             return;
@@ -2063,50 +2056,10 @@ mod tests {
     }
 
     #[test]
-    fn move_with_tabular_summary_annotation_renders_as_paired_bullets() {
-        // A CSV rename+modify produces a `binoc.move.modified` node whose
-        // origin is synthesized from its source and whose content comes from
-        // `annotations.tabular_summary` (set by TabularAnalyzer).
-        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_tag("binoc.move")
-            .with_tag("binoc.move.modified")
-            .with_tag("binoc.column-addition")
-            .with_tag("binoc.schema-change");
-        move_node.annotate_from(
-            "binoc",
-            "tabular_summary",
-            serde_json::json!("Column added: 'email'"),
-        );
-        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
-
-        let md = render_markdown(
-            &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig {
-                groups: vec![MarkdownGroup {
-                    heading: "Substantive changes".into(),
-                    tags: vec!["binoc.column-addition".into(), "binoc.schema-change".into()],
-                }],
-                ..Default::default()
-            },
-        );
-
-        assert!(md.contains("## Substantive changes"));
-        assert!(
-            md.contains("  - Moved from data.csv\n"),
-            "origin line missing; got:\n{md}"
-        );
-        assert!(
-            md.contains("  - Column added: 'email'\n"),
-            "tabular_summary must render beneath the origin under the same path; got:\n{md}"
-        );
-    }
-
-    #[test]
     fn move_with_content_summary_annotation_renders_as_paired_bullets() {
         // A text rename+modify produces a `binoc.move.modified` node with no
-        // children, no tabular_summary, but `annotations.content_summary` from
-        // the stdlib projection annotator.
+        // children but with `annotations.content_summary` from the stdlib
+        // projection annotator.
         let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
             .with_source(Source::new("notes.txt", Side::From).with_action("move"))
             .with_tag("binoc.move")
@@ -2135,36 +2088,6 @@ mod tests {
         assert!(
             md.contains("  - 2 lines added\n"),
             "content_summary must render beneath the origin under the same path; got:\n{md}"
-        );
-    }
-
-    #[test]
-    fn move_trailer_prefers_tabular_over_content_summary() {
-        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_summary("Moved from data.csv")
-            .with_tag("binoc.move");
-        move_node.annotate_from(
-            "binoc",
-            "tabular_summary",
-            serde_json::json!("Column added: 'email'"),
-        );
-        move_node.annotate_from(
-            "binoc",
-            "content_summary",
-            serde_json::json!("CSV modified"),
-        );
-        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
-
-        let md = render_markdown(
-            &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
-        );
-
-        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
-        assert!(
-            !md.contains("CSV modified"),
-            "content_summary should be shadowed by tabular_summary"
         );
     }
 
