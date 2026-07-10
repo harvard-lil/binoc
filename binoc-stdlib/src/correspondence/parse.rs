@@ -1207,7 +1207,7 @@ fn line_delimiter_stats(line: &[u8], delimiter: u8) -> LineDelimiterStats {
 }
 
 fn sniff_quote(sample: &[u8], delimiter: u8) -> Option<u8> {
-    [b'"', b'\''].into_iter().find(|quote| {
+    (*b"\"'").into_iter().find(|quote| {
         sample
             .split(|byte| *byte == b'\n' || *byte == b'\r')
             .filter(|line| !line.is_empty())
