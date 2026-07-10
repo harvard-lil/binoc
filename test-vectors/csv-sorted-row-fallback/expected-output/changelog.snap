@@ -1,0 +1,7 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: rows reordered; cell values unchanged under inferred row alignment

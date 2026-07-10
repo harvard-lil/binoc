@@ -15,4 +15,6 @@ Install it with:
 pip install binoc
 ```
 
-Optional format-specific plugins, such as `binoc-sqlite`, install separately and are discovered automatically through Python entry points.
+Most first-party format packs are bundled into the `binoc` wheel. Separately
+published plugins are discovered automatically through Python entry points;
+native rule-pack publishing is paused until that plugin surface graduates.

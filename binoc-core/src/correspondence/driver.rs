@@ -1,13 +1,15 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use binoc_sdk::{
-    ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig,
-    DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule, ExtractResult, GlobalClaim,
-    IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef, NodeId, ParseGroup, ParseOutput,
-    ParseRule, ProjectionAnnotator, ShapeFilter, Side, Summary, TreeSide, WriterDescriptor,
+    ArtifactDecodeCache, ArtifactFormat, ArtifactSubject, BinocError, BinocResult, CoreRule,
+    CorrespondenceEngineConfig, DataAccess, Diagnostic, Edit, EngineView, ExpandOutput, ExpandRule,
+    ExtractResult, GlobalClaim, IdentityExtractor, IdentityToken, ItemRef, LinkCtx, LinkRef,
+    NodeId, ParseGroup, ParseOutput, ParseRule, ProjectionAnnotator, RowIdentityPolicies,
+    ShapeFilter, Side, Summary, TreeSide, WriterDescriptor,
 };
 use rayon::prelude::*;
 
@@ -205,11 +207,13 @@ impl CorrespondenceRunResult {
         })?;
         let link = self.store.links.link(link_index);
         let view = CoreEngineView::new(&self.store, false);
+        let artifact_cache = ArtifactDecodeCache::default();
         let ctx = link_ctx(
             &view,
             view.link_ref(link_index),
             &self.store.right.node(link.right).item.logical_path,
             config,
+            &artifact_cache,
         );
         let edits = self
             .edit_lists
@@ -262,6 +266,29 @@ pub fn run_with_execution(
     run_inner(config, left_root, right_root, data, execution, None)
 }
 
+fn configure_item_for_dispatch(
+    config: &CorrespondenceEngineConfig,
+    item: &mut ItemRef,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> BinocResult<()> {
+    if let Some(resolver) = &config.dispatch_resolver {
+        diagnostics.extend(resolver.configure_item(item)?);
+    }
+    Ok(())
+}
+
+fn rule_allowed_for_item(
+    config: &CorrespondenceEngineConfig,
+    item: &ItemRef,
+    rule_name: &str,
+) -> bool {
+    config
+        .dispatch_resolver
+        .as_ref()
+        .and_then(|resolver| resolver.forced_rule_for(item))
+        .is_none_or(|forced| forced == rule_name)
+}
+
 /// Run the engine in serial mode while capturing a full [`RunTrace`] for
 /// replay/visualization. Serial execution keeps step ordering deterministic,
 /// which matters for a step-by-step replay; the intended target is smaller
@@ -287,15 +314,17 @@ pub fn run_traced(
 
 fn run_inner(
     config: &CorrespondenceEngineConfig,
-    left_root: ItemRef,
-    right_root: ItemRef,
+    mut left_root: ItemRef,
+    mut right_root: ItemRef,
     data: &dyn DataAccess,
     execution: ExecutionMode,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<CorrespondenceRunResult> {
-    let mut store = Store::new(left_root, right_root, config.root_projection.clone());
     let mut stats = RunStats::default();
     let mut diagnostics = Vec::new();
+    configure_item_for_dispatch(config, &mut left_root, &mut diagnostics)?;
+    configure_item_for_dispatch(config, &mut right_root, &mut diagnostics)?;
+    let mut store = Store::new(left_root, right_root, config.root_projection.clone());
 
     let pair_count = config
         .rules
@@ -413,7 +442,9 @@ fn run_inner(
                                 continue;
                             }
                             let item = &store.tree(side).node(index).item;
-                            if !descriptor.input.matches(item) {
+                            if !rule_allowed_for_item(config, item, &descriptor.name)
+                                || !descriptor.input.matches(item)
+                            {
                                 continue;
                             }
                             RunStats::bump(&mut stats.invocations, &descriptor.name);
@@ -460,7 +491,8 @@ fn run_inner(
                             output.diagnostics,
                         );
                         let mut child_indices = Vec::new();
-                        for child in output.children {
+                        for mut child in output.children {
+                            configure_item_for_dispatch(config, &mut child, &mut diagnostics)?;
                             let projection = child.projection_hint.clone();
                             let child_index = store.tree_mut(result.side).add_child(
                                 result.index,
@@ -514,7 +546,17 @@ fn run_inner(
                             }
                             let id = NodeId { side, index };
                             let item = &store.tree(side).node(index).item;
-                            if !descriptor.input.matches(item) {
+                            let forced_rule = config
+                                .dispatch_resolver
+                                .as_ref()
+                                .and_then(|resolver| resolver.forced_rule_for(item));
+                            if forced_rule
+                                .as_deref()
+                                .is_some_and(|rule| rule != descriptor.name)
+                            {
+                                continue;
+                            }
+                            if forced_rule.is_none() && !descriptor.input.matches(item) {
                                 continue;
                             }
                             // Link-gated unless some pair rule consumes this
@@ -641,7 +683,8 @@ fn run_inner(
                             store.add_artifact(result.id, artifact);
                         }
                         let mut child_indices = Vec::new();
-                        for child in output.children {
+                        for mut child in output.children {
+                            configure_item_for_dispatch(config, &mut child.item, &mut diagnostics)?;
                             let projection = child.item.projection_hint.clone();
                             let child_index = store.tree_mut(result.id.side).add_child(
                                 result.id.index,
@@ -834,16 +877,26 @@ fn run_inner(
         }
     }
 
+    let artifact_cache = ArtifactDecodeCache::default();
     let mut edit_lists = build_edit_lists(
         config,
         &store,
         &mut diagnostics,
         &mut stats,
         data,
+        &artifact_cache,
         trace.as_deref_mut(),
     )?;
 
-    compact_edit_lists(config, &store, &mut edit_lists, &mut stats, data, trace)?;
+    compact_edit_lists(
+        config,
+        &store,
+        &mut edit_lists,
+        &mut stats,
+        data,
+        &artifact_cache,
+        trace,
+    )?;
 
     Ok(CorrespondenceRunResult {
         store,
@@ -863,20 +916,56 @@ fn link_ctx<'a>(
     link: LinkRef,
     right_path: &str,
     config: &'a CorrespondenceEngineConfig,
+    artifact_cache: &'a ArtifactDecodeCache,
 ) -> LinkCtx<'a> {
+    let (row_keys, row_identity_policies) = config
+        .row_keys
+        .get(right_path)
+        .map(|keys| {
+            (
+                Cow::Borrowed(keys.as_slice()),
+                config
+                    .row_identity_policies
+                    .get(right_path)
+                    .copied()
+                    .unwrap_or_default(),
+            )
+        })
+        .or_else(|| {
+            config
+                .dispatch_resolver
+                .as_ref()
+                .and_then(|resolver| resolver.row_identity_for(right_path))
+                .filter(|identity| !identity.columns.is_empty())
+                .map(|identity| {
+                    (
+                        Cow::Owned(identity.columns),
+                        RowIdentityPolicies {
+                            on_null_key: identity.on_null_key,
+                            on_duplicate_key: identity.on_duplicate_key,
+                        },
+                    )
+                })
+        })
+        .unwrap_or_else(|| (Cow::Borrowed(&[]), RowIdentityPolicies::default()));
+    let node_identity = config
+        .node_identities
+        .get(right_path)
+        .map(Cow::Borrowed)
+        .or_else(|| {
+            config
+                .dispatch_resolver
+                .as_ref()
+                .and_then(|resolver| resolver.node_identity_for(right_path))
+                .map(Cow::Owned)
+        });
     LinkCtx {
         view,
         link,
-        row_keys: config
-            .row_keys
-            .get(right_path)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]),
-        row_identity_policies: config
-            .row_identity_policies
-            .get(right_path)
-            .copied()
-            .unwrap_or_default(),
+        row_keys,
+        row_identity_policies,
+        node_identity,
+        artifact_cache,
     }
 }
 
@@ -886,6 +975,7 @@ fn build_edit_lists(
     diagnostics: &mut Vec<Diagnostic>,
     stats: &mut RunStats,
     data: &dyn DataAccess,
+    artifact_cache: &ArtifactDecodeCache,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<BTreeMap<usize, Vec<Edit>>> {
     let mut edit_lists = BTreeMap::new();
@@ -931,6 +1021,7 @@ fn build_edit_lists(
             link_ref,
             &store.right.node(link.right).item.logical_path,
             config,
+            artifact_cache,
         );
 
         // Dispatch composes, then selects (CFM-81). The link's edit list is
@@ -940,7 +1031,9 @@ fn build_edit_lists(
         //     `Some` (the substitutability / dialect axis);
         //   * each applicable structural writer (empty `formats`), excluding
         //     the fallback;
-        //   * the fallback, but only when nothing above claimed the link.
+        //   * fallback-tier writers, but only when nothing above claimed the
+        //     link. Multiple fallback-tier writers may compose; this lets a
+        //     bounded localization layer run before the durable byte/hash fact.
         // Each contribution's edits are stamped with the producer's
         // provenance so downstream compaction/extract/summary stay
         // per-content-type. Ordering is deterministic: artifact formats in
@@ -948,7 +1041,7 @@ fn build_edit_lists(
         let mut writers_used: BTreeSet<String> = BTreeSet::new();
         let mut artifact_segments: BTreeMap<ArtifactFormat, Vec<Edit>> = BTreeMap::new();
         let mut structural_edits: Vec<Edit> = Vec::new();
-        let mut fallback: Option<&Arc<dyn binoc_sdk::EditListWriter>> = None;
+        let mut fallback_writers: Vec<&Arc<dyn binoc_sdk::EditListWriter>> = Vec::new();
         // A link is "claimed" once any non-fallback writer returns `Some`
         // (even an empty edit list), exactly as the old first-match loop's
         // `break` claimed it. The fallback fires only on unclaimed links.
@@ -961,9 +1054,9 @@ fn build_edit_lists(
             }
             let is_fallback = descriptor.formats.is_empty() && is_fallback_writer(&descriptor);
             if is_fallback {
-                // Defer the fallback until we know whether the link was
-                // claimed by anything else.
-                fallback.get_or_insert(writer);
+                // Defer fallback-tier writers until we know whether the link
+                // was claimed by anything else.
+                fallback_writers.push(writer);
                 continue;
             }
             let provenance = writer_provenance(&descriptor);
@@ -1001,7 +1094,7 @@ fn build_edit_lists(
         composed.extend(structural_edits);
 
         if !claimed {
-            if let Some(writer) = fallback {
+            for writer in fallback_writers {
                 let descriptor = writer.descriptor();
                 if let Some(output) = writer.write(&ctx, data)? {
                     append_rule_diagnostics(diagnostics, &descriptor.name, output.diagnostics);
@@ -1038,6 +1131,7 @@ fn compact_edit_lists(
     edit_lists: &mut BTreeMap<usize, Vec<Edit>>,
     stats: &mut RunStats,
     data: &dyn DataAccess,
+    artifact_cache: &ArtifactDecodeCache,
     mut trace: Option<&mut TraceRecorder>,
 ) -> BinocResult<()> {
     let view = CoreEngineView::new(store, false);
@@ -1052,6 +1146,7 @@ fn compact_edit_lists(
                 view.link_ref(*link_index),
                 &store.right.node(link.right).item.logical_path,
                 config,
+                artifact_cache,
             );
             // Format-scoped compaction (CFM-81): a rule that declares a
             // `format()` sees and rewrites only the provenance-scoped segment
@@ -1328,6 +1423,8 @@ fn append_rule_diagnostics(
     target.extend(diagnostics.into_iter().map(|mut diagnostic| {
         if diagnostic.location.is_none() {
             diagnostic.location = Some(rule_name.to_string());
+        } else if diagnostic.extract.is_some() {
+            // Extract-capable diagnostics use `location` as the CLI node path.
         } else {
             diagnostic.location = Some(format!(
                 "{}:{}",
@@ -1626,8 +1723,8 @@ impl EngineView for CoreEngineView<'_> {
 mod tests {
     use super::*;
     use binoc_sdk::{
-        ArtifactFormat, CompactionRule, Edit, PairRule, ParseDescriptor, ParseOutput, ParseRule,
-        ProjectionHint,
+        ArtifactFormat, CompactionRule, Diagnostic, Edit, ExtractHint, PairRule, ParseDescriptor,
+        ParseOutput, ParseRule, ProjectionHint,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1710,8 +1807,10 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");
@@ -1728,6 +1827,23 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn append_rule_diagnostics_preserves_extract_locations() {
+        let mut out = Vec::new();
+        append_rule_diagnostics(
+            &mut out,
+            "binoc.write.tabular",
+            vec![
+                Diagnostic::warning("binoc.keyed_row_identity_degraded", "fallback")
+                    .with_location("data.csv")
+                    .with_extract_hint(ExtractHint::new("content")),
+            ],
+        );
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].location.as_deref(), Some("data.csv"));
     }
 
     struct NonDecreasingCompaction;
@@ -1975,8 +2091,10 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");
@@ -2065,8 +2183,10 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
         let result = run(&with_claim, left.clone(), right.clone(), &data).expect("run");
         let writers = result.stats.writer_used.values().next().expect("writers");
@@ -2085,14 +2205,61 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
-        let result = run(&only_fallback, left, right, &data).expect("run");
+        let result = run(&only_fallback, left.clone(), right.clone(), &data).expect("run");
         let writers = result.stats.writer_used.values().next().expect("writers");
         assert_eq!(
             writers.iter().cloned().collect::<Vec<_>>(),
             vec!["fallback"]
+        );
+
+        struct SecondFallback;
+        impl binoc_sdk::EditListWriter for SecondFallback {
+            fn descriptor(&self) -> WriterDescriptor {
+                WriterDescriptor {
+                    name: "fallback_second".into(),
+                    formats: vec![],
+                    input: Default::default(),
+                    shape: ShapeFilter::Any,
+                    fallback: true,
+                }
+            }
+            fn write(
+                &self,
+                _ctx: &LinkCtx<'_>,
+                _data: &dyn DataAccess,
+            ) -> BinocResult<Option<binoc_sdk::WriteOutput>> {
+                Ok(Some(
+                    vec![Edit::new("fallback_second.edit", serde_json::json!({}))].into(),
+                ))
+            }
+        }
+
+        let two_fallbacks = CorrespondenceEngineConfig {
+            rules: vec![CoreRule::Pair(Arc::new(SingleRootPair))],
+            writers: vec![Arc::new(ClaimingFallback), Arc::new(SecondFallback)],
+            compaction: vec![],
+            annotators: vec![],
+            identity_extractors: vec![],
+            row_keys: BTreeMap::new(),
+            row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
+            root_projection: ProjectionHint::default(),
+            dataset_configurator: None,
+            dispatch_resolver: None,
+        };
+        let result = run(&two_fallbacks, left.clone(), right.clone(), &data).expect("run");
+        let edits = result.edit_lists.values().next().expect("edits");
+        assert_eq!(
+            edits
+                .iter()
+                .map(|edit| edit.verb.as_str())
+                .collect::<Vec<_>>(),
+            vec!["fallback.edit", "fallback_second.edit"]
         );
     }
 
@@ -2114,8 +2281,10 @@ mod tests {
             identity_extractors: vec![],
             row_keys: BTreeMap::new(),
             row_identity_policies: BTreeMap::new(),
+            node_identities: Default::default(),
             root_projection: ProjectionHint::default(),
             dataset_configurator: None,
+            dispatch_resolver: None,
         };
 
         let result = run(&config, left, right, &data).expect("run");
@@ -2141,6 +2310,7 @@ mod tests {
             size: None,
             media_type: None,
             projection_hint: ProjectionHint::default().item_type("leaf"),
+            tabular_parse: None,
             handle: path.into(),
         }
     }

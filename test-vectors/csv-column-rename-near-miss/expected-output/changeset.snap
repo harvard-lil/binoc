@@ -1,0 +1,91 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Column added: 'status'; "
+          },
+          {
+            "text": "Column removed: 'legacy'"
+          }
+        ],
+        "tags": [
+          "binoc.column-addition",
+          "binoc.column-removal",
+          "binoc.schema-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "from": [
+                  "id",
+                  "legacy"
+                ],
+                "to": [
+                  "id",
+                  "status"
+                ]
+              },
+              "verb": "tabular.set_headers"
+            },
+            {
+              "params": {
+                "name": "status",
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "alpha",
+                    "draft",
+                    "hold",
+                    "closed"
+                  ]
+                }
+              },
+              "verb": "tabular.add_column"
+            },
+            {
+              "params": {
+                "name": "legacy",
+                "values": {
+                  "total_values": 4,
+                  "truncated": false,
+                  "values": [
+                    "alpha",
+                    "beta",
+                    "gamma",
+                    "delta"
+                  ]
+                }
+              },
+              "verb": "tabular.remove_column"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row added"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "running_list_as_of_2022.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
@@ -52,7 +58,14 @@ expression: "&stable_changeset"
               "verb": "tabular.add_row"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "1 row added"
+          }
+        ]
       }
     ]
   }

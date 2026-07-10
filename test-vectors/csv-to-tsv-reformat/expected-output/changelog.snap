@@ -7,6 +7,7 @@ expression: "&md"
 - **data.tsv**:
   - Moved from data.csv
   - 1 row added; 1 cell changed
+  - Dialect provenance: detected tab-delimited, no quoting, newline LF
   - Changed cells
     - row 2, column 'age': '25' -> '26'
   - Rows added

@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **enterprise.stix.json**: 1 row modified by key
+  - Changed cells
+    - key id 'attack-pattern--1', column 'name': 'Old Name' -> 'New Name'

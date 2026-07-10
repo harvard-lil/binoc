@@ -1,13 +1,21 @@
 use std::collections::BTreeSet;
 
 use binoc_sdk::{
-    decompose_child, structured_document_v1, tabular_v1, BinocError, BinocResult, DataAccess,
-    ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact, ParsedChild,
-    ProjectionHint, StructuredDocument, TabularData,
+    decompose_child, structured_document_v1, tabular_v1, BinocError, BinocResult, CsvDialectConfig,
+    DataAccess, ItemRef, NodeMatch, ParseDescriptor, ParseOutput, ParseRule, ParsedArtifact,
+    ParsedChild, ProjectionHint, StructuredDocument, TabularData, TabularParseConfig,
 };
 use serde::{de, de::DeserializeSeed, Deserialize, Deserializer, Serialize};
 
-pub struct CsvParse;
+const CSV_SNIFF_BYTES: usize = 16 * 1024;
+const CSV_DELIMITER_CANDIDATES: &[u8] = b",\t|;:";
+
+pub struct CsvParse {
+    pub large_tabular_threshold_bytes: u64,
+}
+pub struct CsvMediaParse {
+    pub large_tabular_threshold_bytes: u64,
+}
 pub struct JsonParse;
 pub struct JsonMediaParse;
 /// Routes JSON / JSONL whose top level is a consistently-shaped record
@@ -25,6 +33,12 @@ pub struct YamlMediaParse;
 pub struct TomlParse;
 /// Transcodes INI / cfg / properties files into a `structured_document`.
 pub struct IniParse;
+
+/// Default byte threshold above which stdlib tabular rules switch from
+/// in-memory `tabular_v1` materialization to the streaming keyed-writer path.
+/// The runtime value is configurable via
+/// `dataset.correspondence.large_tabular_threshold_bytes`.
+pub(crate) const LARGE_TABULAR_THRESHOLD_BYTES: u64 = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonSourceFacts {
@@ -59,10 +73,26 @@ impl ParseRule for CsvParse {
     }
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        if item.resolve_size(data)? > self.large_tabular_threshold_bytes {
+            return Ok(ParseOutput::default());
+        }
         let bytes = data.read_bytes(item)?;
-        let records = parse_csv_records(&bytes, delimiter_for(item))?;
-        let tabular = table_from_csv_records(records.clone());
+        let dialect = resolve_csv_dialect(item, &bytes)?;
+        let records = parse_csv_records(&bytes, &dialect)?;
+        let tabular =
+            table_from_csv_records_with_config(records.clone(), item.tabular_parse.as_ref());
         let sections = detect_stacked_sections_from_rows(&records);
+        let projection = if dialect.should_disclose_provenance() {
+            ProjectionHint::default()
+                .tag("binoc.dialect-inferred")
+                .annotate(
+                    "binoc",
+                    "dialect_provenance",
+                    serde_json::json!(dialect_provenance_summary(&dialect)),
+                )
+        } else {
+            ProjectionHint::default()
+        };
 
         // Fewer than two qualifying regions: a plain CSV is a single table,
         // emitted as a LEAF `tabular_v1` artifact with no children.
@@ -74,7 +104,7 @@ impl ParseRule for CsvParse {
                 diagnostics: Vec::new(),
                 children: Vec::new(),
                 artifacts: Vec::new(),
-                projection: ProjectionHint::default(),
+                projection,
             });
         }
 
@@ -86,8 +116,30 @@ impl ParseRule for CsvParse {
             diagnostics: Vec::new(),
             children,
             artifacts: Vec::new(),
-            projection: ProjectionHint::default().item_type("stacked tables"),
+            projection: projection.item_type("stacked tables"),
         })
+    }
+}
+
+impl ParseRule for CsvMediaParse {
+    fn descriptor(&self) -> ParseDescriptor {
+        ParseDescriptor {
+            name: "binoc.parse.csv_media".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                media_types: vec!["text/csv".into(), "text/tab-separated-values".into()],
+                ..NodeMatch::default()
+            },
+            output: tabular_v1(),
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        CsvParse {
+            large_tabular_threshold_bytes: self.large_tabular_threshold_bytes,
+        }
+        .parse(item, data)
     }
 }
 
@@ -161,11 +213,16 @@ impl ParseRule for JsonRecordsParse {
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
-        let table = match item.extension().as_deref() {
-            Some(".jsonl") | Some(".ndjson") => jsonl_records(&bytes),
-            _ => match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                Ok(value) => json_records(&value),
-                Err(_) => None,
+        let table = match records_path_config(item.tabular_parse.as_ref()) {
+            Some(_) => serde_json::from_slice::<serde_json::Value>(&bytes)
+                .map_err(|err| BinocError::Other(format!("parse JSON: {err}")))
+                .and_then(|value| json_records(&value, item.tabular_parse.as_ref()))?,
+            None => match item.extension().as_deref() {
+                Some(".jsonl") | Some(".ndjson") => jsonl_records(&bytes),
+                _ => match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    Ok(value) => json_records(&value, item.tabular_parse.as_ref())?,
+                    Err(_) => None,
+                },
             },
         };
         match table {
@@ -199,7 +256,10 @@ impl ParseRule for JsonMediaRecordsParse {
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
         let table = match serde_json::from_slice::<serde_json::Value>(&bytes) {
-            Ok(value) => json_records(&value),
+            Ok(value) => json_records(&value, item.tabular_parse.as_ref())?,
+            Err(err) if records_path_config(item.tabular_parse.as_ref()).is_some() => {
+                return Err(BinocError::Other(format!("parse JSON: {err}")));
+            }
             Err(_) => None,
         };
         match table {
@@ -211,13 +271,33 @@ impl ParseRule for JsonMediaRecordsParse {
     }
 }
 
+fn records_path_config(config: Option<&TabularParseConfig>) -> Option<&str> {
+    config.and_then(|config| config.records_path.as_deref())
+}
+
+fn json_records(
+    value: &serde_json::Value,
+    config: Option<&TabularParseConfig>,
+) -> BinocResult<Option<TabularData>> {
+    if let Some(records_path) = records_path_config(config) {
+        if records_path.trim().is_empty() {
+            return Err(BinocError::Config(
+                "records_path must be a non-empty JSON path".into(),
+            ));
+        }
+        return records_from_path(value, records_path).map(Some);
+    }
+
+    Ok(detect_json_records(value))
+}
+
 /// Detect a consistently-shaped record collection in a parsed JSON value.
 ///
 /// An array whose elements are all objects becomes a named table (columns are
 /// the union of keys in first-seen order; missing keys are `Null`). An array
 /// whose elements are all arrays becomes a headerless, positional table.
 /// Anything else returns `None` (the document is not record-shaped).
-fn json_records(value: &serde_json::Value) -> Option<TabularData> {
+fn detect_json_records(value: &serde_json::Value) -> Option<TabularData> {
     if let Some(table) = geojson_records(value) {
         return Some(table);
     }
@@ -232,6 +312,67 @@ fn json_records(value: &serde_json::Value) -> Option<TabularData> {
     } else {
         None
     }
+}
+
+fn records_from_path(value: &serde_json::Value, path: &str) -> BinocResult<TabularData> {
+    let records = resolve_simple_json_path(value, path)?;
+    let Some(array) = records.as_array() else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} did not resolve to an array"
+        )));
+    };
+    if array.is_empty() {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} resolved to an empty array"
+        )));
+    }
+    if array.iter().all(serde_json::Value::is_object) {
+        Ok(table_from_objects(array))
+    } else if array.iter().all(serde_json::Value::is_array) {
+        Ok(table_from_arrays(array))
+    } else {
+        Err(BinocError::Config(format!(
+            "records_path {path:?} resolved to an array that is not consistently objects or arrays"
+        )))
+    }
+}
+
+fn resolve_simple_json_path<'a>(
+    mut value: &'a serde_json::Value,
+    path: &str,
+) -> BinocResult<&'a serde_json::Value> {
+    let Some(rest) = path.strip_prefix('$') else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} must start with '$'"
+        )));
+    };
+    if rest.is_empty() {
+        return Ok(value);
+    }
+    let Some(rest) = rest.strip_prefix('.') else {
+        return Err(BinocError::Config(format!(
+            "records_path {path:?} must use simple dotted form like '$.objects'"
+        )));
+    };
+    for key in rest.split('.') {
+        if key.is_empty() {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} contains an empty path segment"
+            )));
+        }
+        let Some(object) = value.as_object() else {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} cannot descend through non-object segment {key:?}"
+            )));
+        };
+        let Some(next) = object.get(key) else {
+            return Err(BinocError::Config(format!(
+                "records_path {path:?} did not resolve; missing segment {key:?}"
+            )));
+        };
+        value = next;
+    }
+    Ok(value)
 }
 
 /// Detect a GeoJSON `FeatureCollection` and build a table from its features.
@@ -310,7 +451,7 @@ fn table_from_arrays(items: &[serde_json::Value]) -> TabularData {
         .map(|a| a.len())
         .max()
         .unwrap_or(0);
-    let headers = (1..=width).map(|i| i.to_string()).collect();
+    let headers = (1..=width).map(|i| format!("column_{i}")).collect();
     let rows = items
         .iter()
         .map(|item| {
@@ -366,7 +507,7 @@ fn parse_json_item(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOu
         .map_err(|err| BinocError::Other(format!("parse JSON: {err}")))?;
     // Record collections are handled as `tabular` by JsonRecordsParse; decline
     // here so the same document is not also published as a structured_document.
-    if json_records(&value).is_some() {
+    if json_records(&value, item.tabular_parse.as_ref())?.is_some() {
         return Ok(ParseOutput::default());
     }
     let source = json_source_facts(&bytes)?;
@@ -691,7 +832,10 @@ fn json_child_path(parent: &str, key: &str) -> String {
     }
 }
 
-fn delimiter_for(item: &ItemRef) -> u8 {
+fn default_delimiter_for(item: &ItemRef) -> u8 {
+    if item.media_type.as_deref() == Some("text/tab-separated-values") {
+        return b'\t';
+    }
     match item.extension().as_deref() {
         Some(".tsv") => b'\t',
         _ => b',',
@@ -700,15 +844,33 @@ fn delimiter_for(item: &ItemRef) -> u8 {
 
 #[cfg(test)]
 fn parse_csv_bytes(bytes: &[u8], delimiter: u8) -> BinocResult<TabularData> {
-    parse_csv_records(bytes, delimiter).map(table_from_csv_records)
+    parse_csv_records(bytes, &ResolvedCsvDialect::for_tests(delimiter)).map(table_from_csv_records)
 }
 
-fn parse_csv_records(bytes: &[u8], delimiter: u8) -> BinocResult<Vec<Vec<String>>> {
-    let mut reader = csv::ReaderBuilder::new()
-        .delimiter(delimiter)
+fn parse_csv_records(bytes: &[u8], dialect: &ResolvedCsvDialect) -> BinocResult<Vec<Vec<String>>> {
+    let mut builder = csv::ReaderBuilder::new();
+    builder
+        .delimiter(dialect.delimiter)
         .has_headers(false)
-        .flexible(true)
-        .from_reader(bytes);
+        .flexible(true);
+    if let Some(quote) = dialect.quote {
+        builder.quote(quote).quoting(true);
+    } else {
+        builder.quoting(false);
+    }
+    builder.double_quote(dialect.double_quote);
+    if let Some(escape) = dialect.escape {
+        builder.escape(Some(escape));
+    }
+    if let Some(terminator) = dialect.terminator() {
+        builder.terminator(terminator);
+    }
+    let parse_bytes = if dialect.bom && bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        &bytes[3..]
+    } else {
+        bytes
+    };
+    let mut reader = builder.from_reader(parse_bytes);
     let mut records = Vec::new();
     let mut record = csv::ByteRecord::new();
     while reader
@@ -725,14 +887,487 @@ fn parse_csv_records(bytes: &[u8], delimiter: u8) -> BinocResult<Vec<Vec<String>
     Ok(records)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedCsvDialect {
+    delimiter: u8,
+    default_delimiter: u8,
+    quote: Option<u8>,
+    escape: Option<u8>,
+    double_quote: bool,
+    bom: bool,
+    newline: Option<String>,
+    inferred: bool,
+}
+
+impl ResolvedCsvDialect {
+    #[cfg(test)]
+    fn for_tests(delimiter: u8) -> Self {
+        Self {
+            delimiter,
+            default_delimiter: delimiter,
+            quote: Some(b'"'),
+            escape: None,
+            double_quote: true,
+            bom: false,
+            newline: Some("\n".into()),
+            inferred: false,
+        }
+    }
+
+    fn terminator(&self) -> Option<csv::Terminator> {
+        match self.newline.as_deref() {
+            Some("\n") => Some(csv::Terminator::Any(b'\n')),
+            Some("\r") => Some(csv::Terminator::Any(b'\r')),
+            Some("\r\n") => Some(csv::Terminator::CRLF),
+            _ => None,
+        }
+    }
+
+    fn should_disclose_provenance(&self) -> bool {
+        self.inferred && !self.matches_boring_default()
+    }
+
+    fn matches_boring_default(&self) -> bool {
+        self.delimiter == self.default_delimiter
+            && self.default_delimiter == b','
+            && matches!(self.quote, None | Some(b'"'))
+            && self.escape.is_none()
+            && !self.bom
+            && self.newline.as_deref() == Some("\n")
+    }
+}
+
+fn resolve_csv_dialect(item: &ItemRef, bytes: &[u8]) -> BinocResult<ResolvedCsvDialect> {
+    let mut resolved = sniff_csv_dialect(bytes, default_delimiter_for(item));
+    let Some(parse) = item.tabular_parse.as_ref() else {
+        resolved.inferred = true;
+        return Ok(resolved);
+    };
+    let declared = parse.delimiter.is_some() || parse.dialect.is_some();
+    resolved.inferred = !declared;
+    if let Some(delimiter) = parse.delimiter.as_deref() {
+        resolved.delimiter = single_byte(delimiter, "delimiter")?;
+    }
+    if let Some(dialect) = parse.dialect.as_ref() {
+        apply_declared_dialect(&mut resolved, dialect)?;
+    }
+    Ok(resolved)
+}
+
+fn apply_declared_dialect(
+    resolved: &mut ResolvedCsvDialect,
+    dialect: &CsvDialectConfig,
+) -> BinocResult<()> {
+    if let Some(delimiter) = dialect.delimiter.as_deref() {
+        resolved.delimiter = single_byte(delimiter, "delimiter")?;
+    }
+    if let Some(quote) = dialect.quote.as_deref() {
+        resolved.quote = Some(single_byte(quote, "quote")?);
+    }
+    if let Some(escape) = dialect.escape.as_deref() {
+        resolved.escape = Some(single_byte(escape, "escape")?);
+        resolved.double_quote = false;
+    }
+    if let Some(bom) = dialect.bom {
+        resolved.bom = bom;
+    }
+    if let Some(newline) = dialect.newline.as_ref() {
+        resolved.newline = Some(normalize_newline(newline)?);
+    }
+    Ok(())
+}
+
+fn single_byte(value: &str, field: &str) -> BinocResult<u8> {
+    let bytes = value.as_bytes();
+    if bytes.len() == 1 {
+        Ok(bytes[0])
+    } else {
+        Err(BinocError::Other(format!(
+            "CSV dialect {field} must be exactly one byte, got {value:?}"
+        )))
+    }
+}
+
+fn normalize_newline(value: &str) -> BinocResult<String> {
+    match value {
+        "\\n" => Ok("\n".into()),
+        "\\r" => Ok("\r".into()),
+        "\\r\\n" => Ok("\r\n".into()),
+        "\n" | "\r" | "\r\n" => Ok(value.into()),
+        _ => Err(BinocError::Other(format!(
+            "CSV dialect newline must be one of \\n, \\r, or \\r\\n, got {value:?}"
+        ))),
+    }
+}
+
+fn sniff_csv_dialect(bytes: &[u8], fallback_delimiter: u8) -> ResolvedCsvDialect {
+    let sample_end = bytes.len().min(CSV_SNIFF_BYTES);
+    let sample = &bytes[..sample_end];
+    let bom = sample.starts_with(&[0xEF, 0xBB, 0xBF]);
+    let sample = if bom && sample.len() >= 3 {
+        &sample[3..]
+    } else {
+        sample
+    };
+    let delimiter = sniff_delimiter(sample, fallback_delimiter).unwrap_or(fallback_delimiter);
+    let quote = sniff_quote(sample, delimiter);
+    let escape = quote.and_then(|quote| sniff_escape(sample, quote));
+    let double_quote = escape.is_none();
+    let newline = sniff_newline(sample);
+    ResolvedCsvDialect {
+        delimiter,
+        default_delimiter: fallback_delimiter,
+        quote,
+        escape,
+        double_quote,
+        bom,
+        newline,
+        inferred: false,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DelimiterScore {
+    candidate: u8,
+    mode_rows: usize,
+    row_count: usize,
+    occurrences: usize,
+    numeric_occurrences: usize,
+    non_numeric_occurrences: usize,
+    is_default: bool,
+}
+
+fn sniff_delimiter(sample: &[u8], default_delimiter: u8) -> Option<u8> {
+    let mut best: Option<DelimiterScore> = None;
+    for &candidate in CSV_DELIMITER_CANDIDATES {
+        let Some(score) = delimiter_score(sample, candidate, default_delimiter) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|best| score.beats(*best)) {
+            best = Some(score);
+        }
+    }
+    best.map(|score| score.candidate)
+}
+
+impl DelimiterScore {
+    fn beats(self, other: Self) -> bool {
+        if self.beats_decimal_comma_default(other) {
+            return true;
+        }
+        if other.beats_decimal_comma_default(self) {
+            return false;
+        }
+        (
+            self.mode_rows,
+            self.row_count,
+            self.non_numeric_occurrences,
+            self.is_default,
+        ) > (
+            other.mode_rows,
+            other.row_count,
+            other.non_numeric_occurrences,
+            other.is_default,
+        )
+    }
+
+    fn beats_decimal_comma_default(self, other: Self) -> bool {
+        matches!(self.candidate, b'\t' | b'|' | b';')
+            && other.candidate == b','
+            && other.is_default
+            && other.occurrences > 0
+            && other.occurrences == other.numeric_occurrences
+            && self.mode_rows == other.mode_rows
+            && self.row_count == other.row_count
+    }
+}
+
+fn delimiter_score(sample: &[u8], candidate: u8, default_delimiter: u8) -> Option<DelimiterScore> {
+    let mut widths = Vec::new();
+    let mut occurrences = 0;
+    let mut numeric_occurrences = 0;
+    for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
+        if line.is_empty() {
+            continue;
+        }
+        let stats = line_delimiter_stats(line, candidate);
+        widths.push(stats.width);
+        occurrences += stats.occurrences;
+        numeric_occurrences += stats.numeric_occurrences;
+    }
+    if widths.len() < 2 {
+        return None;
+    }
+    let (mode_width, mode_rows) = mode_width(&widths);
+    if mode_width < 2 {
+        return None;
+    }
+    Some(DelimiterScore {
+        candidate,
+        mode_rows,
+        row_count: widths.len(),
+        occurrences,
+        numeric_occurrences,
+        non_numeric_occurrences: occurrences.saturating_sub(numeric_occurrences),
+        is_default: candidate == default_delimiter,
+    })
+}
+
+fn mode_width(widths: &[usize]) -> (usize, usize) {
+    let mut sorted = widths.to_vec();
+    sorted.sort_unstable();
+    let mut best_width = sorted[0];
+    let mut best_count = 1;
+    let mut current_width = sorted[0];
+    let mut current_count = 1;
+    for width in sorted.into_iter().skip(1) {
+        if width == current_width {
+            current_count += 1;
+            continue;
+        }
+        if current_count > best_count {
+            best_width = current_width;
+            best_count = current_count;
+        }
+        current_width = width;
+        current_count = 1;
+    }
+    if current_count > best_count {
+        best_width = current_width;
+        best_count = current_count;
+    }
+    (best_width, best_count)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LineDelimiterStats {
+    width: usize,
+    occurrences: usize,
+    numeric_occurrences: usize,
+}
+
+#[cfg(test)]
+fn sample_widths(sample: &[u8], delimiter: u8) -> Vec<usize> {
+    let mut widths = Vec::new();
+    for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
+        if line.is_empty() {
+            continue;
+        }
+        widths.push(line_delimiter_stats(line, delimiter).width);
+    }
+    widths
+}
+
+fn line_delimiter_stats(line: &[u8], delimiter: u8) -> LineDelimiterStats {
+    let mut stats = LineDelimiterStats {
+        width: 1,
+        occurrences: 0,
+        numeric_occurrences: 0,
+    };
+    let mut active_quote = None;
+    let mut at_field_start = true;
+    let mut index = 0;
+    while index < line.len() {
+        let byte = line[index];
+        if let Some(quote) = active_quote {
+            if byte == quote {
+                if index + 1 < line.len() && line[index + 1] == quote {
+                    index += 2;
+                    continue;
+                }
+                active_quote = None;
+            }
+            index += 1;
+            continue;
+        }
+        if at_field_start && matches!(byte, b'"' | b'\'') {
+            active_quote = Some(byte);
+            at_field_start = false;
+            index += 1;
+            continue;
+        }
+        if byte == delimiter {
+            stats.width += 1;
+            stats.occurrences += 1;
+            if index > 0
+                && index + 1 < line.len()
+                && line[index - 1].is_ascii_digit()
+                && line[index + 1].is_ascii_digit()
+            {
+                stats.numeric_occurrences += 1;
+            }
+            at_field_start = true;
+            index += 1;
+            continue;
+        }
+        at_field_start = false;
+        index += 1;
+    }
+    stats
+}
+
+fn sniff_quote(sample: &[u8], delimiter: u8) -> Option<u8> {
+    (*b"\"'").into_iter().find(|quote| {
+        sample
+            .split(|byte| *byte == b'\n' || *byte == b'\r')
+            .filter(|line| !line.is_empty())
+            .any(|line| line_contains_quoted_field(line, delimiter, *quote))
+    })
+}
+
+fn line_contains_quoted_field(line: &[u8], delimiter: u8, quote: u8) -> bool {
+    let mut at_field_start = true;
+    let mut in_quotes = false;
+    let mut saw_quote = false;
+    for &byte in line {
+        if at_field_start && byte == quote {
+            in_quotes = !in_quotes;
+            saw_quote = true;
+        } else if in_quotes && byte == quote {
+            in_quotes = false;
+        } else if !in_quotes && byte == delimiter {
+            at_field_start = true;
+            continue;
+        }
+        at_field_start = false;
+    }
+    saw_quote && !in_quotes
+}
+
+fn sniff_escape(sample: &[u8], quote: u8) -> Option<u8> {
+    if plausible_backslash_escaped_quotes(sample, quote) >= 2 {
+        Some(b'\\')
+    } else {
+        None
+    }
+}
+
+fn plausible_backslash_escaped_quotes(sample: &[u8], quote: u8) -> usize {
+    let mut count = 0;
+    for line in sample.split(|byte| *byte == b'\n' || *byte == b'\r') {
+        let mut in_quotes = false;
+        let mut index = 0;
+        while index < line.len() {
+            let byte = line[index];
+            if byte == quote {
+                in_quotes = !in_quotes;
+                index += 1;
+                continue;
+            }
+            if in_quotes && byte == b'\\' && index + 1 < line.len() && line[index + 1] == quote {
+                let after_quote = line.get(index + 2).copied();
+                if !matches!(after_quote, None | Some(b',' | b'\t' | b'|' | b';' | b':')) {
+                    count += 1;
+                }
+                index += 2;
+                continue;
+            }
+            index += 1;
+        }
+    }
+    count
+}
+
+fn sniff_newline(sample: &[u8]) -> Option<String> {
+    let crlf = sample.windows(2).filter(|pair| *pair == b"\r\n").count();
+    let lf = sample.iter().filter(|byte| **byte == b'\n').count();
+    let cr = sample.iter().filter(|byte| **byte == b'\r').count();
+    if crlf > 0 && crlf * 2 >= lf.max(cr) {
+        Some("\r\n".into())
+    } else if lf > 0 {
+        Some("\n".into())
+    } else if cr > 0 {
+        Some("\r".into())
+    } else {
+        None
+    }
+}
+
+fn dialect_provenance_summary(dialect: &ResolvedCsvDialect) -> String {
+    let mut parts = vec![format!(
+        "detected {}-delimited",
+        describe_byte(dialect.delimiter)
+    )];
+    match dialect.quote {
+        Some(quote) => parts.push(format!("quote {}", describe_byte(quote))),
+        None => parts.push("no quoting".into()),
+    }
+    if let Some(escape) = dialect.escape {
+        parts.push(format!("escape {}", describe_byte(escape)));
+    }
+    if dialect.bom {
+        parts.push("UTF-8 BOM".into());
+    }
+    if let Some(newline) = dialect.newline.as_deref() {
+        parts.push(format!("newline {}", describe_newline(newline)));
+    }
+    parts.join(", ")
+}
+
+fn describe_byte(byte: u8) -> String {
+    match byte {
+        b'\t' => "tab".into(),
+        b'|' => "`|`".into(),
+        b',' => "comma".into(),
+        b';' => "semicolon".into(),
+        b':' => "colon".into(),
+        b'"' => "`\"`".into(),
+        b'\'' => "`'`".into(),
+        b'\\' => "`\\\\`".into(),
+        other => format!("`{}`", char::from(other)),
+    }
+}
+
+fn describe_newline(newline: &str) -> &'static str {
+    match newline {
+        "\r\n" => "CRLF",
+        "\r" => "CR",
+        _ => "LF",
+    }
+}
+#[cfg(test)]
 fn table_from_csv_records(records: Vec<Vec<String>>) -> TabularData {
+    table_from_csv_records_with_config(records, None)
+}
+
+fn table_from_csv_records_with_config(
+    records: Vec<Vec<String>>,
+    config: Option<&TabularParseConfig>,
+) -> TabularData {
     let Some(first) = records.first() else {
         return TabularData::from_string_rows(Vec::new(), Vec::new());
     };
-    let width = records.iter().map(Vec::len).max().unwrap_or(first.len());
-    let headers = complete_csv_headers(first, width);
-    let rows = records.into_iter().skip(1).collect();
-    TabularData::from_string_rows(headers, rows)
+    let has_header = config.is_none_or(|config| config.header);
+    let skip_lines = config.and_then(|config| config.skip_lines).unwrap_or(0);
+    let header_index = config
+        .and_then(|config| config.header_line)
+        .map(|line| line.saturating_sub(1))
+        .unwrap_or(skip_lines);
+
+    if has_header {
+        let header = records.get(header_index).unwrap_or(first);
+        let width = records
+            .iter()
+            .skip(header_index)
+            .map(Vec::len)
+            .max()
+            .unwrap_or(header.len());
+        let headers = complete_csv_headers(header, width);
+        let rows = records.into_iter().skip(header_index + 1).collect();
+        TabularData::from_string_rows(headers, rows)
+    } else {
+        let width = records
+            .iter()
+            .skip(skip_lines)
+            .map(Vec::len)
+            .max()
+            .unwrap_or(first.len());
+        let headers = complete_csv_headers(&[], width);
+        let rows = records.into_iter().skip(skip_lines).collect();
+        let mut table = TabularData::from_string_rows(headers, rows);
+        table.has_header = false;
+        table
+    }
 }
 
 fn complete_csv_headers(first: &[String], width: usize) -> Vec<String> {
@@ -835,6 +1470,7 @@ fn children_from_sections(parent_path: &str, sections: &[StackedSection]) -> Vec
                 size: Some(bytes.len() as u64),
                 media_type: Some("application/vnd.binoc.tabular+json".into()),
                 projection_hint: ProjectionHint::default().item_type("tabular"),
+                tabular_parse: None,
                 handle: logical_path,
             },
             artifacts: vec![ParsedArtifact {
@@ -868,7 +1504,8 @@ mod tests {
     use super::*;
 
     fn detect(csv: &str) -> Vec<StackedSection> {
-        let records = parse_csv_records(csv.as_bytes(), b',').expect("parse csv");
+        let records = parse_csv_records(csv.as_bytes(), &ResolvedCsvDialect::for_tests(b','))
+            .expect("parse csv");
         detect_stacked_sections_from_rows(&records)
     }
 
@@ -906,6 +1543,135 @@ mod tests {
         assert_eq!(table.rows[0][1].as_text(), "Jan");
         assert_eq!(table.rows[0][2].as_text(), "Feb");
         assert_eq!(table.rows[1][2].as_text(), "-.24");
+    }
+
+    #[test]
+    fn sniff_csv_dialect_detects_pipe_without_quotes() {
+        let dialect = sniff_csv_dialect(b"id|value\n1|old\n2|same\n", b',');
+        assert_eq!(dialect.delimiter, b'|');
+        assert_eq!(dialect.quote, None);
+        assert_eq!(dialect.newline.as_deref(), Some("\n"));
+        assert_eq!(
+            dialect_provenance_summary(&dialect),
+            "detected `|`-delimited, no quoting, newline LF"
+        );
+    }
+
+    #[test]
+    fn default_inferred_csv_without_quoted_fields_is_silent() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,old\n2,same\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert!(dialect.matches_boring_default());
+        assert!(!dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn default_inferred_csv_with_double_quotes_is_silent() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,\"old\"\n2,\"same\"\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert_eq!(dialect.quote, Some(b'"'));
+        assert!(dialect.matches_boring_default());
+        assert!(!dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn inferred_non_default_csv_keeps_provenance() {
+        let dialect = sniff_csv_dialect(b"id\tvalue\n1\told\n2\tsame\n", b',');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert!(!dialect.matches_boring_default());
+        assert!(dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn inferred_comma_delimiter_for_tsv_keeps_provenance() {
+        let dialect = sniff_csv_dialect(b"id,value\n1,old\n2,same\n", b'\t');
+        let dialect = ResolvedCsvDialect {
+            inferred: true,
+            ..dialect
+        };
+        assert_eq!(dialect.delimiter, b',');
+        assert!(!dialect.matches_boring_default());
+        assert!(dialect.should_disclose_provenance());
+    }
+
+    #[test]
+    fn sniff_csv_dialect_uses_extension_prior_for_headerless_time_csv() {
+        let dialect = sniff_csv_dialect(b"12:30:00,5\n13:45:00,6\n", b',');
+        assert_eq!(dialect.delimiter, b',');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_uses_extension_prior_for_headerless_decimal_comma_tsv() {
+        let dialect = sniff_csv_dialect(b"foo\t1,5\nbar\t2,5\n", b'\t');
+        assert_eq!(dialect.delimiter, b'\t');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_detects_headerless_semicolon_decimal_comma_csv() {
+        let dialect = sniff_csv_dialect(b"foo;1,5\nbar;2,5\n", b',');
+        assert_eq!(dialect.delimiter, b';');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_detects_all_numeric_headerless_semicolon_decimal_comma_csv() {
+        let dialect = sniff_csv_dialect(b"1,5;2,5\n3,5;4,5\n", b',');
+        assert_eq!(dialect.delimiter, b';');
+    }
+
+    #[test]
+    fn sniff_csv_dialect_ignores_quoted_commas_for_pipe_file() {
+        let dialect = sniff_csv_dialect(b"\"1,5\"|x\n\"2,5\"|y\n", b',');
+        assert_eq!(dialect.delimiter, b'|');
+    }
+
+    #[test]
+    fn sample_widths_ignores_quoted_delimiters() {
+        assert_eq!(sample_widths(b"\"1,5\"|x\n\"2,5\"|y\n", b','), vec![1, 1]);
+        assert_eq!(sample_widths(b"\"1,5\"|x\n\"2,5\"|y\n", b'|'), vec![2, 2]);
+    }
+
+    #[test]
+    fn sniff_escape_ignores_single_backslash_before_closing_quote() {
+        let dialect = sniff_csv_dialect(
+            br#"id,path
+1,"C:\temp\"
+2,"C:\logs\"
+"#,
+            b',',
+        );
+        assert_eq!(dialect.escape, None);
+        assert!(dialect.double_quote);
+    }
+
+    #[test]
+    fn parse_csv_records_respects_backslash_escape() {
+        let dialect = ResolvedCsvDialect {
+            delimiter: b'|',
+            default_delimiter: b'|',
+            quote: Some(b'"'),
+            escape: Some(b'\\'),
+            double_quote: false,
+            bom: false,
+            newline: Some("\n".into()),
+            inferred: false,
+        };
+        let rows = parse_csv_records(
+            br#"id|note
+1|"said \"hi\""
+"#,
+            &dialect,
+        )
+        .expect("parse escaped csv");
+        assert_eq!(rows[1][1], "said \"hi\"");
     }
 
     #[test]

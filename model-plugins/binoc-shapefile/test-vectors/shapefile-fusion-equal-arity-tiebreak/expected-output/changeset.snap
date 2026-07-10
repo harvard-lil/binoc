@@ -64,7 +64,10 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "Document values changed"
+                "uint": 3
+              },
+              {
+                "text": " values changed"
               }
             ],
             "tags": [
@@ -97,6 +100,14 @@ expression: "&stable_changeset"
                     ],
                     "examples_truncated": false
                   },
+                  "summary": [
+                    {
+                      "uint": 3
+                    },
+                    {
+                      "text": " values changed"
+                    }
+                  ],
                   "verb": "document.value_change"
                 }
               ]
@@ -162,7 +173,10 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "Document values changed"
+                "uint": 3
+              },
+              {
+                "text": " values changed"
               }
             ],
             "tags": [
@@ -195,6 +209,14 @@ expression: "&stable_changeset"
                     ],
                     "examples_truncated": false
                   },
+                  "summary": [
+                    {
+                      "uint": 3
+                    },
+                    {
+                      "text": " values changed"
+                    }
+                  ],
                   "verb": "document.value_change"
                 }
               ]

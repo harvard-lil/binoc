@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Document values changed"
+            "path": {
+              "value": "$.jobTitle",
+              "snapshot": "to"
+            }
+          },
+          {
+            "text": ": \"Mathematician\" -> \"Computer Scientist\""
           }
         ],
         "tags": [
@@ -46,6 +52,17 @@ expression: "&stable_changeset"
                 ],
                 "examples_truncated": false
               },
+              "summary": [
+                {
+                  "path": {
+                    "snapshot": "to",
+                    "value": "$.jobTitle"
+                  }
+                },
+                {
+                  "text": ": \"Mathematician\" -> \"Computer Scientist\""
+                }
+              ],
               "verb": "document.value_change"
             }
           ]

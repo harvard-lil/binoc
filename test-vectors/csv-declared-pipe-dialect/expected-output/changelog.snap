@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.txt**: 1 row modified by key
+  - Changed cells
+    - key id '1', column 'value': 'old' -> 'new'

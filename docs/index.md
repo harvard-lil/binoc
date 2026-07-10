@@ -33,25 +33,10 @@ binoc diff release-q3/ release-q4/
 - **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
 ```
 
-Binoc looked inside the zip and compared the CSV column-by-column. But
-`.sqlite` is opaque to the standard library, so you only learn that the bytes
-differ.
-
-```bash
-pip install binoc-sqlite
-binoc diff release-q3/ release-q4/
-```
-
-```
-# Changelog: release-q3/ → release-q4/
-
-- **data.zip/agencies.csv**: Columns reordered (content unchanged)
-- **summary.sqlite/allocations**: 3 rows added (84 → 87 rows)
-```
-
-Same command, richer output. The plugin parsed the database and found the
-actual change: three new rows in the `allocations` table. Plugins install via
-pip and work immediately — no configuration required.
+Binoc looked inside the zip and compared the CSV column-by-column. The default
+published wheel intentionally leaves SQLite out of the bundled rule set, so a
+SQLite database is still reported as a binary content change unless you build
+with the opt-in SQLite pack.
 
 ## Getting started
 
@@ -75,13 +60,10 @@ walkthrough.
 
 ## Plugins
 
-Third-party plugins extend binoc with domain-specific rule packs and renderers.
-Install a plugin and its formats are available automatically:
-
-```bash
-pip install binoc-sqlite
-binoc diff snapshots/v1 snapshots/v2    # .sqlite/.db files now get semantic diffs
-```
+First-party format packs extend binoc with domain-specific rule packs and
+renderers. Most are already compiled into the fat `binoc` wheel; the
+[plugin catalog](users/reference/third-party-plugins.md) records which packs are
+bundled, opt-in, or distributed separately.
 
 See [install and use plugins](users/howto/install-and-use-plugins.md) to manage
 plugins and [Plugin model](plugin-developers/explanation/plugin-model.md) to

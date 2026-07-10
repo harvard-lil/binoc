@@ -7,7 +7,8 @@
 //! Test vectors commit *source* trees like `archive.zip.d/` instead of opaque
 //! binary archives. A [`VectorMaterializer`] turns each staging directory into
 //! the real artifact (`.zip`, `.tar.gz`, `.sqlite`, ...). The stdlib ships
-//! [`ZipMaterializer`], [`TarMaterializer`], and [`GzipMaterializer`]
+//! [`ZipMaterializer`], [`TarMaterializer`], [`GzipMaterializer`], and
+//! [`RepeatedBinaryMaterializer`]
 //! ([`stdlib_materializers`]); plugins contribute their own (see
 //! `binoc-sqlite` for SQLite). Both [`run_vector`] and
 //! [`materialize_snapshots`] go through the same walker so tests and
@@ -24,6 +25,7 @@ use binoc_sdk::ir::DiffNode;
 use binoc_sdk::Changeset;
 use serde::{Deserialize, Serialize};
 
+use crate::correspondence::tabular::ROW_ALIGNMENT_BASIS_VERB;
 use crate::renderers::markdown;
 
 // ── Manifest schema ───────────────────────────────────────────────────────
@@ -143,13 +145,14 @@ pub trait VectorMaterializer: Send + Sync {
 }
 
 /// Stdlib-provided materializers: [`ZipMaterializer`], [`TarMaterializer`],
-/// and [`GzipMaterializer`].
+/// [`GzipMaterializer`], and [`RepeatedBinaryMaterializer`].
 /// Plugin materialize binaries should start from this list and push their own.
 pub fn stdlib_materializers() -> Vec<Box<dyn VectorMaterializer>> {
     vec![
         Box::new(ZipMaterializer),
         Box::new(TarMaterializer),
         Box::new(GzipMaterializer),
+        Box::new(RepeatedBinaryMaterializer),
     ]
 }
 
@@ -190,6 +193,94 @@ impl VectorMaterializer for GzipMaterializer {
     fn build(&self, staging_dir: &Path, out_path: &Path, _all_suffixes: &[&str]) {
         create_gzip_from_dir(staging_dir, out_path);
     }
+}
+
+/// Materializer for deterministic opaque binary fixtures. A staging directory
+/// contains `recipe.json` with a total size, a repeated hexadecimal byte
+/// pattern, and optional repeated-pattern patches. The supported suffixes are
+/// intentionally narrow so ordinary directories ending in `.d` remain data.
+pub struct RepeatedBinaryMaterializer;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepeatedBinaryRecipe {
+    size: usize,
+    repeat_hex: String,
+    #[serde(default)]
+    patches: Vec<RepeatedBinaryPatch>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepeatedBinaryPatch {
+    offset: usize,
+    length: usize,
+    repeat_hex: String,
+}
+
+impl VectorMaterializer for RepeatedBinaryMaterializer {
+    fn suffixes(&self) -> &[&'static str] {
+        &[".bin.d", ".binless.d"]
+    }
+
+    fn build(&self, staging_dir: &Path, out_path: &Path, _all_suffixes: &[&str]) {
+        let recipe_path = staging_dir.join("recipe.json");
+        let recipe_text = std::fs::read_to_string(&recipe_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {e}", recipe_path.display()));
+        let recipe: RepeatedBinaryRecipe = serde_json::from_str(&recipe_text)
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", recipe_path.display()));
+        let pattern = decode_hex_pattern(&recipe.repeat_hex, &recipe_path);
+        let mut bytes = repeated_bytes(&pattern, recipe.size);
+
+        for patch in recipe.patches {
+            let end = patch
+                .offset
+                .checked_add(patch.length)
+                .filter(|end| *end <= bytes.len())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Patch [{}, {}) is outside {}-byte output in {}",
+                        patch.offset,
+                        patch.offset.saturating_add(patch.length),
+                        bytes.len(),
+                        recipe_path.display()
+                    )
+                });
+            let patch_pattern = decode_hex_pattern(&patch.repeat_hex, &recipe_path);
+            for (index, byte) in bytes[patch.offset..end].iter_mut().enumerate() {
+                *byte = patch_pattern[index % patch_pattern.len()];
+            }
+        }
+
+        std::fs::write(out_path, bytes)
+            .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));
+    }
+}
+
+fn decode_hex_pattern(hex: &str, recipe_path: &Path) -> Vec<u8> {
+    assert!(
+        !hex.is_empty() && hex.len().is_multiple_of(2),
+        "Hex patterns must contain a non-empty, even number of digits in {}",
+        recipe_path.display()
+    );
+    hex.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let text = std::str::from_utf8(pair).expect("hex digits are ASCII");
+            u8::from_str_radix(text, 16).unwrap_or_else(|_| {
+                panic!(
+                    "Invalid hexadecimal byte '{text}' in {}",
+                    recipe_path.display()
+                )
+            })
+        })
+        .collect()
+}
+
+fn repeated_bytes(pattern: &[u8], size: usize) -> Vec<u8> {
+    (0..size)
+        .map(|index| pattern[index % pattern.len()])
+        .collect()
 }
 
 /// Walk `root` depth-first; for each directory whose name ends in a registered
@@ -830,6 +921,8 @@ pub fn check_changeset_invariants(name: &str, changeset: &Changeset) {
     }
 
     check_no_parent_child_edit_duplication(name, root);
+    check_no_row_alignment_basis_leaked(name, root);
+    check_empty_tag_map_markdown_legibility(name, changeset);
 }
 
 /// Collect the JSON edit objects (`{ "verb", "params" }`) recorded under a
@@ -875,6 +968,183 @@ fn collect_descendant_edits(node: &DiffNode, out: &mut HashSet<String>) {
     for child in &node.children {
         collect_descendant_edits(child, out);
     }
+}
+
+fn check_no_row_alignment_basis_leaked(name: &str, node: &DiffNode) {
+    for edit in node_edits(node) {
+        assert!(
+            edit.get("verb").and_then(|verb| verb.as_str()) != Some(ROW_ALIGNMENT_BASIS_VERB),
+            "[{name}] Internal row-alignment basis leaked into changeset at '{}'",
+            node.path
+        );
+    }
+    for child in &node.children {
+        check_no_row_alignment_basis_leaked(name, child);
+    }
+}
+
+/// Built-in markdown must remain legible when tag categorization is disabled:
+/// tags may drive grouping, but rule-specific phrasing has to arrive as
+/// summaries/details from the producing rules.
+fn check_empty_tag_map_markdown_legibility(name: &str, changeset: &Changeset) {
+    let md = markdown::render_markdown(
+        std::slice::from_ref(changeset),
+        &markdown::MarkdownRendererConfig {
+            groups: Vec::new(),
+            ..Default::default()
+        },
+    );
+    let claims_only = split_claims_from_diagnostics(&md);
+
+    assert!(
+        !claims_only.contains("binoc."),
+        "[{name}] Markdown rendered with an empty tag_map leaked raw binoc vocabulary into claims:\n{md}"
+    );
+    assert!(
+        !md.contains("linked endpoints have different content hashes, but no visible edit explained the difference"),
+        "[{name}] Markdown rendered with an empty tag_map exposed the opaque content-hash fallback:\n{md}"
+    );
+    if let Some(root) = &changeset.root {
+        check_modify_node_edit_legibility(name, root);
+    }
+}
+
+fn split_claims_from_diagnostics(md: &str) -> &str {
+    ["\n## Errors\n", "\n## Warnings\n", "\n## Suggestions\n"]
+        .iter()
+        .filter_map(|marker| md.find(marker))
+        .min()
+        .map(|index| &md[..index])
+        .unwrap_or(md)
+}
+
+fn check_modify_node_edit_legibility(name: &str, node: &DiffNode) {
+    if node.action == "modify" && node_requires_concrete_fact_check(node) {
+        let rendered = markdown::render_markdown(
+            &[Changeset::new(
+                "left",
+                "right",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node.clone()])),
+            )],
+            &markdown::MarkdownRendererConfig {
+                groups: Vec::new(),
+                ..Default::default()
+            },
+        );
+        let facts = legibility_fact_candidates(node);
+        let has_fact = facts.iter().any(|fact| rendered.contains(fact))
+            || (facts.is_empty()
+                && node
+                    .summary
+                    .as_ref()
+                    .is_some_and(|summary| !generic_summary_phrase(&summary.plain_text())));
+        assert!(
+            has_fact,
+            "[{name}] Modify node with edits rendered without a concrete fact under empty tag_map for path '{}':\n{rendered}",
+            node.path
+        );
+    }
+
+    for child in &node.children {
+        check_modify_node_edit_legibility(name, child);
+    }
+}
+
+fn node_requires_concrete_fact_check(node: &DiffNode) -> bool {
+    node.details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .is_some_and(|edits| {
+            !edits.is_empty()
+                && edits.iter().any(|edit| {
+                    edit.get("verb").and_then(|value| value.as_str())
+                        == Some("document.value_change")
+                        || edit
+                            .get("summary")
+                            .and_then(|summary| {
+                                serde_json::from_value::<binoc_sdk::Summary>(summary.clone()).ok()
+                            })
+                            .is_some_and(|summary| summary_has_concrete_fact(&summary.plain_text()))
+                })
+        })
+}
+
+fn legibility_fact_candidates(node: &DiffNode) -> Vec<String> {
+    let Some(edits) = node.details.get("edits").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+    let mut facts = Vec::new();
+    for edit in edits {
+        collect_legibility_fact_candidates(
+            edit.get("params").unwrap_or(&serde_json::Value::Null),
+            &mut facts,
+        );
+        if let Some(summary) = edit
+            .get("summary")
+            .and_then(|summary| serde_json::from_value::<binoc_sdk::Summary>(summary.clone()).ok())
+            .filter(|summary| summary_has_concrete_fact(&summary.plain_text()))
+            .map(|summary| markdown::render_summary(&summary))
+        {
+            push_legibility_fact(&mut facts, summary);
+        }
+    }
+    facts
+}
+
+fn collect_legibility_fact_candidates(value: &serde_json::Value, facts: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                match key.as_str() {
+                    "path" | "left_path" | "right_path" | "column" | "key" | "name"
+                    | "from_type" | "to_type" => {
+                        if let Some(text) = value.as_str() {
+                            push_legibility_fact(facts, text.to_string());
+                        }
+                    }
+                    "from" | "to" | "value" => {
+                        if let Some(text) = value.as_str() {
+                            push_legibility_fact(facts, text.to_string());
+                        } else if value.is_number() || value.is_boolean() || value.is_null() {
+                            push_legibility_fact(facts, value.to_string());
+                        }
+                    }
+                    _ => collect_legibility_fact_candidates(value, facts),
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_legibility_fact_candidates(value, facts);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_legibility_fact(facts: &mut Vec<String>, fact: String) {
+    if fact.len() < 2 || facts.iter().any(|existing| existing == &fact) {
+        return;
+    }
+    facts.push(fact);
+}
+
+fn summary_has_concrete_fact(summary: &str) -> bool {
+    summary.contains('$')
+        || summary.contains("->")
+        || summary.contains('\'')
+        || summary.chars().any(|ch| ch.is_ascii_digit())
+}
+
+fn generic_summary_phrase(summary: &str) -> bool {
+    let summary = summary.trim();
+    summary == "Document values changed"
+        || summary == "Metadata changed"
+        || summary == "Content changed"
+        || summary == "Text changed"
+        || summary == "Document changed"
+        || summary.ends_with(" edit")
+        || summary.ends_with(" edits")
 }
 
 fn collect_invariant_violations<'a>(node: &'a DiffNode, leaf_paths: &mut Vec<&'a str>) {

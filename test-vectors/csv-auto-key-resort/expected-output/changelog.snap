@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **data.csv**: 1 row modified by key
+  - Changed cells
+    - key id 'brfss-003', column 'rate': '14.8' -> '15.0'
+
+## Suggestions
+
+- inferred row identity column 'id' from unique values with 100% overlap (`binoc.write.tabular`) [binoc.tabular_auto_key]

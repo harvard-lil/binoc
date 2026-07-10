@@ -1,0 +1,9 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **SDN.CSV**: 1 row modified by key
+  - Changed cells
+    - key column_1 '100', column 'column_11': 'remarks' -> 'remarks-updated'

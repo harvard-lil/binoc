@@ -32,7 +32,7 @@ monorepos, available to small teams coordinating an open ecosystem.*
 
 All real plugins live in-tree under `model-plugins/` (binoc-sqlite,
 binoc-stat-binary, binoc-html, binoc-row-reorder), in the same workspace as
-the SDK they depend on. `third_party_plugins.json` is an in-tree registry
+the SDK they depend on. `plugin_registry.json` is an in-tree registry
 describing each plugin's dispatch claims, packages, and entry points —
 currently it lists only in-tree plugins, but its schema doesn't assume
 that. Plugins, including hypothetical out-of-tree ones, can run the shared
@@ -337,7 +337,7 @@ These are implications and open questions, not decisions; any of them
 that ripens into a decision should get an ADR.
 
 **The registry could be a contract, not a directory.**
-`third_party_plugins.json` currently describes plugins; the precedents
+`plugin_registry.json` currently describes plugins; the precedents
 suggest the leverage comes when an entry *buys* something (inclusion in
 ecosystem CI; AI-generated fix PRs when the SDK breaks you; a listing
 page) and *requires* something (test vectors that pass; a responsive
@@ -351,7 +351,7 @@ plugins get the changelog.
 **A binoc-crater is nearly free, and is the prerequisite for
 everything else.** The expensive parts of crater — enumerating the
 ecosystem and uniformly testing each member — already exist as
-`third_party_plugins.json` and the shared vector harness. A CI job that
+`plugin_registry.json` and the shared vector harness. A CI job that
 checks out each registered plugin, builds it against candidate `main`,
 and runs its vectors would make every SDK-breaking PR's blast radius a
 measurement instead of a guess. The failure cases (tinderbox,

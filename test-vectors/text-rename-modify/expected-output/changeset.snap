@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "2 lines added"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "notes.txt",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
@@ -69,7 +75,14 @@ expression: "&stable_changeset"
               "verb": "text.replace_lines"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "2 lines added"
+          }
+        ]
       }
     ]
   }

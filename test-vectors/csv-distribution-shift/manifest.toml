@@ -3,8 +3,8 @@ name = "csv-distribution-shift"
 description = "Numeric column distribution shifts with keyed row matching"
 tags = ["csv", "statistics", "row-identity"]
 
-[config]
-dataset = { tables = { defaults = { row_identity = { columns = ["id"] } } } }
+[config.dataset.defaults.row_identity]
+columns = ["id"]
 
 [expected]
 has_tags = ["binoc.cell-change"]

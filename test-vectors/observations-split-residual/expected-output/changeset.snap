@@ -41,7 +41,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "2 rows removed"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "observations.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
@@ -83,7 +89,14 @@ expression: "&stable_changeset"
               "verb": "tabular.remove_row"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "2 rows removed"
+          }
+        ]
       },
       {
         "action": "add",

@@ -4,5 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.msgpack**: Document values changed
-  - Value Change: changes: [{"from":"30","kind":"replace","path":"$.settings.timeout","to":"45"}]; examples_truncated: false
+- **data.msgpack**: $.settings.timeout: 30 -> 45

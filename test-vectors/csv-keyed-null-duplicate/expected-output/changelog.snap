@@ -6,10 +6,12 @@ expression: "&md"
 
 - **data.csv**: 14 cells changed
   - Changed cells (showing 3 of 14)
+    - changed cells by column: id 4, name 5, score 5
     - row 1, column 'id': 'a' -> 'b'
     - row 1, column 'name': 'Alice' -> 'Bob'
     - row 1, column 'score': '10' -> '21'
 
 ## Warnings
 
-- configured row keys had null values; fell back to positional row comparison (`binoc.write.tabular`) [binoc.keyed_row_identity_degraded]
+- configured row keys had null values; fell back to positional row comparison (`data.csv`) [binoc.keyed_row_identity_degraded]
+  - use `binoc extract CHANGESET "data.csv" content`

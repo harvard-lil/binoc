@@ -1,10 +1,68 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use binoc_sdk::{
     decompose_child, file_name, member_child, BinocError, BinocResult, DataAccess, Diagnostic,
     ExpandDescriptor, ExpandOutput, ExpandRule, ItemRef, NodeMatch, ProjectionHint,
 };
+
+const CONTENT_SNIFF_PREFIX_BYTES: usize = 8192;
+const CONTENT_SNIFF_CONTROL_PCT_LIMIT: usize = 2;
+const TAG_CONTENT_TYPE_INFERENCE: &str = "binoc.inference.content-sniffed-type";
+const SNIFFED_TEXT_CONTENT_TYPE: &str = "text/plain";
+const KNOWN_EXTENSION_DISPATCHES: &[&str] = &[
+    "csv",
+    "tsv",
+    "txt",
+    "md",
+    "vcf",
+    "json",
+    "geojson",
+    "jsonld",
+    "json-ld",
+    "jsonl",
+    "ndjson",
+    "yaml",
+    "yml",
+    "toml",
+    "ini",
+    "cfg",
+    "properties",
+    "xml",
+    "rdf",
+    "kml",
+    "gml",
+    "atom",
+    "rss",
+    "xlsx",
+    "xls",
+    "xlsm",
+    "xlsb",
+    "ods",
+    "zip",
+    "gz",
+    "tar",
+    "cbor",
+    "msgpack",
+    "mp",
+    "bson",
+    "plist",
+    "ion",
+    "arrow",
+    "feather",
+    "ipc",
+    "parquet",
+    "dbf",
+    "xpt",
+    "avro",
+    "sqlite",
+    "sqlite3",
+    "db",
+    "shp",
+    "shx",
+    "prj",
+    "cpg",
+];
 
 /// Default decompression caps. These are bomb-defense bounds, not correctness
 /// limits: they only need to sit comfortably above the largest real bundle we
@@ -44,11 +102,158 @@ impl Default for ExpandCaps {
 const GZIP_CAP_KNOB: &str = "correspondence.max_gzip_bytes";
 const ENTRY_CAP_KNOB: &str = "correspondence.max_archive_entry_bytes";
 const TOTAL_CAP_KNOB: &str = "correspondence.max_archive_total_bytes";
+const STREAM_COPY_BUFFER_BYTES: usize = 64 * 1024;
 
 fn cap_overflow_message(what: &str, cap: u64, knob: &str) -> String {
     format!(
         "{what} exceeds the {cap}-byte decompression cap; raise `{knob}` in the dataset config to expand it"
     )
+}
+
+#[derive(Debug)]
+enum StreamCopyError {
+    SourceIo(std::io::Error),
+    OutputIo(std::io::Error),
+    Cap(String),
+}
+
+impl StreamCopyError {
+    fn into_format_error(self, format: fn(String) -> BinocError) -> BinocError {
+        match self {
+            Self::SourceIo(err) => format(BinocError::Io(err).to_string()),
+            Self::OutputIo(err) => BinocError::Io(err),
+            Self::Cap(message) => format(message),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StreamCap<'a> {
+    cap: u64,
+    message: &'a str,
+}
+
+struct StreamTotalCap<'a> {
+    current: &'a mut u64,
+    cap: u64,
+    message: &'a str,
+}
+
+#[derive(Debug)]
+struct StreamCopyStats {
+    bytes_written: u64,
+    hash: Option<String>,
+    prefix: Vec<u8>,
+    prefix_truncated: bool,
+}
+
+fn stream_copy_with_caps<R: Read>(
+    reader: &mut R,
+    dest: &Path,
+    entry_cap: StreamCap<'_>,
+    mut total_cap: Option<StreamTotalCap<'_>>,
+    hash_output: bool,
+    prefix_bytes: usize,
+) -> Result<StreamCopyStats, StreamCopyError> {
+    let result = (|| {
+        let mut out = std::fs::File::create(dest).map_err(StreamCopyError::OutputIo)?;
+        let mut buffer = [0u8; STREAM_COPY_BUFFER_BYTES];
+        let mut entry_total = 0u64;
+        let mut hasher = hash_output.then(blake3::Hasher::new);
+        let mut prefix = Vec::with_capacity(prefix_bytes.min(CONTENT_SNIFF_PREFIX_BYTES));
+        let mut prefix_truncated = false;
+
+        loop {
+            let entry_remaining = entry_cap.cap.saturating_sub(entry_total);
+            if entry_remaining == 0 {
+                if read_over_cap_probe(reader)? {
+                    return Err(StreamCopyError::Cap(entry_cap.message.to_string()));
+                }
+                break;
+            }
+
+            let total_remaining = total_cap
+                .as_ref()
+                .map(|total| total.cap.saturating_sub(*total.current))
+                .unwrap_or(u64::MAX);
+            if total_remaining == 0 {
+                if read_over_cap_probe(reader)? {
+                    let message = total_cap
+                        .as_ref()
+                        .expect("total cap must be present")
+                        .message
+                        .to_string();
+                    return Err(StreamCopyError::Cap(message));
+                }
+                break;
+            }
+
+            let read_limit = STREAM_COPY_BUFFER_BYTES.min(
+                entry_remaining
+                    .min(total_remaining)
+                    .try_into()
+                    .unwrap_or(usize::MAX),
+            );
+            let bytes_read = reader
+                .read(&mut buffer[..read_limit])
+                .map_err(StreamCopyError::SourceIo)?;
+            if bytes_read == 0 {
+                break;
+            }
+            let bytes_read_u64 = bytes_read as u64;
+            let new_entry_total = entry_total
+                .checked_add(bytes_read_u64)
+                .ok_or_else(|| StreamCopyError::Cap(entry_cap.message.to_string()))?;
+            let new_total = total_cap
+                .as_ref()
+                .map(|total| {
+                    (*total.current)
+                        .checked_add(bytes_read_u64)
+                        .ok_or_else(|| StreamCopyError::Cap(total.message.to_string()))
+                })
+                .transpose()?;
+
+            out.write_all(&buffer[..bytes_read])
+                .map_err(StreamCopyError::OutputIo)?;
+            if let Some(hasher) = hasher.as_mut() {
+                hasher.update(&buffer[..bytes_read]);
+            }
+            if prefix.len() < prefix_bytes {
+                let remaining = prefix_bytes - prefix.len();
+                prefix.extend_from_slice(&buffer[..bytes_read.min(remaining)]);
+                if bytes_read > remaining {
+                    prefix_truncated = true;
+                }
+            } else if prefix_bytes > 0 {
+                prefix_truncated = true;
+            }
+            entry_total = new_entry_total;
+            if let (Some(total), Some(new_total)) = (total_cap.as_mut(), new_total) {
+                *total.current = new_total;
+            }
+        }
+
+        out.flush().map_err(StreamCopyError::OutputIo)?;
+        Ok(StreamCopyStats {
+            bytes_written: entry_total,
+            hash: hasher.map(|hasher| hasher.finalize().to_hex().to_string()),
+            prefix,
+            prefix_truncated,
+        })
+    })();
+
+    if result.is_err() {
+        let _ = std::fs::remove_file(dest);
+    }
+    result
+}
+
+fn read_over_cap_probe<R: Read>(reader: &mut R) -> Result<bool, StreamCopyError> {
+    let mut byte = [0u8; 1];
+    reader
+        .read(&mut byte)
+        .map(|bytes_read| bytes_read > 0)
+        .map_err(StreamCopyError::SourceIo)
 }
 
 /// Which separator the immediate children of an expansion hang off.
@@ -73,38 +278,96 @@ impl ChildSep {
     }
 }
 
-fn projection_for(logical_path: &str, is_dir: bool) -> ProjectionHint {
+fn projection_for(
+    logical_path: &str,
+    is_dir: bool,
+    bytes_prefix: Option<&[u8]>,
+    prefix_truncated: bool,
+) -> ProjectionHint {
     if is_dir {
         return ProjectionHint::default().item_type("directory");
     }
-    match Path::new(logical_path)
+    let extension = Path::new(logical_path)
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
+        .map(str::to_ascii_lowercase);
+    let sniffable_unknown = extension.is_none()
+        || extension.as_ref().is_some_and(|ext| {
+            !KNOWN_EXTENSION_DISPATCHES.contains(&ext.as_str())
+                && mime_guess::from_path(logical_path).first_raw().is_none()
+        });
+    match extension.as_deref() {
         Some("csv" | "tsv") => ProjectionHint::default().item_type("tabular"),
         Some("txt" | "md") => ProjectionHint::default().item_type("text"),
+        _ if sniffable_unknown => {
+            sniff_text_projection(logical_path, bytes_prefix, prefix_truncated)
+                .unwrap_or_else(|| ProjectionHint::default().item_type("file"))
+        }
         _ => ProjectionHint::default().item_type("file"),
     }
 }
 
 fn make_child(physical: &Path, logical: String, data: &dyn DataAccess) -> BinocResult<ItemRef> {
     let mut item = data.register_local(physical, &logical)?;
+    let mut content_sniff = None;
     if !item.is_dir {
-        let (hash, size) = hash_and_size(&item, data)?;
+        let (hash, size, prefix, prefix_truncated) = hash_size_and_prefix(&item, data)?;
         item.content_hash = Some(hash);
         item.size = Some(size);
+        content_sniff = Some((prefix, prefix_truncated));
     }
-    item.projection_hint = projection_for(&logical, item.is_dir);
+    item.projection_hint = projection_for(
+        &logical,
+        item.is_dir,
+        content_sniff.as_ref().map(|(prefix, _)| prefix.as_slice()),
+        content_sniff
+            .as_ref()
+            .is_some_and(|(_, prefix_truncated)| *prefix_truncated),
+    );
+    if item
+        .projection_hint
+        .tags
+        .iter()
+        .any(|tag| tag == TAG_CONTENT_TYPE_INFERENCE)
+    {
+        item.media_type = Some(SNIFFED_TEXT_CONTENT_TYPE.into());
+    }
     Ok(item)
 }
 
-fn hash_and_size(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<(String, u64)> {
+fn hash_size_and_prefix(
+    item: &ItemRef,
+    data: &dyn DataAccess,
+) -> BinocResult<(String, u64, Vec<u8>, bool)> {
     let mut reader = data.open_read(item)?;
     let mut hasher = blake3::Hasher::new();
-    let size = std::io::copy(&mut reader, &mut hasher).map_err(BinocError::Io)?;
-    Ok((hasher.finalize().to_hex().to_string(), size))
+    let mut size = 0u64;
+    let mut prefix = Vec::with_capacity(CONTENT_SNIFF_PREFIX_BYTES);
+    let mut buffer = [0u8; 8192];
+    let mut prefix_truncated = false;
+    loop {
+        let read = reader.read(&mut buffer).map_err(BinocError::Io)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        size += read as u64;
+        if prefix.len() < CONTENT_SNIFF_PREFIX_BYTES {
+            let remaining = CONTENT_SNIFF_PREFIX_BYTES - prefix.len();
+            prefix.extend_from_slice(&buffer[..read.min(remaining)]);
+            if read > remaining {
+                prefix_truncated = true;
+            }
+        } else {
+            prefix_truncated = true;
+        }
+    }
+    Ok((
+        hasher.finalize().to_hex().to_string(),
+        size,
+        prefix,
+        prefix_truncated,
+    ))
 }
 
 fn expand_physical_dir(
@@ -208,23 +471,30 @@ fn extract_zip(zip_path: &Path, dest: &Path, caps: ExpandCaps) -> BinocResult<Ve
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(BinocError::Io)?;
         }
-        let buffer = read_capped(
+        stream_copy_with_caps(
             &mut entry,
-            caps.archive_max_entry_bytes,
-            &cap_overflow_message("zip entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
+            &out_path,
+            StreamCap {
+                cap: caps.archive_max_entry_bytes,
+                message: &cap_overflow_message(
+                    "zip entry",
+                    caps.archive_max_entry_bytes,
+                    ENTRY_CAP_KNOB,
+                ),
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: caps.archive_max_total_bytes,
+                message: &cap_overflow_message(
+                    "zip total output",
+                    caps.archive_max_total_bytes,
+                    TOTAL_CAP_KNOB,
+                ),
+            }),
+            false,
+            0,
         )
-        .map_err(|err| BinocError::Zip(err.to_string()))?;
-        total = total
-            .checked_add(buffer.len() as u64)
-            .ok_or_else(|| BinocError::Zip("zip output size overflow".into()))?;
-        if total > caps.archive_max_total_bytes {
-            return Err(BinocError::Zip(cap_overflow_message(
-                "zip total output",
-                caps.archive_max_total_bytes,
-                TOTAL_CAP_KNOB,
-            )));
-        }
-        std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
+        .map_err(|err| err.into_format_error(BinocError::Zip))?;
     }
     Ok(diagnostics)
 }
@@ -292,38 +562,89 @@ impl ExpandRule for GzipExpand {
         if inner_name.ends_with(".tar") {
             return TarExpand { caps: self.caps }.expand(item, data);
         }
-        let bytes = data.read_bytes(item)?;
-        let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
-        let output = read_capped(
-            &mut decoder,
-            self.caps.gzip_max_bytes,
-            &cap_overflow_message("gzip output", self.caps.gzip_max_bytes, GZIP_CAP_KNOB),
-        )
-        .map_err(|err| BinocError::Gzip(err.to_string()))?;
         let workspace = data.workspace()?;
         let physical = workspace.join(inner_name);
-        std::fs::write(&physical, &output).map_err(BinocError::Io)?;
+        let mut reader = data.open_read(item)?;
+        let mut decoder = flate2::read::GzDecoder::new(&mut reader);
+        let stats = stream_copy_with_caps(
+            &mut decoder,
+            &physical,
+            StreamCap {
+                cap: self.caps.gzip_max_bytes,
+                message: &cap_overflow_message(
+                    "gzip output",
+                    self.caps.gzip_max_bytes,
+                    GZIP_CAP_KNOB,
+                ),
+            },
+            None,
+            true,
+            CONTENT_SNIFF_PREFIX_BYTES,
+        )
+        .map_err(|err| err.into_format_error(BinocError::Gzip))?;
         let logical = decompose_child(&item.logical_path, inner_name);
         let mut child = data.register_local(&physical, &logical)?;
-        child.content_hash = Some(blake3::hash(&output).to_hex().to_string());
-        child.size = Some(output.len() as u64);
-        child.projection_hint = projection_for(&logical, child.is_dir);
+        child.content_hash = stats.hash;
+        child.size = Some(stats.bytes_written);
+        child.projection_hint = projection_for(
+            &logical,
+            child.is_dir,
+            Some(stats.prefix.as_slice()),
+            stats.prefix_truncated,
+        );
+        if child
+            .projection_hint
+            .tags
+            .iter()
+            .any(|tag| tag == TAG_CONTENT_TYPE_INFERENCE)
+        {
+            child.media_type = Some(SNIFFED_TEXT_CONTENT_TYPE.into());
+        }
         Ok(vec![child].into())
     }
 }
 
-fn read_capped<R: Read>(reader: &mut R, cap: u64, message: &str) -> BinocResult<Vec<u8>> {
-    let mut out = Vec::new();
-    reader
-        .take(cap + 1)
-        .read_to_end(&mut out)
-        .map_err(BinocError::Io)?;
-    if out.len() as u64 > cap {
-        return Err(BinocError::Other(message.into()));
+fn sniff_text_projection(
+    logical_path: &str,
+    bytes_prefix: Option<&[u8]>,
+    prefix_truncated: bool,
+) -> Option<ProjectionHint> {
+    if is_likely_text(bytes_prefix?, prefix_truncated) {
+        Some(
+            ProjectionHint::default()
+                .item_type("text")
+                .tag(TAG_CONTENT_TYPE_INFERENCE)
+                .annotate(
+                    "binoc",
+                    "content_type_inference",
+                    serde_json::json!(format!(
+                        "treated {logical_path} as text (content sniff, no extension)"
+                    )),
+                ),
+        )
+    } else {
+        None
     }
-    Ok(out)
 }
 
+fn is_likely_text(bytes: &[u8], prefix_truncated: bool) -> bool {
+    if bytes.contains(&0) {
+        return false;
+    }
+    let bytes = match std::str::from_utf8(bytes) {
+        Ok(_) => bytes,
+        Err(err) if prefix_truncated && err.error_len().is_none() => &bytes[..err.valid_up_to()],
+        Err(_) => return false,
+    };
+    if bytes.is_empty() {
+        return true;
+    }
+    let disallowed_controls = bytes
+        .iter()
+        .filter(|byte| byte.is_ascii_control() && !matches!(byte, b'\n' | b'\r' | b'\t'))
+        .count();
+    disallowed_controls * 100 <= bytes.len() * CONTENT_SNIFF_CONTROL_PCT_LIMIT
+}
 fn safe_archive_path(path: &Path) -> Option<PathBuf> {
     let mut out = PathBuf::new();
     for component in path.components() {
@@ -369,23 +690,155 @@ fn extract_tar<R: Read>(reader: R, dest: &Path, caps: ExpandCaps) -> BinocResult
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(BinocError::Io)?;
         }
-        let buffer = read_capped(
+        stream_copy_with_caps(
             &mut entry,
-            caps.archive_max_entry_bytes,
-            &cap_overflow_message("tar entry", caps.archive_max_entry_bytes, ENTRY_CAP_KNOB),
+            &out_path,
+            StreamCap {
+                cap: caps.archive_max_entry_bytes,
+                message: &cap_overflow_message(
+                    "tar entry",
+                    caps.archive_max_entry_bytes,
+                    ENTRY_CAP_KNOB,
+                ),
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: caps.archive_max_total_bytes,
+                message: &cap_overflow_message(
+                    "tar total output",
+                    caps.archive_max_total_bytes,
+                    TOTAL_CAP_KNOB,
+                ),
+            }),
+            false,
+            0,
         )
-        .map_err(|err| BinocError::Tar(err.to_string()))?;
-        total = total
-            .checked_add(buffer.len() as u64)
-            .ok_or_else(|| BinocError::Tar("tar output size overflow".into()))?;
-        if total > caps.archive_max_total_bytes {
-            return Err(BinocError::Tar(cap_overflow_message(
-                "tar total output",
-                caps.archive_max_total_bytes,
-                TOTAL_CAP_KNOB,
-            )));
-        }
-        std::fs::write(&out_path, &buffer).map_err(BinocError::Io)?;
+        .map_err(|err| err.into_format_error(BinocError::Tar))?;
     }
     Ok(diagnostics)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    #[test]
+    fn stream_copy_writes_in_cap_output_and_hashes_incrementally() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let payload = b"stream me";
+        let mut reader = Cursor::new(payload);
+        let mut total = 7u64;
+
+        let stats = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 1024,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 1024,
+                message: "total cap",
+            }),
+            true,
+            CONTENT_SNIFF_PREFIX_BYTES,
+        )
+        .expect("copy succeeds");
+
+        assert_eq!(std::fs::read(&out_path).expect("output"), payload);
+        assert_eq!(stats.bytes_written, payload.len() as u64);
+        assert_eq!(total, 7 + payload.len() as u64);
+        assert_eq!(
+            stats.hash.as_deref(),
+            Some(blake3::hash(payload).to_hex().as_str())
+        );
+        assert_eq!(stats.prefix, payload);
+        assert!(!stats.prefix_truncated);
+    }
+
+    #[test]
+    fn stream_copy_removes_partial_file_on_entry_cap() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let mut reader = Cursor::new(b"abcdef");
+        let mut total = 0u64;
+
+        let err = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 3,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 1024,
+                message: "total cap",
+            }),
+            false,
+            0,
+        )
+        .expect_err("entry cap should fail");
+
+        assert!(matches!(err, StreamCopyError::Cap(message) if message == "entry cap"));
+        assert!(!out_path.exists(), "partial output should be removed");
+        assert_eq!(total, 3);
+    }
+
+    #[test]
+    fn stream_copy_removes_partial_file_on_total_cap() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let out_path = temp.path().join("out.txt");
+        let mut reader = Cursor::new(b"abcdef");
+        let mut total = 2u64;
+
+        let err = stream_copy_with_caps(
+            &mut reader,
+            &out_path,
+            StreamCap {
+                cap: 1024,
+                message: "entry cap",
+            },
+            Some(StreamTotalCap {
+                current: &mut total,
+                cap: 5,
+                message: "total cap",
+            }),
+            false,
+            0,
+        )
+        .expect_err("total cap should fail");
+
+        assert!(matches!(err, StreamCopyError::Cap(message) if message == "total cap"));
+        assert!(!out_path.exists(), "partial output should be removed");
+        assert_eq!(total, 5);
+    }
+
+    #[test]
+    fn is_likely_text_ignores_truncated_utf8_at_sniff_boundary() {
+        let mut bytes = vec![b'a'; CONTENT_SNIFF_PREFIX_BYTES - 1];
+        bytes.push(0xC3);
+
+        assert!(is_likely_text(&bytes, true));
+    }
+
+    #[test]
+    fn is_likely_text_rejects_invalid_utf8_inside_sniff_prefix() {
+        let mut bytes = vec![b'a'; 32];
+        bytes[16] = 0xFF;
+
+        assert!(!is_likely_text(&bytes, false));
+    }
+
+    #[test]
+    fn is_likely_text_rejects_truncated_utf8_at_eof() {
+        let mut bytes = vec![b'a'; 32];
+        bytes.push(0xC3);
+
+        assert!(!is_likely_text(&bytes, false));
+    }
 }

@@ -5,6 +5,7 @@ expression: "&md"
 # Changelog: snapshot-a → snapshot-b
 
 - **data.tsv**: 2 cells changed
+  - Dialect provenance: detected tab-delimited, no quoting, newline LF
   - Changed cells
     - row 1, column 'age': '30' -> '31'
     - row 2, column 'city': 'Boston' -> 'Cambridge'

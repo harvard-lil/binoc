@@ -8,10 +8,6 @@ version = "0.2.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
-all = [
-    { name = "binoc-sqlite" },
-    { name = "binoc-stat-binary" },
-]
 dev = [
     { name = "maturin" },
     { name = "pytest" },
@@ -21,45 +17,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "binoc-sqlite", marker = "extra == 'all'", editable = "../model-plugins/binoc-sqlite" },
-    { name = "binoc-stat-binary", marker = "extra == 'all'", editable = "../model-plugins/binoc-stat-binary" },
     { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.7,<2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-datadir", marker = "extra == 'dev'", specifier = ">=1.5" },
-    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
-]
-provides-extras = ["dev", "all"]
-
-[[package]]
-name = "binoc-sqlite"
-version = "0.1.1"
-source = { editable = "../model-plugins/binoc-sqlite" }
-dependencies = [
-    { name = "binoc" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "binoc", editable = "." },
-    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.7,<2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "binoc-stat-binary"
-version = "0.1.1"
-source = { editable = "../model-plugins/binoc-stat-binary" }
-dependencies = [
-    { name = "binoc" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "binoc", editable = "." },
-    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.14.1,<2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
 ]
 provides-extras = ["dev"]

@@ -17,7 +17,10 @@ audience: core developers surveying prior art for the edit-list-compaction engin
     e-graphs, the MLIR phase-ordering arc), this one looks through the
     edit-list/edit-distance lens specifically. Facts were web-verified against
     primary sources in June 2026; load-bearing uncertainties are flagged
-    inline. Poke holes in it.
+    inline. Poke holes in it. A sequel, [Searching and verifying edit-list
+    rewrites](edit-list-search-and-verification.md), takes up three questions
+    this survey leaves open: rule ordering, a cost function that is the sole
+    acceptance test, and verification by replay.
 
 *The ADR's Pass 2 is a wager that the field has tested many times under many
 names. Every correspondence link gets an **edit list** in open-vocabulary
@@ -317,9 +320,11 @@ verb composed ahead of it?" an explicit, tested property of the vocabulary.
 
 ## Inferring named operations — and verifying them by replay
 
-binoc's flagship compaction ("these 10,000 cell edits *are* one find-replace
-sneakers→shoes") is operation inference: recovering the high-level process
-behind low-level edits. The software-engineering field has done this for a
+binoc's dataset-wide find-replace idea ("these 10,000 cell edits *are* one
+find-replace sneakers→shoes") is a stretch goal, not a committed feature. The
+user need is still unestablished, and the current engine shape cannot express
+it without a new dataset-scope phase after edit lists are built. The
+software-engineering field has done nearby forms of operation inference for a
 decade, and its single most useful contribution is the honesty about how often
 it is wrong.
 

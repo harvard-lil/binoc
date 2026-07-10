@@ -30,7 +30,7 @@ const demos = {
       "snapshot-b/data.csv":
         "id,name,price,status\np2,Beta,25,active\np4,Delta,40,active\np1,Alpha,10,active\n",
       "config.yaml":
-        "dataset:\n  tables:\n    - path: data.csv\n      columns: [id]\n",
+        "dataset:\n  paths:\n    - match: data.csv\n      row_identity:\n        columns: [id]\n",
     },
   },
   "observations-split-by-year": {

@@ -24,6 +24,7 @@ fmt:
 check:
     cargo fmt --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo test -p binoc-cli --features bundled,sqlite --test plugin_registry
     uvx ruff check binoc-python/ model-plugins/
     uvx ruff format --check binoc-python/ model-plugins/
 
@@ -173,10 +174,12 @@ docs-browser-demo:
     fi
     ls -lh "${OUTPUT}"
 
-# Regenerate docs/users/reference/third-party-plugins.md from third_party_plugins.json (repo root).
+# Regenerate the plugin registry and user-facing plugin catalog from the
+# root-level registry JSON source.
 docs-plugin-catalog:
     #!/usr/bin/env bash
     set -euo pipefail
+    uv run --quiet --script scripts/build_plugin_registry_page.py
     uv run --quiet --script scripts/build_third_party_plugins_page.py
 
 # Regenerate docs/users/reference/changeset-schema.{json,md} from the binoc-sdk IR
@@ -242,7 +245,7 @@ docs-serve:
         -w model-plugins/binoc-sqlite \
         -w model-plugins/binoc-stat-binary \
         -w mkdocs.yml \
-        -w third_party_plugins.json \
+        -w plugin_registry.json \
         -w justfile \
         -w Cargo.toml \
         -i docs/tutorial.md \

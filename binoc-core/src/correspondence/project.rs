@@ -499,6 +499,7 @@ fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_li
         node.summary = Some(line.summary.clone());
         node.tags.extend(line.projection.tags.iter().cloned());
         retain_unretracted(&mut node.tags, &line.projection.retract_tags);
+        apply_projection_annotations(node, &line.projection);
         if !line.edits.is_empty() {
             node.details.insert("edits".into(), edits_json(&line.edits));
         }
@@ -513,8 +514,19 @@ fn merge_line_into_node(node: &mut DiffNode, line: &ActionLine, had_projected_li
     merge_sources(node, &line.sources);
     node.tags.extend(line.projection.tags.iter().cloned());
     retain_unretracted(&mut node.tags, &line.projection.retract_tags);
+    apply_projection_annotations(node, &line.projection);
     append_visible_edits(node, &line.edits);
     node.summary = Some(merged_summary(&node.sources));
+}
+
+fn apply_projection_annotations(node: &mut DiffNode, projection: &ProjectionHint) {
+    for annotation in &projection.annotations {
+        node.annotate_from(
+            annotation.package.clone(),
+            annotation.key.clone(),
+            annotation.value.clone(),
+        );
+    }
 }
 
 /// Drop any tag named in `retract_tags` from `tags`, keeping the node's tag set
@@ -535,10 +547,15 @@ fn reconciled_item_type(line: &ActionLine) -> String {
 }
 
 fn edits_json(edits: &[Edit]) -> serde_json::Value {
-    json!(edits
-        .iter()
-        .map(|edit| json!({ "verb": edit.verb, "params": edit.params }))
-        .collect::<Vec<_>>())
+    json!(edits.iter().map(edit_json).collect::<Vec<_>>())
+}
+
+fn edit_json(edit: &Edit) -> serde_json::Value {
+    let mut value = json!({ "verb": edit.verb, "params": edit.params });
+    if let Some(summary) = &edit.projection.hint.summary {
+        value["summary"] = json!(summary);
+    }
+    value
 }
 
 fn merge_action(left: &str, right: &str) -> &'static str {
@@ -607,6 +624,7 @@ mod tests {
             size: None,
             media_type: None,
             projection_hint: ProjectionHint::default().item_type("leaf"),
+            tabular_parse: None,
             handle: path.into(),
         }
     }

@@ -4,5 +4,4 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **rows.xml**: Document values changed
-  - Value Change: changes: [{"from":"2","kind":"array_length","path":"$.response.row.row","to":"3"},{"from":null,"kind":"add","path":"$.response.row.row[2]","to":"{\"@_id\":\"row-3\",\"@_...; examples_truncated: false
+- **rows.xml**: $.response.row.row length: 2 -> 3; $.response.row.row[2]: added {"@_id":"row-3","@_uuid":"00000000-0000-0000-0000-000000000003","gauge_height":"5.6","station_id":"0791","station_name":...

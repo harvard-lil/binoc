@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a → snapshot-b
+
+- **records**: 1 row modified by key
+  - Dialect provenance: detected `|`-delimited, no quoting, newline LF
+  - Changed cells
+    - key id '1', column 'value': 'old' -> 'new'

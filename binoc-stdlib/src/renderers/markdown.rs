@@ -24,6 +24,8 @@ pub struct MarkdownRendererConfig {
     #[serde(default)]
     pub groups: Vec<MarkdownGroup>,
     #[serde(default)]
+    pub preamble_markdown: Option<String>,
+    #[serde(default)]
     pub verbosity: Verbosity,
     #[serde(default = "default_max_examples_per_block")]
     pub max_examples_per_block: usize,
@@ -41,6 +43,7 @@ impl Default for MarkdownRendererConfig {
     fn default() -> Self {
         Self {
             groups: Vec::new(),
+            preamble_markdown: None,
             verbosity: Verbosity::Examples,
             max_examples_per_block: default_max_examples_per_block(),
             max_detail_blocks_per_node: default_max_detail_blocks_per_node(),
@@ -94,6 +97,14 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
             "# Changelog: {} → {}\n\n",
             changeset.from_snapshot, changeset.to_snapshot
         ));
+        if let Some(preamble_markdown) = config
+            .preamble_markdown
+            .as_deref()
+            .filter(|markdown| !markdown.trim().is_empty())
+        {
+            out.push_str(preamble_markdown.trim_end());
+            out.push_str("\n\n");
+        }
 
         format_claims_section(&mut out, changeset);
 
@@ -203,6 +214,15 @@ fn format_diagnostics_section(
             out.push_str(&format!(" (`{location}`)"));
         }
         out.push_str(&format!(" [{}]\n", diagnostic.code));
+        if let Some(extract) = &diagnostic.extract {
+            if let Some(location) = &diagnostic.location {
+                out.push_str(&format!(
+                    "  - use `binoc extract {} \"{location}\" {}`\n",
+                    extract_changeset_path(extract),
+                    extract.aspect
+                ));
+            }
+        }
     }
     out.push('\n');
 }
@@ -374,40 +394,10 @@ fn is_move_node(node: &DiffNode) -> bool {
     matches!(node.action.as_str(), "move" | "copy")
 }
 
-/// The origin line for a moved or copied node: "Moved from X" / "Copied from X".
-///
-/// When the projection tagged the node `binoc.move.modified`, its `summary`
-/// holds the *content* change (see [`move_content`]) and the origin must be
-/// derived from the node's sources. Otherwise the producer's own summary is
-/// already an origin statement — a bare rename, a copy, or a multi-source
-/// "Merged from A, B" that names every source — and we use it verbatim, falling
-/// back to the synthesized phrasing only when no summary was supplied.
+/// The origin line for a moved or copied node: a producer-supplied origin
+/// statement, falling back to "Moved from X" / "Copied from X".
 fn move_origin(node: &DiffNode) -> Summary {
-    if node.tags.contains("binoc.move.modified") {
-        return synthesized_move_origin(node);
-    }
     node_summary(node)
-}
-
-/// The synthesized "Moved from X" / "Copied from X" origin, reusing the same
-/// wording as [`fallback_summary`]'s move/copy arms.
-fn synthesized_move_origin(node: &DiffNode) -> Summary {
-    let item_type = if node.item_type.is_empty() {
-        "item"
-    } else {
-        &node.item_type
-    };
-    let (verb_phrase, fallback) = if node.action == "copy" {
-        ("Copied from ", "copied")
-    } else {
-        ("Moved from ", "moved")
-    };
-    match node.primary_from_source() {
-        Some(src) => Summary::new()
-            .text(verb_phrase)
-            .path(src.path.clone(), src.side),
-        None => format!("{} {fallback}", capitalize(item_type)).into(),
-    }
 }
 
 /// Whether a move/copy node carries a content change folded inline beneath the
@@ -419,46 +409,22 @@ fn should_group_move_children(node: &DiffNode) -> bool {
 
 /// The content change carried by a moved/copied node, shown beneath its origin
 /// line, or `None` for a pure move/copy. Folder moves describe their content
-/// through separately-rendered child nodes, so they contribute none here.
-///
-/// Priority (first match wins):
-/// 1. `annotations.tabular_summary` — rich, from tabular writers.
-/// 2. `annotations.content_summary` — generic content detail.
-/// 3. The node's own `summary`, when it was tagged `binoc.move.modified` (its
-///    summary is the content change, not the origin).
-/// 4. A join of non-identical child summaries.
+/// through separately-rendered child nodes, so they contribute none here unless
+/// a producer emitted an explicit content summary.
 fn move_content(node: &DiffNode) -> Option<Summary> {
-    if node.tags.contains("binoc.folder-move") {
-        return None;
-    }
     // The annotation trailers are carried as plain strings and render
     // verbatim as a single text segment.
-    if let Some(s) = annotation_str(node, "tabular_summary") {
-        return Some(s.into());
-    }
     if let Some(s) = annotation_str(node, "content_summary") {
         return Some(s.into());
     }
-    if node.tags.contains("binoc.move.modified") {
-        if let Some(summary) = &node.summary {
-            return Some(summary.clone());
+    edit_summaries(node).next().map(|first| {
+        let mut trailer = first;
+        for summary in edit_summaries(node).skip(1) {
+            trailer = trailer.text("; ");
+            trailer.extend(summary);
         }
-    }
-    if !node.children.is_empty() {
-        let mut trailer = Summary::new();
-        let mut any = false;
-        for child in node.children.iter().filter(|c| c.action != "identical") {
-            if any {
-                trailer = trailer.text("; ");
-            }
-            trailer.extend(node_summary(child));
-            any = true;
-        }
-        if any {
-            return Some(trailer);
-        }
-    }
-    None
+        trailer
+    })
 }
 
 fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
@@ -466,6 +432,20 @@ fn annotation_str(node: &DiffNode, key: &str) -> Option<String> {
         .and_then(Annotation::as_str)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
+}
+
+fn edit_summaries(node: &DiffNode) -> impl Iterator<Item = Summary> + '_ {
+    node.details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(edit_summary)
+}
+
+fn edit_summary(edit: &serde_json::Value) -> Option<Summary> {
+    edit.get("summary")
+        .and_then(|summary| serde_json::from_value(summary.clone()).ok())
 }
 
 fn render_annotations(
@@ -478,11 +458,7 @@ fn render_annotations(
         return;
     }
     for annotation in node.annotations.iter().filter(|annotation| {
-        !(annotation.package == "binoc"
-            && matches!(
-                annotation.key.as_str(),
-                "content_summary" | "tabular_summary"
-            ))
+        !(annotation.package == "binoc" && annotation.key == "content_summary")
     }) {
         if !render_annotation(out, annotation, config, detail_budget) {
             return;
@@ -608,7 +584,7 @@ fn node_summary(node: &DiffNode) -> Summary {
 /// richer renderer could hyperlink it, using `Segment::Path`'s snapshot side to
 /// resolve against the correct tree). See ADR
 /// 2026-06-03-structured-summary-segments.
-fn render_summary(summary: &Summary) -> String {
+pub(crate) fn render_summary(summary: &Summary) -> String {
     let mut out = String::new();
     for segment in summary.segments() {
         match segment {
@@ -725,7 +701,8 @@ fn render_detail_blocks(
                 .unwrap_or("all matching data")
                 .to_lowercase();
             header.push_str(&format!(
-                "; use `binoc extract CHANGESET \"{path}\" {}` for {label}",
+                "; use `binoc extract {} \"{path}\" {}` for {label}",
+                extract_changeset_path(extract),
                 extract.aspect
             ));
         }
@@ -741,6 +718,10 @@ fn render_detail_blocks(
             }
         }
     }
+}
+
+fn extract_changeset_path(extract: &ExtractHint) -> &str {
+    extract.changeset_path.as_deref().unwrap_or("CHANGESET")
 }
 
 fn render_known_edit_details(
@@ -762,12 +743,11 @@ fn render_known_edit_details(
     // Metadata reads AFTER the primary table/content edits above, so a changelog
     // says "what the table did" then "what its metadata did" (CFM-82).
     render_metadata_details(out, edits, config, detail_budget);
-    render_generic_edit_details(out, node, edits, config, detail_budget);
+    render_generic_edit_details(out, edits, config, detail_budget);
 }
 
 fn render_generic_edit_details(
     out: &mut String,
-    node: &DiffNode,
     edits: &[serde_json::Value],
     config: &MarkdownRendererConfig,
     detail_budget: &mut DetailBudget,
@@ -778,7 +758,7 @@ fn render_generic_edit_details(
             edit.get("verb")
                 .and_then(|value| value.as_str())
                 .is_none_or(|verb| !specialized_detail_verb(verb))
-                && !summary_covered_generic_verb(node, edit)
+                && edit_summary(edit).is_none()
         })
         .collect();
     if generic.is_empty() {
@@ -871,21 +851,6 @@ fn specialized_detail_verb(verb: &str) -> bool {
             | "binary.contents-differ"
             | "metadata.value_change"
     )
-}
-
-/// True when the node summary already states this edit, so a generic detail
-/// bullet would only repeat it (and, for structural edits, dump raw params).
-/// Each arm pairs the edit verb with the tag that proves the summary covers it.
-fn summary_covered_generic_verb(node: &DiffNode, edit: &serde_json::Value) -> bool {
-    let Some(verb) = edit.get("verb").and_then(|value| value.as_str()) else {
-        return false;
-    };
-    match verb {
-        "tabular.rename_column" => node.tags.contains("binoc.column-rename"),
-        "tabular.reorder_columns" => node.tags.contains("binoc.column-reorder"),
-        "document.serialization_change" => node.tags.contains("binoc.serialization-change"),
-        _ => false,
-    }
 }
 
 fn humanize_edit_verb(verb: &str) -> String {
@@ -1131,19 +1096,114 @@ fn render_tabular_cell_details(
     ) {
         return;
     }
-    for edit in cells.into_iter().take(shown) {
-        let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
-        let example = DetailExample {
-            locator: edit_locator(params, &["key", "row", "column"]),
-            before: params.get("from").map(value_preview_from_json),
-            after: params.get("to").map(value_preview_from_json),
-            fields: BTreeMap::new(),
-        };
-        let line = format_tabular_cell_example(&example, config);
-        if !detail_budget.push_line(out, format!("    - {line}\n")) {
+    if config.verbosity == Verbosity::Full || shown >= cells.len() {
+        for edit in cells.into_iter().take(shown) {
+            if !push_tabular_cell_example(out, edit, config, detail_budget) {
+                return;
+            }
+        }
+        return;
+    }
+    let grouped_cells = grouped_tabular_cell_edits(&cells);
+    let shown_columns = example_count(grouped_cells.len(), config);
+    if !detail_budget.push_line(
+        out,
+        format!(
+            "    - changed cells by column: {}\n",
+            summarize_tabular_cell_columns(&grouped_cells, shown_columns, config)
+        ),
+    ) {
+        return;
+    }
+    for edit in round_robin_tabular_cell_edits(&grouped_cells, shown) {
+        if !push_tabular_cell_example(out, edit, config, detail_budget) {
             return;
         }
     }
+}
+
+fn push_tabular_cell_example(
+    out: &mut String,
+    edit: &serde_json::Value,
+    config: &MarkdownRendererConfig,
+    detail_budget: &mut DetailBudget,
+) -> bool {
+    let params = edit.get("params").unwrap_or(&serde_json::Value::Null);
+    let example = DetailExample {
+        locator: edit_locator(params, &["key", "row", "column"]),
+        before: params.get("from").map(value_preview_from_json),
+        after: params.get("to").map(value_preview_from_json),
+        fields: BTreeMap::new(),
+    };
+    let line = format_tabular_cell_example(&example, config);
+    detail_budget.push_line(out, format!("    - {line}\n"))
+}
+
+fn grouped_tabular_cell_edits<'a>(
+    edits: &[&'a serde_json::Value],
+) -> Vec<(String, Vec<&'a serde_json::Value>)> {
+    let mut groups: Vec<(String, Vec<&'a serde_json::Value>)> = Vec::new();
+    for edit in edits {
+        let column = edit
+            .get("params")
+            .and_then(|params| params.get("column"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string();
+        if let Some((_, group_edits)) = groups
+            .iter_mut()
+            .find(|(group_column, _)| group_column == &column)
+        {
+            group_edits.push(*edit);
+        } else {
+            groups.push((column, vec![*edit]));
+        }
+    }
+    groups
+}
+
+fn summarize_tabular_cell_columns(
+    grouped_cells: &[(String, Vec<&serde_json::Value>)],
+    shown_columns: usize,
+    config: &MarkdownRendererConfig,
+) -> String {
+    let mut parts = grouped_cells
+        .iter()
+        .take(shown_columns)
+        .map(|(column, edits)| {
+            let (column, _) = truncate_text(column, config.max_value_chars);
+            format!("{column} {}", edits.len())
+        })
+        .collect::<Vec<_>>();
+    if shown_columns < grouped_cells.len() {
+        parts.push("...".into());
+    }
+    parts.join(", ")
+}
+
+fn round_robin_tabular_cell_edits<'a>(
+    grouped_cells: &'a [(String, Vec<&'a serde_json::Value>)],
+    shown: usize,
+) -> Vec<&'a serde_json::Value> {
+    let mut out = Vec::with_capacity(shown);
+    let mut indices = vec![0usize; grouped_cells.len()];
+    while out.len() < shown {
+        let mut progressed = false;
+        for (group_index, (_, edits)) in grouped_cells.iter().enumerate() {
+            if out.len() >= shown {
+                break;
+            }
+            if let Some(edit) = edits.get(indices[group_index]) {
+                out.push(*edit);
+                indices[group_index] += 1;
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    out
 }
 
 fn render_tabular_row_details(
@@ -1608,6 +1668,34 @@ mod tests {
         assert!(!md.contains("## "));
         assert!(md.contains("**data.csv**"));
         assert!(md.contains("Column added: 'email'"));
+        assert!(!md.contains("plugin registry"));
+    }
+
+    #[test]
+    fn to_markdown_renders_opt_in_preamble_markdown() {
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "text", "notes.txt").with_summary("Text changed")),
+        );
+        let config = MarkdownRendererConfig {
+            preamble_markdown: Some(
+                "Need background? See [docs](https://example.com/docs).".into(),
+            ),
+            ..Default::default()
+        };
+
+        let md = render_markdown(&[changeset], &config);
+        assert!(md.contains("Need background? See [docs](https://example.com/docs)."));
+    }
+
+    #[test]
+    fn to_markdown_identical_changeset_has_no_preamble_by_default() {
+        let changeset = Changeset::new("v1", "v2", None);
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("No changes detected."));
+        assert!(!md.contains("Need plugin background?"));
     }
 
     #[test]
@@ -1653,7 +1741,10 @@ mod tests {
             serde_json::json!([
                 {
                     "verb": "tabular.rename_column",
-                    "params": { "from": "count", "to": "total" }
+                    "params": { "from": "count", "to": "total" },
+                    "summary": [
+                        { "text": "Column renamed: 'count' -> 'total'" }
+                    ]
                 },
                 {
                     "verb": "tabular.append_rows",
@@ -1681,6 +1772,48 @@ mod tests {
         assert!(!md.contains("Rename Column"), "got:\n{md}");
         assert!(!md.contains("Other edits"), "got:\n{md}");
         assert!(md.contains("  - Rows added\n"), "got:\n{md}");
+    }
+
+    #[test]
+    fn to_markdown_keeps_summary_bearing_edit_visible_with_cell_edits() {
+        let mut node = DiffNode::new("modify", "tabular", "data.csv")
+            .with_summary("1 cell changed; Column type changed: 'score' number -> string");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {
+                    "verb": "tabular.edit_cell",
+                    "params": { "row": 0, "column": "score", "from": "1", "to": "2" }
+                },
+                {
+                    "verb": "tabular.column_type_changed",
+                    "params": {
+                        "column": "score",
+                        "from_type": "number",
+                        "to_type": "string",
+                        "cells": 1
+                    },
+                    "summary": [
+                        { "text": "Column type changed: 'score' number -> string" }
+                    ]
+                }
+            ]),
+        );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("Column type changed: 'score' number -> string"),
+            "got:\n{md}"
+        );
+        assert!(
+            md.contains("row 1, column 'score': '1' -> '2'"),
+            "got:\n{md}"
+        );
     }
 
     #[test]
@@ -1798,6 +1931,41 @@ mod tests {
     }
 
     #[test]
+    fn suggestion_diagnostics_render_extract_command_when_available() {
+        let mut changeset = Changeset::new("v1", "v2", None);
+        changeset.push_diagnostic(
+            Diagnostic::suggestion(
+                "binoc.keyed_row_identity_degraded",
+                "configured row keys had duplicate values; fell back to positional row comparison",
+            )
+            .with_location("data.csv")
+            .with_extract_hint(ExtractHint::new("content").with_changeset_path("changeset.md")),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(
+            md.contains("use `binoc extract changeset.md \"data.csv\" content`"),
+            "missing extract hint in markdown:\n{md}"
+        );
+    }
+
+    #[test]
+    fn suggestion_diagnostics_falls_back_to_changeset_placeholder_when_path_unknown() {
+        let mut changeset = Changeset::new("v1", "v2", None);
+        changeset.push_diagnostic(
+            Diagnostic::suggestion(
+                "binoc.keyed_row_identity_degraded",
+                "configured row keys had duplicate values; fell back to positional row comparison",
+            )
+            .with_location("data.csv")
+            .with_extract_hint(ExtractHint::new("content")),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("use `binoc extract CHANGESET \"data.csv\" content`"));
+    }
+
+    #[test]
     fn node_without_summary_uses_fallback() {
         let node = DiffNode::new("add", "file", "new.txt").with_tag("binoc.content-changed");
         let changeset = Changeset::new("v1", "v2", Some(node));
@@ -1845,12 +2013,11 @@ mod tests {
     }
 
     #[test]
-    fn move_with_children_renders_as_paired_bullets() {
-        // A container `move` whose content change lives in a child (e.g. a
-        // renamed archive holding one modified member) reports as one unit: an
-        // origin line plus the joined child detail, indented under one path and
-        // classified together by the highest-significance descendant tag.
-        // Children must NOT also appear as separate enumerated entries.
+    fn move_with_children_renders_children_separately_without_content_summary() {
+        // A moved container whose content change lives only in a child is not
+        // implicitly summarized by the renderer. The child remains reportable
+        // on its own unless the producing rule emits an explicit content
+        // summary on the moved node.
         let child = DiffNode::new("modify", "column", "email")
             .with_summary("Column added: 'email'")
             .with_tag("binoc.column-addition");
@@ -1874,61 +2041,25 @@ mod tests {
 
         assert!(
             md.contains("## Substantive changes"),
-            "should land in substantive section (promoted from child tag)"
+            "child should land in substantive section"
         );
-        assert!(md.contains("- **data_v2.csv**:\n"), "got:\n{md}");
-        assert!(md.contains("  - Moved from data.csv\n"), "got:\n{md}");
-        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
-        // The child detail should appear exactly once, never as its own
-        // separately-categorized entry.
+        assert!(
+            md.contains("- **email**: Column added: 'email'\n"),
+            "got:\n{md}"
+        );
+        assert!(md.contains("## Other Changes"), "got:\n{md}");
+        assert!(
+            md.contains("- **data_v2.csv**: Moved from data.csv\n"),
+            "got:\n{md}"
+        );
         assert_eq!(md.matches("Column added: 'email'").count(), 1);
-    }
-
-    #[test]
-    fn move_with_tabular_summary_annotation_renders_as_paired_bullets() {
-        // A CSV rename+modify produces a `binoc.move.modified` node whose
-        // origin is synthesized from its source and whose content comes from
-        // `annotations.tabular_summary` (set by TabularAnalyzer).
-        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_tag("binoc.move")
-            .with_tag("binoc.move.modified")
-            .with_tag("binoc.column-addition")
-            .with_tag("binoc.schema-change");
-        move_node.annotate_from(
-            "binoc",
-            "tabular_summary",
-            serde_json::json!("Column added: 'email'"),
-        );
-        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
-
-        let md = render_markdown(
-            &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig {
-                groups: vec![MarkdownGroup {
-                    heading: "Substantive changes".into(),
-                    tags: vec!["binoc.column-addition".into(), "binoc.schema-change".into()],
-                }],
-                ..Default::default()
-            },
-        );
-
-        assert!(md.contains("## Substantive changes"));
-        assert!(
-            md.contains("  - Moved from data.csv\n"),
-            "origin line missing; got:\n{md}"
-        );
-        assert!(
-            md.contains("  - Column added: 'email'\n"),
-            "tabular_summary must render beneath the origin under the same path; got:\n{md}"
-        );
     }
 
     #[test]
     fn move_with_content_summary_annotation_renders_as_paired_bullets() {
         // A text rename+modify produces a `binoc.move.modified` node with no
-        // children, no tabular_summary, but `annotations.content_summary` from
-        // the controller's re-dispatch merge.
+        // children but with `annotations.content_summary` from the stdlib
+        // projection annotator.
         let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
             .with_source(Source::new("notes.txt", Side::From).with_action("move"))
             .with_tag("binoc.move")
@@ -1944,7 +2075,10 @@ mod tests {
 
         let md = render_markdown(
             &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
+            &MarkdownRendererConfig {
+                verbosity: Verbosity::Summary,
+                ..MarkdownRendererConfig::default()
+            },
         );
 
         assert!(
@@ -1954,36 +2088,6 @@ mod tests {
         assert!(
             md.contains("  - 2 lines added\n"),
             "content_summary must render beneath the origin under the same path; got:\n{md}"
-        );
-    }
-
-    #[test]
-    fn move_trailer_prefers_tabular_over_content_summary() {
-        let mut move_node = DiffNode::new("move", "tabular", "data_v2.csv")
-            .with_source(Source::new("data.csv", Side::From).with_action("move"))
-            .with_summary("Moved from data.csv")
-            .with_tag("binoc.move");
-        move_node.annotate_from(
-            "binoc",
-            "tabular_summary",
-            serde_json::json!("Column added: 'email'"),
-        );
-        move_node.annotate_from(
-            "binoc",
-            "content_summary",
-            serde_json::json!("CSV modified"),
-        );
-        let root = DiffNode::new("modify", "directory", "").with_children(vec![move_node]);
-
-        let md = render_markdown(
-            &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
-        );
-
-        assert!(md.contains("  - Column added: 'email'\n"), "got:\n{md}");
-        assert!(
-            !md.contains("CSV modified"),
-            "content_summary should be shadowed by tabular_summary"
         );
     }
 
@@ -2091,6 +2195,7 @@ mod tests {
         assert!(md.contains("row 1, column 'score': '10' -> '12'"));
         assert!(md.contains("row 2, column 'score': '20' -> '22'"));
         assert!(!md.contains("row 3, column 'score': '30' -> '32'"));
+        assert!(!md.contains("changed cells by column"));
     }
 
     #[test]
@@ -2114,14 +2219,67 @@ mod tests {
     }
 
     #[test]
+    fn detail_block_extract_hint_uses_known_changeset_path() {
+        let block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(4)
+            .with_extract_hint(
+                ExtractHint::new("cells_changed")
+                    .with_changeset_path("changeset.json")
+                    .with_label("All changed cells"),
+            );
+        let changeset = Changeset::new(
+            "v1",
+            "v2",
+            Some(
+                DiffNode::new("modify", "tabular", "large.csv")
+                    .with_summary("4 cells changed")
+                    .with_detail_block(block),
+            ),
+        );
+
+        let md = render_markdown(&[changeset], &MarkdownRendererConfig::default());
+        assert!(md.contains("Changed cells (4 total); use `binoc extract changeset.json \"large.csv\" cells_changed` for all changed cells"));
+    }
+
+    #[test]
     fn full_verbosity_renders_all_captured_examples() {
+        let mut block = DetailBlock::new("cells_changed", "binoc.tabular.cell_changes.v1")
+            .with_label("Changed cells")
+            .with_total_count(4)
+            .with_extract_hint(ExtractHint::new("cells_changed").with_label("All changed cells"));
+
+        for (row, column, before, after) in [
+            (0, "score", "10", "12"),
+            (1, "score", "20", "22"),
+            (2, "date", "2025-06-01", "2025-06-02"),
+            (3, "status", "open", "closed"),
+        ] {
+            let mut example = DetailExample::new();
+            example.locator.insert("row".into(), serde_json::json!(row));
+            example
+                .locator
+                .insert("column".into(), serde_json::json!(column));
+            example.before = Some(ValuePreview {
+                value: serde_json::json!(before),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            example.after = Some(ValuePreview {
+                value: serde_json::json!(after),
+                media_type: Some("text/plain".into()),
+                truncated: false,
+            });
+            block.examples.push(example);
+        }
+
         let changeset = Changeset::new(
             "v1",
             "v2",
             Some(
                 DiffNode::new("modify", "tabular", "data.csv")
                     .with_summary("4 cells changed")
-                    .with_detail_block(sample_detail_block(4)),
+                    .with_detail_block(block),
             ),
         );
         let config = MarkdownRendererConfig {
@@ -2130,8 +2288,87 @@ mod tests {
             ..Default::default()
         };
         let md = render_markdown(&[changeset], &config);
-        assert!(md.contains("row 4, column 'score': '40' -> '42'"));
+        assert!(md.contains("row 1, column 'score': '10' -> '12'"));
+        assert!(md.contains("row 3, column 'date': '2025-06-01' -> '2025-06-02'"));
+        assert!(md.contains("row 4, column 'status': 'open' -> 'closed'"));
         assert!(!md.contains("showing 1 of 4"));
+        assert!(!md.contains("changed cells by column"));
+    }
+
+    #[test]
+    fn examples_verbosity_round_robins_cell_examples_across_columns() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("6 cells changed");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {"verb": "tabular.edit_cell", "params": {"row": 0, "column": "score", "from": "10", "to": "12"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 1, "column": "score", "from": "20", "to": "22"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 2, "column": "score", "from": "30", "to": "32"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 3, "column": "date", "from": "2025-06-01", "to": "2025-06-02"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 4, "column": "date", "from": "2025-06-03", "to": "2025-06-04"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 5, "column": "status", "from": "open", "to": "closed"}}
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "v1",
+                "v2",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                max_examples_per_block: 3,
+                ..Default::default()
+            },
+        );
+
+        assert!(md.contains("changed cells by column: score 3, date 2, status 1"));
+        let score_pos = md.find("row 1, column 'score': '10' -> '12'").unwrap();
+        let date_pos = md
+            .find("row 4, column 'date': '2025-06-01' -> '2025-06-02'")
+            .unwrap();
+        let status_pos = md
+            .find("row 6, column 'status': 'open' -> 'closed'")
+            .unwrap();
+        assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
+        assert!(!md.contains("row 2, column 'score': '20' -> '22'"));
+    }
+
+    #[test]
+    fn examples_verbosity_without_truncation_keeps_linear_cell_examples() {
+        let mut node =
+            DiffNode::new("modify", "tabular", "data.csv").with_summary("3 cells changed");
+        node.details.insert(
+            "edits".into(),
+            serde_json::json!([
+                {"verb": "tabular.edit_cell", "params": {"row": 0, "column": "score", "from": "10", "to": "12"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 1, "column": "date", "from": "2025-06-01", "to": "2025-06-02"}},
+                {"verb": "tabular.edit_cell", "params": {"row": 2, "column": "status", "from": "open", "to": "closed"}}
+            ]),
+        );
+
+        let md = render_markdown(
+            &[Changeset::new(
+                "v1",
+                "v2",
+                Some(DiffNode::new("modify", "directory", "").with_children(vec![node])),
+            )],
+            &MarkdownRendererConfig {
+                max_examples_per_block: 3,
+                ..Default::default()
+            },
+        );
+
+        assert!(!md.contains("changed cells by column"));
+        let score_pos = md.find("row 1, column 'score': '10' -> '12'").unwrap();
+        let date_pos = md
+            .find("row 2, column 'date': '2025-06-01' -> '2025-06-02'")
+            .unwrap();
+        let status_pos = md
+            .find("row 3, column 'status': 'open' -> 'closed'")
+            .unwrap();
+        assert!(score_pos < date_pos && date_pos < status_pos, "got:\n{md}");
     }
 
     #[test]

@@ -38,9 +38,10 @@ dataset:
         logical_path: '${list}.csv'
         on_null_key: diagnostic
         on_duplicate_key: diagnostic
-  tables:
-    - logical_name: products
-      columns: ['BLA Number', 'Product Number']
+  paths:
+    - match: 'products.xlsx/>Products'
+      row_identity:
+        columns: ['BLA Number', 'Product Number']
   correspondence:
     expand_renamed_unchanged_collections: true
 
@@ -75,15 +76,17 @@ pairing, edit writing, compaction, and projection.
 The `dataset` block is a top-level semantic description of the dataset being
 compared. Core carries this value through unchanged and exposes it to plugins
 under the `dataset` key in their run config; core does not interpret paths,
-tables, delimiters, or keys.
+tabular data, delimiters, or keys.
 
 The SDK owns a shared v1 shape so independently authored plugins can agree on
 common dataset semantics:
 
 - `dataset.files.correspondences` declares that files with different snapshot
   paths are the same logical file.
-- `dataset.tables` declares table row keys. It can be a list for the common
-  case, or an object with `defaults` and `entries` when shared policy is useful.
+- `dataset.defaults.row_identity` declares a row-key default for tabular paths.
+- `dataset.paths` is the sole per-path facet list. It declares dispatch
+  overrides, tabular shape, row identity, JSON `records_path` extraction, and
+  structured-document node identity.
 - `dataset.correspondence.expand_renamed_unchanged_collections` controls a
   correspondence-engine performance tradeoff for renamed unchanged containers.
 
@@ -103,19 +106,27 @@ dataset:
         on_duplicate_key: diagnostic
         report_path_change: false
 
-  tables:
-    - logical_name: products
-      columns: ['BLA Number', 'Product Number']
-    - path: data.csv
-      columns: ['id']
+  paths:
+    - match: 'products.xlsx/>Products'
+      row_identity:
+        columns: ['BLA Number', 'Product Number']
+    - match: 'data.csv'
+      row_identity:
+        columns: ['id']
+    - match: '**/*.stix.json'
+      records_path: '$.objects'
+      row_identity:
+        columns: ['id']
 
   correspondence:
     expand_renamed_unchanged_collections: true
 ```
 
-`cardinality` is currently `one-to-one`. `on_null_key` and
+`cardinality` is currently `one-to-one`. Row-identity `on_null_key` and
 `on_duplicate_key` accept `diagnostic`, `error`, or `ignore`; plugins decide how
 to apply those policies for the semantics they implement.
+`records_path` uses a simple dotted JSON path such as `$.objects` and must point
+to a non-empty array of consistently shaped records.
 
 ### `dataset.files.correspondences`
 
@@ -186,51 +197,55 @@ Omit a key to keep its default. Raise a cap only as high as your real data
 requires; the bound is what protects you from a maliciously crafted archive
 that expands to far more than its compressed size.
 
-### `dataset.tables`
+### `dataset.paths`
 
-Tabular row identity is optional. Without it, `binoc.tabular_analyzer` keeps
-the positional fallback: row additions/removals are counted by row count
-differences, and changed cells are compared at the same row offset. With
-`columns`, the analyzer builds a table-local key and matches rows by that key
-before reporting row additions, removals, and modified cells.
+`paths` is the only per-path configuration list. Entries are checked in order,
+first match wins, and `match` is a glob:
 
 ```yaml
 dataset:
-  tables:
-    - path: data.csv
-      columns: ['id']
-    - logical_name: products
-      columns: ['BLA Number', 'Product Number']
-    - path: workbook.xlsx
-      logical_name: Products
-      columns: ['id']
-```
-
-Use `logical_name` for logical table children produced by multi-table parsers
-or collection parse rules. Use `path` or `path_regex` for ordinary
-single-file CSVs. When an entry includes both a source selector and
-`logical_name`, both must match; for example, the `workbook.xlsx` entry above
-targets the `Products` logical table inside that source item.
-
-When several entries should share the same identity failure policy, expand
-`tables` to an object with `defaults` and `entries`:
-
-```yaml
-dataset:
-  tables:
-    defaults:
+  paths:
+    - match: "**/num.tsv"
+      content_type: text/tab-separated-values
       row_identity:
-        on_null_key: diagnostic
-        on_duplicate_key: error
-    entries:
-      - logical_name: applications
-        columns: ['ApplNo']
-      - path_regex: '^data/products\.csv$'
-        columns: ['BLA Number', 'Product Number']
+        columns: ["adsh", "tag", "version", "ddate", "qtrs", "uom", "dimh", "iprx"]
 ```
 
-For unusual cases, entries also accept explicit `match` and `row_identity`
-blocks, but the flat selector and `columns` form above is preferred.
+Use `content_type` to pin media-type dispatch before parse rules run. Use
+`row_identity` to declare table keys for the same matched path. Archive
+decompose boundaries match like path boundaries for globs, so `**/num.tsv`
+matches both `exports/num.tsv` and `bundle.zip/>num.tsv`.
+
+Parsed table children use their full logical path. The `/>` marker means binoc
+opened the parent format to reveal the child. Select a sheet, SQLite table, or
+stacked-CSV region with that decomposed path rather than a separate table name:
+
+```yaml
+dataset:
+  defaults:
+    row_identity:
+      on_null_key: diagnostic
+      on_duplicate_key: error
+  paths:
+    - match: 'workbook.xlsx/>Applications'
+      row_identity:
+        columns: ['ApplNo']
+    - match: 'data.sqlite/>products'
+      row_identity:
+        columns: ['BLA Number', 'Product Number']
+    - match: 'report.csv/>table_2'
+      row_identity:
+        columns: ['id']
+```
+
+Tabular row identity is optional. Without it, the tabular rules keep their
+positional fallback. With `row_identity.columns`, they build a table-local key
+and match rows by that key before reporting additions, removals, and modified
+cells. A matching path entry is a presence-aware patch over
+`dataset.defaults.row_identity`, so it can replace only the key selector or one
+failure policy without restating the other defaults. Keep `columns`,
+`on_null_key`, and `on_duplicate_key` inside `row_identity`; flat aliases are
+not accepted.
 
 Rows with blank key components are null-key rows. Keys that appear more
 than once on either side are duplicate-key rows. The default

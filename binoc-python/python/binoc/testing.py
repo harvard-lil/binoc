@@ -99,7 +99,6 @@ def run_vector(
     vector_dir: str | Path,
     *,
     vectors_root: str | Path | None = None,
-    registry: binoc.PluginRegistry | None = None,
 ) -> binoc.Changeset:
     """Run a single test vector and check its manifest assertions.
 
@@ -111,8 +110,7 @@ def run_vector(
     Steps:
       1. Parse the manifest (with root-manifest defaults).
       2. Build a ``binoc.Config`` from supported manifest ``[config]`` fields.
-      3. Run ``binoc.diff()`` against the snapshots with the config and
-         optional *registry*.
+      3. Run ``binoc.diff()`` against the snapshots with the config.
       4. Check ``[expected]`` assertions from the manifest.
 
     Returns the resulting :class:`binoc.Changeset`.
@@ -127,7 +125,7 @@ def run_vector(
     snap_a = vector_dir / 'snapshot-a'
     snap_b = vector_dir / 'snapshot-b'
 
-    changeset = binoc.diff(str(snap_a), str(snap_b), config=config, registry=registry)
+    changeset = binoc.diff(str(snap_a), str(snap_b), config=config)
 
     expected = manifest.get('expected', {})
     if expected:

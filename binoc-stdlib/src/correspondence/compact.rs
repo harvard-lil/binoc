@@ -1,16 +1,45 @@
 use binoc_sdk::{
-    tabular_v1, BinocError, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, NodeId,
-    TabularData, Value,
+    tabular_v1, BinocResult, CompactionRule, DataAccess, Edit, LinkCtx, Summary, TabularData, Value,
 };
 use serde_json::json;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
 
-const MAX_ROW_ALIGNMENT_ROWS: usize = 512;
+use super::tabular::{is_row_alignment_basis_edit, load_tabular, MAX_ROW_ALIGNMENT_ROWS};
+
 const COLUMN_RENAME_MIN_MATCHES: usize = 2;
 const COLUMN_RENAME_MIN_MATCH_RATIO: f64 = 0.10;
+const MAX_VALUE_PREVIEW_BYTES: usize = 120;
 
 pub struct ColumnReorder;
 
 pub struct ColumnRename;
+
+pub struct TypeOnlyColumnChange;
+
+pub struct SortedRowAlignment;
+
+#[derive(Debug, Clone)]
+pub struct ReducedPrecision {
+    suppression_sentinels: BTreeSet<String>,
+}
+
+impl Default for ReducedPrecision {
+    fn default() -> Self {
+        Self::new(["*", "(D)", "(S)", ""])
+    }
+}
+
+impl ReducedPrecision {
+    pub fn new(suppression_sentinels: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            suppression_sentinels: suppression_sentinels
+                .into_iter()
+                .map(|sentinel| sentinel.into().trim().to_string())
+                .collect(),
+        }
+    }
+}
 
 impl CompactionRule for ColumnReorder {
     fn name(&self) -> &str {
@@ -55,7 +84,8 @@ impl CompactionRule for ColumnReorder {
                     Edit::new("tabular.reorder_columns", json!({ "order": common_to }))
                         .with_item_type("tabular")
                         .with_tag("binoc.column-reorder")
-                        .with_tag("binoc.schema-change"),
+                        .with_tag("binoc.schema-change")
+                        .with_summary("Columns reordered"),
                 );
             } else {
                 out.push(edit.clone());
@@ -90,6 +120,705 @@ impl CompactionRule for ColumnRename {
     }
 }
 
+impl CompactionRule for TypeOnlyColumnChange {
+    fn name(&self) -> &str {
+        "binoc.compact.type_only_column_change"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        _ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        Ok(rewrite_type_only_column_changes(edits))
+    }
+}
+
+impl CompactionRule for SortedRowAlignment {
+    fn name(&self) -> &str {
+        "binoc.compact.sorted_row_alignment"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        if !ctx.row_keys.is_empty() {
+            return Ok(None);
+        }
+        let (Some(left), Some(right)) = (
+            load_tabular(ctx, ctx.link.left, data)?,
+            load_tabular(ctx, ctx.link.right, data)?,
+        ) else {
+            return Ok(None);
+        };
+        Ok(rewrite_sorted_row_alignment(edits, &left, &right))
+    }
+}
+
+impl CompactionRule for ReducedPrecision {
+    fn name(&self) -> &str {
+        "binoc.compact.reduced_precision"
+    }
+
+    fn format(&self) -> Option<binoc_sdk::ArtifactFormat> {
+        Some(tabular_v1())
+    }
+
+    fn rewrite(
+        &self,
+        _ctx: &LinkCtx<'_>,
+        edits: &[Edit],
+        _data: &dyn DataAccess,
+    ) -> BinocResult<Option<Vec<Edit>>> {
+        Ok(rewrite_reduced_precision(
+            edits,
+            &self.suppression_sentinels,
+        ))
+    }
+}
+
+fn rewrite_type_only_column_changes(edits: &[Edit]) -> Option<Vec<Edit>> {
+    let type_only = type_only_column_groups(edits);
+    if type_only.is_empty() {
+        return None;
+    }
+
+    let mut out = Vec::new();
+    let mut rewrote = false;
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit) else {
+            out.push(edit.clone());
+            continue;
+        };
+        let Some(group) = type_only.get(column) else {
+            out.push(edit.clone());
+            continue;
+        };
+        if edit_cell_is_type_only(edit) {
+            if index == group.first_index {
+                out.push(type_only_column_edit(column, group));
+            }
+            rewrote = true;
+        } else {
+            out.push(edit.clone());
+        }
+    }
+
+    rewrote.then_some(out)
+}
+
+#[derive(Debug, Clone)]
+struct TypeOnlyColumnGroup {
+    first_index: usize,
+    from_type: &'static str,
+    to_type: &'static str,
+    count: usize,
+}
+
+fn type_only_column_groups(edits: &[Edit]) -> BTreeMap<String, TypeOnlyColumnGroup> {
+    let mut candidates: BTreeMap<String, TypeOnlyColumnGroup> = BTreeMap::new();
+    let mut disqualified = Vec::new();
+
+    for (index, edit) in edits
+        .iter()
+        .enumerate()
+        .filter(|(_, edit)| edit.verb == "tabular.edit_cell")
+    {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        if !edit_cell_is_type_only(edit) {
+            disqualified.push(column);
+            continue;
+        }
+        let from_type = cell_type_name(&edit.params["from"]);
+        let to_type = cell_type_name(&edit.params["to"]);
+        let column_key = column.clone();
+        candidates
+            .entry(column)
+            .and_modify(|group| {
+                if group.from_type != from_type || group.to_type != to_type {
+                    disqualified.push(column_key.clone());
+                }
+                group.first_index = group.first_index.min(index);
+                group.count += 1;
+            })
+            .or_insert(TypeOnlyColumnGroup {
+                first_index: index,
+                from_type,
+                to_type,
+                count: 1,
+            });
+    }
+
+    for column in disqualified {
+        candidates.remove(&column);
+    }
+    candidates
+}
+
+fn edit_cell_column(edit: &Edit) -> Option<&str> {
+    (edit.verb == "tabular.edit_cell")
+        .then(|| edit.params.get("column")?.as_str())
+        .flatten()
+}
+
+fn edit_cell_is_type_only(edit: &Edit) -> bool {
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    from != to && cell_type_name(from) != cell_type_name(to) && canonical_cell_equal(from, to)
+}
+
+fn type_only_column_edit(column: &str, group: &TypeOnlyColumnGroup) -> Edit {
+    Edit::new(
+        "tabular.column_type_changed",
+        json!({
+            "column": column,
+            "from_type": group.from_type,
+            "to_type": group.to_type,
+            "cells": group.count,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.column-type-change")
+    .with_tag("binoc.schema-change")
+    .with_summary(
+        Summary::new()
+            .text("Column type changed: '")
+            .text(column.to_string())
+            .text("' ")
+            .text(group.from_type)
+            .text(" -> ")
+            .text(group.to_type),
+    )
+}
+
+fn cell_type_name(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "bool",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
+/// Conservative cross-type cell equality for detecting representation-only
+/// tabular changes.
+///
+/// Policy:
+/// - Values with the same JSON type use ordinary JSON equality.
+/// - Numeric JSON values and numeric strings compare equal by conservative
+///   decimal value. This makes `1.0` equal to `"1"` while `"007"` is not equal
+///   to `7`, and whitespace remains significant.
+/// - Booleans do not equal strings (`true` != `"true"`).
+/// - Null does not equal an empty string.
+/// - Dates and timestamps have no special parsing; date-like strings are only
+///   equal by exact string equality. We do not normalize time zones, calendars,
+///   or formats.
+/// - Arrays/objects do not cross-compare with strings, because stringified
+///   nested values are often lossy producer choices rather than typed cells.
+fn canonical_cell_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    if left == right {
+        return true;
+    }
+    if let (Some(left), Some(right)) = (NumericCell::parse(left), NumericCell::parse(right)) {
+        return left.value == right.value;
+    }
+    match (left, right) {
+        (serde_json::Value::Number(number), serde_json::Value::String(string))
+        | (serde_json::Value::String(string), serde_json::Value::Number(number)) => {
+            !string.is_empty() && number.to_string() == *string
+        }
+        _ => false,
+    }
+}
+
+fn rewrite_reduced_precision(
+    edits: &[Edit],
+    suppression_sentinels: &BTreeSet<String>,
+) -> Option<Vec<Edit>> {
+    let semantic_edits: Vec<Edit> = edits
+        .iter()
+        .filter(|edit| !edit_cell_is_numeric_noop(edit))
+        .cloned()
+        .collect();
+    let removed_numeric_noops = semantic_edits.len() != edits.len();
+    if semantic_edits.is_empty() && removed_numeric_noops {
+        return Some(vec![numeric_noop_edit()]);
+    }
+
+    let suppressed = suppressed_value_groups(&semantic_edits, suppression_sentinels);
+    let rounded = rounded_value_groups(&semantic_edits);
+    if suppressed.is_empty() && rounded.is_empty() {
+        return removed_numeric_noops.then_some(semantic_edits);
+    }
+
+    let mut out = Vec::new();
+    let mut rewrote = false;
+    for (index, edit) in semantic_edits.iter().enumerate() {
+        if let Some(group) = suppressed.get(&index) {
+            out.push(suppressed_values_edit(group));
+            rewrote = true;
+            continue;
+        }
+        if suppressed
+            .values()
+            .any(|group| group.indices.contains(&index))
+        {
+            rewrote = true;
+            continue;
+        }
+        if let Some(group) = rounded.get(&index) {
+            out.push(rounded_values_edit(group));
+            rewrote = true;
+            continue;
+        }
+        if rounded.values().any(|group| group.indices.contains(&index)) {
+            rewrote = true;
+            continue;
+        }
+        out.push(edit.clone());
+    }
+
+    (rewrote || removed_numeric_noops).then_some(out)
+}
+
+#[derive(Debug, Clone)]
+struct CellGroup {
+    first_index: usize,
+    indices: Vec<usize>,
+    column: String,
+    count: usize,
+    basis: Option<RoundingBasis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum RoundingBasis {
+    Modulus(NumericValue),
+}
+
+fn suppressed_value_groups(
+    edits: &[Edit],
+    suppression_sentinels: &BTreeSet<String>,
+) -> BTreeMap<usize, CellGroup> {
+    let mut by_column: BTreeMap<String, CellGroup> = BTreeMap::new();
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        if !edit_cell_is_value_suppressed(edit, suppression_sentinels) {
+            continue;
+        }
+        by_column
+            .entry(column.clone())
+            .and_modify(|group| {
+                group.indices.push(index);
+                group.count += 1;
+            })
+            .or_insert(CellGroup {
+                first_index: index,
+                indices: vec![index],
+                column,
+                count: 1,
+                basis: None,
+            });
+    }
+    by_column
+        .into_values()
+        .map(|group| (group.first_index, group))
+        .collect()
+}
+
+fn rounded_value_groups(edits: &[Edit]) -> BTreeMap<usize, CellGroup> {
+    let mut by_column_and_basis: BTreeMap<(String, RoundingBasis), CellGroup> = BTreeMap::new();
+    for (index, edit) in edits.iter().enumerate() {
+        let Some(column) = edit_cell_column(edit).map(str::to_string) else {
+            continue;
+        };
+        let Some(basis) = edit_cell_rounding_basis(edit) else {
+            continue;
+        };
+        by_column_and_basis
+            .entry((column.clone(), basis.clone()))
+            .and_modify(|group| {
+                group.indices.push(index);
+                group.count += 1;
+            })
+            .or_insert(CellGroup {
+                first_index: index,
+                indices: vec![index],
+                column,
+                count: 1,
+                basis: Some(basis),
+            });
+    }
+    by_column_and_basis
+        .into_values()
+        .filter(|group| group.count >= 2)
+        .map(|group| (group.first_index, group))
+        .collect()
+}
+
+fn edit_cell_is_numeric_noop(edit: &Edit) -> bool {
+    if edit.verb != "tabular.edit_cell" {
+        return false;
+    }
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    from != to
+        && cell_type_name(from) == cell_type_name(to)
+        && NumericCell::parse(from)
+            .zip(NumericCell::parse(to))
+            .is_some_and(|(from, to)| from.value == to.value)
+}
+
+fn edit_cell_is_value_suppressed(edit: &Edit, suppression_sentinels: &BTreeSet<String>) -> bool {
+    if edit.verb != "tabular.edit_cell" {
+        return false;
+    }
+    let Some(from) = edit.params.get("from") else {
+        return false;
+    };
+    let Some(to) = edit.params.get("to") else {
+        return false;
+    };
+    value_is_present(from) && value_is_suppression_sentinel(from, to, suppression_sentinels)
+}
+
+fn edit_cell_rounding_basis(edit: &Edit) -> Option<RoundingBasis> {
+    if edit.verb != "tabular.edit_cell" {
+        return None;
+    }
+    let from = NumericCell::parse(edit.params.get("from")?)?;
+    let to = NumericCell::parse(edit.params.get("to")?)?;
+    if from.value == to.value {
+        return None;
+    }
+    let modulus = to.rounding_modulus()?;
+    (from.value.round_to_nearest(&modulus)? == to.value).then_some(RoundingBasis::Modulus(modulus))
+}
+
+fn numeric_noop_edit() -> Edit {
+    let mut edit = Edit::new(
+        "tabular.numeric_canonical_equal",
+        json!({
+            "reason": "numeric cells differ only in representation",
+        }),
+    )
+    .with_item_type("tabular")
+    .hidden()
+    .with_summary("Numeric cells differ only in representation");
+    edit.projection.hint.action = Some("identical".into());
+    edit
+}
+
+fn suppressed_values_edit(group: &CellGroup) -> Edit {
+    Edit::new(
+        "tabular.values_suppressed",
+        json!({
+            "column": group.column,
+            "cells": group.count,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.value-suppressed")
+    .with_tag("binoc.cell-change")
+    .with_summary(
+        Summary::new()
+            .text("Suppressed ")
+            .count(group.count as u64, "cell")
+            .text(" in '")
+            .text(group.column.clone())
+            .text("'"),
+    )
+}
+
+fn rounded_values_edit(group: &CellGroup) -> Edit {
+    let basis = match group.basis.as_ref().expect("rounding group has basis") {
+        RoundingBasis::Modulus(modulus) => {
+            json!({
+                "kind": "modulus",
+                "value": modulus.to_display_string(),
+            })
+        }
+    };
+    Edit::new(
+        "tabular.values_rounded",
+        json!({
+            "column": group.column,
+            "cells": group.count,
+            "basis": basis,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.value-rounded")
+    .with_tag("binoc.cell-change")
+    .with_summary(
+        Summary::new()
+            .text("Rounded ")
+            .count(group.count as u64, "cell")
+            .text(" in '")
+            .text(group.column.clone())
+            .text("' to nearest ")
+            .text(
+                match group.basis.as_ref().expect("rounding group has basis") {
+                    RoundingBasis::Modulus(modulus) => modulus.to_display_string(),
+                },
+            ),
+    )
+}
+
+fn value_is_present(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::String(text) => !text.trim().is_empty(),
+        _ => true,
+    }
+}
+
+fn value_is_suppression_sentinel(
+    from: &serde_json::Value,
+    to: &serde_json::Value,
+    suppression_sentinels: &BTreeSet<String>,
+) -> bool {
+    match to {
+        serde_json::Value::Null => {
+            NumericCell::parse(from).is_some() && suppression_sentinels.contains("")
+        }
+        serde_json::Value::String(text) => {
+            let trimmed = text.trim();
+            suppression_sentinels.contains(trimmed)
+                && (!trimmed.is_empty() || NumericCell::parse(from).is_some())
+        }
+        _ => false,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NumericCell {
+    value: NumericValue,
+    declared_scale: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NumericValue {
+    coeff: i128,
+    scale: u32,
+}
+
+impl NumericCell {
+    fn parse(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::Number(number) => parse_numeric_text(&number.to_string()),
+            serde_json::Value::String(text) => parse_numeric_text(text),
+            _ => None,
+        }
+    }
+
+    fn rounding_modulus(&self) -> Option<NumericValue> {
+        if self.value.coeff == 0 {
+            return None;
+        }
+        if self.declared_scale > 0 {
+            return Some(NumericValue {
+                coeff: 1,
+                scale: self.declared_scale,
+            });
+        }
+        let trailing_zeroes = decimal_trailing_zeroes(self.value.coeff.unsigned_abs());
+        (trailing_zeroes > 0)
+            .then(|| {
+                Some(NumericValue {
+                    coeff: pow10(trailing_zeroes)?,
+                    scale: 0,
+                })
+            })
+            .flatten()
+    }
+}
+
+impl NumericValue {
+    fn normalized(mut coeff: i128, mut scale: u32) -> Self {
+        while scale > 0 && coeff % 10 == 0 {
+            coeff /= 10;
+            scale -= 1;
+        }
+        Self { coeff, scale }
+    }
+
+    fn round_to_nearest(&self, modulus: &NumericValue) -> Option<NumericValue> {
+        if modulus.coeff <= 0 {
+            return None;
+        }
+        let scale = self.scale.max(modulus.scale);
+        let value = self.coeff.checked_mul(pow10(scale - self.scale)?)?;
+        let modulus = modulus.coeff.checked_mul(pow10(scale - modulus.scale)?)?;
+        let quotient = div_round_nearest(value, modulus)?;
+        Some(NumericValue::normalized(
+            quotient.checked_mul(modulus)?,
+            scale,
+        ))
+    }
+
+    fn to_display_string(&self) -> String {
+        if self.scale == 0 {
+            return self.coeff.to_string();
+        }
+        let sign = if self.coeff < 0 { "-" } else { "" };
+        let digits = self.coeff.unsigned_abs().to_string();
+        let scale = self.scale as usize;
+        if digits.len() <= scale {
+            format!("{sign}0.{}{}", "0".repeat(scale - digits.len()), digits)
+        } else {
+            let split = digits.len() - scale;
+            format!("{sign}{}.{}", &digits[..split], &digits[split..])
+        }
+    }
+}
+
+fn parse_numeric_text(text: &str) -> Option<NumericCell> {
+    if text.is_empty() || text.trim() != text {
+        return None;
+    }
+    let (negative, rest) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let (mantissa, exponent) = split_exponent(rest)?;
+    let (integer, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    if integer.is_empty() && fraction.is_empty() {
+        return None;
+    }
+    let integer = strip_grouping_commas(integer)?;
+    if integer.len() > 1 && integer.starts_with('0') {
+        return None;
+    }
+    if !integer.bytes().all(|ch| ch.is_ascii_digit())
+        || !fraction.bytes().all(|ch| ch.is_ascii_digit())
+    {
+        return None;
+    }
+    let digits = format!("{integer}{fraction}");
+    if digits.is_empty() || digits.len() > 36 || !digits.bytes().any(|ch| ch != b'0') {
+        return if digits.bytes().all(|ch| ch == b'0') {
+            Some(NumericCell {
+                value: NumericValue { coeff: 0, scale: 0 },
+                declared_scale: fraction.len() as u32,
+            })
+        } else {
+            None
+        };
+    }
+    let mut coeff = digits.parse::<i128>().ok()?;
+    if negative {
+        coeff = -coeff;
+    }
+    let declared_scale = fraction.len() as u32;
+    let scale = declared_scale as i32 - exponent;
+    if scale < 0 {
+        coeff = coeff.checked_mul(pow10((-scale) as u32)?)?;
+        Some(NumericCell {
+            value: NumericValue::normalized(coeff, 0),
+            declared_scale: 0,
+        })
+    } else {
+        Some(NumericCell {
+            value: NumericValue::normalized(coeff, scale as u32),
+            declared_scale: scale as u32,
+        })
+    }
+}
+
+fn split_exponent(text: &str) -> Option<(&str, i32)> {
+    if let Some(index) = text.find(['e', 'E']) {
+        let exponent = text[index + 1..].parse::<i32>().ok()?;
+        Some((&text[..index], exponent))
+    } else {
+        Some((text, 0))
+    }
+}
+
+fn strip_grouping_commas(integer: &str) -> Option<String> {
+    if !integer.contains(',') {
+        return Some(integer.to_string());
+    }
+    let mut groups = integer.split(',');
+    let first = groups.next()?;
+    if first.is_empty() || first.len() > 3 || !first.bytes().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let mut out = first.to_string();
+    for group in groups {
+        if group.len() != 3 || !group.bytes().all(|ch| ch.is_ascii_digit()) {
+            return None;
+        }
+        out.push_str(group);
+    }
+    Some(out)
+}
+
+fn decimal_trailing_zeroes(mut value: u128) -> u32 {
+    let mut count = 0;
+    while value > 0 && value.is_multiple_of(10) {
+        value /= 10;
+        count += 1;
+    }
+    count
+}
+
+fn pow10(exp: u32) -> Option<i128> {
+    let mut value = 1i128;
+    for _ in 0..exp {
+        value = value.checked_mul(10)?;
+    }
+    Some(value)
+}
+
+fn div_round_nearest(value: i128, modulus: i128) -> Option<i128> {
+    if modulus <= 0 {
+        return None;
+    }
+    let sign = if value < 0 { -1 } else { 1 };
+    let absolute = value.checked_abs()?;
+    let quotient = absolute / modulus;
+    let remainder = absolute % modulus;
+    let rounded = if remainder.checked_mul(2)? >= modulus {
+        quotient.checked_add(1)?
+    } else {
+        quotient
+    };
+    rounded.checked_mul(sign)
+}
+
+// Category-collapse and row-aggregation stay out of this pass pending the #120
+// value-domain / aggregation design discussion.
+
 fn rewrite_column_renames(
     edits: &[Edit],
     left: &TabularData,
@@ -114,7 +843,15 @@ fn rewrite_column_renames(
                 )
                 .with_item_type("tabular")
                 .with_tag("binoc.column-rename")
-                .with_tag("binoc.schema-change"),
+                .with_tag("binoc.schema-change")
+                .with_summary(
+                    binoc_sdk::Summary::new()
+                        .text("Column renamed: '")
+                        .text(rename.from.clone())
+                        .text("' -> '")
+                        .text(rename.to.clone())
+                        .text("'"),
+                ),
             );
             out.extend(rename.value_edits.clone());
             continue;
@@ -126,19 +863,6 @@ fn rewrite_column_renames(
     }
 
     Some(out)
-}
-
-fn load_tabular(
-    ctx: &LinkCtx<'_>,
-    id: NodeId,
-    data: &dyn DataAccess,
-) -> BinocResult<Option<TabularData>> {
-    let Some(bytes) = ctx.view.artifact_bytes(id, &tabular_v1(), data)? else {
-        return Ok(None);
-    };
-    serde_json::from_slice(&bytes)
-        .map(Some)
-        .map_err(|err| BinocError::Other(format!("decode tabular artifact: {err}")))
 }
 
 #[derive(Debug, Clone)]
@@ -180,9 +904,9 @@ fn column_rename_matches(
     }
     let row_alignment = edits
         .iter()
-        .find(|edit| edit.verb == "tabular.row_alignment_basis")
+        .find(|edit| is_row_alignment_basis_edit(edit))
         .and_then(RowAlignmentBasis::from_edit)
-        .map(|basis| lcs_pairs(&basis.left, &basis.right));
+        .map(|basis| basis.alignment_pairs());
 
     let mut candidates = Vec::new();
     for remove in &removes {
@@ -416,6 +1140,264 @@ fn column_value_edit(row: usize, column: &str, from: &Value, to: &Value) -> Edit
     .with_tag("binoc.cell-change")
 }
 
+fn rewrite_sorted_row_alignment(
+    edits: &[Edit],
+    left: &TabularData,
+    right: &TabularData,
+) -> Option<Vec<Edit>> {
+    if left.rows.len() != right.rows.len()
+        || left.rows.is_empty()
+        || edits.iter().any(is_high_churn_guardrail)
+        || !edits.iter().any(sorted_row_alignment_trigger)
+    {
+        return None;
+    }
+
+    let common = common_columns(left, right);
+    if common.is_empty() {
+        return None;
+    }
+
+    let mut left_rows = sort_aligned_rows(left, common.iter().map(|column| column.left_index));
+    let mut right_rows = sort_aligned_rows(right, common.iter().map(|column| column.right_index));
+    left_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+    right_rows.sort_by(|a, b| {
+        a.signature
+            .cmp(&b.signature)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+
+    let mut aligned_edits = Vec::new();
+    let mut changed_cells = 0usize;
+    let mut changed_rows = 0usize;
+    let mut reordered = false;
+    for (left_row, right_row) in left_rows.iter().zip(&right_rows) {
+        reordered |= left_row.index != right_row.index;
+        let mut row_changed = false;
+        for column in &common {
+            let left_value = left_row.row.get(column.left_index).unwrap_or(&Value::Null);
+            let right_value = right_row
+                .row
+                .get(column.right_index)
+                .unwrap_or(&Value::Null);
+            if left_value != right_value {
+                changed_cells += 1;
+                row_changed = true;
+                aligned_edits.push(sorted_cell_edit(
+                    left_row.index,
+                    right_row.index,
+                    &column.name,
+                    left_value,
+                    right_value,
+                ));
+            }
+        }
+        if row_changed {
+            changed_rows += 1;
+        }
+    }
+
+    if aligned_edits.is_empty() {
+        if !reordered {
+            return None;
+        }
+        aligned_edits.push(row_reorder_edit("sorted_row_content", right.rows.len()));
+    } else {
+        aligned_edits.push(sorted_row_alignment_edit(
+            left.rows.len(),
+            right.rows.len(),
+            changed_cells,
+            changed_rows,
+            common.len(),
+        ));
+    }
+
+    let mut out: Vec<Edit> = edits
+        .iter()
+        .filter(|edit| !sorted_row_alignment_owned_edit(edit, &common))
+        .cloned()
+        .collect();
+    out.extend(aligned_edits);
+    Some(out)
+}
+
+fn sorted_row_alignment_trigger(edit: &Edit) -> bool {
+    edit.verb == "tabular.edit_cell"
+        && edit.params.get("key").is_none()
+        && edit.params.get("row").is_some()
+}
+
+fn sorted_row_alignment_owned_edit(edit: &Edit, common: &[CommonColumn]) -> bool {
+    edit.verb == "tabular.edit_cell"
+        && edit.params.get("key").is_none()
+        && edit.params.get("row").is_some()
+        && edit
+            .params
+            .get("column")
+            .and_then(|value| value.as_str())
+            .is_some_and(|column| common.iter().any(|common| common.name == column))
+}
+
+fn is_high_churn_guardrail(edit: &Edit) -> bool {
+    edit.verb == "tabular.row_correspondence_uncertain"
+}
+
+#[derive(Debug, Clone)]
+struct CommonColumn {
+    name: String,
+    left_index: usize,
+    right_index: usize,
+}
+
+fn common_columns(left: &TabularData, right: &TabularData) -> Vec<CommonColumn> {
+    let right_headers: BTreeMap<&str, usize> = right
+        .headers
+        .iter()
+        .enumerate()
+        .map(|(index, header)| (header.as_str(), index))
+        .collect();
+    left.headers
+        .iter()
+        .enumerate()
+        .filter_map(|(left_index, header)| {
+            right_headers
+                .get(header.as_str())
+                .copied()
+                .map(|right_index| CommonColumn {
+                    name: header.clone(),
+                    left_index,
+                    right_index,
+                })
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RowSignature<'a>(Box<[Cow<'a, str>]>);
+
+#[derive(Debug, Clone)]
+struct SortAlignedRow<'a> {
+    signature: RowSignature<'a>,
+    index: usize,
+    row: &'a Vec<Value>,
+}
+
+fn sort_aligned_rows<'a>(
+    table: &'a TabularData,
+    indices: impl IntoIterator<Item = usize> + Clone,
+) -> Vec<SortAlignedRow<'a>> {
+    table
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| SortAlignedRow {
+            signature: row_content_signature(row, indices.clone()),
+            index,
+            row,
+        })
+        .collect()
+}
+
+fn row_content_signature<'a>(
+    row: &'a [Value],
+    indices: impl IntoIterator<Item = usize>,
+) -> RowSignature<'a> {
+    RowSignature(
+        indices
+            .into_iter()
+            .map(|index| row.get(index).unwrap_or(&Value::Null).as_text())
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
+fn sorted_cell_edit(
+    left_row: usize,
+    right_row: usize,
+    column: &str,
+    from: &Value,
+    to: &Value,
+) -> Edit {
+    Edit::new(
+        "tabular.edit_cell",
+        json!({
+            "left_row": left_row,
+            "right_row": right_row,
+            "column": column,
+            "from": value_preview(from),
+            "to": value_preview(to),
+            "alignment": "sorted_row_content",
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.cell-change")
+}
+
+fn sorted_row_alignment_edit(
+    left_rows: usize,
+    right_rows: usize,
+    changed_cells: usize,
+    changed_rows: usize,
+    common_columns: usize,
+) -> Edit {
+    let total_cells = left_rows.max(right_rows) * common_columns;
+    let sorted_changed_cell_fraction = if total_cells == 0 {
+        0.0
+    } else {
+        (changed_cells as f64 / total_cells as f64).min(1.0)
+    };
+    Edit::new(
+        "tabular.sorted_row_alignment",
+        json!({
+            "left_rows": left_rows,
+            "right_rows": right_rows,
+            "sorted_changed_cell_fraction": sorted_changed_cell_fraction,
+            "changed_cells": changed_cells,
+            "changed_rows": changed_rows,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.row-alignment-inferred")
+    .hidden()
+}
+
+fn row_reorder_edit(mode: &str, rows: usize) -> Edit {
+    Edit::new(
+        "tabular.reorder_rows",
+        json!({
+            "alignment": mode,
+            "rows": rows,
+        }),
+    )
+    .with_item_type("tabular")
+    .with_tag("binoc.row-reorder")
+    .with_summary("rows reordered; cell values unchanged under inferred row alignment")
+}
+
+/// A previewed cell value as JSON. String cells are truncated and stay JSON
+/// strings; all other variants pass through as their natural JSON.
+fn value_preview(value: &Value) -> serde_json::Value {
+    match value {
+        Value::String(s) => serde_json::Value::String(truncate_preview(s)),
+        other => other.to_json(),
+    }
+}
+
+fn truncate_preview(value: &str) -> String {
+    if value.len() <= MAX_VALUE_PREVIEW_BYTES {
+        return value.to_string();
+    }
+    let mut end = MAX_VALUE_PREVIEW_BYTES;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &value[..end])
+}
+
 pub struct RowAdditionConsolidation;
 
 pub struct RowAlignment;
@@ -440,11 +1422,14 @@ impl CompactionRule for RowAlignment {
 }
 
 fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
-    let basis_index = edits
-        .iter()
-        .position(|edit| edit.verb == "tabular.row_alignment_basis")?;
-    let basis = RowAlignmentBasis::from_edit(&edits[basis_index])?;
-    let alignment = lcs_pairs(&basis.left, &basis.right);
+    let basis_index = edits.iter().position(is_row_alignment_basis_edit)?;
+    let Some(basis) = RowAlignmentBasis::from_edit(&edits[basis_index]) else {
+        return Some(strip_row_alignment_bases(edits));
+    };
+    if basis.columns.is_empty() {
+        return Some(strip_row_alignment_bases(edits));
+    }
+    let alignment = basis.alignment_pairs();
     let mut matched_left = vec![false; basis.left.len()];
     let mut matched_right = vec![false; basis.right.len()];
     for (left, right) in alignment {
@@ -461,14 +1446,13 @@ fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
 
     let mut out: Vec<Edit> = edits
         .iter()
-        .enumerate()
-        .filter(|(index, edit)| {
-            *index != basis_index
+        .filter(|edit| {
+            !is_row_alignment_basis_edit(edit)
                 && !basis.owns_cell_edit(edit)
                 && edit.verb != "tabular.add_row"
                 && edit.verb != "tabular.remove_row"
         })
-        .map(|(_, edit)| edit.clone())
+        .cloned()
         .collect();
 
     if unmatched_left == 0 && !unmatched_right.is_empty() {
@@ -489,18 +1473,25 @@ fn rewrite_row_alignment(edits: &[Edit]) -> Option<Vec<Edit>> {
         out.extend(
             edits
                 .iter()
-                .enumerate()
-                .filter(|(index, edit)| {
-                    *index != basis_index
+                .filter(|edit| {
+                    !is_row_alignment_basis_edit(edit)
                         && (basis.owns_cell_edit(edit)
                             || edit.verb == "tabular.add_row"
                             || edit.verb == "tabular.remove_row")
                 })
-                .map(|(_, edit)| edit.clone()),
+                .cloned(),
         );
     }
 
     Some(out)
+}
+
+fn strip_row_alignment_bases(edits: &[Edit]) -> Vec<Edit> {
+    edits
+        .iter()
+        .filter(|edit| !is_row_alignment_basis_edit(edit))
+        .cloned()
+        .collect()
 }
 
 struct RowAlignmentBasis {
@@ -508,6 +1499,7 @@ struct RowAlignmentBasis {
     left: Vec<String>,
     right: Vec<String>,
     right_rows: Vec<serde_json::Value>,
+    pairs: Option<Vec<(usize, usize)>>,
 }
 
 impl RowAlignmentBasis {
@@ -519,16 +1511,51 @@ impl RowAlignmentBasis {
             return None;
         }
         let right_rows = edit.params.get("right_rows")?.as_array()?.clone();
+        if right_rows.len() > MAX_ROW_ALIGNMENT_ROWS {
+            return None;
+        }
+        let pairs = match edit.params.get("pairs").and_then(|pairs| pairs.as_array()) {
+            Some(pairs) => Some(
+                pairs
+                    .iter()
+                    .map(|pair| {
+                        Some((
+                            pair.get("left")?.as_u64()? as usize,
+                            pair.get("right")?.as_u64()? as usize,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            None => None,
+        };
+        if let Some(pairs) = &pairs {
+            if pairs.iter().any(|(left_index, right_index)| {
+                *left_index >= left.len() || *right_index >= right.len()
+            }) {
+                return None;
+            }
+        }
         Some(Self {
             columns,
             left,
             right,
             right_rows,
+            pairs,
         })
+    }
+
+    fn alignment_pairs(&self) -> Vec<(usize, usize)> {
+        self.pairs
+            .clone()
+            .unwrap_or_else(|| lcs_pairs(&self.left, &self.right))
     }
 
     fn owns_cell_edit(&self, edit: &Edit) -> bool {
         edit.verb == "tabular.edit_cell"
+            && edit.params.get("key").is_none()
+            && (edit.params.get("row").is_some()
+                || edit.params.get("left_row").is_some()
+                || edit.params.get("right_row").is_some())
             && edit
                 .params
                 .get("column")
@@ -694,6 +1721,39 @@ mod tests {
         .with_tag("binoc.schema-change")
     }
 
+    fn cell(row: u64, column: &str, from: serde_json::Value, to: serde_json::Value) -> Edit {
+        Edit::new(
+            "tabular.edit_cell",
+            json!({
+                "row": row,
+                "column": column,
+                "from": from,
+                "to": to,
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.cell-change")
+    }
+
+    fn keyed_cell(
+        key: serde_json::Value,
+        column: &str,
+        from: serde_json::Value,
+        to: serde_json::Value,
+    ) -> Edit {
+        Edit::new(
+            "tabular.edit_cell",
+            json!({
+                "key": key,
+                "column": column,
+                "from": from,
+                "to": to,
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.cell-change")
+    }
+
     fn table(headers: &[&str], rows: &[&[&str]]) -> TabularData {
         TabularData::from_string_rows(
             headers.iter().map(|header| (*header).to_string()).collect(),
@@ -703,11 +1763,387 @@ mod tests {
         )
     }
 
+    #[test]
+    fn sorted_row_alignment_collapses_pure_reorder() {
+        let left = table(
+            &["group", "label", "value"],
+            &[
+                &["A", "x", "10"],
+                &["B", "x", "20"],
+                &["A", "y", "10"],
+                &["B", "y", "20"],
+            ],
+        );
+        let right = table(
+            &["group", "label", "value"],
+            &[
+                &["B", "y", "20"],
+                &["A", "y", "10"],
+                &["B", "x", "20"],
+                &["A", "x", "10"],
+            ],
+        );
+        let edits = vec![
+            cell(0, "group", json!("A"), json!("B")).hidden(),
+            cell(0, "label", json!("x"), json!("y")).hidden(),
+            cell(0, "value", json!("10"), json!("20")).hidden(),
+        ];
+
+        let rewritten = rewrite_sorted_row_alignment(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.reorder_rows");
+        assert_eq!(
+            rewritten[0].params,
+            json!({"alignment": "sorted_row_content", "rows": 4})
+        );
+    }
+
+    #[test]
+    fn sorted_row_alignment_does_not_rewrite_high_churn_guardrail() {
+        let left = table(
+            &["id", "status", "color"],
+            &[
+                &["A", "old", "red"],
+                &["B", "old", "red"],
+                &["C", "old", "red"],
+                &["D", "old", "red"],
+            ],
+        );
+        let right = table(
+            &["id", "status", "color"],
+            &[
+                &["D", "new", "blue"],
+                &["C", "new", "blue"],
+                &["B", "new", "blue"],
+                &["A", "new", "blue"],
+            ],
+        );
+        let positional_basis = vec![
+            cell(0, "id", json!("A"), json!("D")).hidden(),
+            cell(0, "status", json!("old"), json!("new")).hidden(),
+            cell(0, "color", json!("red"), json!("blue")).hidden(),
+            cell(1, "id", json!("B"), json!("C")).hidden(),
+            cell(1, "status", json!("old"), json!("new")).hidden(),
+            cell(1, "color", json!("red"), json!("blue")).hidden(),
+            cell(2, "id", json!("C"), json!("B")).hidden(),
+            cell(2, "status", json!("old"), json!("new")).hidden(),
+            cell(2, "color", json!("red"), json!("blue")).hidden(),
+            cell(3, "id", json!("D"), json!("A")).hidden(),
+            cell(3, "status", json!("old"), json!("new")).hidden(),
+            cell(3, "color", json!("red"), json!("blue")).hidden(),
+        ];
+        let sorted = rewrite_sorted_row_alignment(&positional_basis, &left, &right)
+            .expect("unguarded sorted rewrite");
+        let sorted_alignment = sorted
+            .iter()
+            .find(|edit| edit.verb == "tabular.sorted_row_alignment")
+            .expect("sorted alignment marker");
+        assert_eq!(sorted_alignment.params["changed_cells"], json!(8));
+        assert!(
+            sorted_alignment.params["sorted_changed_cell_fraction"]
+                .as_f64()
+                .expect("fraction")
+                > 0.5
+        );
+        assert!(sorted.len() < positional_basis.len());
+
+        let mut guarded = vec![Edit::new(
+            "tabular.row_correspondence_uncertain",
+            json!({
+                "mode": "positional",
+                "changed_cell_fraction": 1.0,
+                "threshold": 0.5,
+                "changed_cells": 12,
+                "total_cells": 12,
+                "changed_rows": 4,
+                "total_rows": 4,
+                "candidate_keys": [],
+            }),
+        )
+        .with_item_type("tabular")
+        .with_tag("binoc.row-correspondence-uncertain")];
+        guarded.extend(positional_basis);
+
+        assert!(rewrite_sorted_row_alignment(&guarded, &left, &right).is_none());
+    }
+
+    #[test]
+    fn sorted_row_alignment_preserves_non_row_edits() {
+        let left = table(&["id", "status"], &[&["1", "active"], &["2", "pending"]]);
+        let right = table(&["id", "status"], &[&["2", "closed"], &["1", "active"]]);
+        let metadata = Edit::new(
+            "metadata.value_change",
+            json!({"path": "label", "from": "old", "to": "new"}),
+        )
+        .with_item_type("tabular");
+        let edits = vec![
+            metadata.clone(),
+            cell(0, "id", json!("1"), json!("2")),
+            cell(0, "status", json!("active"), json!("closed")),
+            cell(1, "id", json!("2"), json!("1")),
+            cell(1, "status", json!("pending"), json!("active")),
+        ];
+
+        let rewritten = rewrite_sorted_row_alignment(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten[0], metadata);
+        assert!(rewritten
+            .iter()
+            .any(|edit| edit.verb == "tabular.sorted_row_alignment"));
+        assert!(rewritten.iter().any(|edit| {
+            edit.verb == "tabular.edit_cell"
+                && edit.params["alignment"] == json!("sorted_row_content")
+                && edit.params["left_row"] == json!(1)
+                && edit.params["right_row"] == json!(0)
+        }));
+    }
+
+    #[test]
+    fn canonical_cell_equality_is_conservative() {
+        assert!(canonical_cell_equal(&json!(2024), &json!("2024")));
+        assert!(canonical_cell_equal(&json!("2024"), &json!(2024)));
+        assert!(canonical_cell_equal(&json!(1.0), &json!("1.0")));
+        assert!(canonical_cell_equal(&json!("1.0"), &json!("1")));
+        assert!(!canonical_cell_equal(&json!(7), &json!("007")));
+        assert!(!canonical_cell_equal(&json!(true), &json!("true")));
+        assert!(!canonical_cell_equal(&json!(null), &json!("")));
+        assert!(!canonical_cell_equal(
+            &json!("2024-01-01T00:00:00Z"),
+            &json!("2024-01-01")
+        ));
+    }
+
+    #[test]
+    fn type_only_column_change_collapses_to_one_claim() {
+        let edits = vec![
+            cell(0, "year", json!(2024), json!("2024")),
+            cell(1, "year", json!(2025), json!("2025")),
+            cell(0, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let rewritten = rewrite_type_only_column_changes(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.column_type_changed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "year",
+                "from_type": "number",
+                "to_type": "string",
+                "cells": 2,
+            })
+        );
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Column type changed: 'year' number -> string"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+        assert_eq!(rewritten[1].params["column"], json!("name"));
+    }
+
+    #[test]
+    fn type_only_column_change_keeps_mixed_semantic_column_changes() {
+        let edits = vec![
+            cell(0, "year", json!(2024), json!("2024")),
+            cell(1, "year", json!(2025), json!("FY2025")),
+        ];
+
+        assert!(rewrite_type_only_column_changes(&edits).is_none());
+    }
+
+    #[test]
+    fn type_only_column_change_rewrites_keyed_cell_edits() {
+        let edits = vec![
+            keyed_cell(json!({"id": 1}), "year", json!(2024), json!("2024")),
+            keyed_cell(json!({"id": 2}), "year", json!(2025), json!("2025")),
+        ];
+
+        let rewritten = rewrite_type_only_column_changes(&edits).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.column_type_changed");
+        assert_eq!(rewritten[0].params["cells"], json!(2));
+    }
+
+    #[test]
+    fn reduced_precision_removes_numeric_representation_noops() {
+        let edits = vec![
+            cell(0, "rate", json!("1.0"), json!("1")),
+            cell(1, "rate", json!("2.50"), json!("2.5")),
+        ];
+
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.numeric_canonical_equal");
+        assert!(!rewritten[0].projection.visible);
+        assert_eq!(
+            rewritten[0].projection.hint.action.as_deref(),
+            Some("identical")
+        );
+    }
+
+    #[test]
+    fn reduced_precision_collapses_suppressed_cells_by_column() {
+        let edits = vec![
+            cell(0, "count", json!("123"), json!("*")),
+            cell(1, "count", json!("456"), json!("(D)")),
+            cell(2, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "count",
+                "cells": 2,
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Suppressed 2 cells in 'count'"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+    }
+
+    #[test]
+    fn reduced_precision_honors_custom_suppression_sentinels() {
+        let edits = vec![
+            cell(0, "count", json!("123"), json!("N/A")),
+            cell(1, "count", json!("456"), json!("N/A")),
+            cell(2, "other", json!("789"), json!("*")),
+            cell(3, "name", json!("Alice"), json!("Alicia")),
+        ];
+
+        let suppression_sentinels = ["N/A", ""].into_iter().map(str::to_string).collect();
+        let rewritten = rewrite_reduced_precision(&edits, &suppression_sentinels).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 3);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(rewritten[0].params["cells"], json!(2));
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+        assert_eq!(rewritten[1].params["to"], json!("*"));
+        assert!(!rewritten[1]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(rewritten[2].verb, "tabular.edit_cell");
+    }
+
+    #[test]
+    fn reduced_precision_rewrites_single_suppressed_cell() {
+        let edits = vec![cell(0, "count", json!("123"), json!("*"))];
+
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "count",
+                "cells": 1,
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Suppressed 1 cell in 'count'"
+        );
+    }
+
+    #[test]
+    fn reduced_precision_collapses_numeric_rounding_by_column_and_modulus() {
+        let edits = vec![
+            cell(0, "population", json!("12,345"), json!("12,000")),
+            cell(1, "population", json!("67,890"), json!("68,000")),
+            cell(2, "name", json!("Alpha"), json!("Alfa")),
+        ];
+
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten[0].verb, "tabular.values_rounded");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "population",
+                "cells": 2,
+                "basis": {
+                    "kind": "modulus",
+                    "value": "1000",
+                },
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-rounded".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Rounded 2 cells in 'population' to nearest 1000"
+        );
+        assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+    }
+
     fn basis(left: &[&str], right: &[&str], right_rows: Vec<serde_json::Value>) -> Edit {
+        basis_with_columns(&["name", "age"], left, right, right_rows)
+    }
+
+    fn basis_with_columns(
+        columns: &[&str],
+        left: &[&str],
+        right: &[&str],
+        right_rows: Vec<serde_json::Value>,
+    ) -> Edit {
         Edit::new(
             "tabular.row_alignment_basis",
             json!({
-                "columns": ["name", "age"],
+                "columns": columns,
                 "left": left,
                 "right": right,
                 "right_rows": right_rows,
@@ -809,6 +2245,82 @@ mod tests {
     }
 
     #[test]
+    fn column_rename_uses_explicit_row_alignment_pairs() {
+        let edits = vec![
+            Edit::new(
+                "tabular.row_alignment_basis",
+                json!({
+                    "columns": [],
+                    "left": ["id=1", "id=2", "id=3"],
+                    "right": ["id=2", "id=3", "id=1"],
+                    "right_rows": [
+                        {"values": ["2", "closed"], "total_values": 2, "truncated": false},
+                        {"values": ["3", "archived"], "total_values": 2, "truncated": false},
+                        {"values": ["1", "active"], "total_values": 2, "truncated": false}
+                    ],
+                    "pairs": [
+                        {"left": 0, "right": 2},
+                        {"left": 1, "right": 0},
+                        {"left": 2, "right": 1}
+                    ]
+                }),
+            )
+            .hidden(),
+            Edit::new(
+                "tabular.set_headers",
+                json!({"from": ["id", "status"], "to": ["id", "state"]}),
+            )
+            .with_item_type("tabular"),
+            add_column("state", &["closed", "archived", "active"]),
+            remove_column("status", &["active", "pending", "archived"]),
+        ];
+
+        let left = table(
+            &["id", "status"],
+            &[&["1", "active"], &["2", "pending"], &["3", "archived"]],
+        );
+        let right = table(
+            &["id", "state"],
+            &[&["2", "closed"], &["3", "archived"], &["1", "active"]],
+        );
+
+        let rewritten = rewrite_column_renames(&edits, &left, &right).expect("rewrite");
+
+        assert_eq!(rewritten[0].verb, "tabular.row_alignment_basis");
+        assert_eq!(rewritten[1].verb, "tabular.rename_column");
+        assert_eq!(
+            rewritten[2].params,
+            json!({"row": 0, "column": "state", "from": "pending", "to": "closed"})
+        );
+    }
+
+    #[test]
+    fn column_rename_keeps_header_change_when_reorder_remains() {
+        let edits = vec![
+            Edit::new(
+                "tabular.set_headers",
+                json!({"from": ["id", "status", "score"], "to": ["score", "id", "state"]}),
+            )
+            .with_item_type("tabular"),
+            add_column("state", &["active", "pending"]),
+            remove_column("status", &["active", "pending"]),
+        ];
+
+        let left = table(
+            &["id", "status", "score"],
+            &[&["1", "active", "10"], &["2", "pending", "20"]],
+        );
+        let right = table(
+            &["score", "id", "state"],
+            &[&["10", "1", "active"], &["20", "2", "pending"]],
+        );
+
+        let renamed = rewrite_column_renames(&edits, &left, &right).expect("rename rewrite");
+        assert_eq!(renamed[0].verb, "tabular.set_headers");
+        assert_eq!(renamed[1].verb, "tabular.rename_column");
+    }
+
+    #[test]
     fn column_rename_ignores_unrelated_add_remove_columns() {
         let edits = vec![
             add_column("email", &["a@example.test", "b@example.test"]),
@@ -892,6 +2404,57 @@ mod tests {
     }
 
     #[test]
+    fn row_alignment_precedes_reduced_precision_for_inserted_sentinels() {
+        let edits = vec![
+            basis_with_columns(
+                &["name", "count"],
+                &["alpha", "delta", "epsilon"],
+                &["alpha", "beta", "gamma", "delta", "epsilon"],
+                vec![
+                    json!({"values": ["Alpha", "10"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Beta", "*"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Gamma", "(D)"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Delta", "40"], "total_values": 2, "truncated": false}),
+                    json!({"values": ["Epsilon", "50"], "total_values": 2, "truncated": false}),
+                ],
+            ),
+            cell(1, "name", json!("Delta"), json!("Beta")),
+            cell(1, "count", json!("40"), json!("*")),
+            cell(2, "name", json!("Epsilon"), json!("Gamma")),
+            cell(2, "count", json!("50"), json!("(D)")),
+            Edit::new(
+                "tabular.add_row",
+                json!({
+                    "index": 3,
+                    "values": {"values": ["Delta", "40"], "total_values": 2, "truncated": false}
+                }),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-addition"),
+            Edit::new(
+                "tabular.add_row",
+                json!({
+                    "index": 4,
+                    "values": {"values": ["Epsilon", "50"], "total_values": 2, "truncated": false}
+                }),
+            )
+            .with_item_type("tabular")
+            .with_tag("binoc.row-addition"),
+        ];
+
+        let prematurely_reduced =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels())
+                .expect("old-order rewrite");
+        assert!(prematurely_reduced
+            .iter()
+            .any(|edit| edit.verb == "tabular.values_suppressed"));
+
+        let aligned = rewrite_row_alignment(&edits).expect("alignment rewrite");
+        assert!(!aligned.iter().any(|edit| edit.verb == "tabular.edit_cell"));
+        assert!(rewrite_reduced_precision(&aligned, &default_suppression_sentinels()).is_none());
+    }
+
+    #[test]
     fn row_alignment_keeps_visible_edits_when_left_rows_are_unmatched() {
         let cell = Edit::new(
             "tabular.edit_cell",
@@ -909,5 +2472,40 @@ mod tests {
         let rewritten = rewrite_row_alignment(&edits).expect("basis cleanup");
 
         assert_eq!(rewritten, vec![cell]);
+    }
+
+    #[test]
+    fn row_alignment_strips_oversized_basis_it_cannot_parse() {
+        let left = (0..=MAX_ROW_ALIGNMENT_ROWS)
+            .map(|index| format!("left-{index}"))
+            .collect::<Vec<_>>();
+        let right = (0..=MAX_ROW_ALIGNMENT_ROWS)
+            .map(|index| format!("right-{index}"))
+            .collect::<Vec<_>>();
+        let visible = Edit::new("tabular.visible", json!({"kept": true}));
+        let edits = vec![
+            Edit::new(
+                "tabular.row_alignment_basis",
+                json!({
+                    "columns": ["name"],
+                    "left": left,
+                    "right": right,
+                    "right_rows": [],
+                }),
+            )
+            .hidden(),
+            visible.clone(),
+        ];
+
+        let rewritten = rewrite_row_alignment(&edits).expect("basis cleanup");
+
+        assert_eq!(rewritten, vec![visible]);
+    }
+
+    fn default_suppression_sentinels() -> BTreeSet<String> {
+        ["*", "(D)", "(S)", ""]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
     }
 }
