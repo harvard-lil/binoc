@@ -97,6 +97,26 @@ comparison:
 - `data.csv.gz.d/data.csv` → `data.csv.gz` containing `data.csv` bytes
 - `census.txt.gz.d/census.txt` → `census.txt.gz` containing `census.txt` bytes
 
+## Opaque Binary Vectors
+
+For deterministic opaque payloads, use a `.bin.d` staging directory containing
+`recipe.json`. The repeated hex pattern fills `size` bytes; optional patches
+replace bounded regions with their own repeated patterns. The harness builds
+the recipe into the filename with the final `.d` removed.
+
+```json
+{
+  "size": 65536,
+  "repeat_hex": "00010203",
+  "patches": [
+    { "offset": 32768, "length": 64, "repeat_hex": "ff" }
+  ]
+}
+```
+
+For example, `payload.bin.d/recipe.json` becomes `payload.bin`. The materializer
+also supports `.binless.d` for the extensionless-content-sniffing fixture.
+
 ## SQLite Vectors (plugin)
 
 In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `.db.d` directories. Building the `.sqlite`/`.db` file from those sources is the **plugin’s** responsibility (via the harness’s optional `prepare` callback), not the shared harness; see `binoc-sqlite/tests/test_vectors.rs`. Example layout: `data.sqlite.d/01_schema.sql` and `data.sqlite.d/02_data.sql` → `data.sqlite`.
@@ -111,9 +131,8 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 1. Create a new directory: `test-vectors/<vector-name>/`
 2. Add `manifest.toml` with `[vector]`, optional `[config]`, and `[expected]`
 3. Create `snapshot-a/` and `snapshot-b/` with the required files
-4. For binary files, use `printf '\x00\x01...' > path` to write exact bytes
-5. For archive/compression vectors, use staging directories such as `.zip.d`,
-   `.tar.gz.d`, or `.gz.d`; the harness builds them into artifacts
+4. For binary artifacts, use source staging directories such as `.zip.d`,
+   `.tar.gz.d`, `.gz.d`, or `.bin.d`; the harness builds them deterministically
 
 ## Available Vectors
 

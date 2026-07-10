@@ -41,7 +41,7 @@ just materialize
 | [`csv-column-rename-near-miss`](#csv-column-rename-near-miss) | A weak content overlap should remain a column add plus remove | data.csv: Column added: 'status'; Column removed: 'legacy' | Default pipeline |
 | [`csv-column-rename-reorder`](#csv-column-rename-reorder) | A renamed CSV column also moves position | data.csv: Column renamed: 'status' -> 'state'; Columns reordered | Default pipeline |
 | [`csv-column-reorder`](#csv-column-reorder) | Columns shuffled, content identical | data.csv: Columns reordered | Default pipeline |
-| [`csv-declared-pipe-dialect`](#csv-declared-pipe-dialect) | Per-path declared pipe dialect parses a .txt table silently and reports keyed cell changes | data.txt: 1 row modified by key; 1 line added; 1 line removed | Custom config |
+| [`csv-declared-pipe-dialect`](#csv-declared-pipe-dialect) | Per-path declared pipe dialect parses a .txt table silently and reports keyed cell changes | data.txt: 1 row modified by key | Custom config |
 | [`csv-disjoint-cohort-guardrail`](#csv-disjoint-cohort-guardrail) | Disjoint CSV cohorts trip the high-churn guardrail instead of publishing a fictional per-cell diff | data.csv: row correspondence uncertain; 1 changed-cell fraction | Default pipeline |
 | [`csv-distribution-shift`](#csv-distribution-shift) | Numeric column distribution shifts with keyed row matching | data.csv: 4 rows modified by key | Custom config |
 | [`csv-keyed-null-duplicate`](#csv-keyed-null-duplicate) | Configured CSV row keys surface null and duplicate key diagnostics | data.csv: 14 cells changed | Custom config |
@@ -49,13 +49,13 @@ just materialize
 | [`csv-mid-row-insertion`](#csv-mid-row-insertion) | A mid-table row insertion compacts while column reorder/addition rules remain independent | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-numeric-rounding`](#csv-numeric-rounding) | CSV numeric cells rounded to a common modulus and representation-only numeric differences ignored | data.csv: Rounded 3 cells in 'population' to nearest 1000 | Default pipeline |
-| [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and modified: detected as a single move by fuzzy correlation | data_v2.csv: Moved from data.csv | Default pipeline |
+| [`csv-rename-modify`](#csv-rename-modify) | CSV renamed and modified: detected as a single move by fuzzy correlation | data_v2.csv: | Default pipeline |
 | [`csv-row-addition`](#csv-row-addition) | New rows appended | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-insertion-suppression-sentinels`](#csv-row-insertion-suppression-sentinels) | Inserted rows with disclosure sentinels in count cells are reported as row additions, not value suppression | data.csv: 2 rows added | Default pipeline |
 | [`csv-row-removal`](#csv-row-removal) | Rows removed from CSV | data.csv: 2 rows removed | Default pipeline |
 | [`csv-sorted-row-fallback`](#csv-sorted-row-fallback) | CSV rows with no unique key use sorted row-content alignment so a pure re-sort is not reported as cell churn | data.csv: rows reordered; cell values unchanged under inferred row alignment | Default pipeline |
 | [`csv-stacked-tables`](#csv-stacked-tables) | Detects two logical tables stacked in one messy CSV | data.csv/>table_2: 1 row added | Default pipeline |
-| [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: Moved from data.csv | Default pipeline |
+| [`csv-to-tsv-reformat`](#csv-to-tsv-reformat) | Table reformatted from CSV to TSV with row edits: detected as one reformatted-and-modified table, not remove + add | data.tsv: | Default pipeline |
 | [`csv-value-suppression`](#csv-value-suppression) | CSV cells replaced with disclosure suppression sentinels | data.csv: Suppressed 3 cells in 'count' | Default pipeline |
 | [`csv-value-suppression-custom-sentinel`](#csv-value-suppression-custom-sentinel) | CSV cells replaced with a dataset-configured disclosure suppression sentinel | data.csv: 1 cell changed; Suppressed 2 cells in 'count' | Custom config |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
@@ -66,7 +66,7 @@ just materialize
 | [`enforcement-actions-merge-years`](#enforcement-actions-merge-years) | Per-year CSVs merged row-wise into one file; detected as a clean partition merge (CFM-72) | actions_2023.csv, actions_2024.csv merged into actions.csv | Default pipeline |
 | [`file-correspondence-container`](#file-correspondence-container) | Config declares a correspondence between renamed zip containers | archive.zip: Moved from data.zip | Custom config |
 | [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | by-state: Added | Custom config |
-| [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list_as_of_2023.csv: Moved from running_list_as_of_2022.csv | Custom config |
+| [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list_as_of_2023.csv: | Custom config |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Added | Default pipeline |
 | [`geojson-feature-cell-change`](#geojson-feature-cell-change) | A GeoJSON FeatureCollection where one feature's property changes; transcoded to a tabular artifact with the geometry as… | places.geojson: 1 cell changed | Default pipeline |
@@ -83,9 +83,9 @@ just materialize
 | [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: $.jobTitle: "Mathematician" -> "Computer Scientist" | Default pipeline |
 | [`kitchen-sink`](#kitchen-sink) | Runs text, CSV, archive, move, and copy detection together in one end-to-end example. | archive.tar.gz/>inventory.csv: 1 row added | Default pipeline |
 | [`nasa-gistemp-header-line`](#nasa-gistemp-header-line) | NASA GISTEMP-style table with a title line before the real header | GLB.Ts+dSST.csv: 1 row modified by key | Custom config |
-| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: Moved from observations_north.csv | Default pipeline |
+| [`observations-repartition-equal-arity`](#observations-repartition-equal-arity) | Equal-arity N→M repartition: 2 tables grouped by region become 2 tables grouped by year, every row preserved exactly bu… | observations_2024.csv: | Default pipeline |
 | [`observations-split-by-year`](#observations-split-by-year) | One CSV split row-wise into per-year files; detected as a clean partition split (CFM-72) | observations.csv split into observations_2024.csv, observations_2025.csv | Default pipeline |
-| [`observations-split-residual`](#observations-split-residual) | A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest… | observations_2024.csv: Moved from observations.csv | Default pipeline |
+| [`observations-split-residual`](#observations-split-residual) | A would-be split missing one row: partition declines (not complete), emits binoc.possible_split, and degrades to honest… | observations_2024.csv: | Default pipeline |
 | [`ofac-sdn-headerless-position-key`](#ofac-sdn-headerless-position-key) | OFAC SDN-style 12-column headerless CSV keyed by ent_num in column 1 | SDN.CSV: 1 row modified by key | Custom config |
 | [`per-path-dispatch-override`](#per-path-dispatch-override) | Per-path dispatch overrides promote extensionless CSV content before tabular row keying | forced: 1 row modified by key | Custom config |
 | [`single-file-add`](#single-file-add) | File present in B but not A | new_file.txt: Added | Default pipeline |
@@ -97,7 +97,7 @@ just materialize
 | [`stacked-csv-broken-out`](#stacked-csv-broken-out) | Stacked-CSV tables broken out into one file per table; whole-table rehoming (reshape + 1:1), NOT a partition split (CFM… | changes.csv: Moved from report.csv/>table_1 | Default pipeline |
 | [`tar-nested`](#tar-nested) | Nested tar.gz containing CSV | outer.tar.gz/>inner.tar.gz/>data.csv: 1 row added | Default pipeline |
 | [`tar-simple`](#tar-simple) | Tar.gz archive with changes inside | archive.tar.gz/>data.csv: 1 row added | Default pipeline |
-| [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: Moved from notes.txt | Default pipeline |
+| [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: | Default pipeline |
 | [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: $.replicas: 3 -> 5 | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
 | [`trivial-identical`](#trivial-identical) | Two identical directories → empty changeset | # Changelog: snapshot-a → snapshot-b | Default pipeline |
@@ -453,11 +453,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data.txt**: 1 row modified by key; 1 line added; 1 line removed
+- **data.txt**: 1 row modified by key
   - Changed cells
     - key id '1', column 'value': 'old' -> 'new'
-  - Line changes
-    - line 2: '1|old' -> '1|new'
 ```
 
 ## csv-disjoint-cohort-guardrail
@@ -699,7 +697,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data_v2.csv**: Moved from data.csv
+- **data_v2.csv**:
+  - Moved from data.csv
+  - Column added: 'email'
   - Set Headers: from: ["name","age","city"]; to: ["name","age","city","email"]
   - Add Column: name: 'email'; values: {"total_values":3,"truncated":false,"values":["alice@test.com","bob@test.com","carol@test.com"]}
 ```
@@ -838,7 +838,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **data.tsv**: Moved from data.csv
+- **data.tsv**:
+  - Moved from data.csv
+  - 1 row added; 1 cell changed
   - Dialect provenance: detected tab-delimited, no quoting, newline LF
   - Changed cells
     - row 2, column 'age': '25' -> '26'
@@ -1091,7 +1093,7 @@ Shows binoc diffing a tar archive and a plain directory that contain overlapping
 
 - **Browse source:** [directory-nested-with-tar](https://github.com/harvard-lil/binoc/tree/main/test-vectors/directory-nested-with-tar)
 - **Tags:** `directory`, `tar`, `overlap`, `artifact-collision`
-- **Snapshots:** `snapshot-a` has 2 files — `data.tar.gz.d/records.csv`, `data/records.csv`; `snapshot-b` has 2 files — `data.tar.gz.d/records.csv`, `data/records.csv`
+- **Snapshots:** `snapshot-a` has 2 files — `data.tar.gz`, `data/records.csv`; `snapshot-b` has 2 files — `data.tar.gz`, `data/records.csv`
 
 Run it:
 ```bash
@@ -1142,7 +1144,7 @@ Config declares a correspondence between renamed zip containers
 
 - **Browse source:** [file-correspondence-container](https://github.com/harvard-lil/binoc/tree/main/test-vectors/file-correspondence-container)
 - **Tags:** `zip`, `file-correspondence`, `declared-correspondence`, `container`
-- **Snapshots:** `snapshot-a` has 1 file — `data.zip.d/file.csv`; `snapshot-b` has 1 file — `archive.zip.d/file.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip`; `snapshot-b` has 1 file — `archive.zip`
 - **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
 Save this dataset config as `/tmp/file-correspondence-container.yaml`:
 
@@ -1212,7 +1214,9 @@ Result:
 
 - **by-state**: Added
 - **by-state/AL**: Moved from data
-- **by-state/AL/records.csv**: Moved from data/state_AL.csv
+- **by-state/AL/records.csv**:
+  - Moved from data/state_AL.csv
+  - 1 row added
   - Rows added
     - row 2: '2', 'Birmingham'
 ```
@@ -1254,7 +1258,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **running_list_as_of_2023.csv**: Moved from running_list_as_of_2022.csv
+- **running_list_as_of_2023.csv**:
+  - Moved from running_list_as_of_2022.csv
+  - 1 row added
   - Rows added
     - row 3: '3', 'Cy'
 ```
@@ -1342,7 +1348,7 @@ Gzipped CSV and text are decompressed and redispatched under their inner names
 
 - **Browse source:** [gzip-inner-dispatch](https://github.com/harvard-lil/binoc/tree/main/test-vectors/gzip-inner-dispatch)
 - **Tags:** `gzip`, `csv`, `text`, `cell-change`, `row-addition`, `line-change`
-- **Snapshots:** `snapshot-a` has 2 files — `census.txt.gz.d/census.txt`, `data.csv.gz.d/data.csv`; `snapshot-b` has 2 files — `census.txt.gz.d/census.txt`, `data.csv.gz.d/data.csv`
+- **Snapshots:** `snapshot-a` has 2 files — `census.txt.gz`, `data.csv.gz`; `snapshot-b` has 2 files — `census.txt.gz`, `data.csv.gz`
 
 Run it:
 ```bash
@@ -1621,7 +1627,7 @@ Runs text, CSV, archive, move, and copy detection together in one end-to-end exa
 
 - **Browse source:** [kitchen-sink](https://github.com/harvard-lil/binoc/tree/main/test-vectors/kitchen-sink)
 - **Tags:** `csv`, `text`, `binary`, `tar`, `zip`, `directory`, `move`, `copy`, `column-reorder`, `integration`
-- **Snapshots:** `snapshot-a` has 9 files — `archive.tar.gz.d/inventory.csv`, `bundle.zip.d/notes.txt`, `data.csv`, `docs/old-notes.txt`, +5 more; `snapshot-b` has 10 files — `archive.tar.gz.d/inventory.csv`, `bundle.zip.d/notes.txt`, `data.csv`, `docs/new-file.txt`, +6 more
+- **Snapshots:** `snapshot-a` has 9 files — `archive.tar.gz`, `bundle.zip`, `data.csv`, `docs/old-notes.txt`, +5 more; `snapshot-b` has 10 files — `archive.tar.gz`, `bundle.zip`, `data.csv`, `docs/new-file.txt`, +6 more
 
 Run it:
 ```bash
@@ -1716,12 +1722,16 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **observations_2024.csv**: Moved from observations_north.csv
+- **observations_2024.csv**:
+  - Moved from observations_north.csv
+  - 3 cells changed
   - Changed cells
     - row 2, column 'year': '2025' -> '2024'
     - row 2, column 'region': 'north' -> 'south'
     - row 2, column 'count': '15' -> '12'
-- **observations_2025.csv**: Moved from observations_south.csv
+- **observations_2025.csv**:
+  - Moved from observations_south.csv
+  - 3 cells changed
   - Changed cells
     - row 1, column 'year': '2024' -> '2025'
     - row 1, column 'region': 'south' -> 'north'
@@ -1776,7 +1786,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **observations_2024.csv**: Moved from observations.csv
+- **observations_2024.csv**:
+  - Moved from observations.csv
+  - 2 rows removed
   - Rows removed
     - row 3: '2025', 'north', '15'
     - row 4: '2025', 'south', '9'
@@ -2033,7 +2045,7 @@ Nested tar.gz containing CSV
 
 - **Browse source:** [tar-nested](https://github.com/harvard-lil/binoc/tree/main/test-vectors/tar-nested)
 - **Tags:** `tar`, `nested`, `csv`
-- **Snapshots:** `snapshot-a` has 1 file — `outer.tar.gz.d/inner.tar.gz.d/data.csv`; `snapshot-b` has 1 file — `outer.tar.gz.d/inner.tar.gz.d/data.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `outer.tar.gz`; `snapshot-b` has 1 file — `outer.tar.gz`
 
 Run it:
 ```bash
@@ -2056,7 +2068,7 @@ Tar.gz archive with changes inside
 
 - **Browse source:** [tar-simple](https://github.com/harvard-lil/binoc/tree/main/test-vectors/tar-simple)
 - **Tags:** `tar`, `archive`
-- **Snapshots:** `snapshot-a` has 2 files — `archive.tar.gz.d/data.csv`, `archive.tar.gz.d/hello.txt`; `snapshot-b` has 2 files — `archive.tar.gz.d/data.csv`, `archive.tar.gz.d/hello.txt`
+- **Snapshots:** `snapshot-a` has 1 file — `archive.tar.gz`; `snapshot-b` has 1 file — `archive.tar.gz`
 
 Run it:
 ```bash
@@ -2092,7 +2104,9 @@ Result:
 ```markdown
 # Changelog: snapshot-a → snapshot-b
 
-- **meeting-notes-v2.txt**: Moved from notes.txt
+- **meeting-notes-v2.txt**:
+  - Moved from notes.txt
+  - 2 lines added
   - Line changes (showing 3 of 4)
     - line 10: '' -> '- Marketing strategy update'
     - line 11: 'Action Items:' -> ''
@@ -2126,7 +2140,7 @@ Shows tree-wide move and copy detection across nested zip boundaries, including 
 
 - **Browse source:** [tree-wide-correlation](https://github.com/harvard-lil/binoc/tree/main/test-vectors/tree-wide-correlation)
 - **Tags:** `move`, `copy`, `aggregation`, `zip`, `nested`, `archive`, `tree-wide`
-- **Snapshots:** `snapshot-a` has 6 files — `alpha.txt`, `dup.bin`, `kept.txt`, `outer.zip.d/beta.txt`, +2 more; `snapshot-b` has 7 files — `gamma-renamed.txt`, `kept-copy.txt`, `kept.txt`, `merged.bin`, +3 more
+- **Snapshots:** `snapshot-a` has 4 files — `alpha.txt`, `dup.bin`, `kept.txt`, `outer.zip`; `snapshot-b` has 5 files — `gamma-renamed.txt`, `kept-copy.txt`, `kept.txt`, `merged.bin`, +1 more
 
 Run it:
 ```bash
@@ -2237,7 +2251,7 @@ Config declares a correspondence between nested zip containers and preserves inn
 
 - **Browse source:** [zip-declared-container](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-declared-container)
 - **Tags:** `zip`, `file-correspondence`, `declared-correspondence`, `container`
-- **Snapshots:** `snapshot-a` has 1 file — `outer.zip.d/records-old.zip.d/data.csv`; `snapshot-b` has 1 file — `outer.zip.d/records.zip.d/data.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `outer.zip`; `snapshot-b` has 1 file — `outer.zip`
 - **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
 Save this dataset config as `/tmp/zip-declared-container.yaml`:
 
@@ -2280,7 +2294,7 @@ JSON files inside zip expansion get parsed and rendered as serialization-only ch
 
 - **Browse source:** [zip-json-key-order-reexport](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-json-key-order-reexport)
 - **Tags:** `zip`, `json`, `serialization`, `key-order`
-- **Snapshots:** `snapshot-a` has 1 file — `archive.zip.d/metadata.json`; `snapshot-b` has 1 file — `archive.zip.d/metadata.json`
+- **Snapshots:** `snapshot-a` has 1 file — `archive.zip`; `snapshot-b` has 1 file — `archive.zip`
 
 Run it:
 ```bash
@@ -2301,7 +2315,7 @@ Nested zip containing CSV
 
 - **Browse source:** [zip-nested](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-nested)
 - **Tags:** `zip`, `nested`, `csv`
-- **Snapshots:** `snapshot-a` has 1 file — `outer.zip.d/inner.zip.d/data.csv`; `snapshot-b` has 1 file — `outer.zip.d/inner.zip.d/data.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `outer.zip`; `snapshot-b` has 1 file — `outer.zip`
 
 Run it:
 ```bash
@@ -2324,7 +2338,7 @@ Documents a known gap — a renamed zip whose children were all renamed AND rewr
 
 - **Browse source:** [zip-rename-contents-rewritten](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-contents-rewritten)
 - **Tags:** `zip`, `archive`, `known-gap`
-- **Snapshots:** `snapshot-a` has 3 files — `data.zip.d/x.csv`, `data.zip.d/y.csv`, `data.zip.d/z.csv`; `snapshot-b` has 3 files — `archive.zip.d/p.csv`, `archive.zip.d/q.csv`, `archive.zip.d/r.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip`; `snapshot-b` has 1 file — `archive.zip`
 
 Run it:
 ```bash
@@ -2352,7 +2366,7 @@ Zip archive renamed with identical contents; bottom-up roll-up of the inner clea
 
 - **Browse source:** [zip-rename-identical](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-identical)
 - **Tags:** `zip`, `archive`, `folder-move`
-- **Snapshots:** `snapshot-a` has 3 files — `data.zip.d/x.csv`, `data.zip.d/y.csv`, `data.zip.d/z.csv`; `snapshot-b` has 3 files — `archive.zip.d/x.csv`, `archive.zip.d/y.csv`, `archive.zip.d/z.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip`; `snapshot-b` has 1 file — `archive.zip`
 
 Run it:
 ```bash
@@ -2373,7 +2387,7 @@ Zip archive renamed while its only child was renamed and had one cell edited; th
 
 - **Browse source:** [zip-rename-inner-rename-edit](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-rename-inner-rename-edit)
 - **Tags:** `zip`, `archive`, `folder-move`, `fuzzy-correlation`
-- **Snapshots:** `snapshot-a` has 1 file — `data.zip.d/old.csv`; `snapshot-b` has 1 file — `archive.zip.d/new.csv`
+- **Snapshots:** `snapshot-a` has 1 file — `data.zip`; `snapshot-b` has 1 file — `archive.zip`
 
 Run it:
 ```bash
@@ -2386,7 +2400,9 @@ Result:
 # Changelog: snapshot-a → snapshot-b
 
 - **archive.zip**: Moved from data.zip
-- **archive.zip/>new.csv**: Moved from data.zip/>old.csv
+- **archive.zip/>new.csv**:
+  - Moved from data.zip/>old.csv
+  - 1 cell changed
   - Changed cells
     - row 5, column 'score': '60' -> '61'
 ```
@@ -2397,7 +2413,7 @@ Zipped files with changes inside
 
 - **Browse source:** [zip-simple](https://github.com/harvard-lil/binoc/tree/main/test-vectors/zip-simple)
 - **Tags:** `zip`, `archive`
-- **Snapshots:** `snapshot-a` has 1 file — `archive.zip.d/data.txt`; `snapshot-b` has 2 files — `archive.zip.d/data.txt`, `archive.zip.d/extra.txt`
+- **Snapshots:** `snapshot-a` has 1 file — `archive.zip`; `snapshot-b` has 1 file — `archive.zip`
 
 Run it:
 ```bash

@@ -6,6 +6,8 @@ expression: "&md"
 
 - **by-state**: Added
 - **by-state/AL**: Moved from data
-- **by-state/AL/records.csv**: Moved from data/state_AL.csv
+- **by-state/AL/records.csv**:
+  - Moved from data/state_AL.csv
+  - 1 row added
   - Rows added
     - row 2: '2', 'Birmingham'

@@ -75,7 +75,14 @@ expression: "&stable_changeset"
               "verb": "tabular.add_column"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "Column added: 'email'"
+          }
+        ]
       }
     ]
   }

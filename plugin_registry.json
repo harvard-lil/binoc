@@ -46,7 +46,7 @@
       "produces": "Parsed Avro records and field-level changes.",
       "rule_packs": [
         {
-          "name": "binoc-avro.avro",
+          "name": "binoc-avro.parse.avro",
           "dispatch": {
             "extensions": [".avro"],
             "scope": "files"
@@ -72,8 +72,49 @@
       "produces": "Parsed structured values and value-level changes.",
       "rule_packs": [
         {
-          "name": "binoc-binformats.binformats",
+          "name": "binoc-binformats.parse.cbor",
           "dispatch": {
+            "extensions": [".cbor"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-binformats.parse.msgpack",
+          "dispatch": {
+            "extensions": [".msgpack", ".mp"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-binformats.parse.bson",
+          "dispatch": {
+            "extensions": [".bson"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-binformats.parse.plist",
+          "dispatch": {
+            "extensions": [".plist"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-binformats.parse.ion",
+          "dispatch": {
+            "extensions": [".ion"],
             "scope": "files"
           },
           "rules": [
@@ -97,7 +138,7 @@
       "produces": "Tabular records and table/row edits.",
       "rule_packs": [
         {
-          "name": "binoc-dbf.dbf",
+          "name": "binoc-dbf.parse.dbf",
           "dispatch": {
             "extensions": [".dbf"],
             "scope": "files"
@@ -123,13 +164,12 @@
       "produces": "Workbook structure and sheet/table content changes.",
       "rule_packs": [
         {
-          "name": "binoc-excel.excel",
+          "name": "binoc-excel.parse",
           "dispatch": {
-            "extensions": [".xlsx"],
+            "extensions": [".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"],
             "scope": "files"
           },
           "rules": [
-            "expand",
             "parse"
           ]
         }
@@ -139,24 +179,23 @@
       "id": "binoc-html",
       "title": "binoc-html",
       "tier": "first-party-add-on",
-      "summary": "Supports HTML-related parsing and rewriting for datasets that publish or embed structured content in HTML snapshots.",
+      "summary": "Renders Binoc changesets as self-contained HTML changelogs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html",
       "source_path": "model-plugins/binoc-html",
       "packages": {
         "pypi": "binoc-html"
       },
-      "handles": "HTML files and HTML-embedded structured data.",
-      "produces": "Parsed HTML-derived artifacts and content changes.",
+      "handles": "Completed Binoc changesets.",
+      "produces": "Self-contained HTML changelogs.",
       "rule_packs": [
         {
-          "name": "binoc-html.html",
+          "name": "binoc.html",
           "dispatch": {
-            "extensions": [".html", ".htm"],
-            "scope": "files"
+            "scope": "changesets"
           },
           "rules": [
-            "parse"
+            "render"
           ]
         }
       ]
@@ -165,20 +204,30 @@
       "id": "binoc-parquet",
       "title": "binoc-parquet",
       "tier": "first-party-bundled",
-      "summary": "Parses Parquet snapshots so column, row, and cell changes appear as ordinary tabular diffs.",
+      "summary": "Parses Parquet and Arrow IPC snapshots so column, row, and cell changes appear as ordinary tabular diffs.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-parquet",
       "source_path": "model-plugins/binoc-parquet",
       "packages": {
         "crate": "binoc-parquet"
       },
-      "handles": "Parquet files.",
+      "handles": "Parquet, Arrow IPC, and Feather files.",
       "produces": "Tabular records and tabular diffs.",
       "rule_packs": [
         {
-          "name": "binoc-parquet.parquet",
+          "name": "binoc-parquet.parse.parquet",
           "dispatch": {
             "extensions": [".parquet"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-parquet.parse.arrow-ipc",
+          "dispatch": {
+            "extensions": [".arrow", ".feather", ".ipc"],
             "scope": "files"
           },
           "rules": [
@@ -198,17 +247,16 @@
       "packages": {
         "crate": "binoc-row-reorder"
       },
-      "handles": "Tabular collections with reordered rows.",
-      "produces": "Row-reorder correspondence and compact move-like row changes.",
+      "handles": "Paired `binoc.tabular.v1` artifacts with the same rows in a different order.",
+      "produces": "A `tabular.reorder_rows` edit when row multisets match.",
       "rule_packs": [
         {
-          "name": "binoc-row-reorder.csv",
+          "name": "binoc.row_reorder_writer",
           "dispatch": {
-            "extensions": [".csv", ".tsv"],
-            "scope": "files"
+            "artifact_formats": ["binoc.tabular.v1"],
+            "scope": "artifacts"
           },
           "rules": [
-            "pair",
             "writer"
           ]
         }
@@ -229,13 +277,23 @@
       "produces": "Feature-level and geometry-level diffs.",
       "rule_packs": [
         {
-          "name": "binoc-shapefile.shapefile",
+          "name": "binoc-shapefile.fuse",
           "dispatch": {
-            "extensions": [".shp", ".dbf", ".shx"],
+            "extensions": [".shp"],
+            "member_extensions": [".shx", ".dbf", ".prj", ".cpg"],
+            "scope": "file-groups"
+          },
+          "rules": [
+            "group-parse"
+          ]
+        },
+        {
+          "name": "binoc-shapefile.parse.shp",
+          "dispatch": {
+            "extensions": [".shp"],
             "scope": "files"
           },
           "rules": [
-            "expand",
             "parse"
           ]
         }
@@ -256,19 +314,13 @@
       "produces": "Table/column layout changes, type changes, key changes, and row-count diffs.",
       "rule_packs": [
         {
-          "name": "binoc-sqlite.sqlite",
+          "name": "binoc-sqlite.parse.sqlite",
           "dispatch": {
             "extensions": [".sqlite", ".sqlite3", ".db"],
-            "media_types": [
-              "application/vnd.sqlite3",
-              "application/x-sqlite3"
-            ],
             "scope": "files"
           },
           "rules": [
-            "parse",
-            "writer",
-            "materializer"
+            "parse"
           ]
         }
       ]
@@ -288,7 +340,7 @@
       "produces": "Tabular records and tabular diffs for statistical binary formats.",
       "rule_packs": [
         {
-          "name": "binoc-stat-binary.stata",
+          "name": "binoc-stat-binary.stata.parse",
           "dispatch": {
             "extensions": [".dta"],
             "scope": "files"
@@ -298,7 +350,7 @@
           ]
         },
         {
-          "name": "binoc-stat-binary.sas7bdat",
+          "name": "binoc-stat-binary.sas7bdat.parse",
           "dispatch": {
             "extensions": [".sas7bdat"],
             "scope": "files"
@@ -308,7 +360,7 @@
           ]
         },
         {
-          "name": "binoc-stat-binary.xpt",
+          "name": "binoc-stat-binary.xpt.parse",
           "dispatch": {
             "extensions": [".xpt"],
             "scope": "files"
@@ -334,9 +386,24 @@
       "produces": "Structured XML artifacts and element/attribute-level changes.",
       "rule_packs": [
         {
-          "name": "binoc-xml.xml",
+          "name": "binoc-xml.parse.xml",
           "dispatch": {
-            "extensions": [".xml"],
+            "extensions": [".xml", ".rdf", ".kml", ".gml", ".atom", ".rss"],
+            "scope": "files"
+          },
+          "rules": [
+            "parse"
+          ]
+        },
+        {
+          "name": "binoc-xml.parse.xml_media",
+          "dispatch": {
+            "media_types": [
+              "text/xml",
+              "application/xml",
+              "application/rdf+xml",
+              "application/atom+xml"
+            ],
             "scope": "files"
           },
           "rules": [

@@ -451,7 +451,7 @@ fn table_from_arrays(items: &[serde_json::Value]) -> TabularData {
         .map(|a| a.len())
         .max()
         .unwrap_or(0);
-    let headers = (1..=width).map(|i| i.to_string()).collect();
+    let headers = (1..=width).map(|i| format!("column_{i}")).collect();
     let rows = items
         .iter()
         .map(|item| {

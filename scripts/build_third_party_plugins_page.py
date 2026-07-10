@@ -74,18 +74,59 @@ def _md_table(rows: list[tuple[str, str]]) -> str:
 def _format_rule_pack_dispatch(d: dict[str, Any], path: str) -> list[tuple[str, str]]:
     exts = _optional_str_list(d.get('extensions'), f'{path}.extensions')
     mts = _optional_str_list(d.get('media_types'), f'{path}.media_types')
+    member_exts = _optional_str_list(d.get('member_extensions'), f'{path}.member_extensions')
+    artifact_formats = _optional_str_list(d.get('artifact_formats'), f'{path}.artifact_formats')
     scope = d.get('scope', 'Files')
     if not isinstance(scope, str):
         _die(f'{path}.scope: expected string')
     rows: list[tuple[str, str]] = [
         ('`extensions`', ', '.join(f'`{e}`' for e in exts) if exts else '-'),
         ('`media_types`', ', '.join(f'`{m}`' for m in mts) if mts else '-'),
+        (
+            '`member_extensions`',
+            ', '.join(f'`{e}`' for e in member_exts) if member_exts else '-',
+        ),
+        (
+            '`artifact_formats`',
+            ', '.join(f'`{f}`' for f in artifact_formats) if artifact_formats else '-',
+        ),
         ('`scope`', f'`{scope}`'),
     ]
     for key in d:
-        if key not in ('extensions', 'media_types', 'scope'):
+        if key not in (
+            'extensions',
+            'media_types',
+            'member_extensions',
+            'artifact_formats',
+            'scope',
+        ):
             _die(f'{path}: unknown dispatch key {key!r}')
     return rows
+
+
+def _dispatch_description(dispatch: dict[str, Any], path: str) -> str:
+    scope = dispatch.get('scope', 'files')
+    if not isinstance(scope, str):
+        _die(f'{path}.scope: expected string')
+    descriptions = {
+        'files': (
+            'This rule is relevant when a file path matches one of the '
+            '**extensions** or its detected **media type** matches.'
+        ),
+        'file-groups': (
+            'This group parser uses the listed **extensions** as anchors and '
+            'correlates sibling files with the listed **member extensions**.'
+        ),
+        'artifacts': (
+            'This writer consumes paired artifacts in the listed '
+            '**artifact formats**, independent of the source filename.'
+        ),
+        'changesets': 'This renderer consumes completed Binoc changesets.',
+    }
+    description = descriptions.get(scope)
+    if description is None:
+        _die(f'{path}.scope: unsupported catalog scope {scope!r}')
+    return description
 
 
 def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
@@ -153,17 +194,14 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
             _die(f'{rp}.dispatch: expected object')
 
         if len(rule_packs) == 1:
-            lines.append('### When it handles your files')
+            lines.append('### Dispatch')
         else:
             if ci == 0:
-                lines.append('### When it handles your files')
+                lines.append('### Dispatch')
                 lines.append('')
             lines.append(f'#### `{name}`')
         lines.append('')
-        lines.append(
-            'This rule pack is relevant when a file path matches one of the '
-            '**extensions** or its detected **media type** matches.'
-        )
+        lines.append(_dispatch_description(dispatch, f'{rp}.dispatch'))
         lines.append('')
         lines.append(_md_table(_format_rule_pack_dispatch(dispatch, f'{rp}.dispatch')))
         lines.append('')
@@ -226,8 +264,9 @@ def main() -> int:
         'compiled into the fat `binoc` wheel; SQLite remains an explicit opt-in '
         'pack and is not published as a separate PyPI wheel.',
         '',
-        'To find a match, compare your filenames (suffixes) and, when available, '
-        'detected media types to the tables under each plugin.',
+        'For format parsers, compare your filenames (suffixes) and, when available, '
+        'detected media types to the tables under each plugin. Other scopes identify '
+        'group parsers, artifact writers, and changeset renderers explicitly.',
         '',
         'For package ids that may appear in changelog output, see the '
         '[plugin registry](plugin-registry.md).',
@@ -257,7 +296,7 @@ def main() -> int:
     lines.append(
         f'The canonical data lives in `{rel_data}` (JSON). Hosts that suggest plugins '
         'for unrecognized formats should read that file; dispatch fields describe '
-        "the rule pack's advertised file selectors."
+        "the rule's advertised selectors and processing scope."
     )
     lines.append('')
 

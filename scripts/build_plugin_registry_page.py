@@ -124,6 +124,8 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
         rows: list[tuple[str, str]] = []
         exts = dispatch.get('extensions')
         mts = dispatch.get('media_types')
+        member_exts = dispatch.get('member_extensions')
+        artifact_formats = dispatch.get('artifact_formats')
         rows.append(
             (
                 '`extensions`',
@@ -137,6 +139,27 @@ def _plugin_section(p: dict[str, Any], idx: int) -> list[str]:
                 '`media_types`',
                 ', '.join(f'`{x}`' for x in _as_str_list(mts, f'{rp}.dispatch.media_types'))
                 if mts
+                else '—',
+            )
+        )
+        rows.append(
+            (
+                '`member_extensions`',
+                ', '.join(
+                    f'`{x}`' for x in _as_str_list(member_exts, f'{rp}.dispatch.member_extensions')
+                )
+                if member_exts
+                else '—',
+            )
+        )
+        rows.append(
+            (
+                '`artifact_formats`',
+                ', '.join(
+                    f'`{x}`'
+                    for x in _as_str_list(artifact_formats, f'{rp}.dispatch.artifact_formats')
+                )
+                if artifact_formats
                 else '—',
             )
         )

@@ -4,7 +4,9 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **meeting-notes-v2.txt**: Moved from notes.txt
+- **meeting-notes-v2.txt**:
+  - Moved from notes.txt
+  - 2 lines added
   - Line changes (showing 3 of 4)
     - line 10: '' -> '- Marketing strategy update'
     - line 11: 'Action Items:' -> ''

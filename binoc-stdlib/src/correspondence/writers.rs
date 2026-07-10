@@ -1687,65 +1687,15 @@ fn row_remove_edit(params: serde_json::Value) -> Edit {
 }
 
 fn cell_edit(params: serde_json::Value) -> Edit {
-    let suppressed = cell_edit_is_value_suppressed(&params);
-    let mut edit = Edit::new("tabular.edit_cell", params)
+    Edit::new("tabular.edit_cell", params)
         .with_item_type("tabular")
-        .with_tag("binoc.cell-change");
-    if suppressed {
-        edit = edit.with_tag("binoc.value-suppressed");
-    }
-    edit
-}
-
-fn cell_edit_is_value_suppressed(params: &serde_json::Value) -> bool {
-    let Some(from) = params.get("from") else {
-        return false;
-    };
-    let Some(to) = params.get("to") else {
-        return false;
-    };
-    value_is_present(from) && value_is_suppression_sentinel(from, to)
+        .with_tag("binoc.cell-change")
 }
 
 fn hidden_compaction_basis(mut edit: Edit) -> Edit {
     edit.projection.visible = false;
     edit.projection.hint = Default::default();
     edit
-}
-
-fn value_is_present(value: &serde_json::Value) -> bool {
-    match value {
-        serde_json::Value::Null => false,
-        serde_json::Value::String(text) => !text.trim().is_empty(),
-        _ => true,
-    }
-}
-
-fn value_is_suppression_sentinel(from: &serde_json::Value, to: &serde_json::Value) -> bool {
-    match to {
-        serde_json::Value::Null => value_looks_numeric(from),
-        serde_json::Value::String(text) => match text.trim() {
-            "*" | "(D)" | "(S)" => true,
-            "" => value_looks_numeric(from),
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
-fn value_looks_numeric(value: &serde_json::Value) -> bool {
-    match value {
-        serde_json::Value::Number(_) => true,
-        serde_json::Value::String(text) => {
-            let text = text.trim();
-            !text.is_empty()
-                && text
-                    .replace(',', "")
-                    .parse::<f64>()
-                    .is_ok_and(f64::is_finite)
-        }
-        _ => false,
-    }
 }
 
 // ── Metadata rendering (CFM-82) ─────────────────────────────────────────────
@@ -2599,15 +2549,30 @@ fn json_child_path(parent: &str, key: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use binoc_sdk::{NodeIdentity, StructuredDocument, TabularData};
+    use binoc_sdk::{
+        BinocError, ItemRef, LocalDataAccess, NodeIdentity, StructuredDocument, TabularData,
+    };
     use serde_json::json;
 
     use crate::correspondence::tabular::MAX_ROW_ALIGNMENT_ROWS;
 
     use super::{
-        document_value_change_summary, keyed_row_alignment_basis, keyed_tables, keyed_tree_edits,
-        node_identity_key_fields,
+        binary_chunk_diff, cell_edit, document_value_change_summary, keyed_row_alignment_basis,
+        keyed_tables, keyed_tree_edits, node_identity_key_fields,
     };
+
+    fn item(logical_path: &str, handle: String, size: Option<u64>) -> ItemRef {
+        ItemRef {
+            logical_path: logical_path.into(),
+            is_dir: false,
+            content_hash: None,
+            size,
+            media_type: None,
+            projection_hint: Default::default(),
+            tabular_parse: None,
+            handle,
+        }
+    }
 
     fn structured(value: serde_json::Value) -> StructuredDocument {
         StructuredDocument {
@@ -2669,6 +2634,70 @@ mod tests {
                 .plain_text(),
             "$.version: 1 -> 2"
         );
+    }
+
+    #[test]
+    fn cell_writer_does_not_guess_suppression_sentinels() {
+        let edit = cell_edit(json!({
+            "row": 0,
+            "column": "count",
+            "from": "123",
+            "to": "*",
+        }));
+
+        assert!(!edit
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+    }
+
+    #[test]
+    fn binary_chunk_diff_propagates_size_resolution_errors_from_either_side() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let valid = temp.path().join("valid.bin");
+        let missing = temp.path().join("missing.bin");
+        std::fs::write(&valid, []).expect("write valid fixture");
+
+        for missing_on_left in [true, false] {
+            let left_path = if missing_on_left { &missing } else { &valid };
+            let right_path = if missing_on_left { &valid } else { &missing };
+            let left = item("left.bin", left_path.to_string_lossy().into_owned(), None);
+            let right = item("right.bin", right_path.to_string_lossy().into_owned(), None);
+
+            let error = binary_chunk_diff(&left, &right, &LocalDataAccess::new())
+                .expect_err("missing data should be reported");
+
+            assert!(matches!(error, BinocError::Io(_)));
+        }
+    }
+
+    #[test]
+    fn binary_chunk_diff_propagates_stream_open_errors_from_either_side() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let valid = temp.path().join("valid.bin");
+        let missing = temp.path().join("missing.bin");
+        std::fs::write(&valid, []).expect("write valid fixture");
+
+        for missing_on_left in [true, false] {
+            let left_path = if missing_on_left { &missing } else { &valid };
+            let right_path = if missing_on_left { &valid } else { &missing };
+            let left = item(
+                "left.bin",
+                left_path.to_string_lossy().into_owned(),
+                Some(0),
+            );
+            let right = item(
+                "right.bin",
+                right_path.to_string_lossy().into_owned(),
+                Some(0),
+            );
+
+            let error = binary_chunk_diff(&left, &right, &LocalDataAccess::new())
+                .expect_err("missing stream should be reported");
+
+            assert!(matches!(error, BinocError::Io(_)));
+        }
     }
 
     #[test]
@@ -2831,6 +2860,9 @@ impl EditListWriter for TextMediaWriter {
 }
 
 fn write_text(ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<WriteOutput>> {
+    if semantic_artifact_owns_link(ctx, data)? {
+        return Ok(None);
+    }
     let left = ctx.view.item(ctx.link.left);
     let right = ctx.view.item(ctx.link.right);
     let left_bytes = data.read_bytes(left)?;
@@ -2911,6 +2943,17 @@ fn write_text(ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<Option<Wr
     }
     edits.push(edit);
     Ok(Some(edits.into()))
+}
+
+fn semantic_artifact_owns_link(ctx: &LinkCtx<'_>, data: &dyn DataAccess) -> BinocResult<bool> {
+    for id in [ctx.link.left, ctx.link.right] {
+        for format in [tabular_v1(), structured_document_v1()] {
+            if ctx.view.artifact_bytes(id, &format, data)?.is_some() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 fn extract_text(
@@ -3079,7 +3122,7 @@ impl EditListWriter for BinaryChunkWriter {
         }
 
         Ok(Some(
-            binary_chunk_diff(left, right, data)
+            binary_chunk_diff(left, right, data)?
                 .into_iter()
                 .collect::<Vec<_>>()
                 .into(),
@@ -3125,13 +3168,13 @@ fn binary_chunk_diff(
     left: &binoc_sdk::ItemRef,
     right: &binoc_sdk::ItemRef,
     data: &dyn DataAccess,
-) -> Option<Edit> {
-    let left_size = left.resolve_size(data).ok()?;
-    let right_size = right.resolve_size(data).ok()?;
-    let left_chunks = collect_binary_chunks(left, data).ok()?;
-    let right_chunks = collect_binary_chunks(right, data).ok()?;
+) -> BinocResult<Option<Edit>> {
+    let left_size = left.resolve_size(data)?;
+    let right_size = right.resolve_size(data)?;
+    let left_chunks = collect_binary_chunks(left, data)?;
+    let right_chunks = collect_binary_chunks(right, data)?;
     if left_chunks.chunks.is_empty() || right_chunks.chunks.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let matches = align_binary_chunks(&left_chunks.chunks, &right_chunks.chunks);
@@ -3140,7 +3183,7 @@ fn binary_chunk_diff(
         .map(|matched| left_chunks.chunks[matched.left_index].len)
         .sum::<u64>();
     if unchanged_bytes == 0 {
-        return None;
+        return Ok(None);
     }
 
     let (changed_region_count, regions, regions_truncated) = changed_regions(
@@ -3150,7 +3193,7 @@ fn binary_chunk_diff(
         MAX_BINARY_CDC_REGIONS,
     );
     if changed_region_count == 0 {
-        return None;
+        return Ok(None);
     }
 
     let unchanged_ratio = if left_size + right_size == 0 {
@@ -3185,7 +3228,7 @@ fn binary_chunk_diff(
         })).collect::<Vec<_>>(),
     });
 
-    Some(
+    Ok(Some(
         Edit::new("binary.byte_ranges_changed", params)
             .with_item_type("file")
             .with_tag("binoc.content-changed")
@@ -3197,7 +3240,7 @@ fn binary_chunk_diff(
                 regions_truncated,
                 chunk_scan_truncated,
             )),
-    )
+    ))
 }
 
 fn collect_binary_chunks(

@@ -13,7 +13,7 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "text",
+        "item_type": "tabular",
         "path": "data.txt",
         "sources": [
           {
@@ -25,17 +25,11 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row modified by key; "
-          },
-          {
-            "text": "1 line added; 1 line removed"
+            "text": "1 row modified by key"
           }
         ],
         "tags": [
-          "binoc.cell-change",
-          "binoc.content-changed",
-          "binoc.lines-added",
-          "binoc.lines-removed"
+          "binoc.cell-change"
         ],
         "details": {
           "edits": [
@@ -49,23 +43,6 @@ expression: "&stable_changeset"
                 "to": "new"
               },
               "verb": "tabular.edit_cell"
-            },
-            {
-              "params": {
-                "examples": [
-                  {
-                    "from": "1|old",
-                    "line": 2,
-                    "to": "1|new"
-                  }
-                ],
-                "examples_truncated": false,
-                "left_line_count": 3,
-                "lines_added": 1,
-                "lines_removed": 1,
-                "right_line_count": 3
-              },
-              "verb": "text.replace_lines"
             }
           ]
         }

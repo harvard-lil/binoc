@@ -2106,7 +2106,7 @@ mod tests {
     fn move_with_content_summary_annotation_renders_as_paired_bullets() {
         // A text rename+modify produces a `binoc.move.modified` node with no
         // children, no tabular_summary, but `annotations.content_summary` from
-        // the controller's re-dispatch merge.
+        // the stdlib projection annotator.
         let mut move_node = DiffNode::new("move", "text", "meeting-notes-v2.txt")
             .with_source(Source::new("notes.txt", Side::From).with_action("move"))
             .with_tag("binoc.move")
@@ -2122,7 +2122,10 @@ mod tests {
 
         let md = render_markdown(
             &[Changeset::new("v1", "v2", Some(root))],
-            &MarkdownRendererConfig::default(),
+            &MarkdownRendererConfig {
+                verbosity: Verbosity::Summary,
+                ..MarkdownRendererConfig::default()
+            },
         );
 
         assert!(

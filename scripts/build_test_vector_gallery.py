@@ -33,6 +33,15 @@ REPO_BASE_URL = "https://github.com/harvard-lil/binoc/tree/main"
 SNAPSHOT_SAMPLE_LIMIT = 4
 INDEX_OUTPUT_LIMIT = 100
 INDEX_SUMMARY_LIMIT = 120
+MATERIALIZER_SUFFIXES = (
+    ".zip.d",
+    ".tar.d",
+    ".tar.gz.d",
+    ".tgz.d",
+    ".gz.d",
+    ".bin.d",
+    ".binless.d",
+)
 
 # Shown only in manifest-derived text; omit the **Setup** bullet when this is the note.
 DEFAULT_PIPELINE_SETUP_NOTE = (
@@ -107,9 +116,11 @@ def _read_changelog_snapshot(path: Path) -> str:
 
 def _snapshot_summary(snapshot_dir: Path) -> str:
     files = sorted(
-        path.relative_to(snapshot_dir).as_posix()
-        for path in snapshot_dir.rglob("*")
-        if path.is_file() and path.name != ".gitkeep"
+        {
+            _materialized_snapshot_path(path.relative_to(snapshot_dir))
+            for path in snapshot_dir.rglob("*")
+            if path.is_file() and path.name != ".gitkeep"
+        }
     )
     count = len(files)
     if count == 0:
@@ -120,6 +131,14 @@ def _snapshot_summary(snapshot_dir: Path) -> str:
         sample += f", +{count - SNAPSHOT_SAMPLE_LIMIT} more"
     noun = "file" if count == 1 else "files"
     return f"{count} {noun} — {sample}"
+
+
+def _materialized_snapshot_path(relative_path: Path) -> str:
+    parts = relative_path.parts
+    for index, part in enumerate(parts):
+        if part.endswith(MATERIALIZER_SUFFIXES):
+            return Path(*parts[:index], part.removesuffix(".d")).as_posix()
+    return relative_path.as_posix()
 
 
 def _compact(text: str) -> str:

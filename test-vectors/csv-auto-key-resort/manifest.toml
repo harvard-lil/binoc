@@ -6,4 +6,3 @@ tags = ["csv", "auto-key", "row-reorder", "cell-change"]
 [expected]
 root_action = "modify"
 has_tags = ["binoc.row-identity-inferred", "binoc.cell-change"]
-

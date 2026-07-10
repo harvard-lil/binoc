@@ -80,7 +80,14 @@ expression: "&stable_changeset"
                   "verb": "tabular.edit_cell"
                 }
               ]
-            }
+            },
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "content_summary",
+                "value": "1 cell changed"
+              }
+            ]
           }
         ]
       }

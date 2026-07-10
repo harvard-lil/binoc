@@ -5,11 +5,12 @@ use std::sync::Arc;
 use binoc_core::controller::Controller;
 use binoc_core::correspondence::{self, ActionLine, CorrespondenceRunResult, Projection};
 use binoc_sdk::{
-    tabular_v1, BinocError, BinocResult, CoreRule, CorrespondenceEngineConfig, DataAccess,
-    DiagnosticSeverity, DiffNode, Edit, EditListWriter, EngineView, ExpandDescriptor, ExpandOutput,
-    ExpandRule, LinkCtx, LinkProposal, NodeMatch, PairDescriptor, PairOutput, PairRule,
-    ParseDescriptor, ParseOutput, ParseRule, ProjectionHint, ShapeFilter, Side, Source,
-    TabularData, TreeSide, WriteOutput, WriterDescriptor,
+    structured_document_v1, tabular_v1, BinocError, BinocResult, CoreRule,
+    CorrespondenceEngineConfig, DataAccess, DiagnosticSeverity, DiffNode, Edit, EditListWriter,
+    EngineView, ExpandDescriptor, ExpandOutput, ExpandRule, LinkCtx, LinkProposal, NodeMatch,
+    PairDescriptor, PairOutput, PairRule, ParseDescriptor, ParseOutput, ParseRule, ProjectionHint,
+    ShapeFilter, Side, Source, StructuredDocument, TabularData, TreeSide, WriteOutput,
+    WriterDescriptor,
 };
 use binoc_stdlib::correspondence::{
     default_engine_config, engine_config_for_dataset_config, expand, pair, parse, writers,
@@ -679,6 +680,42 @@ fn reduced_precision_uses_dataset_configured_suppression_sentinels() {
 }
 
 #[test]
+fn reduced_precision_labels_a_single_configured_suppression() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "county,count\nAlpha,123\n").unwrap();
+    fs::write(right.join("data.csv"), "county,count\nAlpha,N/A\n").unwrap();
+
+    let root = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "reduced_precision": {
+                "suppression_sentinels": ["N/A"]
+            }
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff")
+        .root
+        .expect("root");
+    let node = find(&root, "data.csv").expect("data.csv node");
+
+    let edits = node
+        .details
+        .get("edits")
+        .and_then(|value| value.as_array())
+        .expect("edits");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["verb"], "tabular.values_suppressed");
+    assert_eq!(
+        edits[0]["params"],
+        serde_json::json!({"column": "count", "cells": 1})
+    );
+    assert!(node.tags.contains("binoc.value-suppressed"));
+}
+
+#[test]
 fn correspondence_engine_reports_copy_without_double_counting_container_edits() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
@@ -1162,6 +1199,133 @@ fn keyed_row_degradation_honors_failure_policies() {
 }
 
 #[test]
+fn path_row_identity_can_restore_default_diagnostic_policy() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "id,value\n,a\n").unwrap();
+    fs::write(right.join("data.csv"), "id,value\n,b\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "defaults": {
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "error"
+                }
+            },
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": { "on_null_key": "diagnostic" }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.keyed_row_identity_degraded"
+            && diagnostic.severity == binoc_sdk::DiagnosticSeverity::Warning
+    }));
+    assert!(!changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.keyed_row_identity_degraded"
+            && diagnostic.severity == binoc_sdk::DiagnosticSeverity::Error
+    }));
+}
+
+#[test]
+fn path_by_position_row_identity_replaces_inherited_columns() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "1,old\n2,same\n").unwrap();
+    fs::write(right.join("data.csv"), "2,same\n1,new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "defaults": {
+                "row_identity": { "columns": ["inherited_name"] }
+            },
+            "paths": [{
+                "match": "data.csv",
+                "shape": { "has_header": false },
+                "row_identity": { "by_position": [1] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.csv").expect("data.csv");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert!(edits.iter().any(|edit| {
+        edit["verb"] == "tabular.edit_cell"
+            && edit["params"]["key"]["column_1"] == "1"
+            && edit["params"]["column"] == "column_2"
+    }));
+}
+
+#[test]
+fn path_by_position_row_identity_keys_headerless_json_arrays() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.json"), r#"[["1","old"],["2","same"]]"#).unwrap();
+    fs::write(right.join("data.json"), r#"[["2","same"],["1","new"]]"#).unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.json",
+                "row_identity": { "by_position": [1] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.json").expect("data.json");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["verb"], "tabular.edit_cell");
+    assert_eq!(edits[0]["params"]["key"]["column_1"], "1");
+    assert_eq!(edits[0]["params"]["column"], "column_2");
+}
+
+#[test]
+fn path_row_identity_accepts_uppercase_tabular_extension() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("DATA.CSV"), "id,value\n1,old\n2,same\n").unwrap();
+    fs::write(right.join("DATA.CSV"), "id,value\n2,same\n1,new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "DATA.CSV",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "DATA.CSV").expect("DATA.CSV");
+    let edits = node.details["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["verb"], "tabular.edit_cell");
+    assert_eq!(edits[0]["params"]["key"]["id"], "1");
+}
+
+#[test]
 fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
@@ -1205,6 +1369,46 @@ fn path_content_type_promotes_extensionless_csv_before_row_identity_gate() {
         "{:?}",
         node.details["edits"]
     );
+}
+
+#[test]
+fn declared_txt_csv_uses_only_the_tabular_writer() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.txt"), "id|value\n1|old\n2|same\n").unwrap();
+    fs::write(right.join("data.txt"), "id|value\n1|new\n2|same\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.txt",
+                "content_type": "text/csv",
+                "dialect": { "delimiter": "|" },
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.txt").expect("data.txt");
+    let edits = node.details["edits"].as_array().expect("edits");
+    let verbs: Vec<&str> = edits
+        .iter()
+        .map(|edit| edit["verb"].as_str().expect("verb"))
+        .collect();
+
+    assert_eq!(node.item_type, "tabular");
+    assert_eq!(verbs, vec!["tabular.edit_cell"]);
+    assert_eq!(
+        node.summary.as_ref().expect("summary").plain_text(),
+        "1 row modified by key"
+    );
+    assert!(!node.tags.contains("binoc.lines-added"));
+    assert!(!node.tags.contains("binoc.lines-removed"));
 }
 
 #[test]
@@ -1348,6 +1552,175 @@ fn path_rule_force_bypasses_extension_dispatch_before_row_identity_gate() {
         "{:?}",
         node.details["edits"]
     );
+}
+
+#[test]
+fn forced_plugin_tabular_rule_supports_extensionless_row_identity() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("records"), "id,value\n1,old\n2,same\n").unwrap();
+    fs::write(right.join("records"), "id,value\n2,same\n1,new\n").unwrap();
+
+    let mut config = default_engine_config();
+    config
+        .rules
+        .push(CoreRule::Parse(Arc::new(PluginTabularParse)));
+    let changeset = Controller::new(config)
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "records",
+                "rule": "plugin.parse.tabular",
+                "row_identity": { "columns": ["id"] }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    assert!(!changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.dataset_config.rule_unknown"
+            || diagnostic.code == "binoc.dataset_config.facet_kind_mismatch"
+    }));
+    let root = changeset.root.expect("root");
+    let node = find(&root, "records").expect("records");
+    assert_eq!(node.item_type, "tabular");
+    assert!(node.details["edits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|edit| { edit["verb"] == "tabular.edit_cell" && edit["params"]["key"]["id"] == "1" }));
+}
+
+#[test]
+fn forced_plugin_structured_rule_supports_extensionless_node_identity() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(
+        left.join("document"),
+        r#"{"items":[{"id":"one","value":"old"},{"id":"two","value":"same"}]}"#,
+    )
+    .unwrap();
+    fs::write(
+        right.join("document"),
+        r#"{"items":[{"id":"two","value":"same"},{"id":"one","value":"new"}]}"#,
+    )
+    .unwrap();
+
+    let mut config = default_engine_config();
+    config
+        .rules
+        .push(CoreRule::Parse(Arc::new(PluginStructuredParse)));
+    let changeset = Controller::new(config)
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "document",
+                "rule": "plugin.parse.structured",
+                "node_identity": { "key_attribute": "id" }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    assert!(!changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.dataset_config.rule_unknown"
+            || diagnostic.code == "binoc.dataset_config.facet_kind_mismatch"
+    }));
+    let root = changeset.root.expect("root");
+    let node = find(&root, "document").expect("document");
+    assert_eq!(node.item_type, "plugin_document");
+    assert!(node.details["edits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|edit| edit["verb"] == "document.edit_node"));
+}
+
+#[test]
+fn plugin_descriptor_extensions_and_media_types_drive_path_facets() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    for name in ["by-extension.plugin-table", "by-media"] {
+        fs::write(left.join(name), "id,value\n1,old\n2,same\n").unwrap();
+        fs::write(right.join(name), "id,value\n2,same\n1,new\n").unwrap();
+    }
+
+    let mut config = default_engine_config();
+    let parse_index = config
+        .rules
+        .iter()
+        .position(|rule| matches!(rule, CoreRule::Parse(_)))
+        .expect("parse rule");
+    config
+        .rules
+        .insert(parse_index, CoreRule::Parse(Arc::new(PluginTabularParse)));
+    let dataset = serde_json::json!({
+        "paths": [
+            {
+                "match": "by-extension.plugin-table",
+                "row_identity": { "columns": ["id"] }
+            },
+            {
+                "match": "by-media",
+                "content_type": "application/x-plugin-table",
+                "row_identity": { "columns": ["id"] }
+            }
+        ]
+    });
+    let data = binoc_sdk::LocalDataAccess::new_for_diff(&left, &right).expect("data access");
+    let left_root = data.register_local(&left, "").expect("left root");
+    let right_root = data.register_local(&right, "").expect("right root");
+    let configurator = config.dataset_configurator.clone().expect("configurator");
+    let diagnostics = configurator
+        .configure(&mut config, &dataset, &left_root, &right_root, &data)
+        .expect("configure dataset");
+
+    assert!(!diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.code == "binoc.dataset_config.facet_kind_mismatch" }));
+    for name in ["by-extension.plugin-table", "by-media"] {
+        assert_eq!(config.row_keys.get(name), Some(&vec![String::from("id")]));
+    }
+}
+
+#[test]
+fn path_rule_validation_rejects_unknown_and_pair_rule_names() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("first"), "old\n").unwrap();
+    fs::write(right.join("first"), "new\n").unwrap();
+    fs::write(left.join("second"), "old\n").unwrap();
+    fs::write(right.join("second"), "new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [
+                { "match": "first", "rule": "plugin.parse.missing" },
+                { "match": "second", "rule": "binoc.pair.root" }
+            ]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let unknown_rule_errors = changeset
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == "binoc.dataset_config.rule_unknown"
+                && diagnostic.severity == DiagnosticSeverity::Error
+        })
+        .count();
+    assert_eq!(unknown_rule_errors, 2, "{:?}", changeset.diagnostics);
 }
 
 #[test]
@@ -1800,6 +2173,32 @@ fn path_config_validation_reports_unknown_empty_and_kind_mismatch_errors() {
 }
 
 #[test]
+fn path_config_rejects_header_line_when_headers_are_disabled() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "1,old\n").unwrap();
+    fs::write(right.join("data.csv"), "1,new\n").unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "data.csv",
+                "shape": { "has_header": false, "header_line": 2 }
+            }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    assert!(changeset.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "binoc.dataset_config.shape_header_ambiguous"
+            && diagnostic.severity == DiagnosticSeverity::Error
+    }));
+}
+
+#[test]
 fn path_node_identity_matches_structured_document_nodes_by_plain_key() {
     let temp = tempfile::tempdir().expect("tempdir");
     let left = temp.path().join("left");
@@ -2060,6 +2459,35 @@ fn correspondence_engine_uses_dataset_row_keys_on_production_path() {
         .root
         .expect("root");
     let node = find(&root, "data.csv").expect("data.csv");
+    assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
+}
+
+#[test]
+fn unrelated_path_config_does_not_disable_legacy_table_row_identity() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let left = temp.path().join("left");
+    let right = temp.path().join("right");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("data.csv"), "id,value\n1,a\n2,b\n").unwrap();
+    fs::write(right.join("data.csv"), "id,value\n2,b\n1,c\n").unwrap();
+    fs::write(left.join("metadata.json"), r#"{"version":1}"#).unwrap();
+    fs::write(right.join("metadata.json"), r#"{"version":2}"#).unwrap();
+
+    let changeset = Controller::new(default_engine_config())
+        .with_dataset_config(serde_json::json!({
+            "paths": [{
+                "match": "metadata.json",
+                "content_type": "application/json"
+            }],
+            "tables": [{ "path_regex": "^data\\.csv$", "columns": ["id"] }]
+        }))
+        .diff(left.to_str().unwrap(), right.to_str().unwrap())
+        .expect("correspondence diff");
+
+    let root = changeset.root.expect("root");
+    let node = find(&root, "data.csv").expect("data.csv");
+    assert_eq!(node.details["edits"][0]["verb"], "tabular.edit_cell");
     assert_eq!(node.details["edits"][0]["params"]["key"]["id"], "1");
 }
 
@@ -2441,6 +2869,61 @@ impl ParseRule for FailingParse {
             children: Vec::new(),
             ..Default::default()
         })
+    }
+}
+
+struct PluginTabularParse;
+
+impl ParseRule for PluginTabularParse {
+    fn descriptor(&self) -> ParseDescriptor {
+        ParseDescriptor {
+            name: "plugin.parse.tabular".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                extensions: vec![".plugin-table".into()],
+                media_types: vec!["application/x-plugin-table".into()],
+            },
+            output: tabular_v1(),
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn parse(&self, item: &binoc_sdk::ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        let bytes = data.read_bytes(item)?;
+        let table = parse_tiny_csv(&String::from_utf8_lossy(&bytes));
+        serde_json::to_vec(&table)
+            .map(Into::into)
+            .map_err(|err| BinocError::Other(format!("serialize plugin table: {err}")))
+    }
+}
+
+struct PluginStructuredParse;
+
+impl ParseRule for PluginStructuredParse {
+    fn descriptor(&self) -> ParseDescriptor {
+        ParseDescriptor {
+            name: "plugin.parse.structured".into(),
+            input: NodeMatch {
+                is_dir: Some(false),
+                extensions: vec![".plugin-document".into()],
+                media_types: vec!["application/x-plugin-document".into()],
+            },
+            output: structured_document_v1(),
+            fires_beneath_settled: false,
+        }
+    }
+
+    fn parse(&self, item: &binoc_sdk::ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
+        let bytes = data.read_bytes(item)?;
+        let value = serde_json::from_slice(&bytes)
+            .map_err(|err| BinocError::Other(format!("parse plugin document: {err}")))?;
+        serde_json::to_vec(&StructuredDocument {
+            value,
+            format: "plugin_document".into(),
+            source: serde_json::json!({ "byte_len": bytes.len() }),
+        })
+        .map(Into::into)
+        .map_err(|err| BinocError::Other(format!("serialize plugin document: {err}")))
     }
 }
 

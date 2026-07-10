@@ -36,6 +36,8 @@ Binoc's built-in rule pack. It handles the baseline formats and structural cases
 |---|---|
 | `extensions` | — |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `all` |
 
 *Rule families supplied:* `expand`, `parse`, `pair`, `writer`, `compaction`, `annotator`, `render`
@@ -58,12 +60,14 @@ Parses Avro snapshots as structured data so changes in records and fields surfac
 
 ### Rule packs
 
-#### `binoc-avro.avro`
+#### `binoc-avro.parse.avro`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.avro` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -86,12 +90,62 @@ Parses common binary interchange formats into JSON-like values so content change
 
 ### Rule packs
 
-#### `binoc-binformats.binformats`
+#### `binoc-binformats.parse.cbor`
 
 | Field | Value |
 |---|---|
-| `extensions` | — |
+| `extensions` | `.cbor` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.msgpack`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.msgpack`, `.mp` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.bson`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.bson` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.plist`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.plist` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.ion`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.ion` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -114,12 +168,14 @@ Parses DBF snapshots so table and row changes in legacy dBase-style datasets sho
 
 ### Rule packs
 
-#### `binoc-dbf.dbf`
+#### `binoc-dbf.parse.dbf`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.dbf` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -142,26 +198,28 @@ Parses Excel workbooks so sheet, row, column, and cell changes can be compared a
 
 ### Rule packs
 
-#### `binoc-excel.excel`
+#### `binoc-excel.parse`
 
 | Field | Value |
 |---|---|
-| `extensions` | `.xlsx` |
+| `extensions` | `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
-*Rule families supplied:* `expand`, `parse`
+*Rule families supplied:* `parse`
 
 ## binoc-html
 
-Supports HTML-related parsing and rewriting for datasets that publish or embed structured content in HTML snapshots.
+Renders Binoc changesets as self-contained HTML changelogs.
 
 | Field | Value |
 |---|---|
 | Tier | First-party add-on |
 | Distribution | Maintained in this repository but distributed outside the default fat `binoc` wheel. |
-| Handles | HTML files and HTML-embedded structured data. |
-| Produces | Parsed HTML-derived artifacts and content changes. |
+| Handles | Completed Binoc changesets. |
+| Produces | Self-contained HTML changelogs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html)
@@ -170,25 +228,27 @@ Supports HTML-related parsing and rewriting for datasets that publish or embed s
 
 ### Rule packs
 
-#### `binoc-html.html`
+#### `binoc.html`
 
 | Field | Value |
 |---|---|
-| `extensions` | `.html`, `.htm` |
+| `extensions` | — |
 | `media_types` | — |
-| `scope` | `files` |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `changesets` |
 
-*Rule families supplied:* `parse`
+*Rule families supplied:* `render`
 
 ## binoc-parquet
 
-Parses Parquet snapshots so column, row, and cell changes appear as ordinary tabular diffs.
+Parses Parquet and Arrow IPC snapshots so column, row, and cell changes appear as ordinary tabular diffs.
 
 | Field | Value |
 |---|---|
 | Tier | First-party bundled |
 | Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Parquet files. |
+| Handles | Parquet, Arrow IPC, and Feather files. |
 | Produces | Tabular records and tabular diffs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
@@ -198,12 +258,26 @@ Parses Parquet snapshots so column, row, and cell changes appear as ordinary tab
 
 ### Rule packs
 
-#### `binoc-parquet.parquet`
+#### `binoc-parquet.parse.parquet`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.parquet` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-parquet.parse.arrow-ipc`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.arrow`, `.feather`, `.ipc` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -216,8 +290,8 @@ Detects row reordering in tabular data so shuffles are represented as ordering c
 |---|---|
 | Tier | First-party bundled |
 | Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Tabular collections with reordered rows. |
-| Produces | Row-reorder correspondence and compact move-like row changes. |
+| Handles | Paired `binoc.tabular.v1` artifacts with the same rows in a different order. |
+| Produces | A `tabular.reorder_rows` edit when row multisets match. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder)
@@ -226,15 +300,17 @@ Detects row reordering in tabular data so shuffles are represented as ordering c
 
 ### Rule packs
 
-#### `binoc-row-reorder.csv`
+#### `binoc.row_reorder_writer`
 
 | Field | Value |
 |---|---|
-| `extensions` | `.csv`, `.tsv` |
+| `extensions` | — |
 | `media_types` | — |
-| `scope` | `files` |
+| `member_extensions` | — |
+| `artifact_formats` | `binoc.tabular.v1` |
+| `scope` | `artifacts` |
 
-*Rule families supplied:* `pair`, `writer`
+*Rule families supplied:* `writer`
 
 ## binoc-shapefile
 
@@ -254,15 +330,29 @@ Handles shapefile bundles and their sidecar files so feature, geometry, and attr
 
 ### Rule packs
 
-#### `binoc-shapefile.shapefile`
+#### `binoc-shapefile.fuse`
 
 | Field | Value |
 |---|---|
-| `extensions` | `.shp`, `.dbf`, `.shx` |
+| `extensions` | `.shp` |
 | `media_types` | — |
+| `member_extensions` | `.shx`, `.dbf`, `.prj`, `.cpg` |
+| `artifact_formats` | — |
+| `scope` | `file-groups` |
+
+*Rule families supplied:* `group-parse`
+
+#### `binoc-shapefile.parse.shp`
+
+| Field | Value |
+|---|---|
+| `extensions` | `.shp` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
-*Rule families supplied:* `expand`, `parse`
+*Rule families supplied:* `parse`
 
 ## binoc-sqlite
 
@@ -282,15 +372,17 @@ Compares SQLite databases: schema, columns, keys, and row counts. Useful when a 
 
 ### Rule packs
 
-#### `binoc-sqlite.sqlite`
+#### `binoc-sqlite.parse.sqlite`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.sqlite`, `.sqlite3`, `.db` |
-| `media_types` | `application/vnd.sqlite3`, `application/x-sqlite3` |
+| `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
-*Rule families supplied:* `parse`, `writer`, `materializer`
+*Rule families supplied:* `parse`
 
 ## binoc-stat-binary
 
@@ -310,32 +402,38 @@ Reads Stata, SAS, and SAS transport files as standard Binoc tabular data so norm
 
 ### Rule packs
 
-#### `binoc-stat-binary.stata`
+#### `binoc-stat-binary.stata.parse`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.dta` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
 
-#### `binoc-stat-binary.sas7bdat`
+#### `binoc-stat-binary.sas7bdat.parse`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.sas7bdat` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
 
-#### `binoc-stat-binary.xpt`
+#### `binoc-stat-binary.xpt.parse`
 
 | Field | Value |
 |---|---|
 | `extensions` | `.xpt` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -358,12 +456,26 @@ Parses XML snapshots into structured data so hierarchical document and metadata 
 
 ### Rule packs
 
-#### `binoc-xml.xml`
+#### `binoc-xml.parse.xml`
 
 | Field | Value |
 |---|---|
-| `extensions` | `.xml` |
+| `extensions` | `.xml`, `.rdf`, `.kml`, `.gml`, `.atom`, `.rss` |
 | `media_types` | — |
+| `member_extensions` | — |
+| `artifact_formats` | — |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-xml.parse.xml_media`
+
+| Field | Value |
+|---|---|
+| `extensions` | — |
+| `media_types` | `text/xml`, `application/xml`, `application/rdf+xml`, `application/atom+xml` |
+| `member_extensions` | — |
+| `artifact_formats` | — |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`

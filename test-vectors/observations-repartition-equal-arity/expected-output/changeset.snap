@@ -70,7 +70,14 @@ expression: "&stable_changeset"
               "verb": "tabular.edit_cell"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "3 cells changed"
+          }
+        ]
       },
       {
         "action": "move",
@@ -131,7 +138,14 @@ expression: "&stable_changeset"
               "verb": "tabular.edit_cell"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "3 cells changed"
+          }
+        ]
       }
     ]
   },

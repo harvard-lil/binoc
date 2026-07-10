@@ -106,7 +106,14 @@ expression: "&stable_changeset"
                   "verb": "tabular.add_row"
                 }
               ]
-            }
+            },
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "content_summary",
+                "value": "1 row added; Column type changed: 'id' string -> number"
+              }
+            ]
           },
           {
             "action": "move",
@@ -189,7 +196,14 @@ expression: "&stable_changeset"
                   "verb": "tabular.edit_cell"
                 }
               ]
-            }
+            },
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "content_summary",
+                "value": "2 cells changed; Column type changed: 'id' string -> number; Column type changed: 'customer_id' string -> number"
+              }
+            ]
           }
         ]
       }

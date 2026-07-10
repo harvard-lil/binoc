@@ -76,6 +76,11 @@ expression: "&stable_changeset"
             "package": "binoc",
             "key": "dialect_provenance",
             "value": "detected tab-delimited, no quoting, newline LF"
+          },
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "1 row added; 1 cell changed"
           }
         ]
       }

@@ -4,8 +4,6 @@ expression: "&md"
 ---
 # Changelog: snapshot-a → snapshot-b
 
-- **data.txt**: 1 row modified by key; 1 line added; 1 line removed
+- **data.txt**: 1 row modified by key
   - Changed cells
     - key id '1', column 'value': 'old' -> 'new'
-  - Line changes
-    - line 2: '1|old' -> '1|new'

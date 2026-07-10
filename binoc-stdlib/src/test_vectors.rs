@@ -7,7 +7,8 @@
 //! Test vectors commit *source* trees like `archive.zip.d/` instead of opaque
 //! binary archives. A [`VectorMaterializer`] turns each staging directory into
 //! the real artifact (`.zip`, `.tar.gz`, `.sqlite`, ...). The stdlib ships
-//! [`ZipMaterializer`], [`TarMaterializer`], and [`GzipMaterializer`]
+//! [`ZipMaterializer`], [`TarMaterializer`], [`GzipMaterializer`], and
+//! [`RepeatedBinaryMaterializer`]
 //! ([`stdlib_materializers`]); plugins contribute their own (see
 //! `binoc-sqlite` for SQLite). Both [`run_vector`] and
 //! [`materialize_snapshots`] go through the same walker so tests and
@@ -144,13 +145,14 @@ pub trait VectorMaterializer: Send + Sync {
 }
 
 /// Stdlib-provided materializers: [`ZipMaterializer`], [`TarMaterializer`],
-/// and [`GzipMaterializer`].
+/// [`GzipMaterializer`], and [`RepeatedBinaryMaterializer`].
 /// Plugin materialize binaries should start from this list and push their own.
 pub fn stdlib_materializers() -> Vec<Box<dyn VectorMaterializer>> {
     vec![
         Box::new(ZipMaterializer),
         Box::new(TarMaterializer),
         Box::new(GzipMaterializer),
+        Box::new(RepeatedBinaryMaterializer),
     ]
 }
 
@@ -191,6 +193,94 @@ impl VectorMaterializer for GzipMaterializer {
     fn build(&self, staging_dir: &Path, out_path: &Path, _all_suffixes: &[&str]) {
         create_gzip_from_dir(staging_dir, out_path);
     }
+}
+
+/// Materializer for deterministic opaque binary fixtures. A staging directory
+/// contains `recipe.json` with a total size, a repeated hexadecimal byte
+/// pattern, and optional repeated-pattern patches. The supported suffixes are
+/// intentionally narrow so ordinary directories ending in `.d` remain data.
+pub struct RepeatedBinaryMaterializer;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepeatedBinaryRecipe {
+    size: usize,
+    repeat_hex: String,
+    #[serde(default)]
+    patches: Vec<RepeatedBinaryPatch>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepeatedBinaryPatch {
+    offset: usize,
+    length: usize,
+    repeat_hex: String,
+}
+
+impl VectorMaterializer for RepeatedBinaryMaterializer {
+    fn suffixes(&self) -> &[&'static str] {
+        &[".bin.d", ".binless.d"]
+    }
+
+    fn build(&self, staging_dir: &Path, out_path: &Path, _all_suffixes: &[&str]) {
+        let recipe_path = staging_dir.join("recipe.json");
+        let recipe_text = std::fs::read_to_string(&recipe_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {e}", recipe_path.display()));
+        let recipe: RepeatedBinaryRecipe = serde_json::from_str(&recipe_text)
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", recipe_path.display()));
+        let pattern = decode_hex_pattern(&recipe.repeat_hex, &recipe_path);
+        let mut bytes = repeated_bytes(&pattern, recipe.size);
+
+        for patch in recipe.patches {
+            let end = patch
+                .offset
+                .checked_add(patch.length)
+                .filter(|end| *end <= bytes.len())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Patch [{}, {}) is outside {}-byte output in {}",
+                        patch.offset,
+                        patch.offset.saturating_add(patch.length),
+                        bytes.len(),
+                        recipe_path.display()
+                    )
+                });
+            let patch_pattern = decode_hex_pattern(&patch.repeat_hex, &recipe_path);
+            for (index, byte) in bytes[patch.offset..end].iter_mut().enumerate() {
+                *byte = patch_pattern[index % patch_pattern.len()];
+            }
+        }
+
+        std::fs::write(out_path, bytes)
+            .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));
+    }
+}
+
+fn decode_hex_pattern(hex: &str, recipe_path: &Path) -> Vec<u8> {
+    assert!(
+        !hex.is_empty() && hex.len().is_multiple_of(2),
+        "Hex patterns must contain a non-empty, even number of digits in {}",
+        recipe_path.display()
+    );
+    hex.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let text = std::str::from_utf8(pair).expect("hex digits are ASCII");
+            u8::from_str_radix(text, 16).unwrap_or_else(|_| {
+                panic!(
+                    "Invalid hexadecimal byte '{text}' in {}",
+                    recipe_path.display()
+                )
+            })
+        })
+        .collect()
+}
+
+fn repeated_bytes(pattern: &[u8], size: usize) -> Vec<u8> {
+    (0..size)
+        .map(|index| pattern[index % pattern.len()])
+        .collect()
 }
 
 /// Walk `root` depth-first; for each directory whose name ends in a registered

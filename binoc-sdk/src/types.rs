@@ -475,7 +475,7 @@ pub struct PathConfigEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub records_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub row_identity: Option<RowIdentity>,
+    pub row_identity: Option<RowIdentityPatch>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_identity: Option<NodeIdentity>,
     #[serde(skip)]
@@ -502,7 +502,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
             #[serde(default)]
             records_path: Option<String>,
             #[serde(default)]
-            row_identity: Option<RowIdentity>,
+            row_identity: Option<RowIdentityPatch>,
             #[serde(default)]
             node_identity: Option<NodeIdentity>,
             #[serde(default)]
@@ -519,14 +519,14 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
         let mut row_identity = raw.row_identity;
         if !raw.columns.is_empty() || raw.on_null_key.is_some() || raw.on_duplicate_key.is_some() {
             let mut identity = row_identity.unwrap_or_default();
-            if identity.columns.is_empty() {
-                identity.columns = raw.columns;
+            if !raw.columns.is_empty() && identity.columns.is_none() {
+                identity.columns = Some(raw.columns);
             }
             if let Some(policy) = raw.on_null_key {
-                identity.on_null_key = policy;
+                identity.on_null_key.get_or_insert(policy);
             }
             if let Some(policy) = raw.on_duplicate_key {
-                identity.on_duplicate_key = policy;
+                identity.on_duplicate_key.get_or_insert(policy);
             }
             row_identity = Some(identity);
         }
@@ -672,7 +672,7 @@ pub struct TableEntry {
     #[serde(default)]
     pub parse: TabularParseConfig,
     #[serde(default)]
-    pub row_identity: RowIdentity,
+    pub row_identity: RowIdentityPatch,
 }
 
 impl<'de> Deserialize<'de> for TableEntry {
@@ -687,7 +687,7 @@ impl<'de> Deserialize<'de> for TableEntry {
             #[serde(default)]
             parse: TabularParseConfig,
             #[serde(default)]
-            row_identity: RowIdentity,
+            row_identity: RowIdentityPatch,
             #[serde(default)]
             logical_name: Option<String>,
             #[serde(default)]
@@ -715,14 +715,14 @@ impl<'de> Deserialize<'de> for TableEntry {
         }
 
         let mut row_identity = raw.row_identity;
-        if row_identity.columns.is_empty() {
-            row_identity.columns = raw.columns;
+        if row_identity.columns.is_none() && !raw.columns.is_empty() {
+            row_identity.columns = Some(raw.columns);
         }
         if let Some(policy) = raw.on_null_key {
-            row_identity.on_null_key = policy;
+            row_identity.on_null_key.get_or_insert(policy);
         }
         if let Some(policy) = raw.on_duplicate_key {
-            row_identity.on_duplicate_key = policy;
+            row_identity.on_duplicate_key.get_or_insert(policy);
         }
 
         Ok(Self {
@@ -829,6 +829,59 @@ pub struct RowIdentity {
     pub on_null_key: IdentityFailurePolicy,
     #[serde(default)]
     pub on_duplicate_key: IdentityFailurePolicy,
+}
+
+/// Presence-preserving row-identity overrides for a selected path or table.
+///
+/// Runtime identities and dataset defaults use [`RowIdentity`]. Entry-level
+/// configuration uses this patch type so an explicitly configured default
+/// enum value is distinguishable from an omitted field. `columns` and
+/// `by_position` are alternate key selectors; when both are present,
+/// `columns` takes precedence.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RowIdentityPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by_position: Option<Vec<usize>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cardinality: Option<Cardinality>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_null_key: Option<IdentityFailurePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_duplicate_key: Option<IdentityFailurePolicy>,
+}
+
+impl RowIdentityPatch {
+    /// Apply this entry-level override to a concrete inherited identity.
+    pub fn apply_to(&self, identity: &mut RowIdentity) {
+        if let Some(columns) = &self.columns {
+            identity.columns = columns.clone();
+            identity.by_position.clear();
+        } else if let Some(by_position) = &self.by_position {
+            identity.by_position = by_position.clone();
+            identity.columns.clear();
+        }
+        if let Some(cardinality) = self.cardinality {
+            identity.cardinality = cardinality;
+        }
+        if let Some(policy) = self.on_null_key {
+            identity.on_null_key = policy;
+        }
+        if let Some(policy) = self.on_duplicate_key {
+            identity.on_duplicate_key = policy;
+        }
+    }
+
+    pub fn has_key_selector(&self) -> bool {
+        self.columns
+            .as_ref()
+            .is_some_and(|columns| !columns.is_empty())
+            || self
+                .by_position
+                .as_ref()
+                .is_some_and(|positions| !positions.is_empty())
+    }
 }
 
 /// A pair of tabular data (left/right sides of a comparison).
@@ -1209,5 +1262,61 @@ mod tests {
         right.content_hash = Some("abc".into());
         let pair = ItemPair::both(left, right);
         assert_eq!(pair.matching_content_hash(), Some("abc"));
+    }
+
+    #[test]
+    fn row_identity_patch_deserialization_preserves_explicit_default_policy() {
+        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "diagnostic"
+                }
+            }]
+        }))
+        .expect("dataset semantics");
+
+        let patch = semantics.paths[0]
+            .row_identity
+            .as_ref()
+            .expect("row identity patch");
+        assert_eq!(
+            patch.columns.as_deref(),
+            Some([String::from("id")].as_slice())
+        );
+        assert_eq!(patch.on_null_key, Some(IdentityFailurePolicy::Diagnostic));
+        assert_eq!(patch.on_duplicate_key, None);
+
+        let serialized = serde_json::to_value(&semantics.paths[0]).expect("serialize path entry");
+        assert_eq!(serialized["row_identity"]["on_null_key"], "diagnostic");
+        assert!(serialized["row_identity"].get("on_duplicate_key").is_none());
+    }
+
+    #[test]
+    fn row_identity_patch_replaces_inherited_key_selector() {
+        let mut identity = RowIdentity {
+            columns: vec!["id".into()],
+            on_null_key: IdentityFailurePolicy::Error,
+            ..RowIdentity::default()
+        };
+        RowIdentityPatch {
+            by_position: Some(vec![2]),
+            on_null_key: Some(IdentityFailurePolicy::Diagnostic),
+            ..RowIdentityPatch::default()
+        }
+        .apply_to(&mut identity);
+
+        assert!(identity.columns.is_empty());
+        assert_eq!(identity.by_position, vec![2]);
+        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Diagnostic);
+
+        RowIdentityPatch {
+            columns: Some(vec!["email".into()]),
+            ..RowIdentityPatch::default()
+        }
+        .apply_to(&mut identity);
+        assert_eq!(identity.columns, vec!["email"]);
+        assert!(identity.by_position.is_empty());
     }
 }

@@ -75,7 +75,14 @@ expression: "&stable_changeset"
               "verb": "text.replace_lines"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "2 lines added"
+          }
+        ]
       }
     ]
   }

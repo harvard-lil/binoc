@@ -6,4 +6,3 @@ tags = ["csv", "row-reorder", "sorted-fallback"]
 [expected]
 root_action = "modify"
 has_tags = ["binoc.row-reorder"]
-

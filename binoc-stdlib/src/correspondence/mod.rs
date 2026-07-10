@@ -6,15 +6,14 @@ pub(crate) mod tabular;
 pub mod writers;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 use std::sync::Arc;
 
 use binoc_sdk::{
-    structured_document_v1, BinocResult, Cardinality, CoreRule, CorrespondenceDatasetConfigurator,
-    CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1, Diagnostic, DispatchResolver, Edit,
-    FileSelector, IdentityFailurePolicy, ItemRef, NodeIdentity, ParseRule, PathConfigEntry,
+    structured_document_v1, tabular_v1, ArtifactFormat, BinocError, BinocResult, CoreRule,
+    CorrespondenceDatasetConfigurator, CorrespondenceEngineConfig, DataAccess, DatasetSemanticsV1,
+    Diagnostic, DispatchResolver, Edit, FileSelector, ItemRef, NodeIdentity, PathConfigEntry,
     ProjectionAnnotationContext, ProjectionAnnotator, ProjectionHint, RowIdentity,
-    RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
+    RowIdentityPatch, RowIdentityPolicies, Summary, TableConfig, TabularParseConfig,
 };
 use regex::Regex;
 
@@ -133,6 +132,11 @@ fn engine_config_with_options_and_reduced_precision(
             Arc::new(writers::BinaryChunkWriter),
             Arc::new(writers::FallbackWriter),
         ],
+        // Pass 2 is deliberately a single ordered sweep. Keep the dependency
+        // chain explicit: rename must see set_headers and alignment bases before
+        // reorder/alignment consume them; sorted alignment competes for the raw
+        // positional basis; row alignment must remove inserted-row noise before
+        // reduced-precision grouping; row-addition consolidation runs last.
         compaction: vec![
             Arc::new(compact::ColumnRename),
             Arc::new(compact::ColumnReorder),
@@ -183,9 +187,10 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
 
         configure_reduced_precision(config, &semantics);
 
+        let parse_capabilities = ParseCapabilities::from_rules(&config.rules);
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
-        let diagnostics = validate_path_entries(&semantics);
+        let diagnostics = validate_path_entries(&semantics, &parse_capabilities);
         if !semantics.paths.is_empty()
             || table_config_has_parse_overrides(&semantics.tables)
             || dataset_has_row_identity_config(&semantics)
@@ -194,9 +199,11 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 entries: semantics.paths.clone(),
                 default_row_identity: dataset_default_row_identity(&semantics).clone(),
                 tables: semantics.tables.clone(),
+                parse_capabilities: parse_capabilities.clone(),
             }));
         }
-        let row_identity = row_identity_for_paths(&semantics, &left_paths, &right_paths);
+        let row_identity =
+            row_identity_for_paths(&semantics, &left_paths, &right_paths, &parse_capabilities);
         config.row_keys = row_identity
             .iter()
             .map(|(path, identity)| (path.clone(), identity.columns.clone()))
@@ -213,14 +220,8 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
                 )
             })
             .collect();
-        config.node_identities = node_identity_for_paths(
-            &semantics,
-            &left_paths,
-            &right_paths,
-            left_root,
-            right_root,
-            data,
-        )?;
+        config.node_identities =
+            node_identity_for_paths(&semantics, &left_paths, &right_paths, &parse_capabilities);
         if !semantics.files.correspondences.is_empty() {
             config.rules.insert(
                 0,
@@ -231,6 +232,89 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
             );
         }
         Ok(diagnostics)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ParseCapabilities {
+    known_rule_names: BTreeSet<String>,
+    output_by_rule: BTreeMap<String, ArtifactFormat>,
+    extensions_by_output: BTreeMap<ArtifactFormat, BTreeSet<String>>,
+    media_types_by_output: BTreeMap<ArtifactFormat, BTreeSet<String>>,
+}
+
+impl ParseCapabilities {
+    fn from_rules(rules: &[CoreRule]) -> Self {
+        let mut capabilities = Self::default();
+        for rule in rules {
+            let CoreRule::Parse(rule) = rule else {
+                if let CoreRule::Expand(rule) = rule {
+                    capabilities.known_rule_names.insert(rule.descriptor().name);
+                }
+                continue;
+            };
+            let descriptor = rule.descriptor();
+            capabilities
+                .known_rule_names
+                .insert(descriptor.name.clone());
+            capabilities
+                .output_by_rule
+                .insert(descriptor.name, descriptor.output.clone());
+            capabilities
+                .extensions_by_output
+                .entry(descriptor.output.clone())
+                .or_default()
+                .extend(
+                    descriptor
+                        .input
+                        .extensions
+                        .into_iter()
+                        .map(|extension| extension.to_ascii_lowercase()),
+                );
+            capabilities
+                .media_types_by_output
+                .entry(descriptor.output)
+                .or_default()
+                .extend(descriptor.input.media_types);
+        }
+        capabilities
+    }
+
+    fn knows_rule(&self, name: &str) -> bool {
+        self.known_rule_names.contains(name)
+    }
+
+    fn rule_outputs(&self, name: &str, output: &ArtifactFormat) -> bool {
+        self.output_by_rule.get(name) == Some(output)
+    }
+
+    fn pattern_can_emit(&self, pattern: &str, output: &ArtifactFormat) -> bool {
+        let pattern = pattern.to_ascii_lowercase();
+        self.extensions_by_output
+            .get(output)
+            .is_some_and(|extensions| {
+                extensions
+                    .iter()
+                    .any(|extension| pattern.ends_with(extension))
+            })
+    }
+
+    fn media_type_can_emit(&self, media_type: &str, output: &ArtifactFormat) -> bool {
+        self.media_types_by_output
+            .get(output)
+            .is_some_and(|media_types| media_types.contains(media_type))
+    }
+
+    fn entry_can_emit(&self, entry: &PathConfigEntry, output: &ArtifactFormat) -> bool {
+        self.pattern_can_emit(&entry.match_, output)
+            || entry
+                .content_type
+                .as_deref()
+                .is_some_and(|media_type| self.media_type_can_emit(media_type, output))
+            || entry
+                .rule
+                .as_deref()
+                .is_some_and(|rule| self.rule_outputs(rule, output))
     }
 }
 
@@ -259,12 +343,17 @@ struct StdlibPathDispatchResolver {
     entries: Vec<PathConfigEntry>,
     default_row_identity: RowIdentity,
     tables: TableConfig,
+    parse_capabilities: ParseCapabilities,
 }
 
 impl DispatchResolver for StdlibPathDispatchResolver {
     fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>> {
         let Some(entry) = first_path_entry(&self.entries, &item.logical_path) else {
-            if let Some(parse) = legacy_tabular_parse_for_path(&self.tables, &item.logical_path) {
+            if let Some(parse) = legacy_tabular_parse_for_path(
+                &self.tables,
+                &item.logical_path,
+                &self.parse_capabilities,
+            ) {
                 item.tabular_parse = Some(parse);
             }
             return Ok(Vec::new());
@@ -272,17 +361,24 @@ impl DispatchResolver for StdlibPathDispatchResolver {
         if let Some(content_type) = &entry.content_type {
             item.media_type = Some(content_type.clone());
             if !item.is_dir {
-                item.projection_hint = projection_for_content_type(content_type);
+                item.projection_hint =
+                    projection_for_content_type(content_type, &self.parse_capabilities);
             }
-        } else if matches!(
-            entry.rule.as_deref(),
-            Some("binoc.parse.csv" | "binoc.parse.csv_media")
-        ) && !item.is_dir
+        } else if entry
+            .rule
+            .as_deref()
+            .is_some_and(|rule| self.parse_capabilities.rule_outputs(rule, &tabular_v1()))
+            && !item.is_dir
         {
             item.media_type = None;
             item.projection_hint = ProjectionHint::default().item_type("tabular");
         }
-        if let Some(parse) = path_tabular_parse_for_path(&self.tables, entry, &item.logical_path) {
+        if let Some(parse) = path_tabular_parse_for_path(
+            &self.tables,
+            entry,
+            &item.logical_path,
+            &self.parse_capabilities,
+        ) {
             item.tabular_parse = Some(parse);
             if !item.is_dir {
                 item.projection_hint = ProjectionHint::default().item_type("tabular");
@@ -296,21 +392,13 @@ impl DispatchResolver for StdlibPathDispatchResolver {
     }
 
     fn row_identity_for(&self, path: &str) -> Option<RowIdentity> {
-        let entry = first_path_entry(&self.entries, path);
-        let has_default_row_identity = !self.default_row_identity.columns.is_empty();
-        let has_path_row_identity = entry
-            .and_then(|entry| entry.row_identity.as_ref())
-            .is_some();
-        let path_can_be_tabular =
-            glob_can_match_tabular_artifact(path) || entry.is_some_and(entry_declares_tabular);
-        if !(has_default_row_identity || has_path_row_identity) || !path_can_be_tabular {
-            return None;
-        }
-        let identity = merge_row_identity(
+        resolve_row_identity_for_path(
             &self.default_row_identity,
-            entry.and_then(|entry| entry.row_identity.as_ref()),
-        );
-        (!identity.columns.is_empty()).then_some(identity)
+            &self.tables,
+            first_path_entry(&self.entries, path),
+            path,
+            &self.parse_capabilities,
+        )
     }
 
     fn node_identity_for(&self, path: &str) -> Option<NodeIdentity> {
@@ -342,6 +430,13 @@ impl ProjectionAnnotator for StdlibProjectionAnnotator {
         }
         if ctx.action == "move" && !ctx.edits.is_empty() {
             hint = hint.tag("binoc.move.modified").tag("binoc.content-changed");
+            if let Some(content_summary) = summarize_known_edits(ctx.edits) {
+                hint = hint.annotate(
+                    "binoc",
+                    "content_summary",
+                    serde_json::Value::String(content_summary.plain_text()),
+                );
+            }
             if let Some(source_path) = ctx.source_path {
                 hint = hint.summary(
                     Summary::new()
@@ -708,6 +803,7 @@ fn row_identity_for_paths(
     semantics: &DatasetSemanticsV1,
     left_paths: &[String],
     right_paths: &[String],
+    parse_capabilities: &ParseCapabilities,
 ) -> BTreeMap<String, RowIdentity> {
     if !dataset_has_row_identity_config(semantics) {
         return BTreeMap::new();
@@ -725,40 +821,45 @@ fn row_identity_for_paths(
     let mut row_identity = BTreeMap::new();
     for path in paths {
         let path_entry = first_path_entry(&semantics.paths, &path);
-        let path_is_tabular = path_can_emit_tabular_artifact(&path, path_entry);
-        if !semantics.paths.is_empty() {
-            let has_path_row_identity = path_entry
-                .and_then(|entry| entry.row_identity.as_ref())
-                .is_some_and(row_identity_configured);
-            let has_default_row_identity = row_identity_configured(defaults);
-            if (has_default_row_identity || has_path_row_identity) && path_is_tabular {
-                let identity = merge_row_identity(
-                    defaults,
-                    path_entry.and_then(|entry| entry.row_identity.as_ref()),
-                );
-                if row_identity_configured(&identity) {
-                    row_identity.insert(path, identity);
-                }
-            }
-            continue;
-        }
-
-        if !path_is_tabular {
-            continue;
-        }
-        let mut identity = defaults.clone();
-        for entry in &semantics.tables.entries {
-            if table_entry_matches_path(entry, &path) {
-                identity = merge_row_identity(&identity, Some(&entry.row_identity));
-                break;
-            }
-        }
-        identity = canonicalize_row_identity(identity);
-        if row_identity_configured(&identity) {
+        if let Some(identity) = resolve_row_identity_for_path(
+            defaults,
+            &semantics.tables,
+            path_entry,
+            &path,
+            parse_capabilities,
+        ) {
             row_identity.insert(path, identity);
         }
     }
     row_identity
+}
+
+fn resolve_row_identity_for_path(
+    defaults: &RowIdentity,
+    tables: &TableConfig,
+    path_entry: Option<&PathConfigEntry>,
+    path: &str,
+    parse_capabilities: &ParseCapabilities,
+) -> Option<RowIdentity> {
+    if !path_can_emit_tabular_artifact(path, path_entry, parse_capabilities) {
+        return None;
+    }
+
+    let identity =
+        if let Some(path_identity) = path_entry.and_then(|entry| entry.row_identity.as_ref()) {
+            merge_row_identity(defaults, Some(path_identity))
+        } else {
+            let mut identity = defaults.clone();
+            if let Some(entry) = tables
+                .entries
+                .iter()
+                .find(|entry| table_entry_matches_path(entry, path))
+            {
+                identity = merge_row_identity(&identity, Some(&entry.row_identity));
+            }
+            canonicalize_row_identity(identity)
+        };
+    row_identity_configured(&identity).then_some(identity)
 }
 
 fn dataset_has_row_identity_config(semantics: &DatasetSemanticsV1) -> bool {
@@ -768,12 +869,12 @@ fn dataset_has_row_identity_config(semantics: &DatasetSemanticsV1) -> bool {
             .paths
             .iter()
             .filter_map(|entry| entry.row_identity.as_ref())
-            .any(row_identity_configured)
+            .any(row_identity_patch_configured)
         || semantics
             .tables
             .entries
             .iter()
-            .any(|entry| row_identity_configured(&entry.row_identity))
+            .any(|entry| row_identity_patch_configured(&entry.row_identity))
 }
 
 fn dataset_default_row_identity(semantics: &DatasetSemanticsV1) -> &RowIdentity {
@@ -791,26 +892,12 @@ fn large_tabular_threshold_bytes(semantics: &DatasetSemanticsV1) -> u64 {
         .unwrap_or(parse::LARGE_TABULAR_THRESHOLD_BYTES)
 }
 
-fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentity>) -> RowIdentity {
+fn merge_row_identity(defaults: &RowIdentity, entry: Option<&RowIdentityPatch>) -> RowIdentity {
     let Some(entry) = entry else {
         return canonicalize_row_identity(defaults.clone());
     };
     let mut identity = defaults.clone();
-    if !entry.columns.is_empty() {
-        identity.columns = entry.columns.clone();
-    }
-    if !entry.by_position.is_empty() {
-        identity.by_position = entry.by_position.clone();
-    }
-    if entry.cardinality != Cardinality::default() {
-        identity.cardinality = entry.cardinality;
-    }
-    if entry.on_null_key != IdentityFailurePolicy::default() {
-        identity.on_null_key = entry.on_null_key;
-    }
-    if entry.on_duplicate_key != IdentityFailurePolicy::default() {
-        identity.on_duplicate_key = entry.on_duplicate_key;
-    }
+    entry.apply_to(&mut identity);
     canonicalize_row_identity(identity)
 }
 
@@ -832,16 +919,16 @@ fn row_identity_configured(identity: &RowIdentity) -> bool {
     !identity.columns.is_empty() || !identity.by_position.is_empty()
 }
 
+fn row_identity_patch_configured(identity: &RowIdentityPatch) -> bool {
+    identity.has_key_selector()
+}
+
 fn node_identity_for_paths(
     semantics: &DatasetSemanticsV1,
     left_paths: &[String],
     right_paths: &[String],
-    left_root: &ItemRef,
-    right_root: &ItemRef,
-    data: &dyn DataAccess,
-) -> BinocResult<BTreeMap<String, NodeIdentity>> {
-    let left_root_physical = data.local_path(left_root)?;
-    let right_root_physical = data.local_path(right_root)?;
+    parse_capabilities: &ParseCapabilities,
+) -> BTreeMap<String, NodeIdentity> {
     let mut paths = left_paths
         .iter()
         .chain(right_paths)
@@ -859,19 +946,14 @@ fn node_identity_for_paths(
         else {
             continue;
         };
-        if path_emits_structured_document_artifact(
-            &path,
-            left_root,
-            &left_root_physical,
-            right_root,
-            &right_root_physical,
-            path_entry,
-            data,
-        )? {
+        if path_entry.is_some_and(|entry| {
+            parse_capabilities.entry_can_emit(entry, &structured_document_v1())
+        }) || parse_capabilities.pattern_can_emit(&path, &structured_document_v1())
+        {
             node_identities.insert(path, identity);
         }
     }
-    Ok(node_identities)
+    node_identities
 }
 
 fn node_identity_configured(identity: &NodeIdentity) -> bool {
@@ -882,27 +964,16 @@ fn positional_column_name(position: usize) -> String {
     format!("column_{position}")
 }
 
-fn parse_config_for_entry(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
-    if entry.shape.is_none() && entry.dialect.is_none() && entry.records_path.is_none() {
-        return None;
-    }
-    let mut parse = TabularParseConfig::default();
-    if let Some(shape) = &entry.shape {
-        shape.apply_to_parse_config(&mut parse);
-    }
-    if let Some(dialect) = &entry.dialect {
-        merge_csv_dialect(&mut parse, dialect);
-    }
-    parse.records_path = entry.records_path.clone();
-    Some(parse)
-}
 fn first_path_entry<'a>(entries: &'a [PathConfigEntry], path: &str) -> Option<&'a PathConfigEntry> {
     entries
         .iter()
         .find(|entry| glob_matches_path(&entry.match_, path))
 }
 
-fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
+fn validate_path_entries(
+    semantics: &DatasetSemanticsV1,
+    parse_capabilities: &ParseCapabilities,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     for entry in &semantics.paths {
         let location = if entry.match_.is_empty() {
@@ -945,6 +1016,19 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 .with_location(location.clone()),
             );
         }
+        if let Some(rule) = &entry.rule {
+            if !parse_capabilities.knows_rule(rule) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.rule_unknown",
+                        Summary::new()
+                            .text("Unknown dataset.paths rule: ")
+                            .text(rule.clone()),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
+        }
         for field in &entry.unknown_fields {
             diagnostics.push(
                 Diagnostic::error(
@@ -956,7 +1040,8 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 .with_location(location.clone()),
             );
         }
-        if entry.row_identity.is_some() && !entry_declares_tabular(entry) {
+        if entry.row_identity.is_some() && !parse_capabilities.entry_can_emit(entry, &tabular_v1())
+        {
             diagnostics.push(
                 Diagnostic::error(
                     "binoc.dataset_config.facet_kind_mismatch",
@@ -978,7 +1063,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                     .with_location(location.clone()),
                 );
             }
-            if !entry_declares_structured_document(entry) {
+            if !parse_capabilities.entry_can_emit(entry, &structured_document_v1()) {
                 diagnostics.push(
                     Diagnostic::error(
                         "binoc.dataset_config.facet_kind_mismatch",
@@ -1001,7 +1086,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                     .with_location(location.clone()),
                 );
             }
-            if !entry_declares_tabular(entry) {
+            if !parse_capabilities.entry_can_emit(entry, &tabular_v1()) {
                 diagnostics.push(
                     Diagnostic::error(
                         "binoc.dataset_config.facet_kind_mismatch",
@@ -1013,7 +1098,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 );
             }
         }
-        if entry.dialect.is_some() && !entry_declares_tabular(entry) {
+        if entry.dialect.is_some() && !parse_capabilities.entry_can_emit(entry, &tabular_v1()) {
             diagnostics.push(
                 Diagnostic::error(
                     "binoc.dataset_config.facet_kind_mismatch",
@@ -1024,7 +1109,7 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                 .with_location(location.clone()),
             );
         }
-        if entry.shape.is_some() && !entry_declares_tabular(entry) {
+        if entry.shape.is_some() && !parse_capabilities.entry_can_emit(entry, &tabular_v1()) {
             diagnostics.push(
                 Diagnostic::error(
                     "binoc.dataset_config.facet_kind_mismatch",
@@ -1041,6 +1126,16 @@ fn validate_path_entries(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
                     Diagnostic::error(
                         "binoc.dataset_config.shape_header_position_ambiguous",
                         Summary::new().text("shape cannot set both header_line and skip_lines"),
+                    )
+                    .with_location(location.clone()),
+                );
+            }
+            if shape.has_header == Some(false) && shape.header_line.is_some() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "binoc.dataset_config.shape_header_ambiguous",
+                        Summary::new()
+                            .text("shape cannot set header_line when has_header is false"),
                     )
                     .with_location(location.clone()),
                 );
@@ -1063,8 +1158,10 @@ fn path_tabular_parse_for_path(
     tables: &TableConfig,
     entry: &PathConfigEntry,
     path: &str,
+    parse_capabilities: &ParseCapabilities,
 ) -> Option<TabularParseConfig> {
-    let mut parse = legacy_tabular_parse_for_path(tables, path).unwrap_or_default();
+    let mut parse =
+        legacy_tabular_parse_for_path(tables, path, parse_capabilities).unwrap_or_default();
     if let Some(shape) = &entry.shape {
         shape.apply_to_parse_config(&mut parse);
     }
@@ -1077,8 +1174,12 @@ fn path_tabular_parse_for_path(
     normalize_tabular_parse(parse)
 }
 
-fn legacy_tabular_parse_for_path(tables: &TableConfig, path: &str) -> Option<TabularParseConfig> {
-    if !is_tabular_path(path) {
+fn legacy_tabular_parse_for_path(
+    tables: &TableConfig,
+    path: &str,
+    parse_capabilities: &ParseCapabilities,
+) -> Option<TabularParseConfig> {
+    if !parse_capabilities.pattern_can_emit(path, &tabular_v1()) {
         return None;
     }
     let mut parse = tables.defaults.parse.clone();
@@ -1149,105 +1250,26 @@ fn table_config_has_parse_overrides(tables: &TableConfig) -> bool {
             .any(|entry| normalize_tabular_parse(entry.parse.clone()).is_some())
 }
 
-fn entry_declares_tabular(entry: &PathConfigEntry) -> bool {
-    glob_can_match_tabular_artifact(&entry.match_)
-        || entry
-            .content_type
-            .as_deref()
-            .is_some_and(content_type_can_emit_tabular_artifact)
-        || entry
-            .rule
-            .as_deref()
-            .is_some_and(rule_can_emit_tabular_artifact)
-}
-
-fn entry_declares_structured_document(entry: &PathConfigEntry) -> bool {
-    glob_can_match_structured_document_artifact(&entry.match_)
-        || entry
-            .content_type
-            .as_deref()
-            .is_some_and(content_type_can_emit_structured_document_artifact)
-        || entry
-            .rule
-            .as_deref()
-            .is_some_and(rule_can_emit_structured_document_artifact)
-}
-
-fn content_type_can_emit_tabular_artifact(content_type: &str) -> bool {
-    matches!(
-        content_type,
-        "text/csv"
-            | "text/tab-separated-values"
-            | "application/json"
-            | "application/ld+json"
-            | "application/geo+json"
-    )
-}
-
-fn content_type_can_emit_structured_document_artifact(content_type: &str) -> bool {
-    matches!(
-        content_type,
-        "application/json"
-            | "application/ld+json"
-            | "application/geo+json"
-            | "text/yaml"
-            | "application/yaml"
-            | "application/x-yaml"
-            | "application/toml"
-            | "text/xml"
-            | "application/xml"
-            | "application/rdf+xml"
-            | "application/atom+xml"
-    )
-}
-
-fn projection_for_content_type(content_type: &str) -> ProjectionHint {
-    match content_type {
-        "text/csv" | "text/tab-separated-values" => ProjectionHint::default().item_type("tabular"),
-        content_type if content_type.starts_with("text/") => {
-            ProjectionHint::default().item_type("text")
-        }
-        _ => ProjectionHint::default(),
+fn projection_for_content_type(
+    content_type: &str,
+    parse_capabilities: &ParseCapabilities,
+) -> ProjectionHint {
+    if parse_capabilities.media_type_can_emit(content_type, &tabular_v1()) {
+        ProjectionHint::default().item_type("tabular")
+    } else if content_type.starts_with("text/") {
+        ProjectionHint::default().item_type("text")
+    } else {
+        ProjectionHint::default()
     }
 }
 
-fn glob_can_match_tabular_artifact(pattern: &str) -> bool {
-    [
-        ".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".geojson", ".jsonld", ".json-ld",
-    ]
-    .iter()
-    .any(|extension| pattern.ends_with(extension))
-}
-
-fn glob_can_match_structured_document_artifact(pattern: &str) -> bool {
-    [
-        ".json",
-        ".jsonld",
-        ".json-ld",
-        ".geojson",
-        ".yaml",
-        ".yml",
-        ".toml",
-        ".ini",
-        ".cfg",
-        ".properties",
-        ".xml",
-        ".rdf",
-        ".kml",
-        ".gml",
-        ".atom",
-        ".rss",
-    ]
-    .iter()
-    .any(|extension| pattern.ends_with(extension))
-}
-
-fn is_tabular_path(path: &str) -> bool {
-    glob_can_match_tabular_artifact(path)
-}
-
-fn path_can_emit_tabular_artifact(path: &str, path_entry: Option<&PathConfigEntry>) -> bool {
-    path_entry.is_some_and(entry_declares_tabular) || glob_can_match_tabular_artifact(path)
+fn path_can_emit_tabular_artifact(
+    path: &str,
+    path_entry: Option<&PathConfigEntry>,
+    parse_capabilities: &ParseCapabilities,
+) -> bool {
+    path_entry.is_some_and(|entry| parse_capabilities.entry_can_emit(entry, &tabular_v1()))
+        || parse_capabilities.pattern_can_emit(path, &tabular_v1())
 }
 
 fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<Vec<String>> {
@@ -1263,8 +1285,8 @@ fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<
         .min_depth(1)
         .sort_by_file_name()
         .into_iter()
-        .filter_map(|entry| entry.ok())
     {
+        let entry = walk_path_entry(entry)?;
         let Ok(rel) = entry.path().strip_prefix(&physical) else {
             continue;
         };
@@ -1276,6 +1298,12 @@ fn logical_paths_for_root(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<
     paths.sort();
     paths.dedup();
     Ok(paths)
+}
+
+fn walk_path_entry(
+    entry: Result<walkdir::DirEntry, walkdir::Error>,
+) -> BinocResult<walkdir::DirEntry> {
+    entry.map_err(|err| BinocError::Other(format!("walk dataset paths: {err}")))
 }
 
 fn table_entry_matches_path(entry: &binoc_sdk::TableEntry, path: &str) -> bool {
@@ -1357,140 +1385,14 @@ fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn item_for_logical_path(
-    root: &ItemRef,
-    root_physical: &Path,
-    logical_path: &str,
-    path_entry: Option<&PathConfigEntry>,
-    data: &dyn DataAccess,
-) -> BinocResult<Option<ItemRef>> {
-    if root_physical.is_file() {
-        let Some(mut item) = (root.logical_path == logical_path).then_some(root.clone()) else {
-            return Ok(None);
-        };
-        apply_path_dispatch_overrides(&mut item, path_entry);
-        return Ok(Some(item));
-    }
-    let physical = root_physical.join(logical_path);
-    if !physical.exists() {
-        return Ok(None);
-    }
-    let mut item = data.register_local(&physical, logical_path)?;
-    apply_path_dispatch_overrides(&mut item, path_entry);
-    Ok(Some(item))
-}
-
-fn apply_path_dispatch_overrides(item: &mut ItemRef, path_entry: Option<&PathConfigEntry>) {
-    let Some(path_entry) = path_entry else {
-        return;
-    };
-    if let Some(content_type) = &path_entry.content_type {
-        item.media_type = Some(content_type.clone());
-    }
-    if let Some(parse) = parse_config_for_entry(path_entry) {
-        item.tabular_parse = Some(parse);
-    }
-}
-
-fn path_emits_structured_document_artifact(
-    path: &str,
-    left_root: &ItemRef,
-    left_root_physical: &Path,
-    right_root: &ItemRef,
-    right_root_physical: &Path,
-    path_entry: Option<&PathConfigEntry>,
-    data: &dyn DataAccess,
-) -> BinocResult<bool> {
-    if path_entry.is_some_and(entry_declares_structured_document)
-        || glob_can_match_structured_document_artifact(path)
-    {
-        return Ok(true);
-    }
-    for (root, physical) in [
-        (left_root, left_root_physical),
-        (right_root, right_root_physical),
-    ] {
-        let Some(item) = item_for_logical_path(root, physical, path, path_entry, data)? else {
-            continue;
-        };
-        if item_emits_structured_document_artifact(&item, path_entry, data) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn item_emits_structured_document_artifact(
-    item: &ItemRef,
-    path_entry: Option<&PathConfigEntry>,
-    data: &dyn DataAccess,
-) -> bool {
-    if let Some(forced) = path_entry
-        .and_then(|entry| entry.rule.as_deref())
-        .and_then(forced_structured_document_parse_rule)
-    {
-        if let Ok(output) = forced.parse(item, data) {
-            return !output.bytes.is_empty();
-        }
-    }
-    let json = parse::JsonParse;
-    let json_media = parse::JsonMediaParse;
-    let yaml = parse::YamlParse;
-    let yaml_media = parse::YamlMediaParse;
-    let toml = parse::TomlParse;
-    let ini = parse::IniParse;
-    let rules = [
-        &json as &dyn ParseRule,
-        &json_media as &dyn ParseRule,
-        &yaml as &dyn ParseRule,
-        &yaml_media as &dyn ParseRule,
-        &toml as &dyn ParseRule,
-        &ini as &dyn ParseRule,
-    ];
-    for rule in rules {
-        let descriptor = rule.descriptor();
-        if descriptor.output != structured_document_v1() || !descriptor.input.matches(item) {
-            continue;
-        }
-        let Ok(output) = rule.parse(item, data) else {
-            continue;
-        };
-        if !output.bytes.is_empty() {
-            return true;
-        }
-    }
-    false
-}
-
-fn forced_structured_document_parse_rule(rule_name: &str) -> Option<&'static dyn ParseRule> {
-    match rule_name {
-        "binoc.parse.json" => Some(&parse::JsonParse),
-        "binoc.parse.json_media" => Some(&parse::JsonMediaParse),
-        "binoc.parse.yaml" => Some(&parse::YamlParse),
-        "binoc.parse.yaml_media" => Some(&parse::YamlMediaParse),
-        "binoc.parse.toml" => Some(&parse::TomlParse),
-        "binoc.parse.ini" => Some(&parse::IniParse),
-        _ => None,
-    }
-}
-
-fn rule_can_emit_tabular_artifact(rule_name: &str) -> bool {
-    matches!(
-        rule_name,
-        "binoc.parse.csv"
-            | "binoc.parse.csv_media"
-            | "binoc.parse.json_records"
-            | "binoc.parse.json_media_records"
-    )
-}
-
-fn rule_can_emit_structured_document_artifact(rule_name: &str) -> bool {
-    forced_structured_document_parse_rule(rule_name).is_some()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use binoc_sdk::{Cardinality, IdentityFailurePolicy};
+
+    fn parse_capabilities() -> ParseCapabilities {
+        ParseCapabilities::from_rules(&default_engine_config().rules)
+    }
 
     fn ctx<'a>(
         container: bool,
@@ -1645,12 +1547,60 @@ mod tests {
     }
 
     #[test]
+    fn modified_move_keeps_origin_and_content_summaries() {
+        let edits = [Edit::new(
+            "text.replace_lines",
+            serde_json::json!({
+                "lines_added": 2,
+                "lines_removed": 0,
+            }),
+        )];
+        let context = ProjectionAnnotationContext {
+            action: "move",
+            item_type: "text",
+            path: "notes-v2.txt",
+            source_path: Some("notes.txt"),
+            source_item_type: Some("text"),
+            evidence: Some("binoc.pair.content_similarity"),
+            edits: &edits,
+            container: false,
+            unlinked_side: None,
+        };
+
+        let hint = StdlibProjectionAnnotator.annotate(&context);
+
+        assert_eq!(
+            hint.summary.map(|summary| summary.plain_text()).as_deref(),
+            Some("Moved from notes.txt")
+        );
+        assert!(hint.annotations.iter().any(|annotation| {
+            annotation.package == "binoc"
+                && annotation.key == "content_summary"
+                && annotation.value == "2 lines added"
+        }));
+    }
+
+    #[test]
     fn glob_matching_treats_decompose_boundaries_like_path_boundaries() {
         assert!(glob_matches_path(
             "**/num.tsv",
             "2026_03_notes.zip/>num.tsv"
         ));
         assert!(glob_matches_path("**/num.tsv", "expanded/num.tsv"));
+    }
+
+    #[test]
+    fn logical_path_discovery_propagates_walk_errors() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let walk_error = walkdir::WalkDir::new(temp.path().join("missing"))
+            .into_iter()
+            .next()
+            .expect("walk result")
+            .expect_err("missing path must fail");
+        let error = walk_path_entry(Err(walk_error)).expect_err("walk must fail");
+
+        assert!(error.to_string().contains("walk dataset paths"));
+        assert!(error.to_string().contains("missing"));
     }
 
     #[test]
@@ -1668,6 +1618,7 @@ mod tests {
             &semantics,
             &[String::from("records.json")],
             &[String::from("records.json")],
+            &parse_capabilities(),
         );
 
         assert!(row_identity.is_empty());
@@ -1682,12 +1633,9 @@ mod tests {
             on_null_key: IdentityFailurePolicy::Error,
             on_duplicate_key: IdentityFailurePolicy::Ignore,
         };
-        let entry = RowIdentity {
-            columns: vec!["email".into()],
-            by_position: Vec::new(),
-            cardinality: Cardinality::default(),
-            on_null_key: IdentityFailurePolicy::default(),
-            on_duplicate_key: IdentityFailurePolicy::default(),
+        let entry = RowIdentityPatch {
+            columns: Some(vec!["email".into()]),
+            ..RowIdentityPatch::default()
         };
 
         let merged = merge_row_identity(&defaults, Some(&entry));
@@ -1697,6 +1645,53 @@ mod tests {
         assert_eq!(merged.cardinality, Cardinality::default());
         assert_eq!(merged.on_null_key, IdentityFailurePolicy::Error);
         assert_eq!(merged.on_duplicate_key, IdentityFailurePolicy::Ignore);
+    }
+
+    #[test]
+    fn merge_row_identity_accepts_explicit_default_policy_override() {
+        let defaults = RowIdentity {
+            columns: vec!["id".into()],
+            on_null_key: IdentityFailurePolicy::Error,
+            on_duplicate_key: IdentityFailurePolicy::Ignore,
+            ..RowIdentity::default()
+        };
+        let entry = RowIdentityPatch {
+            on_null_key: Some(IdentityFailurePolicy::Diagnostic),
+            on_duplicate_key: Some(IdentityFailurePolicy::Diagnostic),
+            ..RowIdentityPatch::default()
+        };
+
+        let merged = merge_row_identity(&defaults, Some(&entry));
+
+        assert_eq!(merged.on_null_key, IdentityFailurePolicy::Diagnostic);
+        assert_eq!(merged.on_duplicate_key, IdentityFailurePolicy::Diagnostic);
+    }
+
+    #[test]
+    fn merge_row_identity_replaces_inherited_selector_in_both_directions() {
+        let named_defaults = RowIdentity {
+            columns: vec!["id".into()],
+            ..RowIdentity::default()
+        };
+        let by_position = RowIdentityPatch {
+            by_position: Some(vec![2]),
+            ..RowIdentityPatch::default()
+        };
+        let positional = merge_row_identity(&named_defaults, Some(&by_position));
+        assert_eq!(positional.columns, vec!["column_2"]);
+        assert!(positional.by_position.is_empty());
+
+        let positional_defaults = RowIdentity {
+            by_position: vec![1],
+            ..RowIdentity::default()
+        };
+        let by_name = RowIdentityPatch {
+            columns: Some(vec!["email".into()]),
+            ..RowIdentityPatch::default()
+        };
+        let named = merge_row_identity(&positional_defaults, Some(&by_name));
+        assert_eq!(named.columns, vec!["email"]);
+        assert!(named.by_position.is_empty());
     }
 
     #[test]
@@ -1721,11 +1716,40 @@ mod tests {
             &semantics,
             &[String::from("data.csv")],
             &[String::from("data.csv")],
+            &parse_capabilities(),
         );
 
         let identity = identities.get("data.csv").expect("data.csv identity");
         assert_eq!(identity.columns, vec!["email"]);
         assert_eq!(identity.on_null_key, IdentityFailurePolicy::Error);
         assert_eq!(identity.on_duplicate_key, IdentityFailurePolicy::Ignore);
+    }
+
+    #[test]
+    fn flat_path_policy_override_keeps_inherited_key_columns() {
+        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
+            "defaults": {
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "error"
+                }
+            },
+            "paths": [{
+                "match": "data.csv",
+                "on_null_key": "diagnostic"
+            }]
+        }))
+        .expect("dataset semantics");
+
+        let identities = row_identity_for_paths(
+            &semantics,
+            &[String::from("data.csv")],
+            &[String::from("data.csv")],
+            &parse_capabilities(),
+        );
+
+        let identity = identities.get("data.csv").expect("data.csv identity");
+        assert_eq!(identity.columns, vec!["id"]);
+        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Diagnostic);
     }
 }

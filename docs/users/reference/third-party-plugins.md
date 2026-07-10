@@ -6,7 +6,7 @@ audience: data steward, plugin consumer
 
 Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) (`binoc-stdlib`) plus first-party format packs. Most format packs are compiled into the fat `binoc` wheel; SQLite remains an explicit opt-in pack and is not published as a separate PyPI wheel.
 
-To find a match, compare your filenames (suffixes) and, when available, detected media types to the tables under each plugin.
+For format parsers, compare your filenames (suffixes) and, when available, detected media types to the tables under each plugin. Other scopes identify group parsers, artifact writers, and changeset renderers explicitly.
 
 For package ids that may appear in changelog output, see the [plugin registry](plugin-registry.md).
 
@@ -34,14 +34,16 @@ Parses Avro snapshots as structured data so changes in records and fields surfac
 - **Source path:** `model-plugins/binoc-avro`
 - **Rust crate:** `binoc-avro`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.avro` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -62,14 +64,74 @@ Parses common binary interchange formats into JSON-like values so content change
 - **Source path:** `model-plugins/binoc-binformats`
 - **Rust crate:** `binoc-binformats`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+#### `binoc-binformats.parse.cbor`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
-| `extensions` | - |
+| `extensions` | `.cbor` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.msgpack`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.msgpack`, `.mp` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.bson`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.bson` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.plist`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.plist` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-binformats.parse.ion`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.ion` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -90,14 +152,16 @@ Parses DBF snapshots so table and row changes in legacy dBase-style datasets sho
 - **Source path:** `model-plugins/binoc-dbf`
 - **Rust crate:** `binoc-dbf`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.dbf` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -118,55 +182,59 @@ Parses Excel workbooks so sheet, row, column, and cell changes can be compared a
 - **Source path:** `model-plugins/binoc-excel`
 - **Rust crate:** `binoc-excel`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
-| `extensions` | `.xlsx` |
+| `extensions` | `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
-*Rule families supplied:* `expand`, `parse`
+*Rule families supplied:* `parse`
 
 ## binoc-html
 
-Supports HTML-related parsing and rewriting for datasets that publish or embed structured content in HTML snapshots.
+Renders Binoc changesets as self-contained HTML changelogs.
 
 | Field | Value |
 |---|---|
 | Tier | First-party add-on |
 | Distribution | Maintained in this repository but distributed outside the default fat `binoc` wheel. |
-| Handles | HTML files and HTML-embedded structured data. |
-| Produces | Parsed HTML-derived artifacts and content changes. |
+| Handles | Completed Binoc changesets. |
+| Produces | Self-contained HTML changelogs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-html)
 - **Source path:** `model-plugins/binoc-html`
 - **PyPI:** `binoc-html`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This renderer consumes completed Binoc changesets.
 
 | Field | Value |
 |---|---|
-| `extensions` | `.html`, `.htm` |
+| `extensions` | - |
 | `media_types` | - |
-| `scope` | `files` |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `changesets` |
 
-*Rule families supplied:* `parse`
+*Rule families supplied:* `render`
 
 ## binoc-parquet
 
-Parses Parquet snapshots so column, row, and cell changes appear as ordinary tabular diffs.
+Parses Parquet and Arrow IPC snapshots so column, row, and cell changes appear as ordinary tabular diffs.
 
 | Field | Value |
 |---|---|
 | Tier | First-party bundled |
 | Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Parquet files. |
+| Handles | Parquet, Arrow IPC, and Feather files. |
 | Produces | Tabular records and tabular diffs. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
@@ -174,14 +242,32 @@ Parses Parquet snapshots so column, row, and cell changes appear as ordinary tab
 - **Source path:** `model-plugins/binoc-parquet`
 - **Rust crate:** `binoc-parquet`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+#### `binoc-parquet.parse.parquet`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.parquet` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-parquet.parse.arrow-ipc`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.arrow`, `.feather`, `.ipc` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -194,25 +280,27 @@ Detects row reordering in tabular data so shuffles are represented as ordering c
 |---|---|
 | Tier | First-party bundled |
 | Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Tabular collections with reordered rows. |
-| Produces | Row-reorder correspondence and compact move-like row changes. |
+| Handles | Paired `binoc.tabular.v1` artifacts with the same rows in a different order. |
+| Produces | A `tabular.reorder_rows` edit when row multisets match. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder)
 - **Source path:** `model-plugins/binoc-row-reorder`
 - **Rust crate:** `binoc-row-reorder`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This writer consumes paired artifacts in the listed **artifact formats**, independent of the source filename.
 
 | Field | Value |
 |---|---|
-| `extensions` | `.csv`, `.tsv` |
+| `extensions` | - |
 | `media_types` | - |
-| `scope` | `files` |
+| `member_extensions` | - |
+| `artifact_formats` | `binoc.tabular.v1` |
+| `scope` | `artifacts` |
 
-*Rule families supplied:* `pair`, `writer`
+*Rule families supplied:* `writer`
 
 ## binoc-shapefile
 
@@ -230,17 +318,35 @@ Handles shapefile bundles and their sidecar files so feature, geometry, and attr
 - **Source path:** `model-plugins/binoc-shapefile`
 - **Rust crate:** `binoc-shapefile`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+#### `binoc-shapefile.fuse`
+
+This group parser uses the listed **extensions** as anchors and correlates sibling files with the listed **member extensions**.
 
 | Field | Value |
 |---|---|
-| `extensions` | `.shp`, `.dbf`, `.shx` |
+| `extensions` | `.shp` |
 | `media_types` | - |
+| `member_extensions` | `.shx`, `.dbf`, `.prj`, `.cpg` |
+| `artifact_formats` | - |
+| `scope` | `file-groups` |
+
+*Rule families supplied:* `group-parse`
+
+#### `binoc-shapefile.parse.shp`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | `.shp` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
-*Rule families supplied:* `expand`, `parse`
+*Rule families supplied:* `parse`
 
 ## binoc-sqlite
 
@@ -258,17 +364,19 @@ Compares SQLite databases: schema, columns, keys, and row counts. Useful when a 
 - **Source path:** `model-plugins/binoc-sqlite`
 - **Rust crate:** `binoc-sqlite`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.sqlite`, `.sqlite3`, `.db` |
-| `media_types` | `application/vnd.sqlite3`, `application/x-sqlite3` |
+| `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
-*Rule families supplied:* `parse`, `writer`, `materializer`
+*Rule families supplied:* `parse`
 
 ## binoc-stat-binary
 
@@ -286,40 +394,46 @@ Reads Stata, SAS, and SAS transport files as standard Binoc tabular data so norm
 - **Source path:** `model-plugins/binoc-stat-binary`
 - **Rust crate:** `binoc-stat-binary`
 
-### When it handles your files
+### Dispatch
 
-#### `binoc-stat-binary.stata`
+#### `binoc-stat-binary.stata.parse`
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.dta` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
 
-#### `binoc-stat-binary.sas7bdat`
+#### `binoc-stat-binary.sas7bdat.parse`
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.sas7bdat` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
 
-#### `binoc-stat-binary.xpt`
+#### `binoc-stat-binary.xpt.parse`
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
 | `extensions` | `.xpt` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
@@ -340,18 +454,36 @@ Parses XML snapshots into structured data so hierarchical document and metadata 
 - **Source path:** `model-plugins/binoc-xml`
 - **Rust crate:** `binoc-xml`
 
-### When it handles your files
+### Dispatch
 
-This rule pack is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+#### `binoc-xml.parse.xml`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
 
 | Field | Value |
 |---|---|
-| `extensions` | `.xml` |
+| `extensions` | `.xml`, `.rdf`, `.kml`, `.gml`, `.atom`, `.rss` |
 | `media_types` | - |
+| `member_extensions` | - |
+| `artifact_formats` | - |
+| `scope` | `files` |
+
+*Rule families supplied:* `parse`
+
+#### `binoc-xml.parse.xml_media`
+
+This rule is relevant when a file path matches one of the **extensions** or its detected **media type** matches.
+
+| Field | Value |
+|---|---|
+| `extensions` | - |
+| `media_types` | `text/xml`, `application/xml`, `application/rdf+xml`, `application/atom+xml` |
+| `member_extensions` | - |
+| `artifact_formats` | - |
 | `scope` | `files` |
 
 *Rule families supplied:* `parse`
 
 ## Catalog file for tools
 
-The canonical data lives in `plugin_registry.json` (JSON). Hosts that suggest plugins for unrecognized formats should read that file; dispatch fields describe the rule pack's advertised file selectors.
+The canonical data lives in `plugin_registry.json` (JSON). Hosts that suggest plugins for unrecognized formats should read that file; dispatch fields describe the rule's advertised selectors and processing scope.

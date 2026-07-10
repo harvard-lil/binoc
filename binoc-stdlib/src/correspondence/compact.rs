@@ -443,7 +443,6 @@ fn suppressed_value_groups(
     }
     by_column
         .into_values()
-        .filter(|group| group.count >= 2)
         .map(|group| (group.first_index, group))
         .collect()
 }
@@ -2036,16 +2035,57 @@ mod tests {
         let edits = vec![
             cell(0, "count", json!("123"), json!("N/A")),
             cell(1, "count", json!("456"), json!("N/A")),
-            cell(2, "name", json!("Alice"), json!("Alicia")),
+            cell(2, "other", json!("789"), json!("*")),
+            cell(3, "name", json!("Alice"), json!("Alicia")),
         ];
 
         let suppression_sentinels = ["N/A", ""].into_iter().map(str::to_string).collect();
         let rewritten = rewrite_reduced_precision(&edits, &suppression_sentinels).expect("rewrite");
 
-        assert_eq!(rewritten.len(), 2);
+        assert_eq!(rewritten.len(), 3);
         assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
         assert_eq!(rewritten[0].params["cells"], json!(2));
         assert_eq!(rewritten[1].verb, "tabular.edit_cell");
+        assert_eq!(rewritten[1].params["to"], json!("*"));
+        assert!(!rewritten[1]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(rewritten[2].verb, "tabular.edit_cell");
+    }
+
+    #[test]
+    fn reduced_precision_rewrites_single_suppressed_cell() {
+        let edits = vec![cell(0, "count", json!("123"), json!("*"))];
+
+        let rewritten =
+            rewrite_reduced_precision(&edits, &default_suppression_sentinels()).expect("rewrite");
+
+        assert_eq!(rewritten.len(), 1);
+        assert_eq!(rewritten[0].verb, "tabular.values_suppressed");
+        assert_eq!(
+            rewritten[0].params,
+            json!({
+                "column": "count",
+                "cells": 1,
+            })
+        );
+        assert!(rewritten[0]
+            .projection
+            .hint
+            .tags
+            .contains(&"binoc.value-suppressed".into()));
+        assert_eq!(
+            rewritten[0]
+                .projection
+                .hint
+                .summary
+                .as_ref()
+                .expect("summary")
+                .plain_text(),
+            "Suppressed 1 cell in 'count'"
+        );
     }
 
     #[test]
