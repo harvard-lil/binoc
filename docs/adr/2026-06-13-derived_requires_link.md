@@ -12,7 +12,7 @@ will never have a counterpart. The engine modeled this with a per-rule
 `ParseDescriptor.requires_link: bool` flag.
 
 The cross-format tabular pairing feature broke that model. `TabularPair`
-compares parsed `tabular_v1` content to detect a CSV→TSV reformat as a
+compares parsed `tabular_v1` content to detect a CSV->TSV reformat as a
 single reformatted table. To do that it must read the `tabular_v1`
 artifact *before any link exists* — pairing is exactly what produces the
 link. So `CsvParse.requires_link` was hand-flipped to `false`.
@@ -47,10 +47,10 @@ Pair rules are the only pre-link artifact consumers today: writers and
 annotators run post-link, and expand rules read raw data, not artifacts.
 So the union of pair `reads` is the complete set of formats that must
 exist on unlinked nodes. The derivation reproduces the prior behavior
-exactly: `CsvParse` (output `tabular_v1`) is read by `TabularPair` → un-
+exactly: `CsvParse` (output `tabular_v1`) is read by `TabularPair` -> un-
 gated (the former hand-flip, now formalized); every other parse rule
 (`CsvStackedTablesParse`, `SqliteParseRule`, the stat-binary collection
-parsers, all output `tabular_collection_v1`, read by no pair rule) →
+parsers, all output `tabular_collection_v1`, read by no pair rule) ->
 stays link-gated.
 
 This stays a static pre-pass: it sets a per-format gate and does not

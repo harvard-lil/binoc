@@ -32,7 +32,7 @@ The file-level separation is right. Three things fall short.
 ## What great looks like
 
 ```
-# Changelog: 2021 edition → 2022 edition
+# Changelog: 2021 edition -> 2022 edition
 
 ## Schema & vocabulary changes
 - facilities.csv
@@ -42,7 +42,7 @@ The file-level separation is right. Three things fall short.
 
 ## Bulk data updates — summarized, not enumerated
 - facilities.csv:  4 rows, 1 cell changed
-- inspections.csv: 4 → 6 rows (+2), 3 cells changed
+- inspections.csv: 4 -> 6 rows (+2), 3 cells changed
 ```
 
 ## The three gaps between today and the target
@@ -57,7 +57,7 @@ The file-level separation is right. Three things fall short.
    IR change.
 
 2. **Vocabulary as a first-class change.**
-   `active → decommissioned` is reported as `binoc.cell-change`, not "the
+   `active -> decommissioned` is reported as `binoc.cell-change`, not "the
    `status` vocabulary gained a value." Columns are not first-class nodes and
    distinct-value-set diffing does not exist.
    *Needs:* a plugin `EditListWriter` over `tabular_v1` that computes the set of
@@ -67,7 +67,7 @@ The file-level separation is right. Three things fall short.
 
 3. **Summary statistics instead of enumeration.**
    The bulk section dumps every changed cell and added row. A vintage reader
-   wants "4 → 6 rows, 3 cells changed."
+   wants "4 -> 6 rows, 3 cells changed."
    *Needs:* the same plugin writer emitting an aggregate via `Edit::with_summary`
    (or `GlobalClaim` for a dataset-level roll-up). The seam already carries such
    facts — binoc-stdlib uses `with_summary` for binary string-diffs today; no

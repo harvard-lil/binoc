@@ -7,7 +7,7 @@
 //! writer then handles diffing, summaries, and tags without knowing the origin
 //! format.
 //!
-//! ## XML → JSON convention
+//! ## XML -> JSON convention
 //!
 //! We hand-roll the walk on top of `quick-xml` rather than using
 //! `quickxml_to_serde`, because that crate is unmaintained (built on
@@ -15,7 +15,7 @@
 //! scalar types — all of which corrupt a diff. Our mapping is:
 //!
 //! - The document is wrapped under its root element's (prefixed) name:
-//!   `<rows>…</rows>` → `{ "rows": … }`. A renamed root is therefore a visible
+//!   `<rows>…</rows>` -> `{ "rows": … }`. A renamed root is therefore a visible
 //!   change.
 //! - Elements become object keys keyed by their **full prefixed name**
 //!   (`gmd:MD_Metadata`, not `MD_Metadata`) so distinct namespaces never
@@ -24,7 +24,7 @@
 //! - Attributes become `@`-prefixed keys (`@id`, `@xlink:href`).
 //! - Text content becomes a `#text` key on an element that also has
 //!   attributes/children, or the element's plain string value when it is a pure
-//!   leaf (`<name>Alice</name>` → `"Alice"`).
+//!   leaf (`<name>Alice</name>` -> `"Alice"`).
 //! - Repeated identically-named sibling elements collect into an array, in
 //!   document order. A name seen once is a single value; seen twice or more, an
 //!   array.
@@ -132,7 +132,7 @@ fn parse_xml_item(item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOut
 
 /// An in-progress element while walking. Children are kept grouped by name in
 /// first-seen order so the final object preserves a stable key order, and each
-/// group preserves document order for the repeated-element → array case.
+/// group preserves document order for the repeated-element -> array case.
 #[derive(Default)]
 struct Node {
     /// Attributes in document order, keys already `@`-prefixed.

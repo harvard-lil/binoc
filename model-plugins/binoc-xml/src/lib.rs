@@ -6,7 +6,7 @@
 //! without knowing the source format — and so future XML-specific edit-list
 //! rewrite rules can match on the parser + artifact + tag.
 //!
-//! See [`xml`] for the deterministic XML → JSON convention.
+//! See [`xml`] for the deterministic XML -> JSON convention.
 
 mod xml;
 

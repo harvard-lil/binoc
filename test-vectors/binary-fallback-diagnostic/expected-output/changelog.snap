@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.parquet**: Binary content changed; 1 extracted string added, 1 extracted string removed
   - Extracted strings added

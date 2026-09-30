@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **story.txt**: 2 lines added; 1 line removed
   - Line changes

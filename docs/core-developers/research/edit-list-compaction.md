@@ -27,7 +27,7 @@ names. Every correspondence link gets an **edit list** in open-vocabulary
 verbs; a naive writer emits the dumbest true list (per-cell, per-line,
 "contents differ"); **compaction rules rewrite the list into shorter
 equivalents by introducing richer verbs** ("columns reordered by σ",
-"find-replace sneakers→shoes"), accepted only when a structural
+"find-replace sneakers->shoes"), accepted only when a structural
 description-cost — verbs + parameter sizes + residual edits — strictly
 decreases. Five distinct research traditions have hit pieces of this. The
 single most important finding: **the moment you add move/copy/block verbs, the
@@ -166,8 +166,8 @@ should reuse rather than reinvent.
   pointers by symbol-table index rather than raw address, and **reorders the
   symbol table specifically to maximize long common substrings** — i.e. it
   rewrites the representation to make the delta small, then diffs in that space
-  and inverts. Verified numbers on one Chrome update: 10.4 MB full → 704 KB
-  bsdiff → **79 KB Courgette**. This *is* binoc's parse-then-compact bet in
+  and inverts. Verified numbers on one Chrome update: 10.4 MB full -> 704 KB
+  bsdiff -> **79 KB Courgette**. This *is* binoc's parse-then-compact bet in
   another domain: don't diff the surface form; parse into a representation where
   corresponding things line up, then describe the small difference. (Flag:
   Courgette is x86-era and partly superseded by its successor *zucchini* for
@@ -196,8 +196,8 @@ endorsement.
   rather than solving for them. ([precedents.md](precedents.md) cites GumTree for
   the nodes-vs-tags tension; here the angle is edit-script-as-derived-view.)
 - **Sequence CRDTs** reached the same place from the concurrency side. The arc:
-  persist CRDT metadata (RGA, Logoot, LSEQ, Yjs/YATA) → persist transformed ops
-  (OT) → **persist only the original event graph and derive everything by
+  persist CRDT metadata (RGA, Logoot, LSEQ, Yjs/YATA) -> persist transformed ops
+  (OT) -> **persist only the original event graph and derive everything by
   replay**. That last step is [Eg-walker
   ("event-graph-walker")](https://arxiv.org/html/2409.14252v1) (Gentle &
   Kleppmann, EuroSys 2025), which stores an append-only DAG of original edits and
@@ -284,7 +284,7 @@ property, and the systems that pretended otherwise shipped bugs for two decades.
   1998, Imine 2003) are *all* incorrect, and proved that for the classical
   insert/delete signature **TP1 and TP2 cannot both be satisfied** — an
   impossibility, not just a difficulty. The escape that made OT shippable
-  (Jupiter 1995 → Google Wave) was to *centralize the order*: a single
+  (Jupiter 1995 -> Google Wave) was to *centralize the order*: a single
   server-defined sequence needs only the pairwise TP1, sidestepping the entire
   TP2 bug class. The two transfers for binoc: (1) the two-rule case is the easy
   case; the bugs live in *three-way* composition, and if rule order is *not*
@@ -321,7 +321,7 @@ verb composed ahead of it?" an explicit, tested property of the vocabulary.
 ## Inferring named operations — and verifying them by replay
 
 binoc's dataset-wide find-replace idea ("these 10,000 cell edits *are* one
-find-replace sneakers→shoes") is a stretch goal, not a committed feature. The
+find-replace sneakers->shoes") is a stretch goal, not a committed feature. The
 user need is still unestablished, and the current engine shape cannot express
 it without a new dataset-scope phase after edit lists are built. The
 software-engineering field has done nearby forms of operation inference for a
@@ -331,7 +331,7 @@ it is wrong.
 - **The forward direction exists and is production-grade.**
   [Coccinelle/SmPL](https://coccinelle.gitlabpages.inria.fr/website/) (Lawall &
   Muller; actively maintained, v1.3.0 Nov 2024, standard in the Linux kernel)
-  lets you write one *semantic patch* — a before→after pattern with
+  lets you write one *semantic patch* — a before->after pattern with
   metavariables — that rewrites thousands of sites a line diff never could.
   That validates the granularity binoc's compaction rules should emit: a single
   parameterized verb, not a pile of literal edits.
@@ -353,7 +353,7 @@ it is wrong.
   binoc's verbs *and* its significance classification.
 - **So binoc's distinguishing move must be to verify by replay.** Every
   inference technique above is fallible; the disciplined response is to *close
-  the loop*. When a rule claims "these edits = find-replace sneakers→shoes,"
+  the loop*. When a rule claims "these edits = find-replace sneakers->shoes,"
   binoc can execute that operation on the old side and assert it reproduces the
   new side. [OpenRefine](https://openrefine.org/) proves operations can be made
   deterministically replayable (its history extracts as a JSON recipe and
@@ -368,7 +368,7 @@ it is wrong.
   **rebased** (`sqlite3rebaser`) onto another applied changeset. Its *patchset*
   is a literally-lossy compaction of a changeset (DELETEs keep only the primary
   key; UPDATEs drop unchanged fields) — a direct analogue of binoc's raw edit
-  list → compacted changeset, *including the honest tradeoff that compaction
+  list -> compacted changeset, *including the honest tradeoff that compaction
   loses invertibility and weakens conflict detection*. This is the design pattern
   to point at when arguing binoc's edit lists should be first-class objects with
   an algebra rather than ephemeral diff output: get the object model right and
@@ -439,7 +439,7 @@ its guardrails.
    vocabularies cheaply.
 7. **Verify inferred operations by replay** (OpenRefine), and treat edit lists as
    **first-class invertible/rebasable objects** (SQLite session/patchset).
-8. **Name the cost function as MDL** (Rissanen → Grünwald → KRIMP) and the
+8. **Name the cost function as MDL** (Rissanen -> Grünwald -> KRIMP) and the
    acceptance test as strictly-decreasing description length.
 
 **Fear:**

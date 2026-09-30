@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.dta**: Column added: 'score'
   - Set Headers: from: ["id","name"]; to: ["id","name","score"]

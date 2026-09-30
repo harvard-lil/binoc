@@ -17,8 +17,8 @@ We want a **polyglot fallback**: a two-tier degradation so that *every* file pro
 *some* human-readable projection of its content for diffing.
 
 1. **Text-extraction tier.** If the file is a recognizable document/format that isn't
-   natively modeled, fall back to extracting its **text** (PDF → text, HTML → text,
-   DOCX → text, spreadsheet → cell text, …) so the diff shows readable content changes.
+   natively modeled, fall back to extracting its **text** (PDF -> text, HTML -> text,
+   DOCX -> text, spreadsheet -> cell text, …) so the diff shows readable content changes.
 2. **`strings(1)` tier.** For truly unreadable / unknown bytes, fall back to a
    `strings(1)`-style extraction of printable runs so that *something* shows up in the
    diff (embedded labels, paths, version strings, etc.).
@@ -62,7 +62,7 @@ RAG ingestion can be a poor fit here.
 | Tool | Lang / runtime | Formats | Native vs delegated (system deps) | Build / deploy cost | Determinism | Metadata | OCR | License | Maintenance (as of 2026-06) |
 |---|---|---|---|---|---|---|---|---|---|
 | **Apache Tika** | JVM (Java) | 1000+ | Delegates to POI, PDFBox, etc. Needs **JVM**; OCR needs **Tesseract** | High (JVM at runtime) | Mostly deterministic for text; OCR/auto-detect can vary | Yes (rich) | Yes (Tesseract) | Apache-2.0 | Very active; 3.3.x stable, 4.0 line in progress |
-| **Extractous** | Rust core + FFI | ~most Tika formats | Compiles Tika to **native libs via GraalVM at build time** → no JVM at *runtime*; OCR via **Tesseract** | **High build** (GraalVM AOT), moderate deploy | Inherits Tika text behavior; OCR nondeterminism if used | Yes | Yes (Tesseract) | **Apache-2.0** | Slower cadence: latest **0.3.0 (Dec 2024)**, ~1.8k stars |
+| **Extractous** | Rust core + FFI | ~most Tika formats | Compiles Tika to **native libs via GraalVM at build time** -> no JVM at *runtime*; OCR via **Tesseract** | **High build** (GraalVM AOT), moderate deploy | Inherits Tika text behavior; OCR nondeterminism if used | Yes | Yes (Tesseract) | **Apache-2.0** | Slower cadence: latest **0.3.0 (Dec 2024)**, ~1.8k stars |
 | **Kreuzberg** | **Rust core**, 14 lang bindings | **96** | Native Rust extractors; OCR optional (**Tesseract / PaddleOCR / EasyOCR / VLM**); ONNX for embeddings | Moderate (OCR/ONNX optional) | Text deterministic-ish; OCR/VLM paths nondeterministic | Yes | Yes (multiple) | **Elastic License 2.0** ⚠️ | Very active; v5 RC (Jun 2026), ~8.5k stars |
 | **unstructured** | Python | Many (PDF, HTML, Office, …) | Heavy Python deps; layout models; OCR (Tesseract) | High (deps + models) | **Low** (ML layout/partition heuristics) | Yes (elements) | Yes | Apache-2.0 core, but **AGPL/LGPL transitive deps** ⚠️ | Active |
 | **Docling (IBM)** | Python | PDF, Office, images, … | **Vision-language + layout models** (Granite-Docling 258M), auto-downloaded; OCR | **Very high** (model downloads, optional GPU) | **Low** (model inference) | Yes (rich structure) | Yes | **MIT** (lib) / Apache-2.0 (models) | Very active; ~30k+ stars |
@@ -186,7 +186,7 @@ determinism and minimal deps:
   emphasize **deterministic page ordering** explicitly (e.g. `unpdf` documents an internal
   reorder buffer emitting pages in ascending order) — a useful pattern if we parallelize
   ([pdf-extract listing](https://lib.rs/crates/pdf-extract)).
-- **HTML:** [`html2text`](https://github.com/jugglerchris/rust-html2text) (HTML → plain
+- **HTML:** [`html2text`](https://github.com/jugglerchris/rust-html2text) (HTML -> plain
   text via `html5ever`, active, MIT, 0.16.x in 2026) or [`scraper`](https://crates.io/crates/scraper)
   for DOM traversal. Both deterministic. *(Note: there is a same-named `html2text` Rust NIF
   for Elixir — the relevant crate is `jugglerchris/rust-html2text`.)*

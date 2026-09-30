@@ -168,7 +168,7 @@ def type_display(prop: dict | bool) -> str:
     if t == "object":
         extra = prop.get("additionalProperties")
         if isinstance(extra, dict):
-            return f"object (map of string → {type_display(extra)})"
+            return f"object (map of string -> {type_display(extra)})"
         if extra is True:
             return "object (free-form)"
         return "object"

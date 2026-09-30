@@ -19,10 +19,10 @@ two questions about these fields were underspecified:
    detection for its children.
 
 2. **What about derived facts like size?** The binary comparator renders
-   "Content changed (N bytes → M bytes)" summaries. It had a fast path that
+   "Content changed (N bytes -> M bytes)" summaries. It had a fast path that
    reused a cached `content_hash` from an upstream comparator but didn't have
    a cached size, so it set `size = 0` whenever the hash was pre-computed.
-   The visible symptom was `Content changed (0 bytes → 0 bytes)` in the
+   The visible symptom was `Content changed (0 bytes -> 0 bytes)` in the
    tutorial's FASTA example and anywhere else the directory comparator pre-
    hashed a file that later turned out to differ.
 

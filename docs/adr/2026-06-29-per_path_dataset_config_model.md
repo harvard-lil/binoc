@@ -103,7 +103,7 @@ it, it only supplies the key. That is why there is no `as: tree`.
 
 Resolution order is the load-bearing part:
 
-1. **Selector match** → first entry whose `match` matches the logical path.
+1. **Selector match** -> first entry whose `match` matches the logical path.
 2. **Dispatch override (`content_type:` / `rule:`)** feeds declarative dispatch —
    and runs *before* the tabular gate. This is the fix for the current ordering
    bug: today `row_identity_for_paths` filters to `is_tabular_path` first, so

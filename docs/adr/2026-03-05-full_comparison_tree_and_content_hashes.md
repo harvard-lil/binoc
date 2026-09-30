@@ -44,7 +44,7 @@ Result: every node in the tree carries content hashes regardless of which compar
 
 ### Side-channel hash map instead of identical nodes in the tree
 
-Instead of keeping identical nodes, the controller could build a separate `HashMap<String, String>` (path → hash) of all unchanged files and pass it to transformers. This avoids tree bloat for snapshots where most files are unchanged.
+Instead of keeping identical nodes, the controller could build a separate `HashMap<String, String>` (path -> hash) of all unchanged files and pass it to transformers. This avoids tree bloat for snapshots where most files are unchanged.
 
 Rejected because: (a) the data exists either way — a hash map and a tree of identical nodes hold the same information, (b) transformers would need a different API to access the side channel, (c) the uniform tree structure is simpler to reason about, and (d) pruning is cheap (single tree walk).
 

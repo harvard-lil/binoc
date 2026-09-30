@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.csv**: Column added: 'status'; Column removed: 'legacy'
   - Set Headers: from: ["id","legacy"]; to: ["id","status"]

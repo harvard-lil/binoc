@@ -5,7 +5,7 @@
 
 ## Problem
 
-The original CLI defaulted to printing raw changeset JSON to stdout (`binoc diff a b` → JSON), with human-readable Markdown only appearing as an automatic sidecar file when `--output` was specified. This was backwards for the common case: a human at a terminal wants to see what changed, not parse JSON. Meanwhile, the single `--output <path>` flag conflated two concerns — choosing where to write and choosing what format to write — and couldn't express "save JSON to a file *and* save Markdown to another file" in one invocation.
+The original CLI defaulted to printing raw changeset JSON to stdout (`binoc diff a b` -> JSON), with human-readable Markdown only appearing as an automatic sidecar file when `--output` was specified. This was backwards for the common case: a human at a terminal wants to see what changed, not parse JSON. Meanwhile, the single `--output <path>` flag conflated two concerns — choosing where to write and choosing what format to write — and couldn't express "save JSON to a file *and* save Markdown to another file" in one invocation.
 
 The sidecar model (write `changeset.json`, automatically get `changeset.md` alongside it) was also surprising: it created files the user didn't explicitly ask for, and there was no way to control which sidecar formats were produced without editing the dataset config's `renderers` list.
 
@@ -57,5 +57,5 @@ binoc changelog changesets/*.json -o CHANGES.md # render saved changesets to fil
 
 - The default `binoc diff` experience is now immediately useful to humans. Machine consumers use `--format json` or `-o file.json`.
 - The sidecar model is gone. Every file output is explicitly requested. This is more predictable but means migrating from the old `--output` flag to `-o file.json -o file.md` if both were wanted.
-- Custom renderers that produce JSON (e.g. a structured changelog in JSON format) can use the explicit prefix to avoid the `.json` → raw inference: `-o my-changelog:output.json`.
+- Custom renderers that produce JSON (e.g. a structured changelog in JSON format) can use the explicit prefix to avoid the `.json` -> raw inference: `-o my-changelog:output.json`.
 - `ResolvedPlugins` gained `renderer_for_extension()` and `renderer_by_name()` methods to support the lookup. These are generally useful for any code that needs to find renderers by something other than their full registered name.

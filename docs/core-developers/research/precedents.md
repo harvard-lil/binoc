@@ -66,7 +66,7 @@ The serious "don't reimplement" arguments are all per-layer.*
 
 **Tabular leaves (Move 4, Claim 1).**
 
-- **[daff](https://github.com/paulfitz/daff)** (MIT, Haxe→JS/Java/Python;
+- **[daff](https://github.com/paulfitz/daff)** (MIT, Haxe->JS/Java/Python;
   1.4.2 May 2025, slow-burn but alive; predecessor coopy dormant since
   2020): aligned table diffs handling inserted/deleted/reordered/**renamed
   columns** and keyed or heuristic row matching — a real chunk of
@@ -199,8 +199,8 @@ the facts/judgments wall. No incumbent has the full combination binoc needs.
   unregistered ops/dialects (unknown vocabulary flows through unharmed),
   the posture binoc wants for unknown tags.
 
-**Pandoc — the m + n hub itself (Moves 1, 5, 7; C5/C7).** Readers → fixed
-typed AST → writers; Lua filters are user-ordered in-process passes and
+**Pandoc — the m + n hub itself (Moves 1, 5, 7; C5/C7).** Readers -> fixed
+typed AST -> writers; Lua filters are user-ordered in-process passes and
 JSON filters the out-of-process twin (literally binoc's JSON-wire shape).
 No dependency system, no fixpoint; inter-filter ordering bugs are a known,
 accepted cost. Its open-vocabulary escape hatch — `Div`/`Span` `Attr`
@@ -244,13 +244,13 @@ binoc's C-ABI + JSON-wire hybrid sits in the mainstream:
   binoc's three-stage dispatch. **GDAL/OGR** (~80 vector formats behind one
   feature model) adds driver capability flags (`TestCapability()`) and
   registry probes (`Identify()`) — fixed hub model, open negotiated
-  capability vocabulary. **Apache Tika** (>1000 formats → one parse
+  capability vocabulary. **Apache Tika** (>1000 formats -> one parse
   signature) shows the hub representation can be a *streaming event
   sequence* rather than a materialized tree — relevant to the eager-
   artifact question. **LSP** solves m × n as protocol, with capability
   negotiation as the transferable mechanism.
 - **abi_stable** (mature, high-ceremony, slowing) and **stabby** (newer,
-  smaller adoption, has chased rustc internals) are the Rust↔Rust dylib
+  smaller adoption, has chased rustc internals) are the Rust<->Rust dylib
   options — both validate binoc's choice *not* to share Rust types across
   the ABI. **Extism** (Wasm) and the **WebAssembly Component Model**
   (WASI 0.3 shipped native async Feb 2026; 1.0 targeted late 2026/2027)
@@ -273,7 +273,7 @@ binoc's C-ABI + JSON-wire hybrid sits in the mainstream:
 - **The schema-diff family is the real "process inference" precedent**:
   migra (deprecated; succeeded in spirit by Stripe's pg-schema-diff, which
   adds dependency-ordered, online-safe plans), **Atlas** (explicitly
-  compiler-shaped: loaders → core schema model → per-dialect planners,
+  compiler-shaped: loaders -> core schema model -> per-dialect planners,
   plus lint/policy over the inferred plan — precedent for renderer-level
   judgments over inferred operations), **skeema** (deliberately *refuses*
   to guess renames — "don't infer processes you can't verify," worth
@@ -292,7 +292,7 @@ binoc's C-ABI + JSON-wire hybrid sits in the mainstream:
   test for when rule order *can't* matter.
 - **OpenRefine** records operations as replayable JSON recipes — the
   inverse of inference, and the missing correctness test for Claim 7: if
-  binoc's inferred processes ("find-replace sneakers→shoes") serialize to
+  binoc's inferred processes ("find-replace sneakers->shoes") serialize to
   a replayable operation list, then *apply to A, compare with B* becomes
   mechanical verification that the inference is right.
 

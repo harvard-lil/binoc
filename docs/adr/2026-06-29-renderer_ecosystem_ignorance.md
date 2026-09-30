@@ -52,7 +52,7 @@ Establish the contract and retire the debt.
    carry "how to phrase this."
 
 3. **What the renderer may do.** Generic segment formatting; number humanizing;
-   the configurable tag→category significance map; and *optional* pretty-print
+   the configurable tag->category significance map; and *optional* pretty-print
    shortcuts for very common rules — permitted only when the generic path already
    renders that change legibly without them, so the shortcut is polish and never
    load-bearing.
@@ -60,7 +60,7 @@ Establish the contract and retire the debt.
 4. **What the renderer may not do (debt to retire).** Branch on specific
    `binoc.*` tag strings or specific item-type strings to decide phrasing or
    structure. The audit list is the three sites above (`move.modified`,
-   `folder-move`, the item-type→tag `match`). For each, the fix is to move the
+   `folder-move`, the item-type->tag `match`). For each, the fix is to move the
    description upstream into the rule's `Segment` output, then delete the branch.
    NOTE: third party renderers are allowed to do these things. Enforcing this rule
    on built in renderers is to make sure the generic path continues to work well.

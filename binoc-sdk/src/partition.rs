@@ -1,4 +1,4 @@
-//! JIT, format-owned partition identities for N↔M correspondence (CFM-72).
+//! JIT, format-owned partition identities for N<->M correspondence (CFM-72).
 //!
 //! Some changes turn one artifact into several of the same shape (a table split
 //! by year) or several into one (merged). Representing that needs a way to ask

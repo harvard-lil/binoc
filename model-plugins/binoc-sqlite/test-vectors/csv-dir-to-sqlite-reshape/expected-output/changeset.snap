@@ -34,7 +34,7 @@ expression: "&stable_changeset"
             }
           },
           {
-            "text": " (directory → SQLite database)"
+            "text": " (directory -> SQLite database)"
           }
         ],
         "tags": [

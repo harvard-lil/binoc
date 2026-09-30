@@ -4,7 +4,7 @@ description = """
 Single kitchen-sink vector for the tree-wide CorrelationDetector. Exercises:
 
 - Cross-container rotation: three files rotate one level in/out across nested zip boundaries
-  (root ↔ outer.zip ↔ outer.zip/inner.zip) and are detected as `binoc.move`.
+  (root <-> outer.zip <-> outer.zip/inner.zip) and are detected as `binoc.move`.
 - 1:N copy aggregation: an unchanged `kept.txt` serves as source for two new copies in
   different containers (`kept-copy.txt` at root and `outer.zip/kept-copy.txt`). Emitted as
   one aggregated `copy` node with `details.destinations`.

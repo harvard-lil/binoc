@@ -106,8 +106,8 @@ This is why grouping config is *per-renderer* (`output.markdown.groups`,
 
 ## Where to go next
 
-- For the design rationale → [renderer config ADR](../../adr/2026-03-09-renderer_config.md),
+- For the design rationale -> [renderer config ADR](../../adr/2026-03-09-renderer_config.md),
   [terminology ADR](../../adr/2026-03-18-terminology.md).
-- For the config YAML keys → [Dataset config reference](../reference/dataset-config.md).
+- For the config YAML keys -> [Dataset config reference](../reference/dataset-config.md).
 - For the Markdown renderer source — the canonical example —
   [`binoc-stdlib/src/renderers/markdown.rs`](https://github.com/harvard-lil/binoc/blob/main/binoc-stdlib/src/renderers/markdown.rs).

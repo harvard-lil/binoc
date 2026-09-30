@@ -7,7 +7,7 @@ audience: Rust plugin author
 The canonical Rust API reference is the rustdoc output for the
 `binoc-sdk` crate, served on this site as a static subpath:
 
-[**Browse the `binoc_sdk` rustdoc →**](../../sdk/binoc_sdk/index.html)
+[**Browse the `binoc_sdk` rustdoc ->**](../../sdk/binoc_sdk/index.html)
 
 It is regenerated from source by `just docs-sdk` (which wraps
 `cargo doc --no-deps --package binoc-sdk`) and rebuilt in CI on every

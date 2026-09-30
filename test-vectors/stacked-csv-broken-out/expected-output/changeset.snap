@@ -62,7 +62,7 @@ expression: "&stable_changeset"
             }
           },
           {
-            "text": " (stacked tables → tabular)"
+            "text": " (stacked tables -> tabular)"
           }
         ],
         "tags": [

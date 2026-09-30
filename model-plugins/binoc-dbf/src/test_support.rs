@@ -27,9 +27,9 @@
 //!
 //! Supported field types: `Character`, `Numeric`, `Logical`. Each row is an
 //! array of cell values aligned to `fields` by position. Cell encoding:
-//! - Character: JSON string (`null` → empty/absent).
-//! - Numeric: JSON number (`null` → absent).
-//! - Logical: JSON boolean (`null` → absent).
+//! - Character: JSON string (`null` -> empty/absent).
+//! - Numeric: JSON number (`null` -> absent).
+//! - Logical: JSON boolean (`null` -> absent).
 //!
 //! The fields are added to a `dbase::TableWriterBuilder` (Character width is
 //! taken to be 50; Numeric is declared with width 20 and 4 decimals — wide

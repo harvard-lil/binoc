@@ -148,7 +148,7 @@ grows into.
 
 ## Migration tooling shipped with the break
 
-**Go's gofix.** During Go's pre-1.0 period (public release Nov 2009 →
+**Go's gofix.** During Go's pre-1.0 period (public release Nov 2009 ->
 Go 1 in March 2012), the team shipped
 [gofix](https://go.dev/blog/introducing-gofix): each breaking API change
 came with a mechanical rewriter, so updating a codebase was one command.
@@ -156,7 +156,7 @@ Breaking changes stayed cheap for users precisely *because* the platform
 team paid the cost of writing the migration alongside the break. Then the
 [Go 1 compatibility promise](https://go.dev/doc/go1compat) ended the era
 deliberately, and ecosystem growth followed the stability promise — the
-sequence (break freely with migration tooling → promise stability →
+sequence (break freely with migration tooling -> promise stability ->
 ecosystem grows) is the cleanest version of the pre-1.0 playbook on
 record.
 
@@ -168,8 +168,8 @@ shipping in Rust 1.85) allow opt-in surface breakage, `cargo fix
 interoperate in one build — so the ecosystem never has to move in
 lockstep. The interop point is the part Python lacked.
 
-**Python 2→3, the negative control.** Twelve years (Python 3.0 in
-December 2008 → Python 2 EOL January 2020) for a migration that was
+**Python 2->3, the negative control.** Twelve years (Python 3.0 in
+December 2008 -> Python 2 EOL January 2020) for a migration that was
 individually cheap per library. The failure dynamics are well documented
 in core-dev retrospectives (e.g.
 [Guido's BDFL retrospective](https://2018.pycascades.com/talks/bdfl-python-3-retrospective/)):
@@ -268,7 +268,7 @@ builds and flagging use of deprecated and internal APIs
 Centralized verification means plugin authors learn about incompatibility
 from the registry, not from users.
 
-**Chrome MV2→MV3 — the deadline gate.** Announced ~2020, repeatedly
+**Chrome MV2->MV3 — the deadline gate.** Announced ~2020, repeatedly
 delayed, then executed on a published
 [timeline](https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline):
 disabled by default in stable October 2024, fully disabled (no
@@ -303,7 +303,7 @@ attend to.
 ## What the precedents converge on
 
 1. **Author-pays beats maintainer-pays during instability.** Linux,
-   Google, and Home Assistant all converge on it; Python 2→3 is the
+   Google, and Home Assistant all converge on it; Python 2->3 is the
    documented cost of the alternative. The platform team breaking the
    API is the actor with the knowledge, the motive, and — now — the
    tooling to fix every consumer.
@@ -369,10 +369,10 @@ write-set-completeness style checks in the
 for third parties even more than for in-tree code.
 
 **Repo design reads as a spectrum with a known safe ordering.**
-Monorepo (now) → publish-from-monorepo, Kubernetes-staging style, if
+Monorepo (now) -> publish-from-monorepo, Kubernetes-staging style, if
 "equal footing" packaging for binoc-sqlite/binoc-stat-binary is wanted
-before the SDK stabilizes → mono-org (separate repos, shared org, shared
-CI, mass-PR capability, Jenkins-style) → federation. Terraform's lesson
+before the SDK stabilizes -> mono-org (separate repos, shared org, shared
+CI, mass-PR capability, Jenkins-style) -> federation. Terraform's lesson
 cautions against splitting repos before the plugin ABI/protocol seam is
 versioned, and notes that the SDK becomes a separately-versioned product
 the moment plugins live elsewhere. Nothing in the precedents suggests

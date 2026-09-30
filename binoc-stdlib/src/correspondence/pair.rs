@@ -1114,8 +1114,8 @@ const TAG_MERGE: &str = "binoc.tabular_merge";
 /// unlinked. For each unmatched, partition-capable node it asks the SDK coverage
 /// query whether that node's identity tokens are the clean disjoint union of a
 /// set of unmatched nodes on the other side. When they are — complete (residual
-/// 0), disjoint, unambiguous, and not a whole-artifact 1:1 — it claims a 1→N
-/// split (or N→1 merge) as a settled link fan; otherwise it declines, emitting a
+/// 0), disjoint, unambiguous, and not a whole-artifact 1:1 — it claims a 1->N
+/// split (or N->1 merge) as a settled link fan; otherwise it declines, emitting a
 /// `binoc.possible_split` suggestion for the near miss and leaving the nodes to
 /// honest add/remove. There are no similarity dials: it is the exact-tier analog
 /// of [`HashPair`].
@@ -1155,7 +1155,7 @@ impl PartitionPair {
             // Two kinds of existing link disqualify a node from being a split/merge
             // candidate:
             //   * a *settled* link — a confirmed 1:1 (exact move/copy); and
-            //   * a *same-path* link — an in-place modify (`data.csv` ↔ `data.csv`),
+            //   * a *same-path* link — an in-place modify (`data.csv` <-> `data.csv`),
             //     a strong 1:1 that an unchanged shared row must not turn into a
             //     spurious partition near miss.
             // A node carrying only an unsettled *cross-path* link (a fuzzy rename)

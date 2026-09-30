@@ -19,7 +19,7 @@
 use binoc_sdk::{BinocResult, Changeset, Renderer, RendererDescriptor};
 
 /// A trivial renderer that echoes a few open-vocabulary IR fields back as JSON.
-/// Its only job is to exercise the real `cdylib` → `libloading` crossing.
+/// Its only job is to exercise the real `cdylib` -> `libloading` crossing.
 #[derive(Default)]
 pub struct EchoRenderer;
 

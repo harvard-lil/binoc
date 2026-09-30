@@ -2,7 +2,7 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **firmware.bin**: Binary content changed; 2 extracted strings added, 2 extracted strings removed
   - Extracted strings added

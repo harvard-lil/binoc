@@ -861,11 +861,11 @@ impl PyChangeset {
     fn __str__(&self) -> String {
         match self.inner.node_count() {
             0 => format!(
-                "{} → {}: no changes",
+                "{} -> {}: no changes",
                 self.inner.from_snapshot, self.inner.to_snapshot
             ),
             n => format!(
-                "{} → {}: {} change nodes",
+                "{} -> {}: {} change nodes",
                 self.inner.from_snapshot, self.inner.to_snapshot, n
             ),
         }

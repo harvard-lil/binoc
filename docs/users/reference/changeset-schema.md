@@ -62,7 +62,7 @@ A structured description of how to get from one snapshot to the next.
 | `claims` | array of [`GlobalClaim`](#globalclaim) | no | Run-scoped claims that do not belong to one tree node. Reserved for the CFM-41 global-claim prototype; empty in current engine output. |
 | `diagnostics` | array of [`Diagnostic`](#diagnostic) | no |  |
 | `from_snapshot` | string | yes |  |
-| `metadata` | object (map of string → string) | no |  |
+| `metadata` | object (map of string -> string) | no |  |
 | `root` | [`DiffNode`](#diffnode) \| null | no |  |
 | `to_snapshot` | string | yes |  |
 

@@ -16,9 +16,9 @@ The `binoc-sqlite` plugin demonstrated the cost: its Rust comparator results wer
 Plugin authors (including `binoc-stdlib` and third-party plugins) depend on `binoc-sdk`. The engine (`binoc-core`) also depends on `binoc-sdk` and implements its abstractions. This separates what plugin authors program against from how the engine implements dispatch, data access, and communication.
 
 ```
-SDK["binoc-sdk"] ← Core["binoc-core"]
-SDK ← Stdlib["binoc-stdlib"]
-SDK ← Sqlite["binoc-sqlite"]
+SDK["binoc-sdk"] <- Core["binoc-core"]
+SDK <- Stdlib["binoc-stdlib"]
+SDK <- Sqlite["binoc-sqlite"]
 ```
 
 ### 2. Three-layer SDK design

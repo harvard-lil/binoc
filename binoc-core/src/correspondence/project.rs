@@ -478,13 +478,13 @@ fn insert_segments(
 ///
 /// - **First line (`had_projected_line == false`).** Establish the node from the
 ///   line's own action / item_type / summary / tags / edits. A container-type
-///   change (directory ↔ SQLite database) is already carried on the line as a
+///   change (directory <-> SQLite database) is already carried on the line as a
 ///   `container_representation_change` action with a reshape summary — emitted by
 ///   the stdlib annotator from the two endpoints' kinds — so it lands here as one
 ///   reshaped container with its members projected underneath, NOT as a move plus
 ///   add/remove of the members.
 ///
-/// - **Subsequent lines (`had_projected_line == true`).** The degenerate N→1
+/// - **Subsequent lines (`had_projected_line == true`).** The degenerate N->1
 ///   case: several sources reconcile onto one target path (the historic
 ///   "Merged from a.txt, b.txt" same-path collision). Fold the extra line's
 ///   action / sources / tags / edits in and switch to the merged summary.

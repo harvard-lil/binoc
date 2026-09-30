@@ -94,7 +94,7 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
 
     for changeset in changesets {
         out.push_str(&format!(
-            "# Changelog: {} → {}\n\n",
+            "# Changelog: {} -> {}\n\n",
             changeset.from_snapshot, changeset.to_snapshot
         ));
         if let Some(preamble_markdown) = config
@@ -1664,7 +1664,7 @@ mod tests {
         );
         let config = MarkdownRendererConfig::default();
         let md = render_markdown(&[changeset], &config);
-        assert!(md.contains("# Changelog: v1 → v2"));
+        assert!(md.contains("# Changelog: v1 -> v2"));
         assert!(!md.contains("## "));
         assert!(md.contains("**data.csv**"));
         assert!(md.contains("Column added: 'email'"));

@@ -61,8 +61,8 @@ saturation was independently impossible.
 The reason to reopen the question is not that e-graphs are fashionable. It is that
 binoc's Pass 2, at **six rules**, already exhibits the pathology, and does so
 undocumented. The shipped order in `binoc-stdlib/src/correspondence/mod.rs` is
-`ColumnRename → ColumnReorder → TypeOnlyColumnChange → RowAlignment →
-ReducedPrecision → RowAdditionConsolidation`, with no comment explaining it, while
+`ColumnRename -> ColumnReorder -> TypeOnlyColumnChange -> RowAlignment ->
+ReducedPrecision -> RowAdditionConsolidation`, with no comment explaining it, while
 at least four ordering facts are load-bearing:
 
 - **`ColumnRename` must precede `RowAlignment`.** The rename scorer reads a hidden
@@ -124,7 +124,7 @@ minimum-cost representative. `egg` is the reference implementation; `egglog`
 Datalog, which matters if rules ever need to query relational context.
 
 **Cross-artifact compaction is an induction problem.** Given ten thousand edit
-lists, find the *hypothesis* — "someone ran find-replace sneakers→shoes" — that
+lists, find the *hypothesis* — "someone ran find-replace sneakers->shoes" — that
 explains many at once. Nothing here is an equivalence-preserving rewrite, and the
 generalization can be **wrong** in a way a sound rewrite cannot. The right
 machinery is anti-unification (Plotkin, "A Note on Inductive Generalization,"
@@ -143,7 +143,7 @@ prior art for the named-inference claim:
 - **[Refazer](https://arxiv.org/abs/1608.09000)** (Rolim et al., ICSE 2017) learns
   syntactic program transformations from example edits, on FlashMeta/PROSE.
 - **[Getafix](https://arxiv.org/abs/1902.06111)** (Bader, Scott, Pradel & Chandra,
-  OOPSLA 2019) is the closest thing to a spec for the sneakers→shoes rule:
+  OOPSLA 2019) is the closest thing to a spec for the sneakers->shoes rule:
   hierarchically cluster concrete edits, anti-unify each cluster into a
   parameterized pattern, rank candidates. It is a production Meta tool.
 - **[Revisar](https://arxiv.org/abs/1803.03806)** (Rolim et al., SBES 2021 —

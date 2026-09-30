@@ -2,6 +2,6 @@
 source: binoc-stdlib/src/test_vectors.rs
 expression: "&md"
 ---
-# Changelog: snapshot-a → snapshot-b
+# Changelog: snapshot-a -> snapshot-b
 
 - **data.shp**: $.bbox.max_x: 5.0 -> 9.0; $.bbox.max_y: 5.0 -> 9.0

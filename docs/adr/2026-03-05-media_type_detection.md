@@ -33,7 +33,7 @@ A new trait method on `Comparator`:
 fn handles_media_types(&self) -> &[&str] { &[] }
 ```
 
-The controller checks each comparator in order: **extension → media type → `can_handle`**. All three stages are per-comparator (not separate passes), preserving the property that config ordering controls priority. Directories skip extension and media type matching entirely — they are claimed solely via `can_handle` — preventing extracted archive contents (a directory with `logical_path` like `"archive.zip"`) from being re-claimed by the archive comparator.
+The controller checks each comparator in order: **extension -> media type -> `can_handle`**. All three stages are per-comparator (not separate passes), preserving the property that config ordering controls priority. Directories skip extension and media type matching entirely — they are claimed solely via `can_handle` — preventing extracted archive contents (a directory with `logical_path` like `"archive.zip"`) from being re-claimed by the archive comparator.
 
 ### Identifier system
 
@@ -77,7 +77,7 @@ Currently `media_type` lives only on `Item` (dispatch-time metadata) and doesn't
 | Crate | Why not (for phase 1) |
 |---|---|
 | `file-format` | Reader features are valuable but add complexity. Better suited as a phase 2 upgrade when container disambiguation is a real need. |
-| `file_type` | Primarily a lookup/mapping crate (extension → media type). Doesn't do content-based magic-byte matching, which is the main gap we're filling. |
+| `file_type` | Primarily a lookup/mapping crate (extension -> media type). Doesn't do content-based magic-byte matching, which is the main gap we're filling. |
 | `magic` (libmagic FFI) | C dependency, known CVEs, platform-specific build requirements. Unacceptable for a library targeting `pip install` distribution. |
 | `pure-magic` | Not mature enough yet (missing some test types). Promising for future evaluation. |
 | `tree_magic` | Development stalled; the maintained fork (`tree_magic_mini`) uses freedesktop.org's shared-mime-info which is Linux-centric. |

@@ -27,10 +27,10 @@ binoc diff release-q3/ release-q4/
 ```
 
 ```
-# Changelog: release-q3/ → release-q4/
+# Changelog: release-q3/ -> release-q4/
 
 - **data.zip/agencies.csv**: Columns reordered (content unchanged)
-- **summary.sqlite**: Content changed (12.0 KB → 12.0 KB)
+- **summary.sqlite**: Content changed (12.0 KB -> 12.0 KB)
 ```
 
 Binoc looked inside the zip and compared the CSV column-by-column. The default
