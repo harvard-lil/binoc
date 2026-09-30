@@ -17,16 +17,16 @@ binoc *ARGS:
 # Auto-format Rust and Python code.
 fmt:
     cargo fmt
-    uvx ruff format binoc-python/ model-plugins/
-    uvx ruff check --fix-only binoc-python/ model-plugins/
+    uvx ruff@0.15.22 format binoc-python/ model-plugins/
+    uvx ruff@0.15.22 check --fix-only binoc-python/ model-plugins/
 
 # Run formatting and lint checks (mirrors CI).
 check:
     cargo fmt --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     cargo test -p binoc-cli --features bundled,sqlite --test plugin_registry
-    uvx ruff check binoc-python/ model-plugins/
-    uvx ruff format --check binoc-python/ model-plugins/
+    uvx ruff@0.15.22 check binoc-python/ model-plugins/
+    uvx ruff@0.15.22 format --check binoc-python/ model-plugins/
 
 # Run the mechanical lint tests with warnings visible. Lint errors already
 # fail `just test`; this surfaces the advisory warnings that passing tests
