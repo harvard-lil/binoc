@@ -1,0 +1,11 @@
+[vector]
+name = "csv-value-suppression-custom-sentinel"
+description = "CSV cells replaced with a dataset-configured disclosure suppression sentinel"
+tags = ["csv", "cell-change", "value-suppression", "dataset-config"]
+
+[config.dataset.reduced_precision]
+suppression_sentinels = ["N/A", ""]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.value-suppressed"]

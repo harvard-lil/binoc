@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row added; 1 row removed; 1 row modified by key"
+            "text": "1 row added; "
+          },
+          {
+            "text": "1 row removed; "
+          },
+          {
+            "text": "1 row modified by key"
           }
         ],
         "tags": [

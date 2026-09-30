@@ -99,10 +99,10 @@ assertions.
 Binary artifacts (`.zip`, `.tar.gz`, `.sqlite`, …) are kept out of
 git. Vectors commit *source* trees — `archive.zip.d/`,
 `data.sqlite.d/*.sql` — that the harness builds into real artifacts
-at test time. The stdlib ships builders for `.zip.d`, `.tar.gz.d`, and
-`.gz.d`. If your plugin's format has no suitable builder, implement the
-`VectorMaterializer` trait once and reuse it for both tests and the
-`just materialize` CLI:
+at test time. The stdlib ships builders for `.zip.d`, `.tar.gz.d`, `.gz.d`,
+and deterministic `.bin.d` recipes. If your plugin's format has no suitable
+builder, implement the `VectorMaterializer` trait once and reuse it for both
+tests and the `just materialize` CLI:
 
 ```rust
 use std::path::Path;

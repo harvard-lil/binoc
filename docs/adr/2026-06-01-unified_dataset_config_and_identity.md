@@ -1,16 +1,17 @@
 # Unified Dataset Config and Identity Policy
 
 **Date:** 2026-06-01
-**Status:** Accepted; implementation notes superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md)
+**Status:** Superseded by [A Unified Per-Path Dataset Config Model](2026-06-29-per_path_dataset_config_model.md)
 
 Note: the Markdown-renderer grouping example below is superseded by
 [2026-06-02-renderer_groups.md](2026-06-02-renderer_groups.md). Current config
 uses `output.markdown.groups`, not `output.markdown.significance`.
 
-Note: the dataset-semantics shape remains current, but implementation passages
-that mention comparator-to-transformer orchestration or `pending_recompare` are
-superseded by the correspondence engine. Declared file identity is now pair-rule
-evidence over side items.
+Note: the dataset-semantics shape in this ADR is historical. Per-path and
+tabular configuration now use the ordered `dataset.paths` model. Implementation
+passages that mention comparator-to-transformer orchestration or
+`pending_recompare` are superseded by the correspondence engine. Declared file
+identity is now pair-rule evidence over side items.
 
 ## Context
 

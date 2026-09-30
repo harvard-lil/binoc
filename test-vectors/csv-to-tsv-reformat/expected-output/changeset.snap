@@ -25,12 +25,19 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row added; 1 cell changed"
+            "text": "Moved from "
+          },
+          {
+            "path": {
+              "value": "data.csv",
+              "snapshot": "from"
+            }
           }
         ],
         "tags": [
           "binoc.cell-change",
           "binoc.content-changed",
+          "binoc.dialect-inferred",
           "binoc.move",
           "binoc.move.modified",
           "binoc.row-addition",
@@ -63,7 +70,19 @@ expression: "&stable_changeset"
               "verb": "tabular.add_row"
             }
           ]
-        }
+        },
+        "annotations": [
+          {
+            "package": "binoc",
+            "key": "dialect_provenance",
+            "value": "detected tab-delimited, no quoting, newline LF"
+          },
+          {
+            "package": "binoc",
+            "key": "content_summary",
+            "value": "1 row added; 1 cell changed"
+          }
+        ]
       }
     ]
   }

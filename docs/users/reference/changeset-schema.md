@@ -108,6 +108,7 @@ Metadata-only view of one side of a comparison. Carries logical identity and con
 | `media_type` | string \| null | no |  |
 | `projection_hint` | [`ProjectionHint`](#projectionhint) | no | Optional projection metadata supplied by rule packs while they still know the vocabulary. Core carries this through but does not interpret file names, media types, or plugin-specific tags. |
 | `size` | integer \| null | no |  |
+| `tabular_parse` | [`TabularParseConfig`](#tabularparseconfig) \| null | no | Optional stdlib-resolved tabular parse hints carried from dataset config to whichever tabular parser eventually claims this item. |
 
 ### `ArtifactDescriptor`
 
@@ -150,6 +151,16 @@ Renderer-visible metadata attached to a projected diff node by a rule pack. Anno
 | `package` | string | yes |  |
 | `value` | any | yes |  |
 
+### `CsvDialectConfig`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bom` | boolean \| null | no |  |
+| `delimiter` | string \| null | no |  |
+| `escape` | string \| null | no |  |
+| `newline` | string \| null | no |  |
+| `quote` | string \| null | no |  |
+
 ### `DetailBlock`
 
 Renderer-visible, bounded evidence attached to a diff node.
@@ -180,6 +191,7 @@ One bounded example inside a detail block.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `code` | string | yes |  |
+| `extract` | [`ExtractHint`](#extracthint) \| null | no |  |
 | `location` | string \| null | no |  |
 | `message` | [`Summary`](#summary) | yes |  |
 | `severity` | [`DiagnosticSeverity`](#diagnosticseverity) | yes |  |
@@ -199,6 +211,7 @@ Pointer to an extract aspect that can return exhaustive content.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `aspect` | string | yes | Aspect name accepted by `binoc extract`. |
+| `changeset_path` | string \| null | no |  |
 | `label` | string \| null | no |  |
 
 ### `GlobalClaim`
@@ -209,7 +222,7 @@ Reserved run-scoped claim slot. The shape is intentionally provisional pending t
 |---|---|---|---|
 | `params` | object (free-form) | no | Claim-specific structured parameters. |
 | `summary` | [`Summary`](#summary) \| null | no | Optional renderer-facing summary for the claim. |
-| `verb` | string | yes | Open claim verb such as a future global find/replace action. |
+| `verb` | string | yes | Open claim verb for a renderer- or plugin-defined run-scoped claim. |
 
 ### `ProjectionHint`
 
@@ -218,6 +231,7 @@ Product-facing projection metadata supplied by rules, not inferred by core.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `action` | string \| null | no |  |
+| `annotations` | array of [`Annotation`](#annotation) | no |  |
 | `item_type` | string \| null | no |  |
 | `retract_tags` | array of string | no | Tags this hint *removes* from the accumulated projection. Tag overlay is union-only, so an annotator that supersedes an earlier framing (e.g. a CFM-71 container reshape replacing a pair-time `binoc.move`) needs a way to drop the now-stale tag — otherwise the IR carries contradictory tags (inert in rendering, but incoherent in JSON). A retraction is honored whenever tags are merged: the named tags are removed from the result and can never be re-introduced by the *same* hint. |
 | `summary` | [`Summary`](#summary) \| null | no |  |
@@ -245,6 +259,17 @@ Renderer-visible provenance for a projected diff node. Most nodes have one sourc
 ### `Summary`
 
 *(unrecognised schema shape)*
+
+### `TabularParseConfig`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `delimiter` | string \| null | no |  |
+| `dialect` | [`CsvDialectConfig`](#csvdialectconfig) \| null | no |  |
+| `header` | boolean | no |  |
+| `header_line` | integer \| null | no |  |
+| `records_path` | string \| null | no | JSON record collection path for document formats that need to expose a nested array as the tabular record stream. |
+| `skip_lines` | integer \| null | no |  |
 
 ### `ValuePreview`
 

@@ -1,0 +1,9 @@
+[vector]
+name = "csv-column-rename-reorder"
+description = "A renamed CSV column also moves position"
+tags = ["csv", "column-rename", "column-reorder"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.column-rename", "binoc.column-reorder"]

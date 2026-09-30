@@ -329,6 +329,7 @@ mod tests {
             } else {
                 "leaf"
             }),
+            tabular_parse: None,
             handle: path.into(),
         }
     }

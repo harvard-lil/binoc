@@ -18,7 +18,7 @@ usable changelog.
   [Save and render changesets](users/howto/save-and-render-changesets.md).
 - If your dataset includes formats binoc does not understand yet, see
   [Install and use plugins](users/howto/install-and-use-plugins.md) and
-  [Third-party plugins](users/reference/third-party-plugins.md).
+  [Plugin catalog](users/reference/third-party-plugins.md).
 - If you want the framing before the mechanics, read
   [Why binoc exists](users/explanation/why-binoc-exists.md).
 

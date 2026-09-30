@@ -413,17 +413,124 @@ impl ParserMetadata {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatasetSemanticsV1 {
     #[serde(default)]
+    pub defaults: DatasetDefaults,
+    #[serde(default)]
+    pub paths: Vec<PathConfigEntry>,
+    #[serde(default)]
     pub files: FileIdentityConfig,
     #[serde(default)]
-    pub tables: TableConfig,
-    #[serde(default)]
     pub correspondence: CorrespondenceConfig,
+    #[serde(default)]
+    pub reduced_precision: ReducedPrecisionConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReducedPrecisionConfig {
+    /// String sentinels that represent a suppressed published value after
+    /// reduced-precision post-processing. The empty string covers both blank
+    /// cells and `null`, preserving the historical blank/null sentinel.
+    #[serde(default = "default_suppression_sentinels")]
+    pub suppression_sentinels: Vec<String>,
+}
+
+impl Default for ReducedPrecisionConfig {
+    fn default() -> Self {
+        Self {
+            suppression_sentinels: default_suppression_sentinels(),
+        }
+    }
+}
+
+fn default_suppression_sentinels() -> Vec<String> {
+    vec!["*".into(), "(D)".into(), "(S)".into(), "".into()]
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatasetDefaults {
+    #[serde(default)]
+    pub row_identity: RowIdentity,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct NodeIdentity {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_attribute: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PathConfigEntry {
+    #[serde(default, rename = "match")]
+    pub match_: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<TabularShapeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialect: Option<CsvDialectConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub records_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_identity: Option<RowIdentityPatch>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_identity: Option<NodeIdentity>,
+    #[serde(skip)]
+    pub unknown_fields: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for PathConfigEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawPathConfigEntry {
+            #[serde(default, rename = "match")]
+            match_: String,
+            #[serde(default)]
+            content_type: Option<String>,
+            #[serde(default)]
+            rule: Option<String>,
+            #[serde(default)]
+            dialect: Option<CsvDialectConfig>,
+            #[serde(default)]
+            shape: Option<TabularShapeConfig>,
+            #[serde(default)]
+            records_path: Option<String>,
+            #[serde(default)]
+            row_identity: Option<RowIdentityPatch>,
+            #[serde(default)]
+            node_identity: Option<NodeIdentity>,
+            #[serde(flatten)]
+            extra: BTreeMap<String, serde_json::Value>,
+        }
+
+        let raw = RawPathConfigEntry::deserialize(deserializer)?;
+        Ok(Self {
+            match_: raw.match_,
+            content_type: raw.content_type,
+            rule: raw.rule,
+            dialect: raw.dialect,
+            shape: raw.shape,
+            records_path: raw.records_path,
+            row_identity: raw.row_identity,
+            node_identity: raw.node_identity,
+            unknown_fields: raw.extra.into_keys().collect(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CorrespondenceConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expand_renamed_unchanged_collections: Option<bool>,
+    /// Byte threshold above which stdlib tabular rules skip in-memory
+    /// `tabular_v1` materialization and use the bounded streaming keyed-writer
+    /// path instead. `None` uses the stdlib default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub large_tabular_threshold_bytes: Option<u64>,
     /// Maximum decompressed size of a single gzip stream, in bytes. `None` uses
     /// the stdlib default. Raise this for legitimately large `.gz` payloads;
     /// the cap exists only as a decompression-bomb bound, so any value over a
@@ -491,131 +598,23 @@ pub enum IdentityFailurePolicy {
     Ignore,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct TableConfig {
-    #[serde(default)]
-    pub defaults: TableDefaults,
-    #[serde(default)]
-    pub entries: Vec<TableEntry>,
-}
-
-impl<'de> Deserialize<'de> for TableConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Repr {
-            Entries(Vec<TableEntry>),
-            Full {
-                #[serde(default)]
-                defaults: TableDefaults,
-                #[serde(default)]
-                entries: Vec<TableEntry>,
-            },
-        }
-
-        match Repr::deserialize(deserializer)? {
-            Repr::Entries(entries) => Ok(Self {
-                defaults: TableDefaults::default(),
-                entries,
-            }),
-            Repr::Full { defaults, entries } => Ok(Self { defaults, entries }),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TableDefaults {
-    #[serde(default)]
-    pub parse: TabularParseConfig,
-    #[serde(default)]
-    pub row_identity: RowIdentity,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct TableEntry {
-    #[serde(default, rename = "match")]
-    pub match_: TableSelector,
-    #[serde(default)]
-    pub parse: TabularParseConfig,
-    #[serde(default)]
-    pub row_identity: RowIdentity,
-}
-
-impl<'de> Deserialize<'de> for TableEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Default, Deserialize)]
-        struct RawTableEntry {
-            #[serde(default, rename = "match")]
-            match_: TableSelector,
-            #[serde(default)]
-            parse: TabularParseConfig,
-            #[serde(default)]
-            row_identity: RowIdentity,
-            #[serde(default)]
-            logical_name: Option<String>,
-            #[serde(default)]
-            path: Option<String>,
-            #[serde(default)]
-            path_regex: Option<String>,
-            #[serde(default)]
-            columns: Vec<String>,
-            #[serde(default)]
-            on_null_key: Option<IdentityFailurePolicy>,
-            #[serde(default)]
-            on_duplicate_key: Option<IdentityFailurePolicy>,
-        }
-
-        let raw = RawTableEntry::deserialize(deserializer)?;
-        let mut match_ = raw.match_;
-        if match_.logical_name.is_none() {
-            match_.logical_name = raw.logical_name;
-        }
-        if match_.source.is_none() && (raw.path.is_some() || raw.path_regex.is_some()) {
-            match_.source = Some(FileSelector {
-                path: raw.path,
-                path_regex: raw.path_regex,
-            });
-        }
-
-        let mut row_identity = raw.row_identity;
-        if row_identity.columns.is_empty() {
-            row_identity.columns = raw.columns;
-        }
-        if let Some(policy) = raw.on_null_key {
-            row_identity.on_null_key = policy;
-        }
-        if let Some(policy) = raw.on_duplicate_key {
-            row_identity.on_duplicate_key = policy;
-        }
-
-        Ok(Self {
-            match_,
-            parse: raw.parse,
-            row_identity,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TableSelector {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub logical_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<FileSelector>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct TabularParseConfig {
     #[serde(default = "default_header")]
     pub header: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delimiter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialect: Option<CsvDialectConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_line: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_lines: Option<usize>,
+    /// JSON record collection path for document formats that need to expose a
+    /// nested array as the tabular record stream.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub records_path: Option<String>,
 }
 
 impl Default for TabularParseConfig {
@@ -623,6 +622,10 @@ impl Default for TabularParseConfig {
         Self {
             header: true,
             delimiter: None,
+            dialect: None,
+            header_line: None,
+            skip_lines: None,
+            records_path: None,
         }
     }
 }
@@ -631,16 +634,111 @@ fn default_header() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct CsvDialectConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escape: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bom: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newline: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct TabularShapeConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_header: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_line: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_lines: Option<usize>,
+}
+
+impl TabularShapeConfig {
+    pub fn apply_to_parse_config(&self, parse: &mut TabularParseConfig) {
+        if let Some(has_header) = self.has_header {
+            parse.header = has_header;
+        }
+        if let Some(header_line) = self.header_line {
+            parse.header_line = Some(header_line);
+        }
+        if let Some(skip_lines) = self.skip_lines {
+            parse.skip_lines = Some(skip_lines);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RowIdentity {
     #[serde(default)]
     pub columns: Vec<String>,
+    #[serde(default)]
+    pub by_position: Vec<usize>,
     #[serde(default)]
     pub cardinality: Cardinality,
     #[serde(default)]
     pub on_null_key: IdentityFailurePolicy,
     #[serde(default)]
     pub on_duplicate_key: IdentityFailurePolicy,
+}
+
+/// Presence-preserving row-identity overrides for a selected path.
+///
+/// Runtime identities and dataset defaults use [`RowIdentity`]. Entry-level
+/// configuration uses this patch type so an explicitly configured default
+/// enum value is distinguishable from an omitted field. `columns` and
+/// `by_position` are alternate key selectors; when both are present,
+/// `columns` takes precedence.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RowIdentityPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by_position: Option<Vec<usize>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cardinality: Option<Cardinality>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_null_key: Option<IdentityFailurePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_duplicate_key: Option<IdentityFailurePolicy>,
+}
+
+impl RowIdentityPatch {
+    /// Apply this entry-level override to a concrete inherited identity.
+    pub fn apply_to(&self, identity: &mut RowIdentity) {
+        if let Some(columns) = &self.columns {
+            identity.columns = columns.clone();
+            identity.by_position.clear();
+        } else if let Some(by_position) = &self.by_position {
+            identity.by_position = by_position.clone();
+            identity.columns.clear();
+        }
+        if let Some(cardinality) = self.cardinality {
+            identity.cardinality = cardinality;
+        }
+        if let Some(policy) = self.on_null_key {
+            identity.on_null_key = policy;
+        }
+        if let Some(policy) = self.on_duplicate_key {
+            identity.on_duplicate_key = policy;
+        }
+    }
+
+    pub fn has_key_selector(&self) -> bool {
+        self.columns
+            .as_ref()
+            .is_some_and(|columns| !columns.is_empty())
+            || self
+                .by_position
+                .as_ref()
+                .is_some_and(|positions| !positions.is_empty())
+    }
 }
 
 /// A pair of tabular data (left/right sides of a comparison).
@@ -848,6 +946,10 @@ pub struct ItemRef {
     /// file names, media types, or plugin-specific tags.
     #[serde(default, skip_serializing_if = "crate::projection_hint_is_default")]
     pub projection_hint: crate::ProjectionHint,
+    /// Optional stdlib-resolved tabular parse hints carried from dataset config
+    /// to whichever tabular parser eventually claims this item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tabular_parse: Option<TabularParseConfig>,
     /// Opaque identifier used by DataAccess implementations to locate data.
     /// Plugin authors should not create or interpret this value directly.
     #[serde(default)]
@@ -970,6 +1072,7 @@ mod tests {
             size: None,
             media_type: None,
             projection_hint: Default::default(),
+            tabular_parse: None,
             handle: String::new(),
         }
     }
@@ -1016,5 +1119,61 @@ mod tests {
         right.content_hash = Some("abc".into());
         let pair = ItemPair::both(left, right);
         assert_eq!(pair.matching_content_hash(), Some("abc"));
+    }
+
+    #[test]
+    fn row_identity_patch_deserialization_preserves_explicit_default_policy() {
+        let semantics: DatasetSemanticsV1 = serde_json::from_value(serde_json::json!({
+            "paths": [{
+                "match": "data.csv",
+                "row_identity": {
+                    "columns": ["id"],
+                    "on_null_key": "diagnostic"
+                }
+            }]
+        }))
+        .expect("dataset semantics");
+
+        let patch = semantics.paths[0]
+            .row_identity
+            .as_ref()
+            .expect("row identity patch");
+        assert_eq!(
+            patch.columns.as_deref(),
+            Some([String::from("id")].as_slice())
+        );
+        assert_eq!(patch.on_null_key, Some(IdentityFailurePolicy::Diagnostic));
+        assert_eq!(patch.on_duplicate_key, None);
+
+        let serialized = serde_json::to_value(&semantics.paths[0]).expect("serialize path entry");
+        assert_eq!(serialized["row_identity"]["on_null_key"], "diagnostic");
+        assert!(serialized["row_identity"].get("on_duplicate_key").is_none());
+    }
+
+    #[test]
+    fn row_identity_patch_replaces_inherited_key_selector() {
+        let mut identity = RowIdentity {
+            columns: vec!["id".into()],
+            on_null_key: IdentityFailurePolicy::Error,
+            ..RowIdentity::default()
+        };
+        RowIdentityPatch {
+            by_position: Some(vec![2]),
+            on_null_key: Some(IdentityFailurePolicy::Diagnostic),
+            ..RowIdentityPatch::default()
+        }
+        .apply_to(&mut identity);
+
+        assert!(identity.columns.is_empty());
+        assert_eq!(identity.by_position, vec![2]);
+        assert_eq!(identity.on_null_key, IdentityFailurePolicy::Diagnostic);
+
+        RowIdentityPatch {
+            columns: Some(vec!["email".into()]),
+            ..RowIdentityPatch::default()
+        }
+        .apply_to(&mut identity);
+        assert_eq!(identity.columns, vec!["email"]);
+        assert!(identity.by_position.is_empty());
     }
 }

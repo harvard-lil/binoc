@@ -87,6 +87,7 @@ fn table_child(db_logical_path: &str, conn: &Connection, table: &str) -> BinocRe
             size: Some(bytes.len() as u64),
             media_type: Some("application/vnd.binoc.tabular+json".into()),
             projection_hint: ProjectionHint::default().item_type("tabular"),
+            tabular_parse: None,
             handle: logical_path,
         },
         artifacts: vec![ParsedArtifact {

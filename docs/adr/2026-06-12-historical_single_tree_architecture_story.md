@@ -547,15 +547,19 @@ contracts are what can't change later. Which ceilings are interface-load-
 bearing?
 
 **Claim 7: The architecture is shaped for the actual vision.**
-The vision's flagship example — "someone did a find-replace from sneakers to
-shoes" — is *process inference across the whole dataset*. Today nothing
-performs cross-file or cross-cell pattern induction: detail blocks are
+The vision's find-replace example — "someone did a find-replace from sneakers
+to shoes" — is a stretch goal, not a committed deliverable: the user need is
+unestablished, and it is *process inference across the whole dataset*. Today
+nothing performs cross-file or cross-cell pattern induction: detail blocks are
 bounded and truncated (the evidence for the pattern is discarded at capture
 time), and tree-wide transformers see nodes, not cell-level edits. A
-find-replace detector would need either unbounded evidence capture or
-artifact-level access to *both* sides of every changed leaf at root scope.
-The pieces (Root transformers, artifacts, annotations) plausibly suffice —
-but no existing pass is of this kind, so the claim is untested. This is the
+find-replace detector would need either unbounded evidence capture or a new
+dataset-scope phase with artifact-level access to *both* sides of every changed
+leaf at root scope. The pieces (Root transformers, artifacts, annotations)
+plausibly suffice — but no existing pass is of this kind, so the claim is
+untested. See
+[Searching and verifying edit-list rewrites](../core-developers/research/edit-list-search-and-verification.md)
+§6 for the structural constraint. This is the
 deepest hole: the architecture has proven it can compose *parsers*; it has
 not yet proven it can compose *inferences*.
 

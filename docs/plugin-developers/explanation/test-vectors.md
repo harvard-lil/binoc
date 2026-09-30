@@ -50,8 +50,9 @@ flowchart LR
 Both `just test` (via the test harness) and `just materialize` (which
 produces a gitignored `test-vectors-materialized/` tree) go through the
 same `VectorMaterializer` plugin trait. The stdlib ships
-`ZipMaterializer`, `TarMaterializer`, and `GzipMaterializer`; plugins
-contribute their own (see `binoc_sqlite::test_support::SqliteMaterializer`).
+`ZipMaterializer`, `TarMaterializer`, `GzipMaterializer`, and
+`RepeatedBinaryMaterializer`; plugins contribute their own (see
+`binoc_sqlite::test_support::SqliteMaterializer`).
 
 The materialized tree is byte-for-byte what tests diff. The how-to
 [Test a plugin with vectors](../howto/test-a-plugin-with-vectors.md)

@@ -25,7 +25,13 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Column added: 'email'; Columns reordered; 1 row added"
+            "text": "Column added: 'email'; "
+          },
+          {
+            "text": "Columns reordered; "
+          },
+          {
+            "text": "1 row added"
           }
         ],
         "tags": [
@@ -44,6 +50,11 @@ expression: "&stable_changeset"
                   "age"
                 ]
               },
+              "summary": [
+                {
+                  "text": "Columns reordered"
+                }
+              ],
               "verb": "tabular.reorder_columns"
             },
             {

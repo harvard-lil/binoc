@@ -1,0 +1,12 @@
+[vector]
+name = "content-sniff-extensionless-tz"
+description = "Extensionless IANA tz source files are sniffed as text and disclose that inference; a binary sibling in the same bundle stays on the opaque fallback path."
+tags = ["text", "binary", "inference", "content-sniff"]
+
+[expected]
+root_action = "modify"
+has_tags = [
+    "binoc.inference.content-sniffed-type",
+    "binoc.lines-added",
+    "binoc.content-changed",
+]

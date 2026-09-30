@@ -1,15 +1,18 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::any::{Any, TypeId};
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ArtifactFormat, BinocResult, DataAccess, Diagnostic, ExtractResult, GlobalClaim,
-    IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, Segment, Summary,
+    Annotation, ArtifactFormat, BinocError, BinocResult, DataAccess, Diagnostic, ExtractResult,
+    GlobalClaim, IdentityExtractor, IdentityFailurePolicy, IdentityToken, ItemRef, NodeIdentity,
+    RowIdentity, Segment, Summary,
 };
 
 /// Which side tree a node belongs to in the correspondence-first IR.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TreeSide {
@@ -27,11 +30,95 @@ impl TreeSide {
 }
 
 /// Stable identity of one side-tree node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct NodeId {
     pub side: TreeSide,
     pub index: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ArtifactDecodeCacheKey {
+    id: NodeId,
+    format: ArtifactFormat,
+    type_id: TypeId,
+}
+
+#[derive(Clone)]
+enum CachedDecode {
+    Missing,
+    Present(Arc<dyn Any + Send + Sync>),
+}
+
+/// Per-run, type-erased cache for decoded artifacts used by in-process rules.
+///
+/// The engine only carries this cache through dispatch; individual plugins own
+/// the artifact format and decoded type they store in it.
+#[derive(Default)]
+pub struct ArtifactDecodeCache {
+    entries: Mutex<HashMap<ArtifactDecodeCacheKey, CachedDecode>>,
+}
+
+impl ArtifactDecodeCache {
+    pub fn get_or_try_insert_with<T>(
+        &self,
+        id: NodeId,
+        format: &ArtifactFormat,
+        load: impl FnOnce() -> BinocResult<Option<T>>,
+    ) -> BinocResult<Option<Arc<T>>>
+    where
+        T: Any + Send + Sync,
+    {
+        let key = ArtifactDecodeCacheKey {
+            id,
+            format: format.clone(),
+            type_id: TypeId::of::<T>(),
+        };
+        if let Some(cached) = self.lookup::<T>(&key)? {
+            return Ok(cached);
+        }
+
+        let loaded = match load()? {
+            Some(value) => CachedDecode::Present(Arc::new(value)),
+            None => CachedDecode::Missing,
+        };
+
+        let cached = {
+            let mut entries = self.entries.lock().map_err(cache_poisoned)?;
+            entries.entry(key).or_insert(loaded).clone()
+        };
+        decode_cached::<T>(cached)
+    }
+
+    fn lookup<T>(&self, key: &ArtifactDecodeCacheKey) -> BinocResult<Option<Option<Arc<T>>>>
+    where
+        T: Any + Send + Sync,
+    {
+        let cached = self
+            .entries
+            .lock()
+            .map_err(cache_poisoned)?
+            .get(key)
+            .cloned();
+        cached.map(decode_cached::<T>).transpose()
+    }
+}
+
+fn decode_cached<T>(cached: CachedDecode) -> BinocResult<Option<Arc<T>>>
+where
+    T: Any + Send + Sync,
+{
+    match cached {
+        CachedDecode::Missing => Ok(None),
+        CachedDecode::Present(value) => value
+            .downcast::<T>()
+            .map(Some)
+            .map_err(|_| BinocError::Other("artifact decode cache type mismatch".into())),
+    }
+}
+
+fn cache_poisoned<T>(_err: std::sync::PoisonError<T>) -> BinocError {
+    BinocError::Other("artifact decode cache lock poisoned".into())
 }
 
 /// Product-facing projection metadata supplied by rules, not inferred by core.
@@ -55,6 +142,8 @@ pub struct ProjectionHint {
     pub retract_tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Summary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<Annotation>,
 }
 
 pub fn projection_hint_is_default(hint: &ProjectionHint) -> bool {
@@ -90,6 +179,16 @@ impl ProjectionHint {
         self
     }
 
+    pub fn annotate(
+        mut self,
+        package: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> Self {
+        upsert_annotation(&mut self.annotations, package.into(), key.into(), value);
+        self
+    }
+
     pub fn merge_from(&mut self, other: &ProjectionHint) {
         if self.action.is_none() {
             self.action = other.action.clone();
@@ -101,6 +200,7 @@ impl ProjectionHint {
             self.summary = other.summary.clone();
         }
         self.merge_tags(other);
+        merge_annotations_if_missing(&mut self.annotations, &other.annotations);
     }
 
     /// Union `other`'s tags and retractions into `self`, then honor the combined
@@ -131,6 +231,44 @@ impl ProjectionHint {
             self.summary = other.summary.clone();
         }
         self.merge_tags(other);
+        overlay_annotations(&mut self.annotations, &other.annotations);
+    }
+}
+
+fn merge_annotations_if_missing(target: &mut Vec<Annotation>, source: &[Annotation]) {
+    for annotation in source {
+        if !target.iter().any(|existing| {
+            existing.package == annotation.package && existing.key == annotation.key
+        }) {
+            target.push(annotation.clone());
+        }
+    }
+}
+
+fn overlay_annotations(target: &mut Vec<Annotation>, source: &[Annotation]) {
+    for annotation in source {
+        upsert_annotation(
+            target,
+            annotation.package.clone(),
+            annotation.key.clone(),
+            annotation.value.clone(),
+        );
+    }
+}
+
+fn upsert_annotation(
+    annotations: &mut Vec<Annotation>,
+    package: String,
+    key: String,
+    value: serde_json::Value,
+) {
+    if let Some(existing) = annotations
+        .iter_mut()
+        .find(|annotation| annotation.package == package && annotation.key == key)
+    {
+        existing.value = value;
+    } else {
+        annotations.push(Annotation::new(package, key, value));
     }
 }
 
@@ -194,8 +332,14 @@ pub struct CorrespondenceEngineConfig {
     pub identity_extractors: Vec<Arc<dyn IdentityExtractor>>,
     pub row_keys: BTreeMap<String, Vec<String>>,
     pub row_identity_policies: BTreeMap<String, RowIdentityPolicies>,
+    pub node_identities: BTreeMap<String, NodeIdentity>,
     pub root_projection: ProjectionHint,
     pub dataset_configurator: Option<Arc<dyn CorrespondenceDatasetConfigurator>>,
+    /// Optional path-scoped dispatch resolver installed by a rule pack's dataset
+    /// configurator. Core treats it as opaque: it may annotate an item before
+    /// declarative dispatch and may restrict dispatch to a named rule for that
+    /// item.
+    pub dispatch_resolver: Option<Arc<dyn DispatchResolver>>,
 }
 
 pub trait CorrespondenceDatasetConfigurator: Send + Sync {
@@ -207,6 +351,22 @@ pub trait CorrespondenceDatasetConfigurator: Send + Sync {
         right_root: &ItemRef,
         data: &dyn DataAccess,
     ) -> BinocResult<Vec<Diagnostic>>;
+}
+
+pub trait DispatchResolver: Send + Sync {
+    fn configure_item(&self, item: &mut ItemRef) -> BinocResult<Vec<Diagnostic>>;
+
+    fn forced_rule_for(&self, _item: &ItemRef) -> Option<String> {
+        None
+    }
+
+    fn row_identity_for(&self, _path: &str) -> Option<RowIdentity> {
+        None
+    }
+
+    fn node_identity_for(&self, _path: &str) -> Option<NodeIdentity> {
+        None
+    }
 }
 
 /// Metadata-only declarative filter over an [`ItemRef`].
@@ -731,8 +891,10 @@ pub struct WriterDescriptor {
 pub struct LinkCtx<'a> {
     pub view: &'a dyn EngineView,
     pub link: LinkRef,
-    pub row_keys: &'a [String],
+    pub row_keys: Cow<'a, [String]>,
     pub row_identity_policies: RowIdentityPolicies,
+    pub node_identity: Option<Cow<'a, NodeIdentity>>,
+    pub artifact_cache: &'a ArtifactDecodeCache,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -842,5 +1004,28 @@ mod projection_hint_tests {
             .retract_tag("binoc.move");
         acc.merge_from(&hint);
         assert!(!acc.tags.contains(&"binoc.move".to_string()));
+    }
+
+    #[test]
+    fn overlay_replaces_annotation_value_by_key() {
+        let mut acc = ProjectionHint::default().annotate(
+            "binoc",
+            "content_type_inference",
+            serde_json::json!("left"),
+        );
+        let overlay = ProjectionHint::default().annotate(
+            "binoc",
+            "content_type_inference",
+            serde_json::json!("right"),
+        );
+        acc.overlay_from(&overlay);
+        assert_eq!(
+            acc.annotations,
+            vec![Annotation::new(
+                "binoc",
+                "content_type_inference",
+                serde_json::json!("right")
+            )]
+        );
     }
 }

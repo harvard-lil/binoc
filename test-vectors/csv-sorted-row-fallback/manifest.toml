@@ -1,0 +1,8 @@
+[vector]
+name = "csv-sorted-row-fallback"
+description = "CSV rows with no unique key use sorted row-content alignment so a pure re-sort is not reported as cell churn"
+tags = ["csv", "row-reorder", "sorted-fallback"]
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-reorder"]

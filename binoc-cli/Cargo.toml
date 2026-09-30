@@ -39,6 +39,8 @@ binoc-row-reorder = { path = "../model-plugins/binoc-row-reorder", optional = tr
 clap = { version = "4.6.1", features = ["derive"] }
 clap-markdown = "0.1.5"
 serde_json = { workspace = true }
+serde = { workspace = true }
+serde_yaml = "0.9.34"
 
 [features]
 default = []

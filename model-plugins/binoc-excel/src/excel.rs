@@ -130,6 +130,7 @@ fn children_from_sheets(logical_path: &str, sheets: &[NonEmptySheet]) -> Vec<Par
                 size: Some(bytes.len() as u64),
                 media_type: Some("application/vnd.binoc.tabular+json".into()),
                 projection_hint: ProjectionHint::default().item_type("tabular"),
+                tabular_parse: None,
                 handle: child_path,
             },
             artifacts: vec![ParsedArtifact {

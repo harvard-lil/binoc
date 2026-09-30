@@ -30,6 +30,7 @@ and `binoc <subcommand> --help` print the same information at the terminal.
 * [`binoc`↴](#binoc)
 * [`binoc diff`↴](#binoc-diff)
 * [`binoc replay`↴](#binoc-replay)
+* [`binoc report`↴](#binoc-report)
 * [`binoc changelog`↴](#binoc-changelog)
 * [`binoc extract`↴](#binoc-extract)
 
@@ -43,6 +44,7 @@ Binoc produces the missing changelog for datasets. It detects, classifies, and r
 
 * `diff` — Diff an ordered sequence of snapshots and produce a changelog
 * `replay` — Render a saved run trace as a self-contained HTML replay
+* `report` — Prepare a local bug-report bundle for an imperfect diff result
 * `changelog` — Generate a human-readable changelog from one or more saved changesets
 * `extract` — Extract actual changed data from a changeset node
 
@@ -87,6 +89,35 @@ Reads a trace JSON produced by `binoc diff --trace` and writes a single standalo
 ###### **Options:**
 
 * `-o`, `--output <OUTPUT>` — Output HTML path. Defaults to the trace path with a `.html` extension
+
+
+
+## `binoc report`
+
+Prepare a local bug-report bundle for an imperfect diff result.
+
+Re-runs a two-snapshot diff with trace capture and writes a local directory containing the snapshots, the resolved config, the replay trace, rendered output, and version metadata. The bundle is never uploaded anywhere; its purpose is to give a user one directory they can inspect and share if they choose.
+
+**Usage:** `binoc report [OPTIONS] --output-dir <OUTPUT_DIR> <SNAPSHOT_A> <SNAPSHOT_B>`
+
+###### **Arguments:**
+
+* `<SNAPSHOT_A>` — "Before" snapshot path
+* `<SNAPSHOT_B>` — "After" snapshot path
+
+###### **Options:**
+
+* `--config <CONFIG>` — Path to a dataset config YAML file. If omitted, the registry's default config is used
+* `-d`, `--output-dir <OUTPUT_DIR>` — Output directory for the report bundle. The command refuses to reuse an existing path
+* `--snapshot-mode <SNAPSHOT_MODE>` — Whether to copy the snapshot bytes into the bundle or merely record their original paths. `copy` is reproducible but can be large; `reference` is lighter but not self-contained
+
+  Default value: `copy`
+
+  Possible values: `copy`, `reference`
+
+* `--max-snapshot-bytes <MAX_SNAPSHOT_BYTES>` — Refuse to copy more than this many bytes of snapshot payload unless explicitly raised. Applies only with `--snapshot-mode copy`
+
+  Default value: `536870912`
 
 
 

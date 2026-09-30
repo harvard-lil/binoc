@@ -119,6 +119,7 @@ nav:
           - Diff two snapshots: users/howto/diff-two-snapshots.md
           - Save and render changesets: users/howto/save-and-render-changesets.md
           - Extract changed data: users/howto/extract-changed-data.md
+          - Diff SEC monthly notes bundles: users/howto/diff-sec-monthly-notes.md
           - Install and use plugins: users/howto/install-and-use-plugins.md
       - Reference:
           - users/reference/index.md
@@ -126,7 +127,8 @@ nav:
           - Dataset config: users/reference/dataset-config.md
           - Performance tuning: users/reference/performance-tuning.md
           - Changeset JSON schema: users/reference/changeset-schema.md
-          - Third-party plugins: users/reference/third-party-plugins.md
+          - Plugin registry: users/reference/plugin-registry.md
+          - Plugin catalog: users/reference/third-party-plugins.md
       - Explanation:
           - Why Binoc exists: users/explanation/why-binoc-exists.md
           - Vocabulary: users/explanation/vocabulary.md
@@ -160,6 +162,7 @@ nav:
           - Prior art and architecture precedents: core-developers/research/precedents.md
           - Format-aware diff tools, a field survey: core-developers/research/format-aware-diff-tools.md
           - Edit lists, edit distance, and compaction: core-developers/research/edit-list-compaction.md
+          - Searching and verifying edit-list rewrites: core-developers/research/edit-list-search-and-verification.md
           - Nurturing a plugin ecosystem under an unstable SDK: core-developers/research/plugin-ecosystem-precedents.md
           - The data.gov format landscape: core-developers/research/data-gov-inventory-analysis.md
           - Revision-prone datasets, a cross-field catalog: core-developers/research/revision-prone-datasets.md
@@ -172,6 +175,13 @@ nav:
           # BEGIN-ADR-NAV
           - adr/README.md
           - 'Fat-binoc Distribution and the ABI Canary': adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md
+          - 'SDK Annotation Package Identity Stays Explicit': adr/2026-06-29-sdk_annotation_package_id.md
+          - 'Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug': adr/2026-06-29-renderer_ecosystem_ignorance.md
+          - 'Memory and Wall-Clock Contract for Large Dataset Diffs': adr/2026-06-29-memory_and_wall_clock_contract_for_large_dataset_diffs.md
+          - 'Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop': adr/2026-06-29-inference_disclosure_and_high_churn_guardrail.md
+          - 'Feedback Report Bundles for Imperfect Results': adr/2026-06-29-feedback_report_bundles.md
+          - 'Binary Byte-Range Edit Kind': adr/2026-06-29-binary_byte_range_edit_kind.md
+          - 'A Unified Per-Path Dataset Config Model': adr/2026-06-29-per_path_dataset_config_model.md
           - 'The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading': adr/2026-06-22-vintage_audience_and_metadata_only_benchmark.md
           - 'Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact': adr/2026-06-15-tiered_artifact_metadata.md
           - 'The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First': adr/2026-06-15-engine_overhaul_retrospective.md

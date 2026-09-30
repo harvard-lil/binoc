@@ -56,36 +56,39 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "1 row added; 2 cells changed"
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data/customers.csv",
+                  "snapshot": "from"
+                }
               }
             ],
             "tags": [
-              "binoc.cell-change",
+              "binoc.column-type-change",
               "binoc.content-changed",
               "binoc.move",
               "binoc.move.modified",
               "binoc.row-addition",
+              "binoc.schema-change",
               "binoc.serialization-change"
             ],
             "details": {
               "edits": [
                 {
                   "params": {
+                    "cells": 2,
                     "column": "id",
-                    "from": "1",
-                    "row": 0,
-                    "to": 1
+                    "from_type": "string",
+                    "to_type": "number"
                   },
-                  "verb": "tabular.edit_cell"
-                },
-                {
-                  "params": {
-                    "column": "id",
-                    "from": "2",
-                    "row": 1,
-                    "to": 2
-                  },
-                  "verb": "tabular.edit_cell"
+                  "summary": [
+                    {
+                      "text": "Column type changed: 'id' string -> number"
+                    }
+                  ],
+                  "verb": "tabular.column_type_changed"
                 },
                 {
                   "params": {
@@ -103,7 +106,14 @@ expression: "&stable_changeset"
                   "verb": "tabular.add_row"
                 }
               ]
-            }
+            },
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "content_summary",
+                "value": "1 row added; Column type changed: 'id' string -> number"
+              }
+            ]
           },
           {
             "action": "move",
@@ -119,35 +129,53 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "6 cells changed"
+                "text": "Moved from "
+              },
+              {
+                "path": {
+                  "value": "data/orders.csv",
+                  "snapshot": "from"
+                }
               }
             ],
             "tags": [
               "binoc.cell-change",
+              "binoc.column-type-change",
               "binoc.content-changed",
               "binoc.move",
               "binoc.move.modified",
+              "binoc.schema-change",
               "binoc.serialization-change"
             ],
             "details": {
               "edits": [
                 {
                   "params": {
+                    "cells": 2,
                     "column": "id",
-                    "from": "100",
-                    "row": 0,
-                    "to": 100
+                    "from_type": "string",
+                    "to_type": "number"
                   },
-                  "verb": "tabular.edit_cell"
+                  "summary": [
+                    {
+                      "text": "Column type changed: 'id' string -> number"
+                    }
+                  ],
+                  "verb": "tabular.column_type_changed"
                 },
                 {
                   "params": {
+                    "cells": 2,
                     "column": "customer_id",
-                    "from": "1",
-                    "row": 0,
-                    "to": 1
+                    "from_type": "string",
+                    "to_type": "number"
                   },
-                  "verb": "tabular.edit_cell"
+                  "summary": [
+                    {
+                      "text": "Column type changed: 'customer_id' string -> number"
+                    }
+                  ],
+                  "verb": "tabular.column_type_changed"
                 },
                 {
                   "params": {
@@ -155,24 +183,6 @@ expression: "&stable_changeset"
                     "from": "42",
                     "row": 0,
                     "to": 42
-                  },
-                  "verb": "tabular.edit_cell"
-                },
-                {
-                  "params": {
-                    "column": "id",
-                    "from": "101",
-                    "row": 1,
-                    "to": 101
-                  },
-                  "verb": "tabular.edit_cell"
-                },
-                {
-                  "params": {
-                    "column": "customer_id",
-                    "from": "2",
-                    "row": 1,
-                    "to": 2
                   },
                   "verb": "tabular.edit_cell"
                 },
@@ -186,7 +196,14 @@ expression: "&stable_changeset"
                   "verb": "tabular.edit_cell"
                 }
               ]
-            }
+            },
+            "annotations": [
+              {
+                "package": "binoc",
+                "key": "content_summary",
+                "value": "2 cells changed; Column type changed: 'id' string -> number; Column type changed: 'customer_id' string -> number"
+              }
+            ]
           }
         ]
       }

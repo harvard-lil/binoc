@@ -1075,11 +1075,7 @@ impl PyConfig {
 // Top-level functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn build_controller(
-    _py: Python<'_>,
-    config: &PyConfig,
-    _registry: Option<&PyPluginRegistry>,
-) -> PyResult<Controller> {
+fn build_controller(config: &PyConfig) -> PyResult<Controller> {
     let mut engine = binoc_stdlib::correspondence::engine_config_for_dataset_config(
         &config.dataset_config.dataset,
     );
@@ -1096,18 +1092,14 @@ fn build_controller(
 /// :param snapshot_b: Path to the later snapshot (file or directory).
 /// :param config: Optional :class:`Config` carrying dataset semantics. If
 ///     ``None``, the stdlib defaults are used.
-/// :param registry: Optional :class:`PluginRegistry` providing the set of
-///     plugins available to resolve from ``config``. If ``None``, the
-///     stdlib registry is used.
 /// :returns: The resulting :class:`Changeset`.
 #[pyfunction]
-#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None, registry=None))]
+#[pyo3(signature = (snapshot_a, snapshot_b, *, config=None))]
 fn diff(
     py: Python<'_>,
     snapshot_a: &str,
     snapshot_b: &str,
     config: Option<&PyConfig>,
-    registry: Option<&PyPluginRegistry>,
 ) -> PyResult<PyChangeset> {
     let default_config;
     let config = match config {
@@ -1120,7 +1112,7 @@ fn diff(
         }
     };
 
-    let controller = build_controller(py, config, registry)?;
+    let controller = build_controller(config)?;
 
     let changeset = py
         .detach(|| controller.diff(snapshot_a, snapshot_b))
@@ -1163,7 +1155,7 @@ fn extract(
         }
     };
 
-    let controller = build_controller(py, config, None)?;
+    let controller = build_controller(config)?;
 
     let snap_a = snapshot_a
         .map(|s| s.to_string())

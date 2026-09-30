@@ -8,12 +8,15 @@ normal Binoc `binoc.tabular.v1` data for row, column, and cell analysis. The SQL
 table name is used verbatim as the child name, since it is the table's intrinsic
 identity.
 
-## Install
+## Use
 
-From PyPI (requires Binoc and Python 3.10+):
+Separate PyPI publishing for this native rule pack is paused. The default
+`binoc` wheel does not include SQLite because it is excluded from the
+`binoc-cli` `bundled` feature set; enable the `sqlite` feature explicitly when
+building from source.
 
 ```bash
-pip install binoc binoc-sqlite
+cargo run -p binoc-cli --features sqlite -- diff snapshot-a snapshot-b
 ```
 
 From the repo (when developing Binoc or this plugin):

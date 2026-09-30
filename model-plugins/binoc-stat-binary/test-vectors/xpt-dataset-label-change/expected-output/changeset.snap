@@ -30,7 +30,10 @@ expression: "&stable_changeset"
             ],
             "summary": [
               {
-                "text": "1 row added; Table metadata changed"
+                "text": "1 row added; "
+              },
+              {
+                "text": "Table metadata changed"
               }
             ],
             "tags": [

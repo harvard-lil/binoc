@@ -236,7 +236,7 @@ fn xml_to_json(text: &str) -> BinocResult<Value> {
             }
             Event::Text(text) => {
                 let chunk = text
-                    .xml_content()
+                    .xml10_content()
                     .map_err(|err| BinocError::Other(format!("decode XML text: {err}")))?;
                 if let Some((_, node)) = stack.last_mut() {
                     node.text.push_str(&chunk);

@@ -7,6 +7,13 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | Date | Title | Status |
 |---|---|---|
 | 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented |
+| 2026-06-29 | [SDK Annotation Package Identity Stays Explicit](2026-06-29-sdk_annotation_package_id.md) | Accepted |
+| 2026-06-29 | [Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug](2026-06-29-renderer_ecosystem_ignorance.md) | Accepted |
+| 2026-06-29 | [Memory and Wall-Clock Contract for Large Dataset Diffs](2026-06-29-memory_and_wall_clock_contract_for_large_dataset_diffs.md) | Proposed |
+| 2026-06-29 | [Inference Is Allowed, But Always Disclosed and Overridable; the High-Churn Guardrail Is the Backstop](2026-06-29-inference_disclosure_and_high_churn_guardrail.md) | Accepted |
+| 2026-06-29 | [Feedback Report Bundles for Imperfect Results](2026-06-29-feedback_report_bundles.md) | Implemented |
+| 2026-06-29 | [Binary Byte-Range Edit Kind](2026-06-29-binary_byte_range_edit_kind.md) | Proposed |
+| 2026-06-29 | [A Unified Per-Path Dataset Config Model](2026-06-29-per_path_dataset_config_model.md) | Accepted |
 | 2026-06-22 | [The Vintage Audience: a Kept Benchmark for Metadata-Over-Data Reading](2026-06-22-vintage_audience_and_metadata_only_benchmark.md) | Accepted (benchmark landed; features deliberately deferred) |
 | 2026-06-15 | [Tiered Artifact Metadata: Column, Table, and a `parser_metadata_v1` Artifact](2026-06-15-tiered_artifact_metadata.md) | Implemented (channels + producers in CFM-80; rendering + significance in CFM-82) |
 | 2026-06-15 | [The Engine Overhaul, Told Whole: Single-Tree to Correspondence-First](2026-06-15-engine_overhaul_retrospective.md) | Retrospective |
@@ -30,10 +37,10 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | 2026-06-03 | [Progressive Renderer Annotations](2026-06-03-progressive_renderer_annotations.md) | Implemented |
 | 2026-06-03 | [Error Diagnostics Are Reportable Findings](2026-06-03-error_diagnostics_are_reportable_findings.md) | Implemented |
 | 2026-06-02 | [Markdown Renderer Groups Replace Significance-Map Grouping](2026-06-02-renderer_groups.md) | Implemented |
-| 2026-06-01 | [Unified Dataset Config and Identity Policy](2026-06-01-unified_dataset_config_and_identity.md) | Accepted; implementation notes superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md) |
+| 2026-06-01 | [Unified Dataset Config and Identity Policy](2026-06-01-unified_dataset_config_and_identity.md) | Superseded by [A Unified Per-Path Dataset Config Model](2026-06-29-per_path_dataset_config_model.md) |
 | 2026-06-01 | [Tabular Collection Artifact Model](2026-06-01-tabular_collection_artifact_model.md) | Accepted |
 | 2026-06-01 | [Single-stream gzip as an expanding comparator](2026-06-01-single_stream_gzip_as_expanding_comparator.md) | Implemented |
-| 2026-06-01 | [Optional First-Party Plugins and `binoc[all]`](2026-06-01-optional_first_party_plugins.md) | Accepted |
+| 2026-06-01 | [Optional First-Party Plugins and `binoc[all]`](2026-06-01-optional_first_party_plugins.md) | Superseded by [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) |
 | 2026-06-01 | [Example Verbosity and Plugin-Supplied Details](2026-06-01-example_verbosity.md) | Decided |
 | 2026-06-01 | [Diagnostics Channel for Non-Fatal Warnings and Suggestions](2026-06-01-diagnostics_channel.md) | Implemented |
 | 2026-05-13 | [Rename-and-modify detection: fuzzy correlation + transformer-initiated re-dispatch](rename_modify_detection.md) | Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md) |

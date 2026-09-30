@@ -1,0 +1,52 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "SDN.CSV",
+        "sources": [
+          {
+            "path": "SDN.CSV",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 row modified by key"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "column_11",
+                "from": "remarks",
+                "key": {
+                  "column_1": "100"
+                },
+                "to": "remarks-updated"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+[vector]
+name = "per-path-dispatch-override"
+description = "Per-path dispatch overrides promote extensionless CSV content before tabular row keying"
+tags = ["config", "dispatch", "csv", "keyed"]
+
+[config.dataset.defaults.row_identity]
+columns = ["id"]
+
+[[config.dataset.paths]]
+match = "**/records"
+content_type = "text/csv"
+
+[[config.dataset.paths]]
+match = "forced"
+rule = "binoc.parse.csv"
+row_identity = { columns = ["id"] }
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

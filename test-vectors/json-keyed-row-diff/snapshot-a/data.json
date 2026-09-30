@@ -1,0 +1,5 @@
+[
+  {"id": "p1", "name": "Alpha", "price": 10, "status": "active"},
+  {"id": "p2", "name": "Beta", "price": 20, "status": "active"},
+  {"id": "p3", "name": "Gamma", "price": 30, "status": "retired"}
+]

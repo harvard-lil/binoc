@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
+use binoc_core::config::DatasetConfig;
 use binoc_core::correspondence::driver::{self, ExecutionMode, RunStats};
 use binoc_core::data_access::LocalDataAccess;
 use binoc_sdk::{Changeset, DataAccess};
-use binoc_stdlib::correspondence::default_engine_config;
+use binoc_stdlib::correspondence::{default_engine_config, engine_config_for_dataset_config};
 use serde::Serialize;
 
 const REPORT_VERSION: u32 = 1;
@@ -15,10 +16,11 @@ const REPORT_VERSION: u32 = 1;
 fn main() {
     let args = Args::parse();
     let temp = tempfile::tempdir().expect("create perf tempdir");
+    let dataset_config = args.dataset_config();
     for fixture in args.fixtures {
         let prepared = fixture.prepare(temp.path());
         for execution in &args.execution_modes {
-            let report = run_report(&prepared, *execution);
+            let report = run_report(&prepared, *execution, &dataset_config, args.config.as_ref());
             println!(
                 "{}",
                 serde_json::to_string(&report).expect("serialize run report")
@@ -31,6 +33,7 @@ fn main() {
 struct Args {
     fixtures: Vec<Fixture>,
     execution_modes: Vec<ExecutionMode>,
+    config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +52,7 @@ impl Args {
         let mut mode = ModeSelection::Both;
         let mut left = None;
         let mut right = None;
+        let mut config = None;
 
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -66,6 +70,7 @@ impl Args {
                 }
                 "--left" => left = Some(PathBuf::from(required_arg("--left", args.next()))),
                 "--right" => right = Some(PathBuf::from(required_arg("--right", args.next()))),
+                "--config" => config = Some(PathBuf::from(required_arg("--config", args.next()))),
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -105,7 +110,20 @@ impl Args {
         Self {
             fixtures,
             execution_modes: mode.execution_modes(),
+            config,
         }
+    }
+
+    fn dataset_config(&self) -> DatasetConfig {
+        self.config
+            .as_deref()
+            .map(DatasetConfig::from_file)
+            .transpose()
+            .unwrap_or_else(|err| {
+                eprintln!("failed to read --config: {err}");
+                std::process::exit(2);
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -245,7 +263,7 @@ fn required_arg(flag: &str, value: Option<String>) -> String {
 
 fn print_help() {
     eprintln!(
-        "Usage: just perf [--mode both|serial|parallel_parse] [--groups N --files-per-group N --rows-per-file N]\n       just perf --family row-scale|file-count-scale|directory-scale|fuzzy-threshold [--mode both|serial|parallel_parse]\n       just perf --left SNAPSHOT_A --right SNAPSHOT_B [--mode both|serial|parallel_parse]"
+        "Usage: just perf [--mode both|serial|parallel_parse] [--groups N --files-per-group N --rows-per-file N]\n       just perf --family row-scale|file-count-scale|directory-scale|fuzzy-threshold [--mode both|serial|parallel_parse]\n       just perf --left SNAPSHOT_A --right SNAPSHOT_B [--config DATASET.yaml] [--mode both|serial|parallel_parse]"
     );
 }
 
@@ -385,6 +403,8 @@ struct InputFacts {
     fuzzy_candidate_pairs: Option<usize>,
     left: String,
     right: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    config: Option<String>,
     left_nodes: usize,
     right_nodes: usize,
     total_bytes: u64,
@@ -436,18 +456,41 @@ struct DeterminismMetrics {
     changeset_json_hash: String,
 }
 
-fn run_report(fixture: &PreparedFixture, execution: ExecutionMode) -> RunReport {
+fn run_report(
+    fixture: &PreparedFixture,
+    execution: ExecutionMode,
+    dataset_config: &DatasetConfig,
+    config_path: Option<&PathBuf>,
+) -> RunReport {
     let data = Arc::new(
         LocalDataAccess::new_for_diff(&fixture.left, &fixture.right)
             .expect("local data access for diff"),
     );
+    let root_logical = root_logical_path(&fixture.left, &fixture.right);
     let left = data
-        .register_local(&fixture.left, "")
+        .register_local(&fixture.left, &root_logical)
         .expect("register left root");
     let right = data
-        .register_local(&fixture.right, "")
+        .register_local(&fixture.right, &root_logical)
         .expect("register right root");
-    let config = default_engine_config();
+    let mut config = if dataset_config.dataset.is_null() {
+        default_engine_config()
+    } else {
+        engine_config_for_dataset_config(&dataset_config.dataset)
+    };
+    let setup_diagnostics = if let Some(configurator) = config.dataset_configurator.clone() {
+        configurator
+            .configure(
+                &mut config,
+                &dataset_config.dataset,
+                &left,
+                &right,
+                data.as_ref(),
+            )
+            .expect("configure dataset semantics")
+    } else {
+        Vec::new()
+    };
 
     let resource_start = resource_snapshot();
     let started = Instant::now();
@@ -462,6 +505,7 @@ fn run_report(fixture: &PreparedFixture, execution: ExecutionMode) -> RunReport 
         fixture.left.display().to_string(),
         fixture.right.display().to_string(),
     );
+    changeset.diagnostics.extend(setup_diagnostics);
     changeset.diagnostics.extend(run.diagnostics);
     changeset.hoist_node_diagnostics();
     changeset.dedupe_and_cap_diagnostics(16);
@@ -485,6 +529,7 @@ fn run_report(fixture: &PreparedFixture, execution: ExecutionMode) -> RunReport 
                 .map(|candidates| candidates * candidates),
             left: fixture.left.display().to_string(),
             right: fixture.right.display().to_string(),
+            config: config_path.map(|path| path.display().to_string()),
             left_nodes,
             right_nodes,
             total_bytes: total_bytes(&fixture.left) + total_bytes(&fixture.right),
@@ -566,6 +611,18 @@ fn total_bytes(root: &Path) -> u64 {
         .filter(|metadata| metadata.is_file())
         .map(|metadata| metadata.len())
         .sum()
+}
+
+fn root_logical_path(left: &Path, right: &Path) -> String {
+    if left.is_dir() && right.is_dir() {
+        return String::new();
+    }
+    right
+        .file_name()
+        .or_else(|| left.file_name())
+        .and_then(|name| name.to_str())
+        .map(binoc_sdk::escape_segment)
+        .unwrap_or_default()
 }
 
 fn write_synthetic_fixture(root: &Path, shape: FixtureShape) -> (PathBuf, PathBuf) {

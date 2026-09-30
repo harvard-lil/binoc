@@ -1,5 +1,8 @@
 """Tests for the binoc-html renderer plugin."""
 
+import json
+from pathlib import Path
+
 import binoc
 from binoc_html import HtmlRenderer
 
@@ -48,3 +51,17 @@ def test_register_adds_to_registry():
 
     register(registry)
     assert 'binoc.html' in registry.list_renderers()
+
+
+def test_plugin_registry_describes_renderer_not_file_parser():
+    registry_path = Path(__file__).resolve().parents[3] / 'plugin_registry.json'
+    registry = json.loads(registry_path.read_text(encoding='utf-8'))
+    plugin = next(plugin for plugin in registry['plugins'] if plugin['id'] == 'binoc-html')
+
+    assert plugin['rule_packs'] == [
+        {
+            'name': HtmlRenderer.name,
+            'dispatch': {'scope': 'changesets'},
+            'rules': ['render'],
+        }
+    ]

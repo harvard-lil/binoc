@@ -37,6 +37,11 @@ expression: "&stable_changeset"
               "params": {
                 "row_count": 3
               },
+              "summary": [
+                {
+                  "text": "Rows reordered (same data, different sort order)"
+                }
+              ],
               "verb": "tabular.reorder_rows"
             }
           ]

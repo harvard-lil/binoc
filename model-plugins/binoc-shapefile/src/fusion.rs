@@ -136,6 +136,7 @@ impl ParseRule for ShapefileFuseRule {
                 size: Some(geometry_bytes.len() as u64),
                 media_type: Some("application/vnd.binoc.structured-document+json".into()),
                 projection_hint: ProjectionHint::default().item_type("Geometry"),
+                tabular_parse: None,
                 handle: geometry_path,
             },
             artifacts: vec![ParsedArtifact {
@@ -160,6 +161,7 @@ impl ParseRule for ShapefileFuseRule {
                     size: Some(table_bytes.len() as u64),
                     media_type: Some("application/vnd.binoc.tabular+json".into()),
                     projection_hint: ProjectionHint::default().item_type("Attribute table"),
+                    tabular_parse: None,
                     handle: child_path,
                 },
                 artifacts: vec![ParsedArtifact {

@@ -1,0 +1,78 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 cell changed; "
+          },
+          {
+            "text": "Suppressed "
+          },
+          {
+            "uint": 2
+          },
+          {
+            "text": " cells in 'count'"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change",
+          "binoc.value-suppressed"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "cells": 2,
+                "column": "count"
+              },
+              "summary": [
+                {
+                  "text": "Suppressed "
+                },
+                {
+                  "uint": 2
+                },
+                {
+                  "text": " cells in 'count'"
+                }
+              ],
+              "verb": "tabular.values_suppressed"
+            },
+            {
+              "params": {
+                "column": "rate",
+                "from": "8.9",
+                "row": 2,
+                "to": "9.1"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

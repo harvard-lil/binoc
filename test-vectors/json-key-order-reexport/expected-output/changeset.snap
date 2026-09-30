@@ -86,6 +86,11 @@ expression: "&stable_changeset"
                   "trailing_newline": true
                 }
               },
+              "summary": [
+                {
+                  "text": "Document serialization changed"
+                }
+              ],
               "verb": "document.serialization_change"
             }
           ]

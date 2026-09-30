@@ -140,7 +140,6 @@ def diff(
     snapshot_b: str,
     *,
     config: Config | None = None,
-    registry: PluginRegistry | None = None,
 ) -> Changeset: ...
 def to_json(changeset: Changeset) -> str: ...
 def to_markdown(

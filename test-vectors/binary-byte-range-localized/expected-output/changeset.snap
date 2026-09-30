@@ -1,0 +1,146 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "file",
+        "path": "payload.bin",
+        "sources": [
+          {
+            "path": "payload.bin",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "uint": 1
+          },
+          {
+            "text": " changed byte range; "
+          },
+          {
+            "float": 66.66666666666666
+          },
+          {
+            "text": "% unchanged; first range left ["
+          },
+          {
+            "uint": 65536
+          },
+          {
+            "text": ", "
+          },
+          {
+            "uint": 131072
+          },
+          {
+            "text": ") to right ["
+          },
+          {
+            "uint": 65536
+          },
+          {
+            "text": ", "
+          },
+          {
+            "uint": 131072
+          },
+          {
+            "text": ")"
+          }
+        ],
+        "tags": [
+          "binoc.binary-byte-range-change",
+          "binoc.content-changed"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "changed_region_count": 1,
+                "chunk_count_limit": 32768,
+                "chunk_scan_truncated": false,
+                "chunking": {
+                  "algorithm": "fastcdc.v2020",
+                  "avg_bytes": 16384,
+                  "max_bytes": 65536,
+                  "min_bytes": 4096
+                },
+                "left_analyzed_bytes": 196608,
+                "left_size": 196608,
+                "regions": [
+                  {
+                    "left_len": 65536,
+                    "left_start": 65536,
+                    "right_len": 65536,
+                    "right_start": 65536
+                  }
+                ],
+                "regions_truncated": false,
+                "right_analyzed_bytes": 196608,
+                "right_size": 196608,
+                "unchanged_bytes": 131072,
+                "unchanged_ratio": 0.6666666666666666
+              },
+              "summary": [
+                {
+                  "uint": 1
+                },
+                {
+                  "text": " changed byte range; "
+                },
+                {
+                  "float": 66.66666666666666
+                },
+                {
+                  "text": "% unchanged; first range left ["
+                },
+                {
+                  "uint": 65536
+                },
+                {
+                  "text": ", "
+                },
+                {
+                  "uint": 131072
+                },
+                {
+                  "text": ") to right ["
+                },
+                {
+                  "uint": 65536
+                },
+                {
+                  "text": ", "
+                },
+                {
+                  "uint": 131072
+                },
+                {
+                  "text": ")"
+                }
+              ],
+              "verb": "binary.byte_ranges_changed"
+            },
+            {
+              "params": {},
+              "verb": "binary.contents-differ"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+[vector]
+name = "ofac-sdn-headerless-position-key"
+description = "OFAC SDN-style 12-column headerless CSV keyed by ent_num in column 1"
+tags = ["csv", "config", "shape", "headerless", "keyed"]
+
+[[config.dataset.paths]]
+match = "**/SDN.CSV"
+content_type = "text/csv"
+shape = { has_header = false }
+row_identity = { by_position = [1] }
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.cell-change"]

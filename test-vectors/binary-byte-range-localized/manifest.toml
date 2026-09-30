@@ -1,0 +1,9 @@
+[vector]
+name = "binary-byte-range-localized"
+description = "An opaque binary changes in one localized byte region; CDC byte-range localization reports the changed range and unchanged-byte percentage while the durable binary fallback fact remains present."
+tags = ["modify", "binary", "byte-range"]
+
+[expected]
+root_action = "modify"
+child_count = 1
+has_tags = ["binoc.content-changed", "binoc.binary-byte-range-change"]

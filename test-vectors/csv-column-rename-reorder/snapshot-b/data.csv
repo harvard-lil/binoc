@@ -1,0 +1,4 @@
+score,id,state
+10,1,active
+20,2,pending
+30,3,closed

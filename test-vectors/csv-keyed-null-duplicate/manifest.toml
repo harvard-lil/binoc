@@ -3,13 +3,13 @@ name = "csv-keyed-null-duplicate"
 description = "Configured CSV row keys surface null and duplicate key diagnostics"
 tags = ["csv", "keyed", "null-key", "duplicate-key"]
 
-[config.dataset.tables.defaults.row_identity]
+[config.dataset.defaults.row_identity]
 on_null_key = "diagnostic"
 on_duplicate_key = "diagnostic"
 
-[[config.dataset.tables.entries]]
-path_regex = '^data\.csv$'
-columns = ["id"]
+[[config.dataset.paths]]
+match = "data.csv"
+row_identity = { columns = ["id"] }
 
 [expected]
 root_action = "modify"
