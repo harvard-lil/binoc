@@ -214,28 +214,29 @@ impl ParseRule for IonParseRule {
 
     fn parse(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ParseOutput> {
         let bytes = data.read_bytes(item)?;
-        let element = ion_rs::element::Element::read_one(&bytes)
+        let element = ion_rs::Element::read_one(&bytes)
             .map_err(|err| BinocError::Other(format!("parse Ion: {err}")))?;
         let value = ion_value_to_json(element.value());
         structured_document_output(value, "ion", bytes.len())
     }
 }
 
-/// Convert an Ion [`Value`](ion_rs::element::Value) into a
+/// Convert an Ion [`Value`](ion_rs::Value) into a
 /// [`serde_json::Value`].
 ///
 /// Scalars map directly. Ion-specific types without a JSON equivalent
 /// (`Decimal`, `Timestamp`, `Symbol`, `Clob`, `Blob`) render as strings so they
 /// remain diffable. `SExp` is treated like a list.
-fn ion_value_to_json(value: &ion_rs::element::Value) -> serde_json::Value {
-    use ion_rs::element::Value as IonValue;
-    use ion_rs::Int;
+fn ion_value_to_json(value: &ion_rs::Value) -> serde_json::Value {
+    use ion_rs::Value as IonValue;
 
     match value {
         IonValue::Null(_) => serde_json::Value::Null,
         IonValue::Bool(b) => serde_json::Value::Bool(*b),
-        IonValue::Int(Int::I64(n)) => serde_json::Value::Number((*n).into()),
-        IonValue::Int(Int::BigInt(n)) => serde_json::Value::String(n.to_string()),
+        IonValue::Int(n) => match n.as_i64() {
+            Some(n) => serde_json::Value::Number(n.into()),
+            None => serde_json::Value::String(n.to_string()),
+        },
         IonValue::Float(f) => serde_json::Number::from_f64(*f)
             .map_or(serde_json::Value::Null, serde_json::Value::Number),
         IonValue::Decimal(d) => serde_json::Value::String(d.to_string()),
@@ -283,8 +284,15 @@ mod tests {
 
     #[test]
     fn ion_struct_transcodes_to_json_object() {
-        let element = ion_rs::element::Element::read_one(b"{name: \"svc\", replicas: 3}").unwrap();
+        let element = ion_rs::Element::read_one(b"{name: \"svc\", replicas: 3}").unwrap();
         let value = ion_value_to_json(element.value());
         assert_eq!(value, serde_json::json!({ "name": "svc", "replicas": 3 }));
+    }
+
+    #[test]
+    fn ion_int_beyond_i64_renders_as_string() {
+        let element = ion_rs::Element::read_one(b"123456789012345678901234567890").unwrap();
+        let value = ion_value_to_json(element.value());
+        assert_eq!(value, serde_json::json!("123456789012345678901234567890"));
     }
 }
