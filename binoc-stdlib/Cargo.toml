@@ -28,7 +28,7 @@ csv = "1.4.0"
 encoding_rs = "0.8.35"
 encoding_rs_io = "0.1.7"
 fastcdc = "4.0.1"
-infer = "0.19"
+infer = "0.22"
 mime_guess = "2.0.5"
 regex = "1.12.2"
 serde = { workspace = true }
