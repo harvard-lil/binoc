@@ -25,7 +25,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 blake3 = "1.8.5"
 binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
-dbase = { version = "0.7.0", optional = true }
+dbase = { version = "0.8.0", optional = true }
 shapefile = "0.8.0"
 
 [dev-dependencies]
@@ -34,5 +34,5 @@ binoc-sdk = { workspace = true, features = ["test-support"] }
 binoc-stdlib = { workspace = true, features = ["test-vectors"] }
 binoc-shapefile = { path = ".", features = ["test-support"] }
 binoc-dbf = { workspace = true, features = ["test-support"] }
-dbase = "0.7.0"
+dbase = "0.8.0"
 tempfile = "3"
