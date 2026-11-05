@@ -53,6 +53,7 @@ binoc diff ./test-vectors-materialized/trivial-identical/snapshot-a ./test-vecto
 ```output
 # Changelog: ./test-vectors-materialized/trivial-identical/snapshot-a -> ./test-vectors-materialized/trivial-identical/snapshot-b
 
+No changes detected.
 
 ```
 
