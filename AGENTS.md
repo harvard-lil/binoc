@@ -81,6 +81,14 @@ If you make a design decision worth recording separately from the code (the alte
 
 Add a short summary with date to `docs/adr/README.md`.
 
+## Changelog
+
+User-visible changes (CLI flags and exit status, config keys, output, formats
+read, published SDK API, distribution) get an entry under `## Unreleased` in
+`CHANGELOG.md` in the same change. Breaking changes go under "Breaking
+changes" with what users must do. Internal refactors and test-only changes do
+not need an entry.
+
 ## Writing docs
 
 See [2026-04-17-documentation_platform_and_info_design.md](docs/adr/2026-04-17-documentation_platform_and_info_design.md) for the documentation platform and information design decisions.
