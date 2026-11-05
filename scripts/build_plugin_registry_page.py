@@ -25,7 +25,7 @@ TIER_LABELS = {
 TIER_DISTRIBUTION = {
     'built-in': 'Included with every binoc build.',
     'first-party-bundled': 'Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature.',
-    'first-party-opt-in': 'Not published as a separate PyPI wheel. The pack remains in-tree and can be enabled explicitly; SQLite is excluded from the default `bundled` feature set.',
+    'first-party-opt-in': 'Not published as a separate PyPI wheel and excluded from the default `bundled` feature set. The pack remains in-tree; enable its `binoc-cli` feature explicitly to build it in.',
     'first-party-add-on': 'Maintained in this repository but distributed outside the default fat `binoc` wheel.',
     'third-party': 'Maintained outside the core binoc distribution.',
 }

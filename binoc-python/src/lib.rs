@@ -1249,9 +1249,22 @@ impl PyPluginRegistry {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[pyfunction]
-fn run_cli(registry: &mut PyPluginRegistry, args: Vec<String>) -> PyResult<()> {
+#[pyo3(signature = (registry, args, version=None))]
+fn run_cli(
+    registry: &mut PyPluginRegistry,
+    args: Vec<String>,
+    version: Option<String>,
+) -> PyResult<i32> {
     let inner = std::mem::take(&mut registry.inner);
-    binoc_cli::run(inner, args).map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    // The Python distribution is versioned independently of the Rust crates,
+    // so the console script passes its own version. clap needs a 'static
+    // string; this runs once per process.
+    let version: &'static str = match version {
+        Some(version) => Box::leak(version.into_boxed_str()),
+        None => env!("CARGO_PKG_VERSION"),
+    };
+    binoc_cli::run_with_version(inner, args, version)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

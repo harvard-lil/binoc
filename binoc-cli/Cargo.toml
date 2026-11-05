@@ -54,10 +54,10 @@ shapefile = ["dep:binoc-shapefile"]
 binformats = ["dep:binoc-binformats"]
 stat-binary = ["dep:binoc-stat-binary"]
 row-reorder = ["dep:binoc-row-reorder"]
-# The default fat-binoc bundle. SQLite is intentionally excluded (its bundled
-# rusqlite C build is paused for now); enable `sqlite` explicitly if needed.
-# See docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
+# The default fat-binoc bundle. See
+# docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
 bundled = [
+    "sqlite",
     "excel",
     "parquet",
     "avro",

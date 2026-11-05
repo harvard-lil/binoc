@@ -1,0 +1,10 @@
+[vector]
+name = "exclude-capture-manifest"
+description = "dataset.exclude leaves a capture manifest and an archive member out of the comparison, so captures with identical data compare as identical"
+tags = ["exclude", "directory", "zip"]
+
+[config.dataset]
+exclude = ["manifest.json", "**/capture-log.txt"]
+
+[expected]
+root_action = "identical"

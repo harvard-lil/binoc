@@ -1,0 +1,57 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "metadata",
+        "path": "quakes.geojson",
+        "sources": [
+          {
+            "path": "quakes.geojson",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Table metadata changed"
+          }
+        ],
+        "tags": [
+          "binoc.metadata-change",
+          "binoc.metadata.table"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": 1793905969000,
+                    "key": "metadata.generated",
+                    "kind": "changed",
+                    "to": 1793906029000
+                  }
+                ],
+                "examples_truncated": false,
+                "scope": "table"
+              },
+              "verb": "metadata.value_change"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

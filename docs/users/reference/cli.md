@@ -71,6 +71,8 @@ Runs pairwise comparisons over each consecutive snapshot pair and emits the resu
   Default value: `markdown`
 * `-q`, `--quiet` — Suppress stdout. Useful when every rendered output is directed to a file via -o
 * `--trace <TRACE>` — Write a detailed replay trace (JSON) of the correspondence run to this path: every expand/parse/link/write/compaction step plus the final side trees and links. Requires exactly two snapshots. Convert it to an interactive HTML replay with `binoc replay`
+* `--exclude <GLOB>` — Leave paths matching this glob out of the comparison on both sides. Repeatable. Same glob syntax as `dataset.paths[].match`; added to any `dataset.exclude` entries in --config
+* `--exit-code` — Exit 1 when any compared pair changed and 0 when every pair is identical. Without this flag, a completed diff exits 0. Errors exit 2 either way
 
 
 

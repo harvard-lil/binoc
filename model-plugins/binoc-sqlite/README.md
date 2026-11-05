@@ -10,13 +10,13 @@ identity.
 
 ## Use
 
-Separate PyPI publishing for this native rule pack is paused. The default
-`binoc` wheel does not include SQLite because it is excluded from the
-`binoc-cli` `bundled` feature set; enable the `sqlite` feature explicitly when
-building from source.
+This pack is compiled into the default `binoc` wheel (the `binoc-cli`
+`bundled` feature set) since binoc 0.3.0, so `binoc diff` reads SQLite files
+without installing anything else. Separate PyPI publishing of `binoc-sqlite` is
+paused.
 
 ```bash
-cargo run -p binoc-cli --features sqlite -- diff snapshot-a snapshot-b
+binoc diff snapshot-a snapshot-b
 ```
 
 From the repo (when developing Binoc or this plugin):

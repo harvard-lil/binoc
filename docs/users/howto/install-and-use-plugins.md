@@ -18,8 +18,7 @@ compiled in and available without installing another package. The
 distribution tier.
 
 `binoc-sqlite` and `binoc-stat-binary` are not published as separate PyPI wheels
-today. `binoc-stat-binary` ships in the fat wheel. SQLite remains an explicit
-source-build opt-in and is excluded from the default `bundled` feature set.
+today. Both ship in the fat wheel.
 
 Separately published plugins still use normal Python packaging. When a plugin is
 published independently, install it in the same environment as `binoc`:

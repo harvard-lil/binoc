@@ -108,7 +108,11 @@ pub fn render_markdown(changesets: &[Changeset], config: &MarkdownRendererConfig
 
         format_claims_section(&mut out, changeset);
 
-        if let Some(root) = &changeset.root {
+        if let Some(root) = changeset
+            .root
+            .as_ref()
+            .filter(|root| root.action != "identical")
+        {
             let tag_to_group = build_tag_map(&config.groups);
             let mut by_group: Vec<Vec<&DiffNode>> = vec![Vec::new(); config.groups.len()];
             let mut uncategorized: Vec<&DiffNode> = Vec::new();

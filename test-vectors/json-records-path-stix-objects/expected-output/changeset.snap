@@ -25,11 +25,16 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "1 row modified by key"
+            "text": "1 row modified by key; "
+          },
+          {
+            "text": "Table metadata changed"
           }
         ],
         "tags": [
-          "binoc.cell-change"
+          "binoc.cell-change",
+          "binoc.metadata-change",
+          "binoc.metadata.table"
         ],
         "details": {
           "edits": [
@@ -43,6 +48,21 @@ expression: "&stable_changeset"
                 "to": "New Name"
               },
               "verb": "tabular.edit_cell"
+            },
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "bundle--left",
+                    "key": "id",
+                    "kind": "changed",
+                    "to": "bundle--right"
+                  }
+                ],
+                "examples_truncated": false,
+                "scope": "table"
+              },
+              "verb": "metadata.value_change"
             }
           ]
         }

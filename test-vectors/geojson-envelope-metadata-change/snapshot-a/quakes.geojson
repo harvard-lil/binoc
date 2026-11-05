@@ -1,0 +1,4 @@
+{"type": "FeatureCollection", "metadata": {"generated": 1793905969000, "title": "Significant Earthquakes", "count": 2}, "features": [
+  {"type": "Feature", "id": "us1", "properties": {"mag": 6.1, "place": "Offshore"}, "geometry": {"type": "Point", "coordinates": [140.1, 35.2, 10]}},
+  {"type": "Feature", "id": "us2", "properties": {"mag": 5.4, "place": "Inland"}, "geometry": {"type": "Point", "coordinates": [-120.5, 36.1, 7]}}
+], "bbox": [-120.5, 35.2, 7, 140.1, 36.1, 10]}

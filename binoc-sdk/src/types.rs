@@ -422,9 +422,29 @@ pub struct DatasetSemanticsV1 {
     pub correspondence: CorrespondenceConfig,
     #[serde(default)]
     pub reduced_precision: ReducedPrecisionConfig,
+    /// Path globs (same syntax as `paths[].match`) whose items are left out of
+    /// the comparison entirely, on both sides. Use for files that change on
+    /// every capture by construction, such as a capture manifest.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
+}
+
+impl DatasetSemanticsV1 {
+    /// Top-level keys of the `dataset` section that the SDK schema defines.
+    /// Hosts and the stdlib use this to report unknown keys instead of
+    /// silently ignoring them.
+    pub const KNOWN_FIELDS: &'static [&'static str] = &[
+        "defaults",
+        "paths",
+        "files",
+        "correspondence",
+        "reduced_precision",
+        "exclude",
+    ];
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReducedPrecisionConfig {
     /// String sentinels that represent a suppressed published value after
     /// reduced-precision post-processing. The empty string covers both blank
@@ -446,6 +466,7 @@ fn default_suppression_sentinels() -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DatasetDefaults {
     #[serde(default)]
     pub row_identity: RowIdentity,
@@ -523,6 +544,7 @@ impl<'de> Deserialize<'de> for PathConfigEntry {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CorrespondenceConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expand_renamed_unchanged_collections: Option<bool>,
@@ -549,6 +571,7 @@ pub struct CorrespondenceConfig {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FileIdentityConfig {
     #[serde(default)]
     pub correspondences: Vec<FileCorrespondenceRule>,
@@ -893,6 +916,119 @@ pub fn tabular_extract(
             Some(ExtractResult::Text(out))
         }
         _ => None,
+    }
+}
+
+/// Keyed variant of [`tabular_extract`] for `rows_added`, `rows_removed`, and
+/// `cells_changed`: rows are matched by the values of `key_columns` instead of
+/// by position, so the result agrees with a keyed changeset. Returns `None`
+/// (letting the caller fall back to [`tabular_extract`]) when `key_columns` is
+/// empty, a key column is missing on either side, or the aspect is not one of
+/// those three.
+///
+/// A key that appears more than once on one side cannot be matched
+/// unambiguously; its rows are never reported as changed cells, and they
+/// count as added or removed only when the key is absent from the other side.
+pub fn tabular_extract_keyed(
+    pair: &TabularDataPair,
+    key_columns: &[String],
+    aspect: &str,
+) -> Option<ExtractResult> {
+    if key_columns.is_empty() || !matches!(aspect, "rows_added" | "rows_removed" | "cells_changed")
+    {
+        return None;
+    }
+    let empty = TabularData::new(Vec::new(), Vec::new());
+    let left = pair.left.as_ref().unwrap_or(&empty);
+    let right = pair.right.as_ref().unwrap_or(&empty);
+    let key_indexes = |table: &TabularData| -> Option<Vec<usize>> {
+        if table.headers.is_empty() {
+            return Some(Vec::new());
+        }
+        key_columns
+            .iter()
+            .map(|col| table.column_index(col))
+            .collect()
+    };
+    let left_idx = key_indexes(left)?;
+    let right_idx = key_indexes(right)?;
+    let key_of = |row: &[Value], idx: &[usize]| -> Vec<String> {
+        idx.iter()
+            .map(|&i| row.get(i).unwrap_or(&NULL_VALUE).as_text().into_owned())
+            .collect()
+    };
+    let mut left_rows: std::collections::BTreeMap<Vec<String>, Vec<&Vec<Value>>> =
+        Default::default();
+    for row in &left.rows {
+        left_rows
+            .entry(key_of(row, &left_idx))
+            .or_default()
+            .push(row);
+    }
+    let mut right_rows: std::collections::BTreeMap<Vec<String>, Vec<&Vec<Value>>> =
+        Default::default();
+    for row in &right.rows {
+        right_rows
+            .entry(key_of(row, &right_idx))
+            .or_default()
+            .push(row);
+    }
+
+    let unmatched = |table: &TabularData,
+                     idx: &[usize],
+                     other: &std::collections::BTreeMap<Vec<String>, Vec<&Vec<Value>>>,
+                     none: &str| {
+        let rows: Vec<Vec<Value>> = table
+            .rows
+            .iter()
+            .filter(|row| !other.contains_key(&key_of(row, idx)))
+            .cloned()
+            .collect();
+        if rows.is_empty() {
+            ExtractResult::Text(none.into())
+        } else {
+            ExtractResult::Text(TabularData::new(table.headers.clone(), rows).to_csv())
+        }
+    };
+
+    match aspect {
+        "rows_added" => Some(unmatched(right, &right_idx, &left_rows, "No rows added.\n")),
+        "rows_removed" => Some(unmatched(
+            left,
+            &left_idx,
+            &right_rows,
+            "No rows removed.\n",
+        )),
+        _ => {
+            let common_cols = tabular_columns_in_common(left, right);
+            let mut out_rows = Vec::new();
+            for (key, lrows) in &left_rows {
+                let (Some(rrows), [lrow]) = (right_rows.get(key), lrows.as_slice()) else {
+                    continue;
+                };
+                let [rrow] = rrows.as_slice() else {
+                    continue;
+                };
+                for col in &common_cols {
+                    let lv = lrow.get(left.column_index(col)?).unwrap_or(&NULL_VALUE);
+                    let rv = rrow.get(right.column_index(col)?).unwrap_or(&NULL_VALUE);
+                    if lv != rv {
+                        out_rows.push(vec![
+                            Value::String(key.join("|")),
+                            Value::String(col.clone()),
+                            lv.clone(),
+                            rv.clone(),
+                        ]);
+                    }
+                }
+            }
+            let headers = ["key", "column", "old_value", "new_value"]
+                .map(String::from)
+                .to_vec();
+            Some(ExtractResult::Text(
+                TabularData::new(headers, out_rows).to_csv(),
+            ))
+        }
     }
 }
 

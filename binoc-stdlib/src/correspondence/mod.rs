@@ -30,6 +30,8 @@ pub struct CorrespondenceOptions {
     /// to [`expand::ExpandCaps::default`]; per-dataset config overrides
     /// individual caps (see [`engine_config_for_dataset_config`]).
     pub expand_caps: expand::ExpandCaps,
+    /// Paths left out of the comparison (`dataset.exclude`).
+    pub exclude: PathExclusion,
 }
 
 impl Default for CorrespondenceOptions {
@@ -38,6 +40,7 @@ impl Default for CorrespondenceOptions {
             expand_renamed_unchanged_collections: true,
             large_tabular_threshold_bytes: parse::LARGE_TABULAR_THRESHOLD_BYTES,
             expand_caps: expand::ExpandCaps::default(),
+            exclude: PathExclusion::default(),
         }
     }
 }
@@ -64,6 +67,7 @@ pub fn engine_config_for_dataset_config(dataset: &serde_json::Value) -> Correspo
         if let Some(bytes) = correspondence.max_archive_total_bytes {
             options.expand_caps.archive_max_total_bytes = bytes;
         }
+        options.exclude = PathExclusion::new(&semantics.exclude);
         reduced_precision =
             compact::ReducedPrecision::new(semantics.reduced_precision.suppression_sentinels);
     }
@@ -95,14 +99,19 @@ fn engine_config_with_options_and_reduced_precision(
             CoreRule::Pair(Arc::new(pair::ContainerFromChildEvidence::default())),
             CoreRule::Expand(Arc::new(expand::ZipExpand {
                 caps: options.expand_caps,
+                exclude: options.exclude.clone(),
             })),
             CoreRule::Expand(Arc::new(expand::TarExpand {
                 caps: options.expand_caps,
+                exclude: options.exclude.clone(),
             })),
             CoreRule::Expand(Arc::new(expand::GzipExpand {
                 caps: options.expand_caps,
+                exclude: options.exclude.clone(),
             })),
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand {
+                exclude: options.exclude.clone(),
+            })),
             CoreRule::Parse(Arc::new(parse::JsonRecordsParse)),
             CoreRule::Parse(Arc::new(parse::JsonMediaRecordsParse)),
             CoreRule::Parse(Arc::new(parse::JsonParse)),
@@ -176,12 +185,14 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         let semantics = match serde_json::from_value::<DatasetSemanticsV1>(dataset.clone()) {
             Ok(semantics) => semantics,
             Err(err) => {
-                return Ok(vec![Diagnostic::warning(
+                let mut diagnostics = validate_dataset_fields(dataset);
+                diagnostics.push(Diagnostic::error(
                     "binoc.dataset_config.invalid",
                     Summary::new()
                         .text("Ignored malformed dataset semantics config: ")
                         .text(err.to_string()),
-                )]);
+                ));
+                return Ok(diagnostics);
             }
         };
 
@@ -191,7 +202,8 @@ impl CorrespondenceDatasetConfigurator for StdlibDatasetConfigurator {
         let left_paths = logical_paths_for_root(left_root, data)?;
         let right_paths = logical_paths_for_root(right_root, data)?;
         let mut diagnostics = validate_path_entries(&semantics, &parse_capabilities);
-        diagnostics.extend(validate_removed_dataset_fields(dataset));
+        diagnostics.extend(validate_dataset_fields(dataset));
+        diagnostics.extend(validate_exclude(&semantics));
         if !semantics.paths.is_empty() || dataset_has_row_identity_config(&semantics) {
             config.dispatch_resolver = Some(Arc::new(StdlibPathDispatchResolver {
                 entries: semantics.paths.clone(),
@@ -1111,18 +1123,45 @@ fn validate_path_entries(
     diagnostics
 }
 
-fn validate_removed_dataset_fields(dataset: &serde_json::Value) -> Vec<Diagnostic> {
+/// Report top-level `dataset` keys that the SDK schema does not define. A
+/// misspelled or retired key would otherwise be ignored without a trace.
+fn validate_dataset_fields(dataset: &serde_json::Value) -> Vec<Diagnostic> {
     let Some(fields) = dataset.as_object() else {
         return Vec::new();
     };
-    if !fields.contains_key("tables") {
-        return Vec::new();
-    }
-    vec![Diagnostic::error(
-        "binoc.dataset_config.unknown_field",
-        Summary::new().text("Unknown dataset configuration field: tables; use dataset.paths"),
-    )
-    .with_location("dataset.tables")]
+    fields
+        .keys()
+        .filter(|key| !DatasetSemanticsV1::KNOWN_FIELDS.contains(&key.as_str()))
+        .map(|key| {
+            let mut message = Summary::new()
+                .text("Unknown dataset configuration field: ")
+                .text(key.clone());
+            if key == "tables" {
+                message = message.text("; use dataset.paths");
+            } else {
+                message = message
+                    .text("; known fields are ")
+                    .text(DatasetSemanticsV1::KNOWN_FIELDS.join(", "));
+            }
+            Diagnostic::error("binoc.dataset_config.unknown_field", message)
+                .with_location(format!("dataset.{key}"))
+        })
+        .collect()
+}
+
+fn validate_exclude(semantics: &DatasetSemanticsV1) -> Vec<Diagnostic> {
+    semantics
+        .exclude
+        .iter()
+        .filter(|pattern| pattern.is_empty())
+        .map(|_| {
+            Diagnostic::error(
+                "binoc.dataset_config.exclude_empty",
+                Summary::new().text("A dataset.exclude entry is empty; it matches nothing"),
+            )
+            .with_location("dataset.exclude[]")
+        })
+        .collect()
 }
 
 fn path_tabular_parse_for_path(entry: &PathConfigEntry) -> Option<TabularParseConfig> {
@@ -1243,8 +1282,14 @@ fn glob_matches_path(pattern: &str, path: &str) -> bool {
 }
 
 fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
+    glob_regex(pattern).is_some_and(|regex| regex.is_match(path))
+}
+
+/// Compile a `dataset.paths[].match`-style glob into an anchored regex.
+/// Returns `None` for an empty pattern.
+fn glob_regex(pattern: &str) -> Option<Regex> {
     if pattern.is_empty() {
-        return false;
+        return None;
     }
     let mut regex = String::from("^");
     let mut chars = pattern.chars().peekable();
@@ -1272,15 +1317,96 @@ fn glob_matches_path_exact(pattern: &str, path: &str) -> bool {
         }
     }
     regex.push('$');
-    Regex::new(&regex)
-        .map(|regex| regex.is_match(path))
-        .unwrap_or(false)
+    Regex::new(&regex).ok()
+}
+
+/// Precompiled `dataset.exclude` globs. Collection expansion consults this
+/// before registering or hashing a child, so excluded items never enter
+/// either side of the comparison.
+#[derive(Debug, Clone, Default)]
+pub struct PathExclusion {
+    patterns: Arc<[Regex]>,
+}
+
+impl PathExclusion {
+    pub fn new<I, S>(patterns: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        Self {
+            patterns: patterns
+                .into_iter()
+                .filter_map(|pattern| glob_regex(pattern.as_ref()))
+                .collect(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
+    /// True when `logical_path` (or its `/>`-normalized form, so globs can
+    /// reach into archives) matches any exclusion glob.
+    pub fn matches(&self, logical_path: &str) -> bool {
+        if self.patterns.is_empty() {
+            return false;
+        }
+        let normalized = logical_path
+            .contains("/>")
+            .then(|| logical_path.replace("/>", "/"));
+        self.patterns.iter().any(|regex| {
+            regex.is_match(logical_path)
+                || normalized
+                    .as_deref()
+                    .is_some_and(|path| regex.is_match(path))
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use binoc_sdk::{Cardinality, IdentityFailurePolicy};
+
+    #[test]
+    fn path_exclusion_matches_globs_and_archive_members() {
+        let exclude = PathExclusion::new(["manifest.json", "**/capture-log.txt", "logs/*"]);
+        assert!(exclude.matches("manifest.json"));
+        assert!(!exclude.matches("data/manifest.json"));
+        assert!(exclude.matches("bundle.zip/>capture-log.txt"));
+        assert!(exclude.matches("a/b/capture-log.txt"));
+        assert!(exclude.matches("logs/run.txt"));
+        assert!(!exclude.matches("logs/deeper/run.txt"));
+        assert!(!exclude.matches("data.csv"));
+        assert!(!PathExclusion::new([""]).matches(""));
+        assert!(PathExclusion::default().is_empty());
+    }
+
+    #[test]
+    fn unknown_dataset_fields_are_error_diagnostics() {
+        let diagnostics = validate_dataset_fields(&serde_json::json!({
+            "paths": [],
+            "exclude": ["manifest.json"],
+            "tables": [],
+            "pathz": [],
+        }));
+        let locations: Vec<_> = diagnostics
+            .iter()
+            .map(|d| (d.code.as_str(), d.location.as_deref()))
+            .collect();
+        assert_eq!(
+            locations,
+            vec![
+                ("binoc.dataset_config.unknown_field", Some("dataset.pathz")),
+                ("binoc.dataset_config.unknown_field", Some("dataset.tables")),
+            ]
+        );
+        assert!(diagnostics[1]
+            .message
+            .plain_text()
+            .contains("use dataset.paths"));
+    }
 
     fn parse_capabilities() -> ParseCapabilities {
         ParseCapabilities::from_rules(&default_engine_config().rules)

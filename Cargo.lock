@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-abi-canary"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-sdk",
  "libloading",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-avro"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "apache-avro",
  "binoc-avro",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-binformats"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-binformats",
  "binoc-core",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "assert_cmd",
  "binoc-avro",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-sdk",
  "insta",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-dbf"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-dbf",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-excel"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-excel",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-parquet"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "arrow",
  "binoc-core",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-python"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-cli",
  "binoc-core",
@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-row-reorder"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-sdk"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-sdk",
  "blake3",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-shapefile"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-dbf",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-sqlite"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-stat-binary"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-stdlib"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "binoc-xml"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "binoc-core",
  "binoc-sdk",

@@ -1,7 +1,7 @@
 # Fat-binoc Distribution and the ABI Canary
 
 **Date:** 2026-06-30
-**Status:** Accepted; implemented
+**Status:** Accepted; implemented (amended 2026-11-05: SQLite bundled)
 
 ## Context
 
@@ -69,6 +69,11 @@ in-process shortcut that the eventual ABI path could not also express.
   reason *and* to keep the build free of its bundled `rusqlite` C compilation
   during dev; it is deliberately excluded from the default `bundled` set. Both
   crates and their features remain for opt-in use and as reference plugins.
+  *Amended 2026-11-05:* SQLite joined the default `bundled` set for binoc
+  0.3.0. The dev-build concern no longer held (`just check`, CI, and the
+  browser-demo wasm build already compiled rusqlite), and the cost measured
+  then was about 1 MB of wheel size (7.6 to 8.5 MB, macOS arm64). Separate
+  `binoc-sqlite` publishing stays paused.
 - **Add the ABI canary as the graduation gate.** The `binoc-abi-canary` crate is
   a real renderer exported via `export_plugin!` and built as a cdylib; its
   `tests/abi_crossing.rs` builds that cdylib, loads it over `libloading` (the

@@ -1,0 +1,10 @@
+[vector]
+name = "dataset-config-unknown-field"
+description = "A misspelled top-level dataset key is reported as an error diagnostic instead of being ignored, and the comparison still runs"
+tags = ["config", "diagnostics", "csv"]
+
+[config.dataset]
+pathz = [{ match = "data.csv", row_identity = { columns = ["id"] } }]
+
+[expected]
+root_action = "modify"

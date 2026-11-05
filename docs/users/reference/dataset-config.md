@@ -89,6 +89,18 @@ common dataset semantics:
   structured-document node identity.
 - `dataset.correspondence.expand_renamed_unchanged_collections` controls a
   correspondence-engine performance tradeoff for renamed unchanged containers.
+- `dataset.exclude` lists path globs left out of the comparison.
+- `dataset.reduced_precision.suppression_sentinels` lists the strings that mark
+  a suppressed published value.
+
+These are the only top-level keys `dataset` accepts. Any other key, including
+`tables` from binoc 0.2.0 configs, is reported as a
+`binoc.dataset_config.unknown_field` error. An unknown key inside
+`defaults`, `files`, `correspondence`, or `reduced_precision` makes the
+whole `dataset` block unreadable and is reported as
+`binoc.dataset_config.invalid`; binoc then compares with no dataset config.
+In both cases the comparison still runs and records the diagnostic in the
+changeset, and `binoc diff` prints the error to stderr and exits 2.
 
 ```yaml
 dataset:
@@ -127,6 +139,25 @@ dataset:
 to apply those policies for the semantics they implement.
 `records_path` uses a simple dotted JSON path such as `$.objects` and must point
 to a non-empty array of consistently shaped records.
+
+### `dataset.exclude`
+
+Path globs whose items are left out of the comparison on both sides, using the
+same glob syntax as `dataset.paths[].match`. Globs reach inside archives: a
+member written `bundle.zip/>log.txt` also matches `bundle.zip/log.txt` and
+`**/log.txt`. An excluded directory or archive is not opened.
+
+```yaml
+dataset:
+  exclude:
+    - manifest.json        # rewritten on every capture
+    - '**/capture-log.txt'
+```
+
+Use it for files that change on every capture by construction. Excluded
+items do not appear anywhere in the changeset, so record the exclusion
+wherever the comparison is documented. `binoc diff --exclude GLOB` adds globs
+to this list for one run.
 
 ### `dataset.files.correspondences`
 

@@ -4,6 +4,8 @@ expression: "&md"
 ---
 # Changelog: snapshot-a -> snapshot-b
 
-- **enterprise.stix.json**: 1 row modified by key
+- **enterprise.stix.json**: 1 row modified by key; Table metadata changed
   - Changed cells
     - key id 'attack-pattern--1', column 'name': 'Old Name' -> 'New Name'
+  - Metadata changed
+    - table id changed from 'bundle--left' to 'bundle--right'

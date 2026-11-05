@@ -27,8 +27,14 @@ impl EditListWriter for RowReorderWriter {
         if left.headers != right.headers || left.rows.len() != right.rows.len() {
             return Ok(None);
         }
-        if left.rows == right.rows {
-            return Ok(Some(Vec::new().into()));
+        // Claim only a pure reorder. Equal rows, or a reorder alongside table
+        // or column metadata changes, are left to the general tabular writer,
+        // which reports those changes; claiming them here would hide them.
+        if left.rows == right.rows
+            || left.table_metadata != right.table_metadata
+            || left.column_metadata != right.column_metadata
+        {
+            return Ok(None);
         }
         if row_multiset(&left.rows) != row_multiset(&right.rows) {
             return Ok(None);

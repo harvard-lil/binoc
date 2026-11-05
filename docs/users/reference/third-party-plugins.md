@@ -4,7 +4,7 @@ audience: data steward, plugin consumer
 
 # Plugin catalog
 
-Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) (`binoc-stdlib`) plus first-party format packs. Most format packs are compiled into the fat `binoc` wheel; SQLite remains an explicit opt-in pack and is not published as a separate PyPI wheel.
+Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) (`binoc-stdlib`) plus first-party format packs. The format packs are compiled into the fat `binoc` wheel and are not published as separate PyPI wheels; the HTML renderer is a separately distributed add-on.
 
 For format parsers, compare your filenames (suffixes) and, when available, detected media types to the tables under each plugin. Other scopes identify group parsers, artifact writers, and changeset renderers explicitly.
 
@@ -350,14 +350,14 @@ This rule is relevant when a file path matches one of the **extensions** or its 
 
 ## binoc-sqlite
 
-Compares SQLite databases: schema, columns, keys, and row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.
+Compares SQLite databases table by table: each table is read as tabular data, so column, row, and cell diffing applies. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.
 
 | Field | Value |
 |---|---|
-| Tier | First-party opt-in |
-| Distribution | Not published as a separate PyPI wheel. The pack remains in-tree and can be enabled explicitly; SQLite is excluded from the default `bundled` feature set. |
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | SQLite database files. |
-| Produces | Table/column layout changes, type changes, key changes, and row-count diffs. |
+| Produces | One tabular child per table (`db.sqlite/>table`) with column, row, and cell diffs; tables added or removed. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **More detail:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite)

@@ -1,0 +1,62 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "data.csv",
+        "sources": [
+          {
+            "path": "data.csv",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "1 cell changed"
+          }
+        ],
+        "tags": [
+          "binoc.cell-change"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "column": "v",
+                "from": "a",
+                "row": 0,
+                "to": "b"
+              },
+              "verb": "tabular.edit_cell"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "binoc.dataset_config.unknown_field",
+      "message": [
+        {
+          "text": "Unknown dataset configuration field: pathz; known fields are defaults, paths, files, correspondence, reduced_precision, exclude"
+        }
+      ],
+      "location": "dataset.pathz"
+    }
+  ]
+}

@@ -285,10 +285,66 @@ fn json_records(
                 "records_path must be a non-empty JSON path".into(),
             ));
         }
-        return records_from_path(value, records_path).map(Some);
+        let table = records_from_path(value, records_path)?;
+        let segments: Vec<&str> = records_path
+            .trim_start_matches('$')
+            .split('.')
+            .filter(|segment| !segment.is_empty())
+            .collect();
+        return Ok(Some(with_json_envelope(table, value, &segments)));
     }
 
     Ok(detect_json_records(value))
+}
+
+/// Attach everything in the document outside the record array as tier-2
+/// table metadata, so a change there (a feed's `metadata.generated`, a
+/// FeatureCollection `bbox`) is reported as a table metadata change instead of
+/// an unexplained content-hash difference.
+fn with_json_envelope(
+    table: TabularData,
+    document: &serde_json::Value,
+    records_path: &[&str],
+) -> TabularData {
+    let mut envelope = serde_json::Map::new();
+    flatten_json_envelope(document, records_path, "", &mut envelope);
+    if envelope.is_empty() {
+        table
+    } else {
+        table.with_table_metadata(serde_json::Value::Object(envelope))
+    }
+}
+
+/// Flatten objects into dotted keys (`metadata.generated`), skipping the value
+/// at `records_path`. Arrays and scalars are leaf values.
+fn flatten_json_envelope(
+    value: &serde_json::Value,
+    records_path: &[&str],
+    prefix: &str,
+    out: &mut serde_json::Map<String, serde_json::Value>,
+) {
+    let Some(object) = value.as_object() else {
+        if !prefix.is_empty() {
+            out.insert(prefix.to_string(), value.clone());
+        }
+        return;
+    };
+    for (key, child) in object {
+        let path = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{prefix}.{key}")
+        };
+        match records_path.split_first() {
+            // The record array itself is the table; descend only to reach it.
+            Some((first, rest)) if *first == key.as_str() => {
+                if !rest.is_empty() {
+                    flatten_json_envelope(child, rest, &path, out);
+                }
+            }
+            _ => flatten_json_envelope(child, &[], &path, out),
+        }
+    }
 }
 
 /// Detect a consistently-shaped record collection in a parsed JSON value.
@@ -393,7 +449,11 @@ fn geojson_records(value: &serde_json::Value) -> Option<TabularData> {
     if features.is_empty() || !features.iter().all(serde_json::Value::is_object) {
         return None;
     }
-    Some(table_from_objects(features))
+    Some(with_json_envelope(
+        table_from_objects(features),
+        value,
+        &["features"],
+    ))
 }
 
 /// Detect a like-shaped JSONL/NDJSON record stream: every non-blank line is a

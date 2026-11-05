@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 
 use binoc_sdk::{
-    file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
-    BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractHint,
-    ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment,
-    ShapeFilter, Side, StructuredDocument, Summary, TabularData, TabularDataPair, Value,
+    file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_extract_keyed,
+    tabular_v1, BinocError, BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter,
+    ExtractHint, ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata,
+    Segment, ShapeFilter, Side, StructuredDocument, Summary, TabularData, TabularDataPair, Value,
     WriteOutput, WriterDescriptor,
 };
 use fastcdc::v2020::StreamCDC;
@@ -179,7 +179,7 @@ impl EditListWriter for TabularWriter {
                         &left_keyed,
                         &right_keyed,
                     );
-                    edits.extend(metadata_edits);
+                    append_table_metadata_edits(&mut edits, metadata_edits);
                     return Ok(Some(WriteOutput { edits, diagnostics }));
                 }
                 let quality = key_quality(&left_keyed.index, &right_keyed.index);
@@ -207,7 +207,7 @@ impl EditListWriter for TabularWriter {
                             stats,
                             candidate_key_columns(&left, &right),
                         );
-                        edits.extend(metadata_edits);
+                        append_table_metadata_edits(&mut edits, metadata_edits);
                         return Ok(Some(WriteOutput { edits, diagnostics }));
                     }
                     diagnostics.push(Diagnostic::suggestion(
@@ -244,7 +244,7 @@ impl EditListWriter for TabularWriter {
                         edits.extend(row_edits);
                     }
                 }
-                edits.extend(metadata_edits);
+                append_table_metadata_edits(&mut edits, metadata_edits);
                 return Ok(Some(WriteOutput { edits, diagnostics }));
             }
         }
@@ -297,7 +297,7 @@ impl EditListWriter for TabularWriter {
             edits.extend(positional_row_edits(&left, &right, &common).edits);
         }
 
-        edits.extend(metadata_edits);
+        append_table_metadata_edits(&mut edits, metadata_edits);
 
         Ok(Some(WriteOutput { edits, diagnostics }))
     }
@@ -318,6 +318,18 @@ impl EditListWriter for TabularWriter {
         }
         if aspect == "column_order" {
             return Ok(Some(column_order_extract(&pair)));
+        }
+        let key_columns: Vec<String> = if ctx.row_keys.is_empty() {
+            pair.right
+                .as_ref()
+                .or(pair.left.as_ref())
+                .map(|table| table.key.clone())
+                .unwrap_or_default()
+        } else {
+            ctx.row_keys.to_vec()
+        };
+        if let Some(result) = tabular_extract_keyed(&pair, &key_columns, aspect) {
+            return Ok(Some(result));
         }
         Ok(tabular_extract(
             &pair,
@@ -1819,6 +1831,22 @@ fn metadata_value_change_edit(
         edit = edit.with_tag(tag);
     }
     Some(edit)
+}
+
+/// Append metadata edits after a table's own edits. When the table also has
+/// tabular edits, the metadata edits drop their `item_type` so the node stays
+/// typed `tabular` (projection takes the last edit's `item_type`); a node whose
+/// only changes are metadata is still typed `metadata`.
+fn append_table_metadata_edits(edits: &mut Vec<Edit>, mut metadata_edits: Vec<Edit>) {
+    let has_table_edits = edits
+        .iter()
+        .any(|edit| edit.projection.hint.item_type.as_deref() == Some("tabular"));
+    if has_table_edits {
+        for edit in &mut metadata_edits {
+            edit.projection.hint.item_type = None;
+        }
+    }
+    edits.extend(metadata_edits);
 }
 
 /// Diff tier-1 (per-column) and tier-2 (per-table) metadata carried on
