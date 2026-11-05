@@ -25,6 +25,7 @@ check:
     cargo fmt --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     cargo test -p binoc-cli --features bundled,sqlite --test plugin_registry
+    cargo test -p binoc-cli --features bundled --test bundled_formats
     uvx ruff@0.15.22 check binoc-python/ model-plugins/
     uvx ruff@0.15.22 format --check binoc-python/ model-plugins/
 

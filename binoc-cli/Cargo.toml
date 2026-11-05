@@ -74,3 +74,15 @@ assert_cmd = "2.2.2"
 predicates = "3.1.4"
 tempfile = { workspace = true }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+# Fixture builders for tests/bundled_formats.rs, which runs the bundled CLI on
+# each format pack's own test vectors.
+binoc-stdlib = { workspace = true, features = ["test-vectors"] }
+binoc-sqlite = { path = "../model-plugins/binoc-sqlite", features = ["test-support"] }
+binoc-excel = { path = "../model-plugins/binoc-excel", features = ["test-support"] }
+binoc-parquet = { path = "../model-plugins/binoc-parquet", features = ["test-support"] }
+binoc-avro = { path = "../model-plugins/binoc-avro", features = ["test-support"] }
+binoc-dbf = { path = "../model-plugins/binoc-dbf", features = ["test-support"] }
+binoc-shapefile = { path = "../model-plugins/binoc-shapefile", features = ["test-support"] }
+binoc-binformats = { path = "../model-plugins/binoc-binformats", features = ["test-support"] }
+binoc-stat-binary = { path = "../model-plugins/binoc-stat-binary", features = ["test-support"] }
+toml = "1.0.4"

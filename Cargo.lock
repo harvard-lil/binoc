@@ -513,6 +513,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
+ "toml",
  "zip 8.6.0",
 ]
 
