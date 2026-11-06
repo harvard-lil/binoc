@@ -23,7 +23,7 @@ binoc-sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 binoc-stdlib = { workspace = true, optional = true, features = ["test-vectors"] }
-dbase = "0.7.0"
+dbase = "0.8.0"
 
 [dev-dependencies]
 binoc-core = { workspace = true }
