@@ -51,7 +51,7 @@ jobs:
             target: x86_64-apple-darwin
             manylinux: off
             interpreter: python
-          - os: macos-14
+          - os: macos-15
             artifact: macos-aarch64
             target: aarch64-apple-darwin
             manylinux: off
