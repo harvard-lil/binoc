@@ -1,9 +1,0 @@
-[vector]
-name = "csv-row-reorder"
-description = "Rows reordered, same data as multiset"
-tags = ["csv", "row-reorder"]
-
-[expected]
-root_action = "modify"
-child_count = 1
-has_tags = ["binoc.row-reorder"]

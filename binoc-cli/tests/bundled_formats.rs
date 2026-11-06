@@ -16,8 +16,7 @@
     feature = "xml",
     feature = "shapefile",
     feature = "binformats",
-    feature = "stat-binary",
-    feature = "row-reorder"
+    feature = "stat-binary"
 ))]
 
 use std::collections::BTreeSet;
@@ -27,26 +26,19 @@ use assert_cmd::Command;
 use binoc_stdlib::test_vectors::{materialize_snapshots, stdlib_materializers, VectorMaterializer};
 use serde_json::Value;
 
-/// (plugin directory under model-plugins/, vector name, text only that pack
-/// emits). The manifest's `expected.has_tags` is checked for every vector; the
-/// text is for packs whose tags the standard library also produces, such as
-/// row-reorder, whose `binoc.row-reorder` tag the stdlib tabular writer also
-/// emits for a pure reorder.
-const VECTORS: &[(&str, &str, Option<&str>)] = &[
-    ("binoc-avro", "avro-cell-change", None),
-    ("binoc-binformats", "cbor-value-change", None),
-    ("binoc-dbf", "dbf-cell-change", None),
-    ("binoc-excel", "excel-single-sheet-cell-change", None),
-    ("binoc-parquet", "parquet-cell-change", None),
-    (
-        "binoc-row-reorder",
-        "csv-row-reorder",
-        Some("Rows reordered (same data, different sort order)"),
-    ),
-    ("binoc-shapefile", "shapefile-feature-addition", None),
-    ("binoc-sqlite", "sqlite-row-addition", None),
-    ("binoc-stat-binary", "stata-column-addition", None),
-    ("binoc-xml", "xml-socrata-rows-row-addition", None),
+/// (plugin directory under model-plugins/, vector name). Each vector's
+/// `expected.has_tags` must include a tag only that pack produces, so a byte
+/// comparison or the standard library alone cannot pass.
+const VECTORS: &[(&str, &str)] = &[
+    ("binoc-avro", "avro-cell-change"),
+    ("binoc-binformats", "cbor-value-change"),
+    ("binoc-dbf", "dbf-cell-change"),
+    ("binoc-excel", "excel-single-sheet-cell-change"),
+    ("binoc-parquet", "parquet-cell-change"),
+    ("binoc-shapefile", "shapefile-feature-addition"),
+    ("binoc-sqlite", "sqlite-row-addition"),
+    ("binoc-stat-binary", "stata-column-addition"),
+    ("binoc-xml", "xml-socrata-rows-row-addition"),
 ];
 
 fn workspace_root() -> PathBuf {
@@ -115,7 +107,7 @@ fn bundled_cli_handles_each_format_pack() {
     let tmp = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
 
-    for (plugin, vector, marker) in VECTORS {
+    for (plugin, vector) in VECTORS {
         let source = workspace_root()
             .join("model-plugins")
             .join(plugin)
@@ -148,11 +140,6 @@ fn bundled_cli_handles_each_format_pack() {
             failures.push(format!(
                 "{plugin}/{vector}: missing {missing:?}; got {tags:?}"
             ));
-        }
-        if let Some(marker) = marker {
-            if !String::from_utf8_lossy(&output.stdout).contains(marker) {
-                failures.push(format!("{plugin}/{vector}: output lacks {marker:?}"));
-            }
         }
     }
 

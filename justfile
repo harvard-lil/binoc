@@ -34,7 +34,7 @@ check:
 # hide. See binoc_sdk::lints for the invariant/lint tier scheme and
 # .agents/skills/lint-plugin/SKILL.md for the judgment-level checklist.
 lint:
-    cargo test -p binoc-core -p binoc-stdlib -p binoc-sqlite -p binoc-row-reorder -p binoc-excel -p binoc-parquet -p binoc-avro -p binoc-dbf -p binoc-binformats --test lints -- --nocapture
+    cargo test -p binoc-core -p binoc-stdlib -p binoc-sqlite -p binoc-excel -p binoc-parquet -p binoc-avro -p binoc-dbf -p binoc-binformats --test lints -- --nocapture
 
 # Emit correspondence engine performance reports as JSONL. With no args, uses
 # the deterministic synthetic fixture; pass `--left A --right B` for real
@@ -266,7 +266,7 @@ snapshot-review:
 snapshot-update:
     INSTA_UPDATE=always cargo test -p binoc-stdlib --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-sqlite --test test_vectors
-    INSTA_UPDATE=always cargo test -p binoc-row-reorder --test test_vectors
+    INSTA_UPDATE=always cargo test --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-stat-binary --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-excel --test test_vectors
     INSTA_UPDATE=always cargo test -p binoc-parquet --test test_vectors

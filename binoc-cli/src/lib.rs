@@ -684,8 +684,6 @@ pub fn register_bundled_correspondence_rules(config: &mut CorrespondenceEngineCo
     binoc_binformats::register_correspondence_rules(config);
     #[cfg(feature = "stat-binary")]
     binoc_stat_binary::register_correspondence_rules(config);
-    #[cfg(feature = "row-reorder")]
-    binoc_row_reorder::register_correspondence_rules(config);
 }
 
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the

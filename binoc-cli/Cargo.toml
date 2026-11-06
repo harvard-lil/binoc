@@ -35,7 +35,6 @@ binoc-xml = { path = "../model-plugins/binoc-xml", optional = true }
 binoc-shapefile = { path = "../model-plugins/binoc-shapefile", optional = true }
 binoc-binformats = { path = "../model-plugins/binoc-binformats", optional = true }
 binoc-stat-binary = { path = "../model-plugins/binoc-stat-binary", optional = true }
-binoc-row-reorder = { path = "../model-plugins/binoc-row-reorder", optional = true }
 clap = { version = "4.6.1", features = ["derive"] }
 clap-markdown = "0.1.5"
 serde_json = { workspace = true }
@@ -53,7 +52,6 @@ xml = ["dep:binoc-xml"]
 shapefile = ["dep:binoc-shapefile"]
 binformats = ["dep:binoc-binformats"]
 stat-binary = ["dep:binoc-stat-binary"]
-row-reorder = ["dep:binoc-row-reorder"]
 # The default fat-binoc bundle. See
 # docs/adr/2026-06-30-fat_binoc_distribution_and_abi_canary.md.
 bundled = [
@@ -66,7 +64,6 @@ bundled = [
     "shapefile",
     "binformats",
     "stat-binary",
-    "row-reorder",
 ]
 
 [dev-dependencies]

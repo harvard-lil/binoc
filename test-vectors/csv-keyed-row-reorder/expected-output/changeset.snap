@@ -14,10 +14,10 @@ expression: "&stable_changeset"
       {
         "action": "modify",
         "item_type": "tabular",
-        "path": "data.csv",
+        "path": "scores.csv",
         "sources": [
           {
-            "path": "data.csv",
+            "path": "scores.csv",
             "side": "from",
             "evidence": "binoc.pair.name",
             "action": "modify"
@@ -25,7 +25,7 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Rows reordered (same data, different sort order)"
+            "text": "rows reordered; cell values unchanged under the configured row key"
           }
         ],
         "tags": [
@@ -35,11 +35,15 @@ expression: "&stable_changeset"
           "edits": [
             {
               "params": {
-                "row_count": 3
+                "alignment": "configured_key",
+                "keys": [
+                  "id"
+                ],
+                "rows": 4
               },
               "summary": [
                 {
-                  "text": "Rows reordered (same data, different sort order)"
+                  "text": "rows reordered; cell values unchanged under the configured row key"
                 }
               ],
               "verb": "tabular.reorder_rows"

@@ -13,7 +13,7 @@ expression: "&stable_changeset"
     "children": [
       {
         "action": "modify",
-        "item_type": "metadata",
+        "item_type": "tabular",
         "path": "export.json",
         "sources": [
           {
@@ -25,15 +25,34 @@ expression: "&stable_changeset"
         ],
         "summary": [
           {
-            "text": "Table metadata changed"
+            "text": "Table metadata changed; "
+          },
+          {
+            "text": "rows reordered; cell values unchanged under the configured row key"
           }
         ],
         "tags": [
           "binoc.metadata-change",
-          "binoc.metadata.table"
+          "binoc.metadata.table",
+          "binoc.row-reorder"
         ],
         "details": {
           "edits": [
+            {
+              "params": {
+                "alignment": "configured_key",
+                "keys": [
+                  "id"
+                ],
+                "rows": 2
+              },
+              "summary": [
+                {
+                  "text": "rows reordered; cell values unchanged under the configured row key"
+                }
+              ],
+              "verb": "tabular.reorder_rows"
+            },
             {
               "params": {
                 "changes": [

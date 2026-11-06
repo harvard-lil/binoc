@@ -237,32 +237,6 @@
       ]
     },
     {
-      "id": "binoc-row-reorder",
-      "title": "binoc-row-reorder",
-      "tier": "first-party-bundled",
-      "summary": "Detects row reordering in tabular data so shuffles are represented as ordering changes rather than as noisy row removals and additions.",
-      "repository": "https://github.com/harvard-lil/binoc",
-      "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder",
-      "source_path": "model-plugins/binoc-row-reorder",
-      "packages": {
-        "crate": "binoc-row-reorder"
-      },
-      "handles": "Paired `binoc.tabular.v1` artifacts with the same rows in a different order.",
-      "produces": "A `tabular.reorder_rows` edit when row multisets match.",
-      "rule_packs": [
-        {
-          "name": "binoc.row_reorder_writer",
-          "dispatch": {
-            "artifact_formats": ["binoc.tabular.v1"],
-            "scope": "artifacts"
-          },
-          "rules": [
-            "writer"
-          ]
-        }
-      ]
-    },
-    {
       "id": "binoc-shapefile",
       "title": "binoc-shapefile",
       "tier": "first-party-bundled",

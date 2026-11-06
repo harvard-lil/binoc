@@ -499,7 +499,6 @@ dependencies = [
  "binoc-dbf",
  "binoc-excel",
  "binoc-parquet",
- "binoc-row-reorder",
  "binoc-sdk",
  "binoc-shapefile",
  "binoc-sqlite",
@@ -588,18 +587,6 @@ dependencies = [
  "libloading",
  "pyo3",
  "serde_json",
-]
-
-[[package]]
-name = "binoc-row-reorder"
-version = "0.3.0"
-dependencies = [
- "binoc-core",
- "binoc-sdk",
- "binoc-stdlib",
- "pyo3",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]

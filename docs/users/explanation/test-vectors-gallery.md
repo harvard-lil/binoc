@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **86 shared examples** in this gallery.
+Binoc currently ships **87 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -46,6 +46,7 @@ just materialize
 | [`csv-distribution-shift`](#csv-distribution-shift) | Numeric column distribution shifts with keyed row matching | data.csv: 4 rows modified by key | Custom config |
 | [`csv-keyed-null-duplicate`](#csv-keyed-null-duplicate) | Configured CSV row keys surface null and duplicate key diagnostics | data.csv: 14 cells changed | Custom config |
 | [`csv-keyed-row-diff`](#csv-keyed-row-diff) | Configured CSV row keys match reordered rows and report keyed row/cell changes | data.csv: 1 row added; 1 row removed; 1 row modified by key | Custom config |
+| [`csv-keyed-row-reorder`](#csv-keyed-row-reorder) | With a configured row key, a CSV whose rows are only re-sorted reports a row reorder instead of an unexplained content… | scores.csv: rows reordered; cell values unchanged under the configured row key | Custom config |
 | [`csv-mid-row-insertion`](#csv-mid-row-insertion) | A mid-table row insertion compacts while column reorder/addition rules remain independent | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-numeric-rounding`](#csv-numeric-rounding) | CSV numeric cells rounded to a common modulus and representation-only numeric differences ignored | data.csv: Rounded 3 cells in 'population' to nearest 1000 | Default pipeline |
@@ -80,7 +81,7 @@ just materialize
 | [`json-keyed-row-diff`](#json-keyed-row-diff) | Configured JSON record keys match reordered rows and report keyed row/cell changes | data.json: 1 row added; 1 row removed; 1 row modified by key | Custom config |
 | [`json-records-cell-change`](#json-records-cell-change) | JSON array of like-shaped objects parsed as a typed table; numeric cell values change | data.json: 2 cells changed | Default pipeline |
 | [`json-records-nested-value`](#json-records-nested-value) | JSON records with a nested object cell; the nested value changes and is reported as a single equality-based cell edit (… | people.json: 1 cell changed | Default pipeline |
-| [`json-records-path-envelope-change`](#json-records-path-envelope-change) | With a nested records_path, content outside the records (export.version, license) is reported as table metadata even wh… | export.json: Table metadata changed | Custom config |
+| [`json-records-path-envelope-change`](#json-records-path-envelope-change) | With a nested records_path, content outside the records (export.version, license) is reported as table metadata, alongs… | export.json: Table metadata changed; rows reordered; cell values unchanged under the configured row… | Custom config |
 | [`json-records-path-stix-objects`](#json-records-path-stix-objects) | STIX-shaped JSON bundle records under $.objects are parsed as a keyed table | enterprise.stix.json: 1 row modified by key; Table metadata changed | Custom config |
 | [`json-records-type-only-column`](#json-records-type-only-column) | Typed JSON records re-serialized with one numeric column as strings; canonical values match | data.json: Column type changed: 'year' number -> string | Default pipeline |
 | [`jsonl-row-addition`](#jsonl-row-addition) | JSONL stream of like-shaped objects parsed as a table; a record is appended | events.jsonl: 1 row added | Default pipeline |
@@ -612,6 +613,40 @@ Result:
     - key id 'p4': 'p4', 'Delta', '40'
   - Rows removed
     - key id 'p3': 'p3', 'Gamma', '30'
+```
+
+## csv-keyed-row-reorder
+
+With a configured row key, a CSV whose rows are only re-sorted reports a row reorder instead of an unexplained content…
+
+- **Browse source:** [csv-keyed-row-reorder](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-keyed-row-reorder)
+- **Tags:** `csv`, `row-reorder`, `row-identity`
+- **Snapshots:** `snapshot-a` has 1 file — `scores.csv`; `snapshot-b` has 1 file — `scores.csv`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/csv-keyed-row-reorder.yaml`:
+
+```yaml
+dataset:
+  paths:
+    - match: scores.csv
+      row_identity:
+        columns:
+          - id
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-keyed-row-reorder/snapshot-a \
+  ./test-vectors-materialized/csv-keyed-row-reorder/snapshot-b \
+  --config /tmp/csv-keyed-row-reorder.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+- **scores.csv**: rows reordered; cell values unchanged under the configured row key
 ```
 
 ## csv-mid-row-insertion
@@ -1621,7 +1656,7 @@ Result:
 
 ## json-records-path-envelope-change
 
-With a nested records_path, content outside the records (export.version, license) is reported as table metadata even wh…
+With a nested records_path, content outside the records (export.version, license) is reported as table metadata, alongs…
 
 - **Browse source:** [json-records-path-envelope-change](https://github.com/harvard-lil/binoc/tree/main/test-vectors/json-records-path-envelope-change)
 - **Tags:** `json-records`, `records-path`, `metadata`, `reorder`
@@ -1651,7 +1686,7 @@ Result:
 ```markdown
 # Changelog: snapshot-a -> snapshot-b
 
-- **export.json**: Table metadata changed
+- **export.json**: Table metadata changed; rows reordered; cell values unchanged under the configured row key
   - Metadata changed
     - table export.version changed from '2026.10' to '2026.11'
     - table license changed from 'CC0-1.0' to 'CC-BY-4.0'

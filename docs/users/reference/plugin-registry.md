@@ -282,36 +282,6 @@ Parses Parquet and Arrow IPC snapshots so column, row, and cell changes appear a
 
 *Rule families supplied:* `parse`
 
-## binoc-row-reorder
-
-Detects row reordering in tabular data so shuffles are represented as ordering changes rather than as noisy row removals and additions.
-
-| Field | Value |
-|---|---|
-| Tier | First-party bundled |
-| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Paired `binoc.tabular.v1` artifacts with the same rows in a different order. |
-| Produces | A `tabular.reorder_rows` edit when row multisets match. |
-
-- **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
-- **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder)
-- **Source path:** `model-plugins/binoc-row-reorder`
-- **Rust crate:** `binoc-row-reorder`
-
-### Rule packs
-
-#### `binoc.row_reorder_writer`
-
-| Field | Value |
-|---|---|
-| `extensions` | — |
-| `media_types` | — |
-| `member_extensions` | — |
-| `artifact_formats` | `binoc.tabular.v1` |
-| `scope` | `artifacts` |
-
-*Rule families supplied:* `writer`
-
 ## binoc-shapefile
 
 Handles shapefile bundles and their sidecar files so feature, geometry, and attribute changes stay aligned across the dataset package.

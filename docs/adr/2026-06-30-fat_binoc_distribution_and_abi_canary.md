@@ -1,7 +1,7 @@
 # Fat-binoc Distribution and the ABI Canary
 
 **Date:** 2026-06-30
-**Status:** Accepted; implemented (amended 2026-11-05: SQLite bundled)
+**Status:** Accepted; implemented (amended 2026-11-05: SQLite bundled; 2026-11-06: row-reorder retired)
 
 ## Context
 
@@ -74,6 +74,9 @@ in-process shortcut that the eventual ABI path could not also express.
   browser-demo wasm build already compiled rusqlite), and the cost measured
   then was about 1 MB of wheel size (7.6 to 8.5 MB, macOS arm64). Separate
   `binoc-sqlite` publishing stays paused.
+  *Amended 2026-11-06:* `binoc-row-reorder` was removed; the standard library
+  handles row reorders
+  ([ADR](2026-11-06-retire_row_reorder_plugin.md)).
 - **Add the ABI canary as the graduation gate.** The `binoc-abi-canary` crate is
   a real renderer exported via `export_plugin!` and built as a cdylib; its
   `tests/abi_crossing.rs` builds that cdylib, loads it over `libloading` (the

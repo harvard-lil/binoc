@@ -1,7 +1,7 @@
 # Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering
 
 **Date:** 2026-06-11
-**Status:** Implemented
+**Status:** Implemented; `binoc-row-reorder` retired 2026-11-06 ([ADR](2026-11-06-retire_row_reorder_plugin.md))
 
 ## Context
 

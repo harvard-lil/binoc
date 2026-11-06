@@ -173,12 +173,21 @@ impl EditListWriter for TabularWriter {
                     {
                         edits.push(edit);
                     }
+                    let mut row_edits = Vec::new();
                     write_keyed_row_edits(
-                        &mut edits,
+                        &mut row_edits,
                         ctx.row_keys.as_ref(),
                         &left_keyed,
                         &right_keyed,
                     );
+                    if row_edits.is_empty() && keyed_row_order_changed(&left_keyed, &right_keyed) {
+                        edits.push(row_reorder_edit(
+                            "configured_key",
+                            Some(ctx.row_keys.as_ref()),
+                            right.rows.len(),
+                        ));
+                    }
+                    edits.extend(row_edits);
                     append_table_metadata_edits(&mut edits, metadata_edits);
                     return Ok(Some(WriteOutput { edits, diagnostics }));
                 }
@@ -1444,10 +1453,35 @@ fn row_reorder_edit(mode: &str, keys: Option<&[String]>, rows: usize) -> Edit {
     if let Some(keys) = keys {
         params["keys"] = json!(keys);
     }
+    let summary = if mode == "configured_key" {
+        "rows reordered; cell values unchanged under the configured row key"
+    } else {
+        "rows reordered; cell values unchanged under inferred row alignment"
+    };
     Edit::new("tabular.reorder_rows", params)
         .with_item_type("tabular")
         .with_tag("binoc.row-reorder")
-        .with_summary("rows reordered; cell values unchanged under inferred row alignment")
+        .with_summary(summary)
+}
+
+/// True when both sides have the same columns and some row present on both
+/// sides under the same key sits at a different position. Called with no keyed
+/// row edits, so the key sets match; the column check keeps a renamed or added
+/// column, whose cells the keyed comparison does not cover, from reading as a
+/// pure reorder.
+fn keyed_row_order_changed(left: &KeyedTable<'_>, right: &KeyedTable<'_>) -> bool {
+    let left_columns: BTreeSet<&String> = left.table.headers.iter().collect();
+    let right_columns: BTreeSet<&String> = right.table.headers.iter().collect();
+    if left_columns != right_columns {
+        return false;
+    }
+    left.index.rows.iter().any(|(signature, left_row)| {
+        right
+            .index
+            .rows
+            .get(signature)
+            .is_some_and(|right_row| right_row.index != left_row.index)
+    })
 }
 
 fn sort_aligned_rows<'a>(

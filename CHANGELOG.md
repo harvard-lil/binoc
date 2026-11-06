@@ -41,6 +41,11 @@ Planned as `binoc` 0.3.0 and `binoc-sdk` 0.3.0.
   `binoc diff` prints these to stderr and exits 2, after writing its outputs.
 - **Errors exit 2.** Failures through the `binoc` console script exited 1 in
   0.2.0. Exit 1 is now reserved for `binoc diff --exit-code`.
+- **Row-reorder pack removed.** The standard library already detects row
+  reorders, with the same `binoc.row-reorder` tag and `tabular.reorder_rows`
+  edit; the pack's own summary text ("Rows reordered (same data, different
+  sort order)") no longer appears. The `binoc-cli` `row-reorder` feature is
+  gone ([ADR](docs/adr/2026-11-06-retire_row_reorder_plugin.md)).
 - **Rust hosts:** `binoc_cli::run` returns the process exit status
   (`Result<i32, _>`); `run_with_version` reports a host-supplied version.
 
@@ -87,8 +92,9 @@ Planned as `binoc` 0.3.0 and `binoc-sdk` 0.3.0.
   bundle `id`, as table metadata changes. Before, a change only there showed
   as "no visible edit explained the difference", and alongside record changes
   it was not shown at all.
-- The row-reorder writer no longer claims tables whose rows are unchanged or
-  whose metadata changed, which had hidden those changes.
+- With a configured row key, a table whose rows were only re-sorted reports
+  `tabular.reorder_rows` (`binoc.row-reorder`). Before, it showed as "no visible
+  edit explained the difference" unless the row-reorder pack was installed.
 - Identical comparisons render "No changes detected." in Markdown.
 - `binoc diff` with a missing snapshot names the path.
 - `extract` hints point at known changeset paths.
