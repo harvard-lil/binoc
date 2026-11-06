@@ -144,8 +144,7 @@ pub fn register_correspondence_rules(config: &mut CorrespondenceEngineConfig) {
 ```
 
 The in-tree model plugins use this pattern. See
-`model-plugins/binoc-sqlite` for a parser plus collection writer and
-`model-plugins/binoc-row-reorder` for a specialized writer.
+`model-plugins/binoc-sqlite` for a parser plus collection writer.
 
 ## Test with vectors
 

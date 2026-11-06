@@ -1,0 +1,82 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&stable_changeset"
+---
+{
+  "from_snapshot": "snapshot-a",
+  "to_snapshot": "snapshot-b",
+  "claims": [],
+  "root": {
+    "action": "modify",
+    "item_type": "directory",
+    "path": "",
+    "children": [
+      {
+        "action": "modify",
+        "item_type": "tabular",
+        "path": "export.json",
+        "sources": [
+          {
+            "path": "export.json",
+            "side": "from",
+            "evidence": "binoc.pair.name",
+            "action": "modify"
+          }
+        ],
+        "summary": [
+          {
+            "text": "Table metadata changed; "
+          },
+          {
+            "text": "rows reordered; cell values unchanged under the configured row key"
+          }
+        ],
+        "tags": [
+          "binoc.metadata-change",
+          "binoc.metadata.table",
+          "binoc.row-reorder"
+        ],
+        "details": {
+          "edits": [
+            {
+              "params": {
+                "alignment": "configured_key",
+                "keys": [
+                  "id"
+                ],
+                "rows": 2
+              },
+              "summary": [
+                {
+                  "text": "rows reordered; cell values unchanged under the configured row key"
+                }
+              ],
+              "verb": "tabular.reorder_rows"
+            },
+            {
+              "params": {
+                "changes": [
+                  {
+                    "from": "2026.10",
+                    "key": "export.version",
+                    "kind": "changed",
+                    "to": "2026.11"
+                  },
+                  {
+                    "from": "CC0-1.0",
+                    "key": "license",
+                    "kind": "changed",
+                    "to": "CC-BY-4.0"
+                  }
+                ],
+                "examples_truncated": false,
+                "scope": "table"
+              },
+              "verb": "metadata.value_change"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+[vector]
+name = "csv-keyed-row-reorder"
+description = "With a configured row key, a CSV whose rows are only re-sorted reports a row reorder instead of an unexplained content difference"
+tags = ["csv", "row-reorder", "row-identity"]
+
+[config.dataset]
+
+[[config.dataset.paths]]
+match = "scores.csv"
+row_identity = { columns = ["id"] }
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.row-reorder"]

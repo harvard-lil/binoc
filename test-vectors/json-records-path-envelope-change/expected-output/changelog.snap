@@ -1,0 +1,10 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a -> snapshot-b
+
+- **export.json**: Table metadata changed; rows reordered; cell values unchanged under the configured row key
+  - Metadata changed
+    - table export.version changed from '2026.10' to '2026.11'
+    - table license changed from 'CC0-1.0' to 'CC-BY-4.0'

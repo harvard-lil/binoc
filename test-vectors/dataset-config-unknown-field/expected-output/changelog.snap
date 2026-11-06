@@ -1,0 +1,13 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a -> snapshot-b
+
+- **data.csv**: 1 cell changed
+  - Changed cells
+    - row 1, column 'v': 'a' -> 'b'
+
+## Errors
+
+- Unknown dataset configuration field: pathz; known fields are defaults, paths, files, correspondence, reduced_precision, exclude (`dataset.pathz`) [binoc.dataset_config.unknown_field]

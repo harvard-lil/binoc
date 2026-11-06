@@ -535,3 +535,189 @@ fn diff_help_flag_works() {
         .success()
         .stdout(predicates::str::contains("snapshot"));
 }
+
+// ── version, exit status, exclusion, config errors ─────────────────
+
+#[test]
+fn version_flag_prints_package_version() {
+    binoc()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn diff_records_binoc_version_in_changeset_metadata() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    let output = binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--format")
+        .arg("json")
+        .output()
+        .unwrap();
+    let changeset: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        changeset["metadata"]["binoc.version"],
+        env!("CARGO_PKG_VERSION")
+    );
+}
+
+#[test]
+fn diff_exit_code_is_zero_when_identical() {
+    let dir = vectors_dir().join("trivial-identical");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--exit-code")
+        .assert()
+        .code(0)
+        .stdout(predicates::str::contains("No changes detected."));
+}
+
+#[test]
+fn diff_exit_code_is_one_when_changed() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--exit-code")
+        .assert()
+        .code(1);
+}
+
+#[test]
+fn diff_without_exit_code_flag_exits_zero_on_change() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .assert()
+        .code(0);
+}
+
+#[test]
+fn diff_exclude_flag_leaves_paths_out() {
+    // The vector's own config excludes nothing here; the CLI flags do.
+    let dir = vectors_dir().join("exclude-capture-manifest");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--exclude")
+        .arg("manifest.json")
+        .arg("--exclude")
+        .arg("**/capture-log.txt")
+        .arg("--exit-code")
+        .assert()
+        .code(0);
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--exclude")
+        .arg("manifest.json")
+        .arg("--exit-code")
+        .assert()
+        .code(1)
+        .stdout(predicates::str::contains("capture-log.txt"))
+        .stdout(predicates::str::contains("manifest.json").not());
+}
+
+#[test]
+fn diff_config_error_is_printed_and_exits_two() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    let tmp = tempfile::tempdir().unwrap();
+    let config = tmp.path().join("binoc.yaml");
+    std::fs::write(
+        &config,
+        "dataset:\n  tables:\n    - path: story.txt\n      columns: [id]\n",
+    )
+    .unwrap();
+    let changeset = tmp.path().join("changeset.json");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--config")
+        .arg(&config)
+        .arg("-o")
+        .arg(&changeset)
+        .arg("-q")
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains(
+            "config error: Unknown dataset configuration field: tables",
+        ));
+    // Outputs are still written so the run can be inspected.
+    assert!(changeset.exists());
+}
+
+#[test]
+fn diff_missing_snapshot_names_the_path_and_exits_two() {
+    let dir = vectors_dir().join("single-file-modify-text");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("no-such-snapshot"))
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("snapshot not found"))
+        .stderr(predicates::str::contains("no-such-snapshot"));
+}
+
+#[test]
+fn extract_uses_configured_row_keys() {
+    // Rows are reordered between snapshots, so positional extraction would
+    // report the wrong rows; keyed extraction must agree with the changeset.
+    let dir = vectors_dir().join("csv-keyed-row-diff");
+    let tmp = tempfile::tempdir().unwrap();
+    let config = tmp.path().join("binoc.yaml");
+    std::fs::write(
+        &config,
+        "dataset:\n  paths:\n    - match: data.csv\n      row_identity:\n        columns: [id]\n",
+    )
+    .unwrap();
+    let changeset = tmp.path().join("changeset.json");
+    binoc()
+        .arg("diff")
+        .arg(dir.join("snapshot-a"))
+        .arg(dir.join("snapshot-b"))
+        .arg("--config")
+        .arg(&config)
+        .arg("-o")
+        .arg(&changeset)
+        .arg("-q")
+        .assert()
+        .success();
+    let extract = |aspect: &str| {
+        let output = binoc()
+            .arg("extract")
+            .arg(&changeset)
+            .arg("data.csv")
+            .arg(aspect)
+            .arg("--config")
+            .arg(&config)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        String::from_utf8(output.stdout).unwrap()
+    };
+    assert_eq!(
+        extract("rows_added"),
+        "id,name,price,status\np4,Delta,40,active\n"
+    );
+    assert_eq!(
+        extract("rows_removed"),
+        "id,name,price,status\np3,Gamma,30,retired\n"
+    );
+    assert_eq!(
+        extract("cells_changed"),
+        "key,column,old_value,new_value\np2,price,20,25\n"
+    );
+}

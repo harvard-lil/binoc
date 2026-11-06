@@ -3,19 +3,32 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use binoc_core::config::{DatasetConfig, PluginRegistry, ResolvedPlugins};
 use binoc_core::controller::Controller;
 use binoc_core::output;
-use binoc_sdk::{BinocError, Changeset, CorrespondenceEngineConfig, ExtractResult, Renderer};
+use binoc_sdk::{
+    BinocError, Changeset, CorrespondenceEngineConfig, DiagnosticSeverity, ExtractResult, Renderer,
+};
 
 const DEFAULT_REPORT_MAX_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Process exit status for a completed command with nothing to signal.
+pub const EXIT_OK: i32 = 0;
+/// `binoc diff --exit-code`: at least one compared pair changed.
+pub const EXIT_CHANGED: i32 = 1;
+/// The command failed, or the dataset config had errors.
+pub const EXIT_ERROR: i32 = 2;
+
+/// Changeset metadata key recording the binoc version that produced it.
+pub const VERSION_METADATA_KEY: &str = "binoc.version";
 
 #[derive(Parser)]
 #[command(
     name = "binoc",
+    version,
     about = "The missing changelog for datasets",
     long_about = "Binoc produces the missing changelog for datasets. It \
                   detects, classifies, and renders changes across ordered \
@@ -64,6 +77,16 @@ enum Commands {
         /// it to an interactive HTML replay with `binoc replay`.
         #[arg(long)]
         trace: Option<PathBuf>,
+        /// Leave paths matching this glob out of the comparison on both
+        /// sides. Repeatable. Same glob syntax as `dataset.paths[].match`;
+        /// added to any `dataset.exclude` entries in --config.
+        #[arg(long, value_name = "GLOB")]
+        exclude: Vec<String>,
+        /// Exit 1 when any compared pair changed and 0 when every pair is
+        /// identical. Without this flag, a completed diff exits 0. Errors
+        /// exit 2 either way.
+        #[arg(long)]
+        exit_code: bool,
     },
     /// Render a saved run trace as a self-contained HTML replay.
     ///
@@ -222,6 +245,7 @@ struct ReportBundleRequest<'a> {
     run_trace: &'a binoc_core::correspondence::RunTrace,
     snapshot_mode: SnapshotMode,
     max_snapshot_bytes: u64,
+    version: &'static str,
 }
 
 impl OutputSpec {
@@ -515,6 +539,7 @@ fn write_report_bundle(request: ReportBundleRequest<'_>) -> Result<(), Box<dyn s
         run_trace,
         snapshot_mode,
         max_snapshot_bytes,
+        version,
     } = request;
     let stats_a = snapshot_stats(snapshot_a)?;
     let stats_b = snapshot_stats(snapshot_b)?;
@@ -566,7 +591,7 @@ fn write_report_bundle(request: ReportBundleRequest<'_>) -> Result<(), Box<dyn s
     let created_unix_seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let metadata = ReportMetadata {
         tool: "binoc",
-        version: env!("CARGO_PKG_VERSION"),
+        version,
         created_unix_seconds,
         snapshot_mode,
         snapshot_a: ReportSnapshotMetadata {
@@ -659,8 +684,6 @@ pub fn register_bundled_correspondence_rules(config: &mut CorrespondenceEngineCo
     binoc_binformats::register_correspondence_rules(config);
     #[cfg(feature = "stat-binary")]
     binoc_stat_binary::register_correspondence_rules(config);
-    #[cfg(feature = "row-reorder")]
-    binoc_row_reorder::register_correspondence_rules(config);
 }
 
 /// Return the underlying `clap::Command` tree so external tooling (e.g. the
@@ -670,11 +693,29 @@ pub fn command() -> clap::Command {
     Cli::command()
 }
 
+/// Run the CLI and return the process exit status (see [`EXIT_OK`],
+/// [`EXIT_CHANGED`], [`EXIT_ERROR`]). An `Err` should also exit
+/// [`EXIT_ERROR`]. Reports this crate's version; hosts that ship under their
+/// own version, such as the Python package, use [`run_with_version`].
 pub fn run(
     registry: PluginRegistry,
     args: impl IntoIterator<Item = impl Into<std::ffi::OsString> + Clone>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let cli = match Cli::try_parse_from(args) {
+) -> Result<i32, Box<dyn std::error::Error>> {
+    run_with_version(registry, args, env!("CARGO_PKG_VERSION"))
+}
+
+/// [`run`], reporting `version` from `--version` and in changeset metadata.
+pub fn run_with_version(
+    registry: PluginRegistry,
+    args: impl IntoIterator<Item = impl Into<std::ffi::OsString> + Clone>,
+    version: &'static str,
+) -> Result<i32, Box<dyn std::error::Error>> {
+    let mut status = EXIT_OK;
+    let parsed = Cli::command()
+        .version(version)
+        .try_get_matches_from(args)
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
         Ok(cli) => cli,
         Err(e) => {
             e.print()?;
@@ -694,21 +735,31 @@ pub fn run(
             format,
             quiet,
             trace,
+            exclude,
+            exit_code,
         } => {
-            let dataset_config = match config {
+            let mut dataset_config = match config {
                 Some(path) => DatasetConfig::from_file(&path)?,
                 None => DatasetConfig::default_config(),
             };
+            add_cli_excludes(&mut dataset_config, &exclude)?;
 
             let resolved = resolve_renderers_only(&registry, &dataset_config)?;
             let controller = diff_controller(&dataset_config);
 
+            if let Some(missing) = snapshots.iter().find(|path| !path.exists()) {
+                return Err(BinocError::Other(format!(
+                    "snapshot not found: {}",
+                    missing.display()
+                ))
+                .into());
+            }
             let snapshots: Vec<String> = snapshots
                 .iter()
                 .map(|path| path.to_string_lossy().to_string())
                 .collect();
 
-            let changesets = match &trace {
+            let mut changesets = match &trace {
                 Some(trace_path) => {
                     if snapshots.len() != 2 {
                         return Err(BinocError::Config(format!(
@@ -741,6 +792,9 @@ pub fn run(
                 }
                 None => controller.diff_many(&snapshots)?,
             };
+            for changeset in &mut changesets {
+                stamp_version(changeset, version);
+            }
 
             write_outputs(
                 &output,
@@ -750,6 +804,15 @@ pub fn run(
                 &dataset_config,
                 &resolved,
             )?;
+
+            let config_errors = report_diagnostics(&changesets);
+            status = if config_errors {
+                EXIT_ERROR
+            } else if exit_code && changesets.iter().any(changeset_has_changes) {
+                EXIT_CHANGED
+            } else {
+                EXIT_OK
+            };
         }
         Commands::Replay { trace, output } => {
             let data = std::fs::read_to_string(&trace)?;
@@ -782,8 +845,9 @@ pub fn run(
             let controller = diff_controller(&dataset_config);
             let snapshot_a_str = snapshot_a.to_string_lossy().to_string();
             let snapshot_b_str = snapshot_b.to_string_lossy().to_string();
-            let (changeset, mut run_trace) =
+            let (mut changeset, mut run_trace) =
                 controller.diff_with_trace(&snapshot_a_str, &snapshot_b_str)?;
+            stamp_version(&mut changeset, version);
             let markdown = render(
                 &resolve_format_name("markdown", &resolved)?,
                 std::slice::from_ref(&changeset),
@@ -802,6 +866,7 @@ pub fn run(
                 run_trace: &run_trace,
                 snapshot_mode,
                 max_snapshot_bytes,
+                version,
             })?;
             eprintln!("Wrote report bundle to {}", output_dir.display());
         }
@@ -894,7 +959,84 @@ pub fn run(
         }
     }
 
+    Ok(status)
+}
+
+/// Record the binoc version that produced `changeset` in its metadata.
+fn stamp_version(changeset: &mut Changeset, version: &str) {
+    changeset
+        .metadata
+        .insert(VERSION_METADATA_KEY.into(), version.into());
+}
+
+/// Append `--exclude` globs to the config's `dataset.exclude` list.
+fn add_cli_excludes(config: &mut DatasetConfig, exclude: &[String]) -> Result<(), BinocError> {
+    if exclude.is_empty() {
+        return Ok(());
+    }
+    if config.dataset.is_null() {
+        config.dataset = serde_json::Value::Object(Default::default());
+    }
+    let dataset = config.dataset.as_object_mut().ok_or_else(|| {
+        BinocError::Config("dataset config section must be a mapping to add --exclude".into())
+    })?;
+    let entries = dataset
+        .entry("exclude")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| BinocError::Config("dataset.exclude must be a list of globs".into()))?;
+    entries.extend(exclude.iter().cloned().map(serde_json::Value::String));
     Ok(())
+}
+
+/// A changeset records a change unless its root is absent or `identical`.
+fn changeset_has_changes(changeset: &Changeset) -> bool {
+    changeset
+        .root
+        .as_ref()
+        .is_some_and(|root| root.action != "identical")
+}
+
+const DATASET_CONFIG_CODE_PREFIX: &str = "binoc.dataset_config.";
+
+/// Print dataset-config errors in full, and a count of other error and
+/// warning diagnostics, to stderr. Returns true when any dataset-config error
+/// was found: the comparison ran, but not with the config the user wrote.
+fn report_diagnostics(changesets: &[Changeset]) -> bool {
+    let mut config_errors = std::collections::BTreeSet::new();
+    let mut other_errors = 0usize;
+    let mut warnings = 0usize;
+    for diagnostic in changesets.iter().flat_map(|c| &c.diagnostics) {
+        match diagnostic.severity {
+            DiagnosticSeverity::Error
+                if diagnostic.code.starts_with(DATASET_CONFIG_CODE_PREFIX) =>
+            {
+                let location = diagnostic
+                    .location
+                    .as_deref()
+                    .map(|location| format!(" ({location})"))
+                    .unwrap_or_default();
+                config_errors.insert(format!(
+                    "binoc: config error: {}{location} [{}]",
+                    diagnostic.message.plain_text(),
+                    diagnostic.code
+                ));
+            }
+            DiagnosticSeverity::Error => other_errors += 1,
+            DiagnosticSeverity::Warning => warnings += 1,
+            DiagnosticSeverity::Suggestion => {}
+        }
+    }
+    for line in &config_errors {
+        eprintln!("{line}");
+    }
+    if other_errors + warnings > 0 {
+        eprintln!(
+            "binoc: {other_errors} error and {warnings} warning diagnostic(s) recorded in the \
+             changeset's diagnostics list"
+        );
+    }
+    !config_errors.is_empty()
 }
 
 #[cfg(test)]

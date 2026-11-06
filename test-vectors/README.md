@@ -155,3 +155,8 @@ In plugin test vectors (e.g. `binoc-sqlite/test-vectors/`), use `.sqlite.d` or `
 | zip-nested | Nested zip containing CSV |
 | tar-simple | Tar.gz archive with changes inside |
 | tar-nested | Nested tar.gz containing CSV |
+| exclude-capture-manifest | `dataset.exclude` drops a capture manifest and an archive member -> identical |
+| dataset-config-unknown-field | Misspelled top-level `dataset` key -> error diagnostic, comparison still runs |
+| geojson-envelope-metadata-change | FeatureCollection with unchanged features and a new `metadata.generated` -> table metadata change |
+| json-records-path-envelope-change | Nested `records_path`; fields outside the records change while records only reorder -> table metadata change plus row reorder |
+| csv-keyed-row-reorder | Configured row key; rows only re-sorted -> row reorder |

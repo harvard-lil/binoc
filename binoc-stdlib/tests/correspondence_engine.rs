@@ -841,7 +841,7 @@ fn fuzzy_candidate_limit_surfaces_diagnostic() {
 
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
             CoreRule::Pair(Arc::new(pair::FuzzyPair {
                 rename_limit: 1,
                 ..Default::default()
@@ -878,7 +878,7 @@ fn unsafe_zip_entry_skip_surfaces_diagnostic() {
 
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
             CoreRule::Expand(Arc::new(expand::ZipExpand::default())),
             CoreRule::Pair(Arc::new(pair::RootPair)),
         ],
@@ -922,8 +922,11 @@ fn low_archive_cap_triggers_overflow_diagnostic() {
     };
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
-            CoreRule::Expand(Arc::new(expand::ZipExpand { caps: tiny_caps })),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
+            CoreRule::Expand(Arc::new(expand::ZipExpand {
+                caps: tiny_caps,
+                ..Default::default()
+            })),
             CoreRule::Pair(Arc::new(pair::RootPair)),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
         ],
@@ -981,8 +984,11 @@ fn raised_archive_cap_allows_expansion() {
     };
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
-            CoreRule::Expand(Arc::new(expand::ZipExpand { caps })),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
+            CoreRule::Expand(Arc::new(expand::ZipExpand {
+                caps,
+                ..Default::default()
+            })),
             CoreRule::Pair(Arc::new(pair::RootPair)),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
             CoreRule::Parse(Arc::new(parse::CsvParse {
@@ -1032,7 +1038,7 @@ fn keyed_row_exclusion_degrades_with_diagnostic() {
     row_keys.insert("data.csv".to_string(), vec!["id".to_string()]);
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
             CoreRule::Pair(Arc::new(pair::RootPair)),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
             CoreRule::Parse(Arc::new(parse::CsvParse {
@@ -2272,7 +2278,7 @@ fn expand_rule_failure_degrades_one_node_and_continues() {
 
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
             CoreRule::Pair(Arc::new(pair::RootPair)),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
             CoreRule::Expand(Arc::new(FailingExpand)),
@@ -2321,7 +2327,7 @@ fn parse_rule_failure_degrades_one_node_and_continues() {
 
     let config = CorrespondenceEngineConfig {
         rules: vec![
-            CoreRule::Expand(Arc::new(expand::DirectoryExpand)),
+            CoreRule::Expand(Arc::new(expand::DirectoryExpand::default())),
             CoreRule::Pair(Arc::new(pair::RootPair)),
             CoreRule::Pair(Arc::new(pair::NameUnderPairedParent)),
             CoreRule::Parse(Arc::new(FailingParse)),
@@ -2507,10 +2513,14 @@ fn records_path_builds_keyed_table_from_nested_json_collection() {
     assert!(node.tags.contains("binoc.cell-change"));
     assert!(!node.tags.contains("binoc.document-value-change"));
     let edits = node.details["edits"].as_array().expect("edits");
-    assert_eq!(edits.len(), 1, "{edits:?}");
+    assert_eq!(edits.len(), 2, "{edits:?}");
     assert_eq!(edits[0]["verb"], "tabular.edit_cell");
     assert_eq!(edits[0]["params"]["key"]["id"], "attack-pattern--1");
     assert_eq!(edits[0]["params"]["column"], "name");
+    // The bundle id sits outside `$.objects`; it is reported as table metadata.
+    assert_eq!(edits[1]["verb"], "metadata.value_change");
+    assert_eq!(edits[1]["params"]["changes"][0]["key"], "id");
+    assert_eq!(edits[1]["params"]["changes"][0]["to"], "bundle--right");
 }
 
 #[test]

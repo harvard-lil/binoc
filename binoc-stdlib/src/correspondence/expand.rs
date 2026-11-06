@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
+use super::PathExclusion;
 use binoc_sdk::{
     decompose_child, file_name, member_child, BinocError, BinocResult, DataAccess, Diagnostic,
     ExpandDescriptor, ExpandOutput, ExpandRule, ItemRef, NodeMatch, ProjectionHint,
@@ -374,6 +375,7 @@ fn expand_physical_dir(
     dir: &Path,
     parent_logical: &str,
     sep: ChildSep,
+    exclude: &PathExclusion,
     data: &dyn DataAccess,
 ) -> BinocResult<Vec<ItemRef>> {
     let mut children = Vec::new();
@@ -384,16 +386,19 @@ fn expand_physical_dir(
     {
         let entry = entry.map_err(|err| BinocError::Io(err.into()))?;
         let name = entry.file_name().to_string_lossy().to_string();
-        children.push(make_child(
-            entry.path(),
-            sep.join(parent_logical, &name),
-            data,
-        )?);
+        let logical = sep.join(parent_logical, &name);
+        if exclude.matches(&logical) {
+            continue;
+        }
+        children.push(make_child(entry.path(), logical, data)?);
     }
     Ok(children)
 }
 
-pub struct DirectoryExpand;
+#[derive(Debug, Clone, Default)]
+pub struct DirectoryExpand {
+    pub exclude: PathExclusion,
+}
 
 impl ExpandRule for DirectoryExpand {
     fn descriptor(&self) -> ExpandDescriptor {
@@ -409,13 +414,21 @@ impl ExpandRule for DirectoryExpand {
 
     fn expand(&self, item: &ItemRef, data: &dyn DataAccess) -> BinocResult<ExpandOutput> {
         let physical = data.local_path(item)?;
-        expand_physical_dir(&physical, &item.logical_path, ChildSep::Member, data).map(Into::into)
+        expand_physical_dir(
+            &physical,
+            &item.logical_path,
+            ChildSep::Member,
+            &self.exclude,
+            data,
+        )
+        .map(Into::into)
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ZipExpand {
     pub caps: ExpandCaps,
+    pub exclude: PathExclusion,
 }
 
 impl ExpandRule for ZipExpand {
@@ -435,8 +448,13 @@ impl ExpandRule for ZipExpand {
         let physical = data.local_path(item)?;
         let workspace = data.workspace()?;
         let diagnostics = extract_zip(&physical, &workspace, self.caps)?;
-        let children =
-            expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
+        let children = expand_physical_dir(
+            &workspace,
+            &item.logical_path,
+            ChildSep::Decompose,
+            &self.exclude,
+            data,
+        )?;
         Ok(ExpandOutput {
             children,
             diagnostics,
@@ -499,9 +517,10 @@ fn extract_zip(zip_path: &Path, dest: &Path, caps: ExpandCaps) -> BinocResult<Ve
     Ok(diagnostics)
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct TarExpand {
     pub caps: ExpandCaps,
+    pub exclude: PathExclusion,
 }
 
 impl ExpandRule for TarExpand {
@@ -527,8 +546,13 @@ impl ExpandRule for TarExpand {
             } else {
                 extract_tar(file, &workspace, self.caps)?
             };
-        let children =
-            expand_physical_dir(&workspace, &item.logical_path, ChildSep::Decompose, data)?;
+        let children = expand_physical_dir(
+            &workspace,
+            &item.logical_path,
+            ChildSep::Decompose,
+            &self.exclude,
+            data,
+        )?;
         Ok(ExpandOutput {
             children,
             diagnostics,
@@ -536,9 +560,12 @@ impl ExpandRule for TarExpand {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct GzipExpand {
     pub caps: ExpandCaps,
+    /// Applied to the members of a `.tgz`/`.tar.gz`, which this rule hands
+    /// to [`TarExpand`].
+    pub exclude: PathExclusion,
 }
 
 impl ExpandRule for GzipExpand {
@@ -560,7 +587,11 @@ impl ExpandRule for GzipExpand {
             return Ok(Vec::new().into());
         };
         if inner_name.ends_with(".tar") {
-            return TarExpand { caps: self.caps }.expand(item, data);
+            return TarExpand {
+                caps: self.caps,
+                exclude: self.exclude.clone(),
+            }
+            .expand(item, data);
         }
         let workspace = data.workspace()?;
         let physical = workspace.join(inner_name);

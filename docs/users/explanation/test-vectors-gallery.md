@@ -13,7 +13,7 @@ audience: new user, data steward, archivist
 
 These are runnable examples from binoc's test suite. Each example links to its source folder on GitHub, tells you whether it needs any extra setup, gives you the exact command to run, and shows the Markdown changelog binoc is expected to print.
 
-Binoc currently ships **82 shared examples** in this gallery.
+Binoc currently ships **87 shared examples** in this gallery.
 
 ## One-time setup
 
@@ -46,6 +46,7 @@ just materialize
 | [`csv-distribution-shift`](#csv-distribution-shift) | Numeric column distribution shifts with keyed row matching | data.csv: 4 rows modified by key | Custom config |
 | [`csv-keyed-null-duplicate`](#csv-keyed-null-duplicate) | Configured CSV row keys surface null and duplicate key diagnostics | data.csv: 14 cells changed | Custom config |
 | [`csv-keyed-row-diff`](#csv-keyed-row-diff) | Configured CSV row keys match reordered rows and report keyed row/cell changes | data.csv: 1 row added; 1 row removed; 1 row modified by key | Custom config |
+| [`csv-keyed-row-reorder`](#csv-keyed-row-reorder) | With a configured row key, a CSV whose rows are only re-sorted reports a row reorder instead of an unexplained content… | scores.csv: rows reordered; cell values unchanged under the configured row key | Custom config |
 | [`csv-mid-row-insertion`](#csv-mid-row-insertion) | A mid-table row insertion compacts while column reorder/addition rules remain independent | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-mixed-changes`](#csv-mixed-changes) | Multiple change types | data.csv: Column added: 'email'; Columns reordered; 1 row added | Default pipeline |
 | [`csv-numeric-rounding`](#csv-numeric-rounding) | CSV numeric cells rounded to a common modulus and representation-only numeric differences ignored | data.csv: Rounded 3 cells in 'population' to nearest 1000 | Default pipeline |
@@ -60,15 +61,18 @@ just materialize
 | [`csv-value-suppression-custom-sentinel`](#csv-value-suppression-custom-sentinel) | CSV cells replaced with a dataset-configured disclosure suppression sentinel | data.csv: 1 cell changed; Suppressed 2 cells in 'count' | Custom config |
 | [`csv-verbosity-full`](#csv-verbosity-full) | Markdown full verbosity renders every captured changed-cell example. | data.csv: 5 cells changed | Custom config |
 | [`csv-vintage-benchmark`](#csv-vintage-benchmark) | A 'vintage' reader compares two editions of the same published dataset and wants the structural story (a column appeared, a category vocabulary shifted) surfaced above the bulk data churn they intend to ignore. | facilities.csv: Column added: 'region'; 1 cell changed | Custom config |
+| [`dataset-config-unknown-field`](#dataset-config-unknown-field) | A misspelled top-level dataset key is reported as an error diagnostic instead of being ignored, and the comparison stil… | data.csv: 1 cell changed | Custom config |
 | [`directory-file-copy`](#directory-file-copy) | New file with same content as an existing unchanged file detected as a copy | duplicate.txt: Copied from original.txt | Default pipeline |
 | [`directory-nested`](#directory-nested) | Subdirectories with mixed changes | data/records.csv: 1 row added | Default pipeline |
 | [`directory-nested-with-tar`](#directory-nested-with-tar) | Shows binoc diffing a tar archive and a plain directory that contain overlapping internal paths. | data.tar.gz/>records.csv: 1 cell changed | Default pipeline |
 | [`enforcement-actions-merge-years`](#enforcement-actions-merge-years) | Per-year CSVs merged row-wise into one file; detected as a clean partition merge (CFM-72) | actions_2023.csv, actions_2024.csv merged into actions.csv | Default pipeline |
+| [`exclude-capture-manifest`](#exclude-capture-manifest) | dataset.exclude leaves a capture manifest and an archive member out of the comparison, so captures with identical data… | No changes detected. | Custom config |
 | [`file-correspondence-container`](#file-correspondence-container) | Config declares a correspondence between renamed zip containers | archive.zip: Moved from data.zip | Custom config |
 | [`file-correspondence-scheme`](#file-correspondence-scheme) | Config declares that a state CSV moved into a new directory scheme is the same logical file | by-state: Added | Custom config |
 | [`file-correspondence-token`](#file-correspondence-token) | Config declares that year-stamped CSV filenames are the same logical file | running_list_as_of_2023.csv: | Custom config |
 | [`folder-move-nested`](#folder-move-nested) | Detects a whole-folder rename and rolls many file moves up into one folder-move entry. | documentation: Moved from docs | Default pipeline |
 | [`folder-move-partial`](#folder-move-partial) | Detects a mostly-moved folder rename and preserves only the added/removed/modified remainder entries beneath it. | FoodData_Central_csv_2026-04-30: Added | Default pipeline |
+| [`geojson-envelope-metadata-change`](#geojson-envelope-metadata-change) | A FeatureCollection whose features are unchanged but whose metadata.generated timestamp changed reports the envelope fi… | quakes.geojson: Table metadata changed | Default pipeline |
 | [`geojson-feature-cell-change`](#geojson-feature-cell-change) | A GeoJSON FeatureCollection where one feature's property changes; transcoded to a tabular artifact with the geometry as… | places.geojson: 1 cell changed | Default pipeline |
 | [`gzip-inner-dispatch`](#gzip-inner-dispatch) | Gzipped CSV and text are decompressed and redispatched under their inner names | census.txt.gz/>census.txt: 1 line added; 1 line removed | Default pipeline |
 | [`ini-value-change`](#ini-value-change) | An INI value changes; transcoded to a structured_document and reported as a value change | config.ini: $.replicas: "3" -> "5" | Default pipeline |
@@ -77,7 +81,8 @@ just materialize
 | [`json-keyed-row-diff`](#json-keyed-row-diff) | Configured JSON record keys match reordered rows and report keyed row/cell changes | data.json: 1 row added; 1 row removed; 1 row modified by key | Custom config |
 | [`json-records-cell-change`](#json-records-cell-change) | JSON array of like-shaped objects parsed as a typed table; numeric cell values change | data.json: 2 cells changed | Default pipeline |
 | [`json-records-nested-value`](#json-records-nested-value) | JSON records with a nested object cell; the nested value changes and is reported as a single equality-based cell edit (… | people.json: 1 cell changed | Default pipeline |
-| [`json-records-path-stix-objects`](#json-records-path-stix-objects) | STIX-shaped JSON bundle records under $.objects are parsed as a keyed table | enterprise.stix.json: 1 row modified by key | Custom config |
+| [`json-records-path-envelope-change`](#json-records-path-envelope-change) | With a nested records_path, content outside the records (export.version, license) is reported as table metadata, alongs… | export.json: Table metadata changed; rows reordered; cell values unchanged under the configured row… | Custom config |
+| [`json-records-path-stix-objects`](#json-records-path-stix-objects) | STIX-shaped JSON bundle records under $.objects are parsed as a keyed table | enterprise.stix.json: 1 row modified by key; Table metadata changed | Custom config |
 | [`json-records-type-only-column`](#json-records-type-only-column) | Typed JSON records re-serialized with one numeric column as strings; canonical values match | data.json: Column type changed: 'year' number -> string | Default pipeline |
 | [`jsonl-row-addition`](#jsonl-row-addition) | JSONL stream of like-shaped objects parsed as a table; a record is appended | events.jsonl: 1 row added | Default pipeline |
 | [`jsonld-value-change`](#jsonld-value-change) | A .jsonld file with no declared media type parses as a structured document tagged format=jsonld; a value change is repo… | person.jsonld: $.jobTitle: "Mathematician" -> "Computer Scientist" | Default pipeline |
@@ -100,8 +105,8 @@ just materialize
 | [`text-rename-modify`](#text-rename-modify) | Text file renamed and modified: detected as a single move by fuzzy correlation | meeting-notes-v2.txt: | Default pipeline |
 | [`toml-value-change`](#toml-value-change) | A TOML value changes; transcoded to a structured_document and reported as a value change | config.toml: $.replicas: 3 -> 5 | Default pipeline |
 | [`tree-wide-correlation`](#tree-wide-correlation) | Shows tree-wide move and copy detection across nested zip boundaries, including one-to-many copies and many-to-one moves. | gamma-renamed.txt: Moved from outer.zip/>inner.zip/>gamma.txt | Default pipeline |
-| [`trivial-identical`](#trivial-identical) | Two identical directories -> empty changeset | # Changelog: snapshot-a -> snapshot-b | Default pipeline |
-| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files -> no changes reported | # Changelog: snapshot-a -> snapshot-b | Default pipeline |
+| [`trivial-identical`](#trivial-identical) | Two identical directories -> empty changeset | No changes detected. | Default pipeline |
+| [`trivial-identical-csv`](#trivial-identical-csv) | Two identical CSV files -> no changes reported | No changes detected. | Default pipeline |
 | [`tsv-cell-changes`](#tsv-cell-changes) | Tab-delimited file parses into real columns and reports cell changes | data.tsv: 2 cells changed | Default pipeline |
 | [`yaml-value-change`](#yaml-value-change) | A YAML scalar value changes; transcoded to a structured_document and reported as a value change | config.yaml: $.replicas: 3 -> 5 | Default pipeline |
 | [`zip-declared-container`](#zip-declared-container) | Config declares a correspondence between nested zip containers and preserves inner CSV content detail | outer.zip/>records.zip: Moved from outer.zip/>records-old.zip | Custom config |
@@ -610,6 +615,40 @@ Result:
     - key id 'p3': 'p3', 'Gamma', '30'
 ```
 
+## csv-keyed-row-reorder
+
+With a configured row key, a CSV whose rows are only re-sorted reports a row reorder instead of an unexplained content…
+
+- **Browse source:** [csv-keyed-row-reorder](https://github.com/harvard-lil/binoc/tree/main/test-vectors/csv-keyed-row-reorder)
+- **Tags:** `csv`, `row-reorder`, `row-identity`
+- **Snapshots:** `snapshot-a` has 1 file — `scores.csv`; `snapshot-b` has 1 file — `scores.csv`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/csv-keyed-row-reorder.yaml`:
+
+```yaml
+dataset:
+  paths:
+    - match: scores.csv
+      row_identity:
+        columns:
+          - id
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/csv-keyed-row-reorder/snapshot-a \
+  ./test-vectors-materialized/csv-keyed-row-reorder/snapshot-b \
+  --config /tmp/csv-keyed-row-reorder.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+- **scores.csv**: rows reordered; cell values unchanged under the configured row key
+```
+
 ## csv-mid-row-insertion
 
 A mid-table row insertion compacts while column reorder/addition rules remain independent
@@ -1039,6 +1078,46 @@ Result:
     - row 6: 'I105', 'F002', '73'
 ```
 
+## dataset-config-unknown-field
+
+A misspelled top-level dataset key is reported as an error diagnostic instead of being ignored, and the comparison stil…
+
+- **Browse source:** [dataset-config-unknown-field](https://github.com/harvard-lil/binoc/tree/main/test-vectors/dataset-config-unknown-field)
+- **Tags:** `config`, `diagnostics`, `csv`
+- **Snapshots:** `snapshot-a` has 1 file — `data.csv`; `snapshot-b` has 1 file — `data.csv`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/dataset-config-unknown-field.yaml`:
+
+```yaml
+dataset:
+  pathz:
+    - match: data.csv
+      row_identity:
+        columns:
+          - id
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/dataset-config-unknown-field/snapshot-a \
+  ./test-vectors-materialized/dataset-config-unknown-field/snapshot-b \
+  --config /tmp/dataset-config-unknown-field.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+- **data.csv**: 1 cell changed
+  - Changed cells
+    - row 1, column 'v': 'a' -> 'b'
+
+## Errors
+
+- Unknown dataset configuration field: pathz; known fields are defaults, paths, files, correspondence, reduced_precision, exclude (`dataset.pathz`) [binoc.dataset_config.unknown_field]
+```
+
 ## directory-file-copy
 
 New file with same content as an existing unchanged file detected as a copy
@@ -1136,6 +1215,38 @@ Claims
 - actions_2023.csv, actions_2024.csv merged into actions.csv
 
 - **actions.csv**: Merged from actions_2023.csv, actions_2024.csv
+```
+
+## exclude-capture-manifest
+
+dataset.exclude leaves a capture manifest and an archive member out of the comparison, so captures with identical data…
+
+- **Browse source:** [exclude-capture-manifest](https://github.com/harvard-lil/binoc/tree/main/test-vectors/exclude-capture-manifest)
+- **Tags:** `exclude`, `directory`, `zip`
+- **Snapshots:** `snapshot-a` has 3 files — `bundle.zip`, `data.csv`, `manifest.json`; `snapshot-b` has 3 files — `bundle.zip`, `data.csv`, `manifest.json`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/exclude-capture-manifest.yaml`:
+
+```yaml
+dataset:
+  exclude:
+    - manifest.json
+    - **/capture-log.txt
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/exclude-capture-manifest/snapshot-a \
+  ./test-vectors-materialized/exclude-capture-manifest/snapshot-b \
+  --config /tmp/exclude-capture-manifest.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+No changes detected.
 ```
 
 ## file-correspondence-container
@@ -1317,6 +1428,29 @@ Result:
 - **FoodData_Central_csv_2025-12-18/docs**: Removed
 - **FoodData_Central_csv_2025-12-18/docs/modified.txt**: Removed
 - **FoodData_Central_csv_2025-12-18/docs/old-table.txt**: Removed
+```
+
+## geojson-envelope-metadata-change
+
+A FeatureCollection whose features are unchanged but whose metadata.generated timestamp changed reports the envelope fi…
+
+- **Browse source:** [geojson-envelope-metadata-change](https://github.com/harvard-lil/binoc/tree/main/test-vectors/geojson-envelope-metadata-change)
+- **Tags:** `geojson`, `json-records`, `metadata`
+- **Snapshots:** `snapshot-a` has 1 file — `quakes.geojson`; `snapshot-b` has 1 file — `quakes.geojson`
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/geojson-envelope-metadata-change/snapshot-a \
+  ./test-vectors-materialized/geojson-envelope-metadata-change/snapshot-b
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+- **quakes.geojson**: Table metadata changed
+  - Metadata changed
+    - table metadata.generated changed from 1793905969000 to 1793906029000
 ```
 
 ## geojson-feature-cell-change
@@ -1520,6 +1654,44 @@ Result:
     - row 2, column 'meta': {"role":"user","tags":["z"]} -> {"role":"editor","tags":["z"]}
 ```
 
+## json-records-path-envelope-change
+
+With a nested records_path, content outside the records (export.version, license) is reported as table metadata, alongs…
+
+- **Browse source:** [json-records-path-envelope-change](https://github.com/harvard-lil/binoc/tree/main/test-vectors/json-records-path-envelope-change)
+- **Tags:** `json-records`, `records-path`, `metadata`, `reorder`
+- **Snapshots:** `snapshot-a` has 1 file — `export.json`; `snapshot-b` has 1 file — `export.json`
+- **Setup:** This example uses a custom dataset config to make the relevant correspondence behavior obvious.
+Save this dataset config as `/tmp/json-records-path-envelope-change.yaml`:
+
+```yaml
+dataset:
+  paths:
+    - match: export.json
+      records_path: $.export.data.items
+      row_identity:
+        columns:
+          - id
+```
+
+
+Run it:
+```bash
+binoc diff \
+  ./test-vectors-materialized/json-records-path-envelope-change/snapshot-a \
+  ./test-vectors-materialized/json-records-path-envelope-change/snapshot-b \
+  --config /tmp/json-records-path-envelope-change.yaml
+```
+Result:
+```markdown
+# Changelog: snapshot-a -> snapshot-b
+
+- **export.json**: Table metadata changed; rows reordered; cell values unchanged under the configured row key
+  - Metadata changed
+    - table export.version changed from '2026.10' to '2026.11'
+    - table license changed from 'CC0-1.0' to 'CC-BY-4.0'
+```
+
 ## json-records-path-stix-objects
 
 STIX-shaped JSON bundle records under $.objects are parsed as a keyed table
@@ -1552,9 +1724,11 @@ Result:
 ```markdown
 # Changelog: snapshot-a -> snapshot-b
 
-- **enterprise.stix.json**: 1 row modified by key
+- **enterprise.stix.json**: 1 row modified by key; Table metadata changed
   - Changed cells
     - key id 'attack-pattern--1', column 'name': 'Old Name' -> 'New Name'
+  - Metadata changed
+    - table id changed from 'bundle--left' to 'bundle--right'
 ```
 
 ## json-records-type-only-column
@@ -2179,6 +2353,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a -> snapshot-b
+
+No changes detected.
 ```
 
 ## trivial-identical-csv
@@ -2198,6 +2374,8 @@ binoc diff \
 Result:
 ```markdown
 # Changelog: snapshot-a -> snapshot-b
+
+No changes detected.
 ```
 
 ## tsv-cell-changes

@@ -7,7 +7,6 @@ members = [
     "binoc-python",
     "binoc-abi-canary",
     "model-plugins/binoc-sqlite",
-    "model-plugins/binoc-row-reorder",
     "model-plugins/binoc-stat-binary",
     "model-plugins/binoc-excel",
     "model-plugins/binoc-parquet",
@@ -24,7 +23,6 @@ default-members = [
     "binoc-cli",
     "binoc-abi-canary",
     "model-plugins/binoc-sqlite",
-    "model-plugins/binoc-row-reorder",
     "model-plugins/binoc-stat-binary",
     "model-plugins/binoc-excel",
     "model-plugins/binoc-parquet",
@@ -44,7 +42,7 @@ inherits = "release"
 debug = "line-tables-only"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.95"
 license = "MIT"

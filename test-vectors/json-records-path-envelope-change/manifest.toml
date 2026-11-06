@@ -1,0 +1,13 @@
+[vector]
+name = "json-records-path-envelope-change"
+description = "With a nested records_path, content outside the records (export.version, license) is reported as table metadata, alongside the reorder of the records"
+tags = ["json-records", "records-path", "metadata", "reorder"]
+
+[[config.dataset.paths]]
+match = "export.json"
+records_path = "$.export.data.items"
+row_identity = { columns = ["id"] }
+
+[expected]
+root_action = "modify"
+has_tags = ["binoc.metadata-change", "binoc.row-reorder"]

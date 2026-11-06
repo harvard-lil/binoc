@@ -87,3 +87,37 @@ class TestPythonCLI:
         parsed = json.loads(result.stdout)
         assert parsed['from_snapshot'].endswith('snapshot-a')
         assert parsed['to_snapshot'].endswith('snapshot-b')
+
+    def test_python_m_binoc_version_reports_distribution_version(self):
+        from importlib.metadata import version
+
+        result = subprocess.run(
+            [sys.executable, '-m', 'binoc', '--version'],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == f'binoc {version("binoc")}'
+
+    def test_python_m_binoc_exit_codes(self, snapshot_pair, tmp_path):
+        def run(*args):
+            return subprocess.run(
+                [sys.executable, '-m', 'binoc', 'diff', *args, '-q'],
+                capture_output=True,
+                text=True,
+            )
+
+        assert run(*snapshot_pair('trivial-identical'), '--exit-code').returncode == 0
+        assert run(*snapshot_pair('single-file-add'), '--exit-code').returncode == 1
+        assert run(*snapshot_pair('single-file-add')).returncode == 0
+
+        config = tmp_path / 'binoc.yaml'
+        config.write_text('dataset:\n  tables: []\n')
+        result = run(*snapshot_pair('single-file-add'), '--config', str(config))
+        assert result.returncode == 2
+        assert 'config error' in result.stderr
+
+        a, _ = snapshot_pair('single-file-add')
+        result = run(a, str(tmp_path / 'missing'))
+        assert result.returncode == 2
+        assert 'snapshot not found' in result.stderr

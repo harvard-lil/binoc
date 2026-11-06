@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 
 use binoc_sdk::{
-    file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_v1, BinocError,
-    BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter, ExtractHint,
-    ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata, Segment,
-    ShapeFilter, Side, StructuredDocument, Summary, TabularData, TabularDataPair, Value,
+    file_name, parser_metadata_v1, structured_document_v1, tabular_extract, tabular_extract_keyed,
+    tabular_v1, BinocError, BinocResult, DataAccess, Diagnostic, DiffNode, Edit, EditListWriter,
+    ExtractHint, ExtractResult, IdentityFailurePolicy, LinkCtx, NodeId, NodeMatch, ParserMetadata,
+    Segment, ShapeFilter, Side, StructuredDocument, Summary, TabularData, TabularDataPair, Value,
     WriteOutput, WriterDescriptor,
 };
 use fastcdc::v2020::StreamCDC;
@@ -173,13 +173,22 @@ impl EditListWriter for TabularWriter {
                     {
                         edits.push(edit);
                     }
+                    let mut row_edits = Vec::new();
                     write_keyed_row_edits(
-                        &mut edits,
+                        &mut row_edits,
                         ctx.row_keys.as_ref(),
                         &left_keyed,
                         &right_keyed,
                     );
-                    edits.extend(metadata_edits);
+                    if row_edits.is_empty() && keyed_row_order_changed(&left_keyed, &right_keyed) {
+                        edits.push(row_reorder_edit(
+                            "configured_key",
+                            Some(ctx.row_keys.as_ref()),
+                            right.rows.len(),
+                        ));
+                    }
+                    edits.extend(row_edits);
+                    append_table_metadata_edits(&mut edits, metadata_edits);
                     return Ok(Some(WriteOutput { edits, diagnostics }));
                 }
                 let quality = key_quality(&left_keyed.index, &right_keyed.index);
@@ -207,7 +216,7 @@ impl EditListWriter for TabularWriter {
                             stats,
                             candidate_key_columns(&left, &right),
                         );
-                        edits.extend(metadata_edits);
+                        append_table_metadata_edits(&mut edits, metadata_edits);
                         return Ok(Some(WriteOutput { edits, diagnostics }));
                     }
                     diagnostics.push(Diagnostic::suggestion(
@@ -244,7 +253,7 @@ impl EditListWriter for TabularWriter {
                         edits.extend(row_edits);
                     }
                 }
-                edits.extend(metadata_edits);
+                append_table_metadata_edits(&mut edits, metadata_edits);
                 return Ok(Some(WriteOutput { edits, diagnostics }));
             }
         }
@@ -297,7 +306,7 @@ impl EditListWriter for TabularWriter {
             edits.extend(positional_row_edits(&left, &right, &common).edits);
         }
 
-        edits.extend(metadata_edits);
+        append_table_metadata_edits(&mut edits, metadata_edits);
 
         Ok(Some(WriteOutput { edits, diagnostics }))
     }
@@ -318,6 +327,18 @@ impl EditListWriter for TabularWriter {
         }
         if aspect == "column_order" {
             return Ok(Some(column_order_extract(&pair)));
+        }
+        let key_columns: Vec<String> = if ctx.row_keys.is_empty() {
+            pair.right
+                .as_ref()
+                .or(pair.left.as_ref())
+                .map(|table| table.key.clone())
+                .unwrap_or_default()
+        } else {
+            ctx.row_keys.to_vec()
+        };
+        if let Some(result) = tabular_extract_keyed(&pair, &key_columns, aspect) {
+            return Ok(Some(result));
         }
         Ok(tabular_extract(
             &pair,
@@ -1432,10 +1453,35 @@ fn row_reorder_edit(mode: &str, keys: Option<&[String]>, rows: usize) -> Edit {
     if let Some(keys) = keys {
         params["keys"] = json!(keys);
     }
+    let summary = if mode == "configured_key" {
+        "rows reordered; cell values unchanged under the configured row key"
+    } else {
+        "rows reordered; cell values unchanged under inferred row alignment"
+    };
     Edit::new("tabular.reorder_rows", params)
         .with_item_type("tabular")
         .with_tag("binoc.row-reorder")
-        .with_summary("rows reordered; cell values unchanged under inferred row alignment")
+        .with_summary(summary)
+}
+
+/// True when both sides have the same columns and some row present on both
+/// sides under the same key sits at a different position. Called with no keyed
+/// row edits, so the key sets match; the column check keeps a renamed or added
+/// column, whose cells the keyed comparison does not cover, from reading as a
+/// pure reorder.
+fn keyed_row_order_changed(left: &KeyedTable<'_>, right: &KeyedTable<'_>) -> bool {
+    let left_columns: BTreeSet<&String> = left.table.headers.iter().collect();
+    let right_columns: BTreeSet<&String> = right.table.headers.iter().collect();
+    if left_columns != right_columns {
+        return false;
+    }
+    left.index.rows.iter().any(|(signature, left_row)| {
+        right
+            .index
+            .rows
+            .get(signature)
+            .is_some_and(|right_row| right_row.index != left_row.index)
+    })
 }
 
 fn sort_aligned_rows<'a>(
@@ -1819,6 +1865,22 @@ fn metadata_value_change_edit(
         edit = edit.with_tag(tag);
     }
     Some(edit)
+}
+
+/// Append metadata edits after a table's own edits. When the table also has
+/// tabular edits, the metadata edits drop their `item_type` so the node stays
+/// typed `tabular` (projection takes the last edit's `item_type`); a node whose
+/// only changes are metadata is still typed `metadata`.
+fn append_table_metadata_edits(edits: &mut Vec<Edit>, mut metadata_edits: Vec<Edit>) {
+    let has_table_edits = edits
+        .iter()
+        .any(|edit| edit.projection.hint.item_type.as_deref() == Some("tabular"));
+    if has_table_edits {
+        for edit in &mut metadata_edits {
+            edit.projection.hint.item_type = None;
+        }
+    }
+    edits.extend(metadata_edits);
 }
 
 /// Diff tier-1 (per-column) and tier-2 (per-table) metadata carried on

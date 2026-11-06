@@ -6,7 +6,9 @@ Newer entries appear first. Each entry shows its date and current status. Create
 
 | Date | Title | Status |
 |---|---|---|
-| 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented |
+| 2026-11-06 | [Retire the binoc-row-reorder Plugin](2026-11-06-retire_row_reorder_plugin.md) | Implemented |
+| 2026-11-05 | [CLI Exit Status, Config Errors, and Path Exclusion](2026-11-05-cli_exit_status_and_config_errors.md) | Implemented |
+| 2026-06-30 | [Fat-binoc Distribution and the ABI Canary](2026-06-30-fat_binoc_distribution_and_abi_canary.md) | Accepted; implemented (amended 2026-11-05: SQLite bundled; 2026-11-06: row-reorder retired) |
 | 2026-06-29 | [SDK Annotation Package Identity Stays Explicit](2026-06-29-sdk_annotation_package_id.md) | Accepted |
 | 2026-06-29 | [Renderers Are Ecosystem-Ignorant; Ugly Output From an Unknown Rule Is an Upstream Bug](2026-06-29-renderer_ecosystem_ignorance.md) | Accepted |
 | 2026-06-29 | [Memory and Wall-Clock Contract for Large Dataset Diffs](2026-06-29-memory_and_wall_clock_contract_for_large_dataset_diffs.md) | Proposed |
@@ -30,7 +32,7 @@ Newer entries appear first. Each entry shows its date and current status. Create
 | 2026-06-12 | [Invariant and Lint Tiers: Harness, Mechanical, Agent](2026-06-12-invariant_and_lint_tiers.md) | Implemented |
 | 2026-06-12 | [Correspondence-First Engine: Two Trees, Links, and Edit-List Compaction](2026-06-12-correspondence_first_engine.md) | Accepted (prototype validated; migration gated by structural projection) |
 | 2026-06-12 | [Binoc: the architecture, told as a story](2026-06-12-historical_single_tree_architecture_story.md) | Historical |
-| 2026-06-11 | [Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering](2026-06-11-inline_pure_reorder_judgment.md) | Implemented |
+| 2026-06-11 | [Inline Pure-Reorder Judgment; Retire Tag-Handoff Layering](2026-06-11-inline_pure_reorder_judgment.md) | Implemented; `binoc-row-reorder` retired 2026-11-06 ([ADR](2026-11-06-retire_row_reorder_plugin.md)) |
 | 2026-06-11 | [Declared Write-Sets on TransformerDescriptor](2026-06-11-declared_write_sets_on_transformer_descriptor.md) | Superseded in part by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md) — `TransformerDescriptor` was removed in the migration; the write-set discipline carried over to rule descriptors and is mechanized in [Invariant and Lint Tiers](2026-06-12-invariant_and_lint_tiers.md) |
 | 2026-06-03 | [Transformer-Initiated Recompare as a Correspondence Contract](2026-06-03-transformer_initiated_recompare.md) | Superseded by [Correspondence-First Engine](2026-06-12-correspondence_first_engine.md) |
 | 2026-06-03 | [Structured Summary Segments](2026-06-03-structured-summary-segments.md) | Implemented |

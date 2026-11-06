@@ -282,36 +282,6 @@ Parses Parquet and Arrow IPC snapshots so column, row, and cell changes appear a
 
 *Rule families supplied:* `parse`
 
-## binoc-row-reorder
-
-Detects row reordering in tabular data so shuffles are represented as ordering changes rather than as noisy row removals and additions.
-
-| Field | Value |
-|---|---|
-| Tier | First-party bundled |
-| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
-| Handles | Paired `binoc.tabular.v1` artifacts with the same rows in a different order. |
-| Produces | A `tabular.reorder_rows` edit when row multisets match. |
-
-- **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
-- **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder)
-- **Source path:** `model-plugins/binoc-row-reorder`
-- **Rust crate:** `binoc-row-reorder`
-
-### Rule packs
-
-#### `binoc.row_reorder_writer`
-
-| Field | Value |
-|---|---|
-| `extensions` | — |
-| `media_types` | — |
-| `member_extensions` | — |
-| `artifact_formats` | `binoc.tabular.v1` |
-| `scope` | `artifacts` |
-
-*Rule families supplied:* `writer`
-
 ## binoc-shapefile
 
 Handles shapefile bundles and their sidecar files so feature, geometry, and attribute changes stay aligned across the dataset package.
@@ -356,14 +326,14 @@ Handles shapefile bundles and their sidecar files so feature, geometry, and attr
 
 ## binoc-sqlite
 
-Compares SQLite databases: schema, columns, keys, and row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.
+Compares SQLite databases table by table: each table is read as tabular data, so column, row, and cell diffing applies. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.
 
 | Field | Value |
 |---|---|
-| Tier | First-party opt-in |
-| Distribution | Not published as a separate PyPI wheel. The pack remains in-tree and can be enabled explicitly; SQLite is excluded from the default `bundled` feature set. |
+| Tier | First-party bundled |
+| Distribution | Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature. |
 | Handles | SQLite database files. |
-| Produces | Table/column layout changes, type changes, key changes, and row-count diffs. |
+| Produces | One tabular child per table (`db.sqlite/>table`) with column, row, and cell diffs; tables added or removed. |
 
 - **Repository:** [https://github.com/harvard-lil/binoc](https://github.com/harvard-lil/binoc)
 - **Documentation:** [https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite](https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite)

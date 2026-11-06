@@ -22,9 +22,8 @@ Or run without installing:
 uvx binoc diff path/to/snapshot-a path/to/snapshot-b
 ```
 
-The `binoc` wheel bundles the first-party format packs that can ship as
-in-process rules today. SQLite support remains an explicit source-build opt-in;
-the project does not currently publish a separate `binoc-sqlite` wheel.
+The `binoc` wheel bundles the first-party format packs, including SQLite, as
+in-process rules; there are no separate format-plugin wheels to install.
 
 The [documentation site](https://harvard-lil.github.io/binoc/) has
 tutorials, how-to recipes, reference for the CLI / Python API /

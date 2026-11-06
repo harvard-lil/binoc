@@ -1,0 +1,7 @@
+---
+source: binoc-stdlib/src/test_vectors.rs
+expression: "&md"
+---
+# Changelog: snapshot-a -> snapshot-b
+
+- **scores.csv**: rows reordered; cell values unchanged under the configured row key

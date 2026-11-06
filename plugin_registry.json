@@ -237,32 +237,6 @@
       ]
     },
     {
-      "id": "binoc-row-reorder",
-      "title": "binoc-row-reorder",
-      "tier": "first-party-bundled",
-      "summary": "Detects row reordering in tabular data so shuffles are represented as ordering changes rather than as noisy row removals and additions.",
-      "repository": "https://github.com/harvard-lil/binoc",
-      "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-row-reorder",
-      "source_path": "model-plugins/binoc-row-reorder",
-      "packages": {
-        "crate": "binoc-row-reorder"
-      },
-      "handles": "Paired `binoc.tabular.v1` artifacts with the same rows in a different order.",
-      "produces": "A `tabular.reorder_rows` edit when row multisets match.",
-      "rule_packs": [
-        {
-          "name": "binoc.row_reorder_writer",
-          "dispatch": {
-            "artifact_formats": ["binoc.tabular.v1"],
-            "scope": "artifacts"
-          },
-          "rules": [
-            "writer"
-          ]
-        }
-      ]
-    },
-    {
       "id": "binoc-shapefile",
       "title": "binoc-shapefile",
       "tier": "first-party-bundled",
@@ -302,8 +276,8 @@
     {
       "id": "binoc-sqlite",
       "title": "binoc-sqlite",
-      "tier": "first-party-opt-in",
-      "summary": "Compares SQLite databases: schema, columns, keys, and row counts. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.",
+      "tier": "first-party-bundled",
+      "summary": "Compares SQLite databases table by table: each table is read as tabular data, so column, row, and cell diffing applies. Useful when a dataset ships as `.db` / `.sqlite` snapshots instead of flat files.",
       "repository": "https://github.com/harvard-lil/binoc",
       "documentation": "https://github.com/harvard-lil/binoc/tree/main/model-plugins/binoc-sqlite",
       "source_path": "model-plugins/binoc-sqlite",
@@ -311,7 +285,7 @@
         "crate": "binoc-sqlite"
       },
       "handles": "SQLite database files.",
-      "produces": "Table/column layout changes, type changes, key changes, and row-count diffs.",
+      "produces": "One tabular child per table (`db.sqlite/>table`) with column, row, and cell diffs; tables added or removed.",
       "rule_packs": [
         {
           "name": "binoc-sqlite.parse.sqlite",

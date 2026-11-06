@@ -76,9 +76,15 @@ If you restrict deployment refs, allow these tag patterns:
 
 Per-package versions do not need to stay in lockstep.
 
+## Release notes
+
+Release notes live in [`CHANGELOG.md`](https://github.com/harvard-lil/binoc/blob/main/CHANGELOG.md)
+at the repository root. Changes add their entries under **Unreleased** as
+they merge, so the notes are written by the time a release is cut.
+
 ## Cutting a release
 
-### 1. Bump the version
+### 1. Bump the version and date the changelog
 
 ```bash
 just set-version binoc 0.1.1
@@ -86,6 +92,11 @@ just set-version binoc 0.1.1
 
 `just set-version` updates the selected published manifest(s) plus
 any tracked lockfiles the test suite would otherwise rewrite.
+
+In the same PR, rename the `## Unreleased` heading in `CHANGELOG.md` to the
+package and version with the release date, e.g. `## binoc 0.3.0 — 2026-11-12`
+(name both packages when both release), and start a new empty
+`## Unreleased` section above it.
 Examples:
 
 ```bash
@@ -115,12 +126,15 @@ version(s) from `origin/main`, creates annotated package-specific
 tag(s) pointing at the current `origin/main` commit, and pushes
 only those tag(s).
 
-### 4. Watch the publish workflow
+### 4. Watch the publish workflow and publish the notes
 
 Tags trigger `.github/workflows/publish.yml`. It builds and publishes
 only the package(s) named by the tags you pushed and leaves the
 others untouched. Monitor at
 [the Actions page](https://github.com/harvard-lil/binoc/actions/workflows/publish.yml).
+
+Optionally, create a GitHub release on the tag with that version's
+`CHANGELOG.md` section as its body.
 
 ## Manual fallbacks
 

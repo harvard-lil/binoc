@@ -29,7 +29,7 @@ TIER_LABELS = {
 }
 TIER_DISTRIBUTION = {
     'first-party-bundled': 'Bundled into the default `binoc` wheel through the `binoc-cli` `bundled` feature.',
-    'first-party-opt-in': 'Not published as a separate PyPI wheel. The pack remains in-tree and can be enabled explicitly; SQLite is excluded from the default `bundled` feature set.',
+    'first-party-opt-in': 'Not published as a separate PyPI wheel and excluded from the default `bundled` feature set. The pack remains in-tree; enable its `binoc-cli` feature explicitly to build it in.',
     'first-party-add-on': 'Maintained in this repository but distributed outside the default fat `binoc` wheel.',
     'third-party': 'Maintained outside the core binoc distribution.',
 }
@@ -260,9 +260,9 @@ def main() -> int:
         '# Plugin catalog',
         '',
         'Binoc ships a capable [standard library](../../plugin-developers/explanation/plugin-model.md) '
-        '(`binoc-stdlib`) plus first-party format packs. Most format packs are '
-        'compiled into the fat `binoc` wheel; SQLite remains an explicit opt-in '
-        'pack and is not published as a separate PyPI wheel.',
+        '(`binoc-stdlib`) plus first-party format packs. The format packs are '
+        'compiled into the fat `binoc` wheel and are not published as separate '
+        'PyPI wheels; the HTML renderer is a separately distributed add-on.',
         '',
         'For format parsers, compare your filenames (suffixes) and, when available, '
         'detected media types to the tables under each plugin. Other scopes identify '

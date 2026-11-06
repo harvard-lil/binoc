@@ -8,8 +8,7 @@
     feature = "xml",
     feature = "shapefile",
     feature = "binformats",
-    feature = "stat-binary",
-    feature = "row-reorder"
+    feature = "stat-binary"
 ))]
 
 use std::collections::{BTreeMap, BTreeSet};
