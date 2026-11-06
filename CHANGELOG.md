@@ -10,7 +10,7 @@ date (see [Cut a release](docs/core-developers/howto/cut-a-release.md)).
 
 ## Unreleased
 
-Planned as `binoc` 0.3.0 and `binoc-sdk` 0.3.0.
+## binoc 0.3.0 and binoc-sdk 0.3.0 — 2026-11-06
 
 ### Breaking changes
 
